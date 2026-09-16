@@ -146,7 +146,7 @@ export default function HomePage() {
                           <GraduationCap className="h-4 w-4" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-white">Valley High School</div>
+                          <div className="text-sm font-semibold text-white">Victory High School</div>
                           <div className="text-xs text-purple-200/50">vhs.resultapp.org • Active</div>
                         </div>
                         <span className="ml-auto rounded-full bg-purple-600 px-2.5 py-1 text-[11px] font-semibold text-white">PRO</span>
