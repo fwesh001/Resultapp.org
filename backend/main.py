@@ -34,7 +34,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # Services
-from services.db_manager import create_school_database, rollback_database, database_exists, test_connection
+from services.db_manager import (
+    create_school_database,
+    rollback_database,
+    database_exists,
+    test_connection,
+    init_schools_registry,
+    register_school,
+    get_school_by_subdomain,
+)
 from services.site_generator import deploy_site, rollback_site, site_exists, generate_temp_credentials, get_domain
 from services.notifier import send_welcome_email, send_failure_alert
 
@@ -79,9 +87,14 @@ if _cors_origins:
 
 API_SECRET = os.getenv("API_SECRET_KEY", "")
 ENV = os.getenv("ENV", "production")
-
 if not API_SECRET and ENV == "production":
     logger.warning("API_SECRET_KEY not set! All provision requests will be rejected in production.")
+
+
+@app.on_event("startup")
+async def startup():
+    init_schools_registry()
+
 
 # ---------------------------------------------------------------------------
 # Security dependency
@@ -112,6 +125,11 @@ async def verify_api_secret(x_api_secret_key: Optional[str] = Header(None, alias
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
+
+class TenantResponse(BaseModel):
+    school: Dict[str, Any]
+
 
 SUBDOMAIN_RE = re.compile(r"^[a-z0-9-]{3,30}$")
 RESERVED_SUBDOMAINS = {"www", "api", "admin", "app", "dashboard", "resultapp", "mail", "support", "help", "billing", "ops", "status"}
@@ -198,6 +216,22 @@ async def health():
             }
         }
     )
+
+
+@app.get("/api/v1/tenant/{subdomain}", tags=["tenancy"])
+async def tenant_lookup(subdomain: str):
+    """
+    Retrieve school metadata by subdomain for the Next.js tenant layout.
+    Used by app/[subdomain]/layout.tsx and app/[subdomain]/page.tsx.
+    """
+    school = get_school_by_subdomain(subdomain)
+    if school is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No school found for subdomain '{subdomain}'",
+        )
+    return TenantResponse(school=school)
+
 
 # ---------------------------------------------------------------------------
 # Provision endpoint
@@ -303,6 +337,18 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         timestamp = datetime.now(timezone.utc).isoformat()
 
         logger.info(f"[PROVISION] SUCCESS for '{subdomain}' in {elapsed_ms}ms -> {login_url}")
+
+        try:
+            register_school(
+                subdomain=subdomain,
+                school_name=school_name,
+                email=admin_email,
+                phone=phone,
+                student_count=student_count,
+            )
+            logger.info(f"[PROVISION] School registered in registry for '{subdomain}'")
+        except Exception as e:
+            logger.warning(f"[PROVISION] Failed to register school '{subdomain}' in registry: {e}")
 
         return ProvisionResponse(
             success=True,

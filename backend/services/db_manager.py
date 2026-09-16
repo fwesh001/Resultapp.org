@@ -249,3 +249,150 @@ def test_connection() -> bool:
     finally:
         if conn:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Schools registry (central metadata store in the superuser DB)
+# ---------------------------------------------------------------------------
+
+SCHOOLS_REGISTRY_TABLE = "schools"
+
+
+def init_schools_registry() -> None:
+    """Create the schools registry table if it does not exist."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {SCHOOLS_REGISTRY_TABLE} (
+                id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain     VARCHAR(60) UNIQUE NOT NULL,
+                school_name   VARCHAR(120) NOT NULL,
+                email         VARCHAR(255),
+                phone         VARCHAR(20),
+                address       TEXT,
+                city          VARCHAR(100),
+                state         VARCHAR(100),
+                country       VARCHAR(100) DEFAULT 'NG',
+                logo_url      TEXT,
+                motto         TEXT,
+                proprietor_name VARCHAR(200),
+                registration_number VARCHAR(100),
+                is_verified   BOOLEAN DEFAULT FALSE,
+                is_active     BOOLEAN DEFAULT TRUE,
+                subscription_plan VARCHAR(100),
+                subscription_status VARCHAR(50),
+                student_count INTEGER DEFAULT 0,
+                created_at    TIMESTAMPTZ DEFAULT NOW(),
+                updated_at    TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        conn.commit()
+        logger.info(f"[DB] Schools registry table '{SCHOOLS_REGISTRY_TABLE}' ready")
+    except Exception as e:
+        logger.error(f"[DB] Failed to initialize schools registry: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
+def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any]:
+    """Register a newly provisioned school in the central registry."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {SCHOOLS_REGISTRY_TABLE}
+                (subdomain, school_name, email, phone, address, city, state, country,
+                 logo_url, motto, proprietor_name, registration_number,
+                 is_verified, is_active, subscription_plan, subscription_status, student_count)
+            VALUES
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (subdomain) DO UPDATE SET
+                school_name = EXCLUDED.school_name,
+                email = EXCLUDED.email,
+                phone = EXCLUDED.phone,
+                address = EXCLUDED.address,
+                city = EXCLUDED.city,
+                state = EXCLUDED.state,
+                country = EXCLUDED.country,
+                logo_url = EXCLUDED.logo_url,
+                motto = EXCLUDED.motto,
+                proprietor_name = EXCLUDED.proprietor_name,
+                registration_number = EXCLUDED.registration_number,
+                updated_at = NOW()
+            RETURNING *;
+            """,
+            (
+                subdomain,
+                school_name,
+                kwargs.get("email"),
+                kwargs.get("phone"),
+                kwargs.get("address"),
+                kwargs.get("city"),
+                kwargs.get("state"),
+                kwargs.get("country", "NG"),
+                kwargs.get("logo_url"),
+                kwargs.get("motto"),
+                kwargs.get("proprietor_name"),
+                kwargs.get("registration_number"),
+                kwargs.get("is_verified", False),
+                kwargs.get("is_active", True),
+                kwargs.get("subscription_plan"),
+                kwargs.get("subscription_status"),
+                kwargs.get("student_count"),
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return _row_to_dict(row, cur)
+    except Exception as e:
+        logger.error(f"[DB] Failed to register school '{subdomain}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
+    """Retrieve school metadata from the registry by subdomain."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, subdomain, school_name, email, phone, address, city, state, country,
+                   logo_url, motto, proprietor_name, registration_number,
+                   is_verified, is_active, subscription_plan, subscription_status, student_count,
+                   created_at, updated_at
+            FROM {SCHOOLS_REGISTRY_TABLE}
+            WHERE subdomain = %s;
+            """,
+            (subdomain,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return _row_to_dict(row, cur)
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch school '{subdomain}': {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def _row_to_dict(row, cursor) -> Dict[str, Any]:
+    """Convert a psycopg2 cursor row to a dict using cursor column names."""
+    if row is None:
+        return {}
+    cols = [desc[0] for desc in cursor.description]
+    return dict(zip(cols, row))
