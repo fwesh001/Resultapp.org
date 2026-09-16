@@ -46,3 +46,9 @@ next-env.d.ts
 # logs
 npm-install*.log
 npm-install-*.log
+
+#mcp
+opencode.json
+
+# notes
+Notes.md

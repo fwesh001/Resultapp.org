@@ -20,9 +20,6 @@ export function Navbar() {
           <Link href="/about" className="text-purple-200/70 transition-colors hover:text-white">
             About
           </Link>
-          <Link href="/dashboard" className="text-purple-200/70 transition-colors hover:text-white">
-            Dashboard
-          </Link>
         </nav>
 
         <div className="flex items-center gap-3">

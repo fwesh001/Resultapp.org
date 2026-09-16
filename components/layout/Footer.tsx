@@ -8,14 +8,13 @@ export function Footer() {
           <div>
             <h4 className="font-semibold tracking-tight text-white">resultapp.org</h4>
             <p className="mt-2 text-sm leading-6 text-purple-200/60">
-              School result compilation for modern Nigerian schools. Pay per student, not per term.
+              School result compilation for modern Nigerian schools.
             </p>
           </div>
           <div>
             <h4 className="text-sm font-semibold tracking-wide text-purple-100">Product</h4>
             <ul className="mt-3 space-y-2 text-sm text-purple-200/60">
               <li><Link href="/pricing" className="transition-colors hover:text-white">Pricing</Link></li>
-              <li><Link href="/dashboard" className="transition-colors hover:text-white">Dashboard</Link></li>
               <li><Link href="/register" className="transition-colors hover:text-white">Register</Link></li>
             </ul>
           </div>
@@ -23,8 +22,8 @@ export function Footer() {
             <h4 className="text-sm font-semibold tracking-wide text-purple-100">Company</h4>
             <ul className="mt-3 space-y-2 text-sm text-purple-200/60">
               <li><Link href="/about" className="transition-colors hover:text-white">About</Link></li>
-              <li><Link href="#" className="transition-colors hover:text-white">Contact</Link></li>
-              <li><Link href="#" className="transition-colors hover:text-white">Support</Link></li>
+              <li><Link href="/support" className="transition-colors hover:text-white">Support</Link></li>
+              <li><Link href="/contact" className="transition-colors hover:text-white">Contact</Link></li>
             </ul>
           </div>
           <div>
@@ -37,7 +36,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-purple-500/10 pt-6 text-center text-sm text-purple-200/40">
-          © {new Date().getFullYear()} resultapp.org. All rights reserved. Secured by Flutterwave.
+          © {new Date().getFullYear()} resultapp.org. All rights reserved.
         </div>
       </div>
     </footer>

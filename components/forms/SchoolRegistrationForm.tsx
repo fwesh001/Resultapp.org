@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
-  calculateTotalAmount,
   formatNaira,
   PRICE_PER_STUDENT,
   getFlutterwavePublicKey,
@@ -22,6 +21,7 @@ import {
   initiateFlutterwaveInlinePayment,
   generateTxRef,
 } from "@/lib/flutterwave";
+import { getPricingTier, calculateTieredTotal, getSliderPct } from "@/lib/pricing";
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -99,13 +99,16 @@ export function SchoolRegistrationForm() {
     domain?: string;
   } | null>(null);
 
-  // Derived pricing
+  // Derived pricing — tiered (shared with PricingCalculator)
   const studentCountNum = useMemo(() => {
     const n = parseInt(values.studentCount, 10);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [values.studentCount]);
 
-  const totalAmount = useMemo(() => calculateTotalAmount(studentCountNum), [studentCountNum]);
+  const { pricePerStudent: unitPrice, badge, badgeStyle } = useMemo(() => getPricingTier(studentCountNum), [studentCountNum]);
+  const totalAmount = useMemo(() => calculateTieredTotal(studentCountNum), [studentCountNum]);
+  const sliderPct = useMemo(() => getSliderPct(studentCountNum), [studentCountNum]);
+  const clampedSliderValue = Math.max(50, Math.min(2000, studentCountNum || 50));
 
   const subdomainPreview = values.subdomain
     ? `${values.subdomain}.resultapp.org`
@@ -198,7 +201,8 @@ export function SchoolRegistrationForm() {
     if (!validate()) return;
 
     const count = parseInt(values.studentCount, 10);
-    const amount = calculateTotalAmount(count);
+    const { pricePerStudent: tierPrice } = getPricingTier(count);
+    const amount = calculateTieredTotal(count);
 
     // Double-check amount
     if (amount <= 0) {
@@ -248,7 +252,7 @@ export function SchoolRegistrationForm() {
         },
         customizations: {
           title: `ResultApp • ${values.schoolName.trim()}`,
-          description: `${count} students × ${formatNaira(PRICE_PER_STUDENT)} = ${formatNaira(amount)}`,
+          description: `${count} students × ${formatNaira(tierPrice)} = ${formatNaira(amount)}`,
           logo: "https://resultapp.org/logo.png",
         },
         meta: {
@@ -256,7 +260,7 @@ export function SchoolRegistrationForm() {
           subdomain: values.subdomain.trim(),
           adminName: values.adminName.trim(),
           studentCount: count,
-          pricePerStudent: PRICE_PER_STUDENT,
+          pricePerStudent: tierPrice,
           source: "registration_form",
         },
       },
@@ -346,32 +350,32 @@ export function SchoolRegistrationForm() {
   if (provisioning) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-600/15 ring-1 ring-purple-500/20">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
         </div>
-        <h3 className="mt-6 text-xl font-semibold">Provisioning your portal...</h3>
-        <p className="mt-2 max-w-md text-sm text-zinc-600">
+        <h3 className="mt-6 text-xl font-semibold tracking-tight text-white">Provisioning your portal...</h3>
+        <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
           Payment verified! We&apos;re setting up{" "}
-          <span className="font-mono font-medium text-black">
+          <span className="font-mono font-medium text-purple-200">
             {values.subdomain}.resultapp.org
           </span>{" "}
-          for <span className="font-medium">{values.schoolName}</span>.
+          for <span className="font-medium text-white">{values.schoolName}</span>.
         </p>
         <div className="mt-6 w-full max-w-sm space-y-2 text-left">
-          <div className="flex items-center gap-3 rounded-lg border bg-white p-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <span className="text-sm">Payment confirmed</span>
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <span className="text-sm text-emerald-100">Payment confirmed</span>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border bg-white p-3">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-            <span className="text-sm">Creating subdomain & admin account</span>
+          <div className="flex items-center gap-3 rounded-xl border border-purple-500/20 bg-purple-900/20 p-3">
+            <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+            <span className="text-sm text-purple-100">Creating subdomain & admin account</span>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border bg-zinc-50 p-3 opacity-60">
-            <Globe className="h-5 w-5 text-zinc-400" />
-            <span className="text-sm">Deploying to resultapp.org</span>
+          <div className="flex items-center gap-3 rounded-xl border border-purple-500/10 bg-purple-950/20 p-3 opacity-60">
+            <Globe className="h-5 w-5 text-purple-300/60" />
+            <span className="text-sm text-purple-200/60">Deploying to resultapp.org</span>
           </div>
         </div>
-        <p className="mt-6 text-xs text-zinc-500">
+        <p className="mt-6 text-xs text-purple-300/50">
           This usually takes 30–60 seconds. You&apos;ll receive an email at {values.adminEmail}.
         </p>
       </div>
@@ -381,30 +385,30 @@ export function SchoolRegistrationForm() {
   if (successData) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle2 className="h-8 w-8 text-green-600" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
+          <CheckCircle2 className="h-8 w-8 text-emerald-400" />
         </div>
-        <h3 className="mt-6 text-2xl font-bold">Payment successful!</h3>
-        <p className="mt-2 max-w-md text-sm text-zinc-600">
+        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Payment successful!</h3>
+        <p className="mt-2 max-w-md text-sm text-purple-200/60">
           Your automated school portal is being provisioned at
         </p>
         <a
           href={successData.deployedUrl || `https://${successData.subdomain}.resultapp.org`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 font-mono text-sm font-medium text-white hover:bg-zinc-800"
+          className="mt-3 inline-flex items-center gap-2 rounded-full bg-purple-600 px-4 py-2 font-mono text-sm font-medium text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] hover:bg-purple-500"
         >
           <Globe className="h-4 w-4" />
           {successData.domain || `${successData.subdomain}.resultapp.org`}
         </a>
 
-        <div className="mt-6 w-full rounded-xl border bg-zinc-50 p-4 text-left">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="h-4 w-4 text-blue-600" />
+        <div className="mt-6 w-full rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-left backdrop-blur">
+          <div className="flex items-center gap-2 text-sm font-medium text-white">
+            <Sparkles className="h-4 w-4 text-purple-400" />
             What happens next?
           </div>
-          <ul className="mt-3 space-y-2 text-sm text-zinc-600">
-            <li>• Admin account for <strong>{values.adminName}</strong> is being created</li>
+          <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
+            <li>• Admin account for <strong className="text-white">{values.adminName}</strong> is being created</li>
             <li>
               • {successData.studentCount} student slots credited ({formatNaira(successData.amount)}{" "}
               paid)
@@ -412,13 +416,13 @@ export function SchoolRegistrationForm() {
             <li>• Login details sent to {values.adminEmail}</li>
             <li>• Portal will be live at the subdomain above in ~1 minute</li>
           </ul>
-          <div className="mt-4 rounded-md bg-white p-3 font-mono text-xs">
+          <div className="mt-4 rounded-xl border border-purple-500/10 bg-[#0B0514]/60 p-3 font-mono text-xs text-purple-200">
             Tx ref: {successData.txRef}
           </div>
         </div>
 
         <Button
-          className="mt-6 w-full"
+          className="mt-6 w-full rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] hover:bg-purple-500"
           onClick={() =>
             (window.location.href =
               successData.deployedUrl || `https://${successData.subdomain}.resultapp.org`)
@@ -426,7 +430,7 @@ export function SchoolRegistrationForm() {
         >
           Go to your portal
         </Button>
-        <p className="mt-3 text-xs text-zinc-500">
+        <p className="mt-3 text-xs text-purple-300/50">
           Need help? Contact support@resultapp.org with your tx_ref.
         </p>
       </div>
@@ -454,9 +458,9 @@ export function SchoolRegistrationForm() {
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="input-subdomain"
-          className="text-sm font-medium text-zinc-700"
+          className="text-sm font-medium text-purple-100"
         >
-          Desired Subdomain Slug <span className="text-red-500">*</span>
+          Desired Subdomain Slug <span className="text-red-400">*</span>
         </label>
         <div className="flex">
           <input
@@ -466,21 +470,21 @@ export function SchoolRegistrationForm() {
             onChange={(e) => handleChange("subdomain", e.target.value)}
             placeholder="vhs"
             required
-            className={`flex h-10 w-full rounded-l-md border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black disabled:opacity-50 ${
-              errors.subdomain ? "border-red-500 focus-visible:ring-red-500" : ""
+            className={`flex h-10 w-full rounded-l-xl border bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
+              errors.subdomain ? "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500" : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
             }`}
           />
-          <span className="inline-flex items-center rounded-r-md border border-l-0 border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500">
+          <span className="inline-flex items-center rounded-r-xl border border-l-0 border-purple-800/50 bg-purple-950/30 px-3 text-sm text-purple-300/60">
             .resultapp.org
           </span>
         </div>
         {errors.subdomain ? (
-          <p className="text-xs text-red-600">{errors.subdomain}</p>
+          <p className="text-xs text-red-400">{errors.subdomain}</p>
         ) : (
-          <p className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <p className="flex items-center gap-1.5 text-xs text-purple-300/50">
             <Globe className="h-3 w-3" />
             Preview:{" "}
-            <span className="font-mono font-medium text-zinc-700">{subdomainPreview}</span>
+            <span className="font-mono font-medium text-purple-200">{subdomainPreview}</span>
           </p>
         )}
       </div>
@@ -523,7 +527,7 @@ export function SchoolRegistrationForm() {
         autoComplete="tel"
       />
 
-      {/* Student Count */}
+      {/* Student Count — text + slider synced */}
       <Input
         label="Estimated Number of Students"
         name="studentCount"
@@ -536,47 +540,90 @@ export function SchoolRegistrationForm() {
         required
       />
 
-      {/* Real-time Pricing Card */}
-      <div className="rounded-xl border bg-zinc-50 p-4">
-        <div className="flex items-center justify-between">
+      {/* Slider: 50-2000, step 10, clamped — allows 1-49 via text */}
+      <div className="rounded-2xl border border-purple-500/10 bg-purple-950/15 p-4 backdrop-blur">
+        <div className="flex items-center justify-between text-xs font-medium text-purple-300">
+          <span>50</span>
+          <span className="rounded-full border border-purple-500/15 bg-purple-500/5 px-2 py-0.5 text-[11px] text-purple-200/60">Slider 50–2000 • step 10 • 1–49 via text</span>
+          <span>2,000</span>
+        </div>
+        <div className="relative mt-3">
+          <input
+            type="range"
+            min={50}
+            max={2000}
+            step={10}
+            value={clampedSliderValue}
+            onChange={(e) => handleChange("studentCount", e.target.value)}
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60"
+            style={{
+              background: `linear-gradient(to right, rgb(147 51 234) 0%, rgb(168 85 247) ${sliderPct}%, rgba(88,28,135,0.35) ${sliderPct}%, rgba(88,28,135,0.35) 100%)`,
+            }}
+            aria-label="Number of students slider"
+          />
+          <div
+            className="pointer-events-none absolute top-1/2 hidden h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-purple-400 shadow-[0_0_14px_6px_rgba(168,85,247,0.45)] sm:block"
+            style={{ left: `calc(${sliderPct}% - 5px)` }}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+          <span className={`rounded-full border px-2.5 py-1 ${studentCountNum < 500 ? "border-purple-500 bg-purple-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            50–499 → ₦100
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 ${studentCountNum >= 500 && studentCountNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            500–999 → ₦90
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 ${studentCountNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            1000+ → ₦80
+          </span>
+        </div>
+        <style>{`input[type="range"]::-webkit-slider-thumb{appearance:none;height:18px;width:18px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} input[type="range"]::-moz-range-thumb{height:18px;width:18px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)}`}</style>
+      </div>
+
+      {/* Real-time Pricing Card — tiered */}
+      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/15 p-4 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_12px_rgba(147,51,234,0.35)]">
               <CreditCard className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-medium">Total Amount</p>
-              <p className="text-xs text-zinc-500">
-                {studentCountNum || 0} students × {formatNaira(PRICE_PER_STUDENT)}
+              <p className="text-sm font-medium text-white">Total Amount</p>
+              <p className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-purple-300/60">
+                  {studentCountNum || 0} × {formatNaira(unitPrice)}
+                </span>
+                {badge && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeStyle}`}>{badge}</span>}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold">
+            <p className="text-lg font-bold tracking-tight text-white">
               {studentCountNum > 0 ? formatNaira(totalAmount) : "—"}
             </p>
-            <p className="text-xs text-zinc-500">One-time • Credits never expire</p>
+            <p className="text-xs text-purple-300/50">One-time • Credits never expire</p>
           </div>
         </div>
 
         {studentCountNum > 0 && (
-          <div className="mt-3 rounded-md bg-white p-3 text-xs leading-5 text-zinc-600">
+          <div className="mt-3 rounded-xl border border-purple-500/10 bg-[#0B0514]/60 p-3 text-xs leading-5 text-purple-200/70">
             <div className="flex justify-between">
               <span>Students</span>
-              <span className="font-medium">{studentCountNum}</span>
+              <span className="font-medium text-white">{studentCountNum}</span>
             </div>
             <div className="flex justify-between">
               <span>Price per student</span>
-              <span>{formatNaira(PRICE_PER_STUDENT)}</span>
+              <span className="text-purple-200">{formatNaira(unitPrice)}</span>
             </div>
-            <div className="my-2 border-t" />
-            <div className="flex justify-between font-semibold text-black">
+            <div className="my-2 border-t border-purple-500/10" />
+            <div className="flex justify-between font-semibold text-white">
               <span>Total payable</span>
               <span>{formatNaira(totalAmount)}</span>
             </div>
           </div>
         )}
 
-        <p className="mt-2 flex items-center gap-1 text-xs text-zinc-500">
+        <p className="mt-2 flex items-center gap-1 text-xs text-purple-300/50">
           <Building2 className="h-3 w-3" />
           Secured by Flutterwave • Pay with card, transfer, or USSD
         </p>
@@ -584,14 +631,19 @@ export function SchoolRegistrationForm() {
 
       {/* Global error */}
       {globalError && (
-        <div className="flex gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
           <span>{globalError}</span>
         </div>
       )}
 
-      {/* Submit */}
-      <Button type="submit" className="w-full gap-2" disabled={isSubmitting} size="lg">
+      {/* Submit — pulsing electric purple */}
+      <Button
+        type="submit"
+        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 animate-pulse hover:animate-none"
+        disabled={isSubmitting}
+        size="lg"
+      >
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -607,9 +659,9 @@ export function SchoolRegistrationForm() {
         )}
       </Button>
 
-      <p className="text-center text-xs text-zinc-500">
+      <p className="text-center text-xs leading-5 text-purple-300/40">
         By continuing, you agree to our Terms and Privacy Policy. Your portal at{" "}
-        <span className="font-mono font-medium">{subdomainPreview}</span> will be created after
+        <span className="font-mono font-medium text-purple-200">{subdomainPreview}</span> will be created after
         payment.
       </p>
     </form>
