@@ -1,82 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWebhookSignature, verifyTransaction } from "@/lib/flutterwave";
 
 /**
  * Flutterwave webhook handler
  * POST /api/flutterwave/webhook
  *
  * Set this URL in Flutterwave Dashboard -> Settings -> Webhooks
- * Also set FLUTTERWAVE_WEBHOOK_SECRET_HASH env variable to the "verif-hash" you configure.
- *
- * Forward verified payment events to FastAPI backend for credit fulfillment.
+ * Configure FLUTTERWAVE_WEBHOOK_HASH (verif-hash) in env.
  */
 export async function POST(req: NextRequest) {
+  // 1. Extract verif-hash from headers
   const verifHash = req.headers.get("verif-hash");
 
-  if (!verifyWebhookSignature(verifHash)) {
-    console.warn("Flutterwave webhook: invalid verif-hash");
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-  }
-
-  let payload: unknown;
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const event = payload as {
-    event?: string;
-    data?: {
-      id?: number;
-      tx_ref?: string;
-      flw_ref?: string;
-      amount?: number;
-      currency?: string;
-      status?: string;
-      customer?: { email?: string };
-      meta?: Record<string, unknown>;
-    };
-  };
-
-  console.log("Flutterwave webhook received:", event.event, event.data?.tx_ref);
-
-  // Optional: verify transaction server-side before fulfilling
-  // This prevents spoofed webhook payloads
-  if (event.data?.id) {
-    try {
-      const verification = await verifyTransaction(event.data.id);
-      if (verification.data.status !== "successful") {
-        console.log("Transaction not successful, skipping fulfillment", verification.data.status);
-        return NextResponse.json({ received: true, verified: false });
-      }
-
-      // Forward to FastAPI backend for credit allocation
-      // Example: POST /webhooks/flutterwave
-      const backendUrl =
-        process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      const backendRes = await fetch(`${backendUrl.replace(/\/$/, "")}/webhooks/flutterwave`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: event.event,
-          data: verification.data,
-          raw: event,
-        }),
-      });
-
-      if (!backendRes.ok) {
-        console.error("Failed to forward webhook to backend:", await backendRes.text());
-        // Still return 200 to avoid Flutterwave retries flooding; log for manual reconciliation
-      }
-    } catch (err) {
-      console.error("Webhook verification error:", err);
-      return NextResponse.json({ error: "Verification failed" }, { status: 500 });
+  // 2. Compare against FLUTTERWAVE_WEBHOOK_HASH env variable
+  if (verifHash !== process.env.FLUTTERWAVE_WEBHOOK_HASH) {
+    // Fallback: also support legacy env name FLUTTERWAVE_WEBHOOK_SECRET_HASH
+    if (
+      !process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH ||
+      verifHash !== process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH
+    ) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
 
-  return NextResponse.json({ received: true });
+  // 3. Parse JSON body and verify event type and status
+  let body: {
+    event?: string;
+    data?: {
+      status?: string;
+      tx_ref?: string;
+      customer?: { email?: string };
+      meta?: any;
+    };
+  };
+
+  try {
+    body = await req.json();
+  } catch {
+    // Still return 200 to prevent retries for malformed payloads, or 400 if you prefer strict validation.
+    // Here we return 200 with error flag so Flutterwave doesn't retry infinitely on bad JSON.
+    return NextResponse.json({ received: true, error: "Invalid JSON" }, { status: 200 });
+  }
+
+  if (body.event === "charge.completed" && body.data?.status === "successful") {
+    // 4. Extract provisioning details from meta - handles both array and object formats
+    const rawMeta = body.data?.meta || [];
+    const getMetaVal = (key: string) => {
+      if (Array.isArray(rawMeta)) {
+        const item = rawMeta.find((m: any) => m.metaname === key || m.name === key);
+        return item?.metavalue || item?.value;
+      }
+      return rawMeta[key];
+    };
+
+    const schoolName = getMetaVal("schoolName") || "Victory High";
+    const subdomain = getMetaVal("subdomain") || body.data?.tx_ref?.split("_")[1] || "vhs";
+    const studentCount = getMetaVal("studentCount") || "300";
+    const adminEmail = getMetaVal("adminEmail") || body.data?.customer?.email;
+
+    // 5. Local Mock: bright console output for testing locally
+    console.log("RAW FLUTTERWAVE DATA:", JSON.stringify(body.data, null, 2));
+
+    console.log(
+      `✅ WEBHOOK VERIFIED: Provisioning ${subdomain} for ${schoolName}...`
+    );
+    console.log(
+      `   → School: ${schoolName} | Subdomain: ${subdomain} | Students: ${studentCount} | Admin: ${adminEmail}`
+    );
+    // In production, this triggers the secure fetch to our FastAPI droplet:
+    // await fetch(`${process.env.PROVISION_API_URL}/provision`, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //     "X-API-Secret": process.env.PROVISION_API_SECRET!,
+    //   },
+    //   body: JSON.stringify({ schoolName, subdomain, studentCount, adminEmail }),
+    // });
+  }
+
+  // 6. Always return 200 OK immediately so Flutterwave doesn't retry
+  return NextResponse.json({ received: true }, { status: 200 });
 }
 
 // Flutterwave may send GET for verification during setup
