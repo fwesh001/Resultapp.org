@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyTransaction, calculateTotalAmount } from "@/lib/flutterwave";
+import { verifyTransaction } from "@/lib/flutterwave";
+import { calculateTieredTotal } from "@/lib/pricing";
 
 /**
  * Secure server-side provision proxy for ResultApp.
@@ -228,8 +229,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Invalid student count in payment metadata" }, { status: 400 });
   }
 
-  // Verify amount matches pricing: studentCount * 100 NGN
-  const expectedAmount = calculateTotalAmount(studentCount);
+  // Verify amount matches tiered pricing:
+  // 50-499: ₦100, 500-999: ₦90, 1000+: ₦80
+  const expectedAmount = calculateTieredTotal(studentCount);
   const paidAmount = Number(data.amount ?? data.charged_amount ?? 0);
   // Allow small tolerance? No, must be exact or greater (in case of fees). Require paid >= expected.
   if (paidAmount < expectedAmount) {

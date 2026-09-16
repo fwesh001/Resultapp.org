@@ -2,7 +2,10 @@
  * Flutterwave payment helper for resultapp.org
  * Supports BOTH server-side (secret-key) and client-side (inline checkout) flows.
  *
- * Pricing: Total Amount = Student Count * PRICE_PER_STUDENT (100 NGN)
+ * Pricing (tiered):
+ * - 50 to 499 students: ₦100 per student
+ * - 500 to 999 students: ₦90 per student (10% off)
+ * - 1000+ students: ₦80 per student (20% off)
  *
  * Env:
  * - FLUTTERWAVE_SECRET_KEY / FLW_SECRET_KEY (server)
@@ -22,12 +25,18 @@ const FLW_BASE_URL = "https://api.flutterwave.com/v3";
 // ---------------------------------------------------------------------------
 
 /**
- * Calculate total payable amount for a given student count.
- * Example: 150 students * 100 NGN = 15,000 NGN
+ * Calculate total payable amount for a given student count (tiered).
+ * - 50 to 499: 100 NGN
+ * - 500 to 999: 90 NGN
+ * - 1000+: 80 NGN
+ * Example: 150 students * 100 NGN = 15,000 NGN; 600 * 90 = 54,000; 1200 * 80 = 96,000
  */
 export function calculateTotalAmount(studentCount: number): number {
   const count = Math.max(0, Math.floor(Number(studentCount) || 0));
-  return count * PRICE_PER_STUDENT;
+  let pricePerStudent = 100;
+  if (count >= 1000) pricePerStudent = 80;
+  else if (count >= 500) pricePerStudent = 90;
+  return count * pricePerStudent;
 }
 
 /**
