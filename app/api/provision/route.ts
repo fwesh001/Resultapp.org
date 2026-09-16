@@ -262,6 +262,17 @@ export async function POST(req: NextRequest) {
     student_count: studentCount,
   };
 
+  // Local testing mock: bypass FastAPI if PROVISION_API_URL contains localhost
+  if (provisionUrl.includes("localhost") || process.env.PROVISION_API_URL?.includes("localhost")) {
+    console.log("[PROVISION MOCK] Bypassing FastAPI call for local testing");
+    return NextResponse.json({
+      success: true,
+      deployed_url: `https://${subdomain}.resultapp.org`,
+      domain: "resultapp.org",
+      subdomain: subdomain,
+    });
+  }
+
   let provisionRes: Response;
   try {
     const controller = new AbortController();
