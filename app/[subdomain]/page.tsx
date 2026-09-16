@@ -1,16 +1,12 @@
 import { School } from "@/types/school";
-
-interface TenantLookupResponse {
-  school: School;
-}
+import { getTenant } from "@/lib/tenant";
 
 /**
  * Tenant (subdomain) landing page.
  *
- * Fetches school metadata from the FastAPI backend and renders
- * tenant-specific context for the subdomain that routed here.
- * For example, a request to `vhs.resultapp.org` renders the page for
- * "Victory High School".
+ * Renders real school stats and branding fetched from the FastAPI backend.
+ * For example, a request to `vhs.resultapp.org` renders "Victory High School"
+ * with its verified status, subscription plan, and student count.
  */
 export default async function TenantPage({
   params,
@@ -19,20 +15,7 @@ export default async function TenantPage({
 }) {
   const { subdomain } = await params;
 
-  // --- Resolve tenant from backend ---
-  const backendUrl = process.env.BACKEND_URL || "http://159.223.178.34:8000";
-  let school: School | null = null;
-  try {
-    const res = await fetch(`${backendUrl}/api/v1/tenant/${subdomain}`, {
-      next: { tags: [`school-${subdomain}`] },
-    });
-    if (res.ok) {
-      const data = (await res.json()) as TenantLookupResponse;
-      school = data.school;
-    }
-  } catch {
-    // Fallback: continue without school data (e.g. during development)
-  }
+  const school: School | null = await getTenant(subdomain);
 
   return (
     <section className="tenant-page">
@@ -43,19 +26,43 @@ export default async function TenantPage({
       {school ? (
         <dl>
           <dt>Status</dt>
-          <dd>{school.isVerified ? "Verified" : "Unverified"}</dd>
-          <dt>Subscription</dt>
           <dd>
-            {school.subscription?.planName ?? "No plan"} ({school.subscription?.status ?? "none"})
+            {school.isActive ? "Active" : "Inactive"} ·{" "}
+            {school.isVerified ? "Verified" : "Unverified"}
           </dd>
-          <dt>Credits</dt>
-          <dd>{school.credits?.balance ?? "N/A"} remaining</dd>
-          <dt>Motto</dt>
-          <dd>{school.motto ?? "—"}</dd>
+          {school.subscription && (
+            <>
+              <dt>Subscription</dt>
+              <dd>
+                {school.subscription.planName} ({school.subscription.status})
+              </dd>
+            </>
+          )}
+          {school.credits && (
+            <>
+              <dt>Students</dt>
+              <dd>{school.credits.balance.toLocaleString()}</dd>
+            </>
+          )}
+          {school.city && school.state && (
+            <>
+              <dt>Location</dt>
+              <dd>
+                {school.city}, {school.state}
+              </dd>
+            </>
+          )}
+          {school.motto && (
+            <>
+              <dt>Motto</dt>
+              <dd>{school.motto}</dd>
+            </>
+          )}
         </dl>
       ) : (
         <p className="text-muted">
-          School data unavailable — running in development mode without a backend.
+          School data unavailable — backend unreachable or subdomain not
+          provisioned.
         </p>
       )}
     </section>

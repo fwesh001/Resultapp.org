@@ -264,6 +264,8 @@ def init_schools_registry() -> None:
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+        # gen_random_uuid() is core in Postgres 13+; provide it for older versions.
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {SCHOOLS_REGISTRY_TABLE} (
                 id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
