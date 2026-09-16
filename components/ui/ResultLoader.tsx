@@ -2,7 +2,11 @@
 
 import { motion } from "framer-motion";
 
-export default function ResultLoader() {
+interface ResultLoaderProps {
+  message?: string;
+}
+
+export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLoaderProps) {
   return (
     <div className="flex flex-col items-center justify-center">
       {/* Gyroscope Container */}
@@ -69,7 +73,7 @@ export default function ResultLoader() {
           ease: "easeInOut",
         }}
       >
-        COMPILING_DATA...
+        {message}
       </motion.p>
     </div>
   );

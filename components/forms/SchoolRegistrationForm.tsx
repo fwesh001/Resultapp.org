@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import {
   formatNaira,
   PRICE_PER_STUDENT,
@@ -344,12 +345,18 @@ export function SchoolRegistrationForm() {
     );
   }
 
+  // Alias for overlay integration (instruction expects isProvisioning)
+  const isProvisioning = provisioning;
+
   // -------------------------------------------------------------------------
   // Success / Provisioning UI
   // -------------------------------------------------------------------------
   if (provisioning) {
     return (
-      <div className="flex flex-col items-center justify-center py-10 text-center">
+      <>
+        <LoadingOverlay isVisible={isProvisioning} message="PROVISIONING_PORTAL..." />
+        <LoadingOverlay isVisible={provisioning} message="PROVISIONING_PORTAL..." />
+        <div className="flex flex-col items-center justify-center py-10 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-600/15 ring-1 ring-purple-500/20">
           <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
         </div>
@@ -379,6 +386,7 @@ export function SchoolRegistrationForm() {
           This usually takes 30–60 seconds. You&apos;ll receive an email at {values.adminEmail}.
         </p>
       </div>
+      </>
     );
   }
 
@@ -441,7 +449,10 @@ export function SchoolRegistrationForm() {
   // Form UI (default)
   // -------------------------------------------------------------------------
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
+    <>
+      <LoadingOverlay isVisible={isProvisioning} message="PROVISIONING_PORTAL..." />
+      <LoadingOverlay isVisible={provisioning} message="PROVISIONING_PORTAL..." />
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* School Name */}
       <Input
         label="School Name"
@@ -665,5 +676,6 @@ export function SchoolRegistrationForm() {
         payment.
       </p>
     </form>
+    </>
   );
 }
