@@ -122,6 +122,22 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
       },
       {
         onSuccess: async (res) => {
+          // 1. Immediately force the Flutterwave modal to close at the very top of the onSuccess block.
+          // 2. If using flutterwave-react-v3, invoke closePaymentModal().
+          // 3. Include a fallback for the raw JS script by manually removing the iframe from the DOM
+          try {
+            const w = window as unknown as Record<string, unknown>;
+            const maybeClose = w["closePaymentModal"] as unknown as (() => void) | undefined;
+            if (typeof maybeClose === "function") {
+              maybeClose();
+            }
+          } catch {}
+          try {
+            const flwIframe = document.querySelector('iframe[name="checkout"]');
+            if (flwIframe) flwIframe.remove();
+          } catch {}
+
+          // 4. After closing the modal, evaluate the res.status, set the submitting state, and make the POST to /api/billing/upgrade.
           const isSuccess =
             res.status === "successful" ||
             res.status === "completed" ||
@@ -155,6 +171,10 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
               throw new Error(msg);
             }
             setSuccess({ studentCount: n, total: amount });
+            // 5. Upon a successful upgrade response, redirect the user directly to /{tenantId}/report/STU001?term=Term%201 after a brief 1.5-second timeout
+            setTimeout(() => {
+              window.location.href = `/${tenantId}/report/STU001?term=Term%201`;
+            }, 1500);
           } catch (e) {
             const msg = e instanceof Error ? e.message : "Upgrade failed. Contact support with transaction ID.";
             setError(msg + ` Ref: ${res.tx_ref || txRef}`);
@@ -354,7 +374,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
       </Button>
 
       <p className="text-center text-xs leading-5 text-zinc-500">
-        On success you’ll be redirected to <span className="font-mono font-medium text-purple-300">/{tenantId}/admin/templates</span> and your report cards will be unlocked.
+        On success you’ll be redirected to <span className="font-mono font-medium text-purple-300">/{tenantId}/report/STU001?term=Term%201</span> and your report cards will be unlocked.
       </p>
     </div>
   );
