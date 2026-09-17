@@ -639,6 +639,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Grading router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Phase 4: Super Admin — mount router (keeps provisioner intact)
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.admin import router as admin_router
+
+    app.include_router(admin_router)
+    logger.info("[App] Admin router mounted (/api/v1/admin/tenants)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Admin router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
