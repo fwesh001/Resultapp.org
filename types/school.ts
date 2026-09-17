@@ -124,7 +124,7 @@ export interface Subscription {
   schoolId: string;
   planId: string;
   planName: string;
-  status: "active" | "past_due" | "cancelled" | "trialing" | "inactive";
+  status: "active" | "past_due" | "cancelled" | "trialing" | "inactive" | "unpaid" | "trial";
   currentPeriodStart: string;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
