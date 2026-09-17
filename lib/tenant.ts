@@ -12,7 +12,7 @@ import { School, Subscription } from "@/types/school";
  * - BACKEND_URL : FastAPI base URL (defaults to droplet IP for production)
  */
 
-/** Raw shape returned by the backend schools registry. */
+/** Raw shape returned by the backend schools registry / tenant endpoint. */
 interface TenantRegistrySchool {
   id: string;
   subdomain: string;
@@ -32,6 +32,8 @@ interface TenantRegistrySchool {
   subscription_plan: string | null;
   subscription_status: string | null;
   student_count: number;
+  location: string | null;
+  status: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +51,8 @@ function getBackendUrl(): string {
 
 /** Map backend registry columns onto the frontend School type. */
 function normalizeSchool(raw: TenantRegistrySchool): School {
+  const locationParts =
+    raw.location?.split(",").map((part) => part.trim()) ?? [];
   return {
     id: raw.id,
     name: raw.school_name,
@@ -56,8 +60,8 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     email: raw.email ?? "",
     phone: raw.phone ?? undefined,
     address: raw.address ?? undefined,
-    city: raw.city ?? undefined,
-    state: raw.state ?? undefined,
+    city: raw.city ?? locationParts[0] ?? undefined,
+    state: raw.state ?? locationParts[1] ?? undefined,
     country: raw.country ?? "NG",
     logoUrl: raw.logo_url ?? undefined,
     motto: raw.motto ?? undefined,
@@ -66,7 +70,7 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     isVerified: raw.is_verified,
-    isActive: raw.is_active,
+    isActive: raw.status === "active" || raw.is_active,
     subscription:
       raw.subscription_plan || raw.subscription_status
         ? ({

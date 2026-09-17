@@ -24,6 +24,7 @@
 # misc
 .DS_Store
 *.pem
+*.key
 
 # debug
 npm-debug.log*
@@ -32,9 +33,46 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
+.env
+.env.local
+.env.*.local
 .env*
 !.env.example
 !**/.env.example
+
+# python / backend - ensure sensitive python artifacts never committed
+__pycache__/
+*.py[cod]
+*.pyc
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# logs
+logs/
+*.log
+npm-install*.log
+npm-install-*.log
+backend/logs/
+provisioning.log
+
+# local databases & secrets
+*.sqlite3
+*.db
+*.sqlite
+secrets/
+config/secrets/
+*.secret
 
 # vercel
 .vercel
@@ -42,10 +80,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# logs
-npm-install*.log
-npm-install-*.log
 
 #mcp
 opencode.json
