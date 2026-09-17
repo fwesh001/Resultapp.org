@@ -13,7 +13,7 @@ import logging
 import secrets
 import string
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import psycopg2
 from psycopg2 import sql
