@@ -110,7 +110,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
-  const backendUrl = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/upgrade`;
+  // Strip any accidental trailing paths from the env variable to isolate the raw host
+  const rawHost = (process.env.BACKEND_URL || "http://159.223.178.34:8000").split("/api/v1")[0].replace(/\/$/, "");
+  const backendUrl = `${rawHost}/api/v1/tenant/${encodeURIComponent(tenantId)}/upgrade`;
   let backendRes: Response;
   try {
     backendRes = await fetch(backendUrl, {
