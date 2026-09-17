@@ -39,17 +39,13 @@ export function calculateTotalAmount(studentCount: number): number {
   return count * pricePerStudent;
 }
 
+import { formatNaira as _formatNaira } from "@/lib/pricing";
 /**
  * Format NGN amount with thousand separators.
  * 15000 -> "₦15,000"
+ * @deprecated Import from @/lib/pricing instead (moved per Phase 4 decision 4). Kept for backwards compat.
  */
-export function formatNaira(amount: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+export const formatNaira = _formatNaira;
 
 // ---------------------------------------------------------------------------
 // Shared: tx_ref generator (usable on both client & server)
