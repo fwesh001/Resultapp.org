@@ -305,6 +305,100 @@ async def tenant_lookup(subdomain: str):
 
 
 # ---------------------------------------------------------------------------
+# Phase 3: Tenant Upgrade (monetization) — raw psycopg2, minimal scope
+# ---------------------------------------------------------------------------
+
+class TenantUpgradeRequest(BaseModel):
+    student_count: int = Field(..., gt=0, le=10000, examples=[150])
+    transaction_id: str = Field(..., min_length=1, examples=["FLW123456789"], description="Flutterwave transaction_id verified via Next.js proxy")
+
+class TenantUpgradeResponse(BaseModel):
+    success: bool
+    message: str
+    school: TenantMetadata
+
+
+@app.post("/api/v1/tenant/{tenant_id}/upgrade", response_model=TenantUpgradeResponse, tags=["tenancy"], dependencies=[Depends(verify_api_secret)])
+def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
+    """
+    Phase 3 upgrade: mark tenant as 'active' and set student_count.
+    Uses raw psycopg2 (like tenant_lookup) — minimal scope: only subscription_status + student_count.
+    Allows re-upgrade to scale (overwrites count). Verified via Flutterwave in Next.js proxy.
+    """
+    # Validate subdomain format (reuse existing regex)
+    tid = tenant_id.lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid.startswith("-") or tid.endswith("-"):
+        raise HTTPException(status_code=400, detail="Invalid tenant_id")
+    if tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail=f"Tenant '{tid}' is reserved")
+
+    # Ensure tenant exists
+    existing = get_school_by_subdomain(tid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+
+    # Raw psycopg2 UPDATE — minimal scope per decision 2
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET subscription_status = 'active',
+                student_count = %s,
+                updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
+                      logo_url, motto, proprietor_name, registration_number,
+                      is_verified, is_active, subscription_plan, subscription_status, student_count,
+                      created_at, updated_at;
+            """,
+            (int(payload.student_count), tid),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Tenant '{tid}' not found during upgrade")
+        row = cur.fetchone()
+        conn.commit()
+        school = _row_to_dict(row, cur)
+        logger.info(f"[UPGRADE] Tenant {tid} upgraded to active with {payload.student_count} students via tx {payload.transaction_id}")
+
+        # Normalize like tenant_lookup
+        city = school.get("city") or None
+        state = school.get("state") or None
+        school["location"] = ", ".join(filter(None, [city, state])) or None
+        school["status"] = "active" if school.get("is_active") else "inactive"
+        school["id"] = str(school.get("id", ""))
+        for ts_field in ("created_at", "updated_at"):
+            value = school.get(ts_field)
+            school[ts_field] = value.isoformat() if isinstance(value, datetime) else str(value)
+
+        return TenantUpgradeResponse(
+            success=True,
+            message=f"Tenant {tid} upgraded to active ({payload.student_count} students)",
+            school=TenantMetadata(**school),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[UPGRADE] Failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Upgrade failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # Provision endpoint
 # ---------------------------------------------------------------------------
 

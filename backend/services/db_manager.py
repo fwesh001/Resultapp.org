@@ -284,14 +284,28 @@ def init_schools_registry() -> None:
                 is_verified   BOOLEAN DEFAULT FALSE,
                 is_active     BOOLEAN DEFAULT TRUE,
                 subscription_plan VARCHAR(100),
-                subscription_status VARCHAR(50),
+                subscription_status VARCHAR(50) DEFAULT 'unpaid',
                 student_count INTEGER DEFAULT 0,
                 created_at    TIMESTAMPTZ DEFAULT NOW(),
                 updated_at    TIMESTAMPTZ DEFAULT NOW()
             );
         """)
+        # Phase 3: ensure existing deployments get the default without dropping data
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'unpaid';
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET subscription_status = 'unpaid'
+            WHERE subscription_status IS NULL OR subscription_status = '';
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_schools_subscription_status
+            ON {SCHOOLS_REGISTRY_TABLE} (subscription_status);
+        """)
         conn.commit()
-        logger.info(f"[DB] Schools registry table '{SCHOOLS_REGISTRY_TABLE}' ready")
+        logger.info(f"[DB] Schools registry table '{SCHOOLS_REGISTRY_TABLE}' ready (subscription_status default 'unpaid')")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize schools registry: {e}")
         if conn:
@@ -346,7 +360,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                 kwargs.get("is_verified", False),
                 kwargs.get("is_active", True),
                 kwargs.get("subscription_plan"),
-                kwargs.get("subscription_status"),
+                kwargs.get("subscription_status", "unpaid"),
                 kwargs.get("student_count"),
             ),
         )
