@@ -127,8 +127,40 @@ async def verify_api_secret(x_api_secret_key: Optional[str] = Header(None, alias
 # ---------------------------------------------------------------------------
 
 
+class TenantMetadata(BaseModel):
+    """Public, snake_case school metadata returned to the Next.js tenant layout.
+
+    Mirrors the schools registry columns plus two computed fields so
+    lib/tenant.ts can normalize them into the frontend School type:
+      - location: derived from city + state
+      - status:   derived from is_active ("active"/"inactive")
+    """
+    id: str
+    subdomain: str
+    school_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = "NG"
+    logo_url: Optional[str] = None
+    motto: Optional[str] = None
+    proprietor_name: Optional[str] = None
+    registration_number: Optional[str] = None
+    is_verified: bool = False
+    is_active: bool = True
+    subscription_plan: Optional[str] = None
+    subscription_status: Optional[str] = None
+    student_count: int = 0
+    location: Optional[str] = None
+    status: str = "inactive"
+    created_at: str
+    updated_at: str
+
+
 class TenantResponse(BaseModel):
-    school: Dict[str, Any]
+    school: TenantMetadata
 
 
 SUBDOMAIN_RE = re.compile(r"^[a-z0-9-]{3,30}$")
@@ -218,19 +250,37 @@ async def health():
     )
 
 
-@app.get("/api/v1/tenant/{subdomain}", tags=["tenancy"])
+@app.get("/api/v1/tenant/{subdomain}", response_model=TenantResponse, tags=["tenancy"])
 async def tenant_lookup(subdomain: str):
     """
-    Retrieve school metadata by subdomain for the Next.js tenant layout.
-    Used by app/[subdomain]/layout.tsx and app/[subdomain]/page.tsx.
+    Public tenant metadata lookup.
+
+    Queries the schools registry table in PostgreSQL for the given subdomain
+    and returns its snake_case columns (school_name, subscription_plan,
+    student_count, motto, location, status, etc.) plus computed fields so
+    lib/tenant.ts can normalize them. Clean 404 if the subdomain is unknown.
     """
+    subdomain = subdomain.lower().strip()
     school = get_school_by_subdomain(subdomain)
     if school is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No school found for subdomain '{subdomain}'",
         )
-    return TenantResponse(school=school)
+
+    # --- Computed convenience fields ---
+    city = school.get("city") or None
+    state = school.get("state") or None
+    school["location"] = ", ".join(filter(None, [city, state])) or None
+    school["status"] = "active" if school.get("is_active") else "inactive"
+
+    # --- Normalize DB types (UUID / timestamps) to JSON-safe strings ---
+    school["id"] = str(school.get("id", ""))
+    for ts_field in ("created_at", "updated_at"):
+        value = school.get(ts_field)
+        school[ts_field] = value.isoformat() if isinstance(value, datetime) else str(value)
+
+    return TenantResponse(school=TenantMetadata(**school))
 
 
 # ---------------------------------------------------------------------------

@@ -365,6 +365,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
 
 def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
     """Retrieve school metadata from the registry by subdomain."""
+    subdomain = _sanitize_subdomain(subdomain)
     conn = None
     try:
         conn = _connect_as_superuser()
