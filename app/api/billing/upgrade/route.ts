@@ -40,14 +40,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { tenantId, tenant_id, studentCount, student_count, transactionId, transaction_id } =
-    body as Record<string, unknown>;
+  const {
+    tenantId: rawTenantId,
+    tenant_id: rawTenantIdAlt,
+    studentCount,
+    student_count,
+    transactionId,
+    transaction_id,
+  } = body as Record<string, unknown>;
 
-  const tid = String(tenantId ?? tenant_id ?? "").toLowerCase().trim();
+  const tenantId = String(rawTenantId ?? rawTenantIdAlt ?? "").toLowerCase().trim();
   const countRaw = studentCount ?? student_count;
   const txId = String(transactionId ?? transaction_id ?? "").trim();
 
-  if (!tid) return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
   if (countRaw === undefined || countRaw === null || String(countRaw).trim() === "")
     return NextResponse.json({ success: false, error: "Missing studentCount" }, { status: 400 });
   if (!txId) return NextResponse.json({ success: false, error: "Missing transactionId" }, { status: 400 });
@@ -104,7 +110,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
-  const backendUrl = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tid)}/upgrade`;
+  const backendUrl = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/upgrade`;
   let backendRes: Response;
   try {
     backendRes = await fetch(backendUrl, {
@@ -144,7 +150,7 @@ export async function POST(req: NextRequest) {
   // 4. Revalidate tenant cache so report gate clears instantly
   try {
     // Next.js 16 types require second arg (profile) — use 'max' to match existing cache
-    (revalidateTag as unknown as (tag: string, profile?: string) => void)(`school-${tid}`, "max");
+    (revalidateTag as unknown as (tag: string, profile?: string) => void)(`school-${tenantId}`, "max");
   } catch (e) {
     console.warn("[billing/upgrade] revalidateTag failed", e);
   }
