@@ -6,3 +6,7 @@ psycopg2-binary==2.9.10
 requests==2.32.3
 python-dotenv==1.0.1
 email-validator==2.2.0
+sqlalchemy==2.0.36
+# Phase 2: Dynamic Grading Engine — SQLAlchemy ORM for JSONB templates/records
+# Keeps psycopg2-binary as DBAPI driver (postgresql+psycopg2)
+alembic==1.15.2  # optional: migrations (not required for Base.metadata.create_all)

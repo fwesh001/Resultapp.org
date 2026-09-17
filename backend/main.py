@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
@@ -46,6 +47,9 @@ from services.db_manager import (
 from services.site_generator import deploy_site, rollback_site, site_exists, generate_temp_credentials, get_domain
 from services.notifier import send_welcome_email, send_failure_alert
 
+# Phase 2: Grading router is included after app/lifespan definition to avoid circular import
+# (import done near the bottom after verify_api_secret is defined)
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -65,6 +69,27 @@ logging.basicConfig(
 logger = logging.getLogger("provisioning")
 
 # ---------------------------------------------------------------------------
+# Lifespan (replaces deprecated @app.on_event)
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: ensure central registry + grading engine tables exist
+    try:
+        init_schools_registry()
+    except Exception as e:
+        logger.warning(f"Schools registry init warning: {e}")
+    try:
+        from database import init_grading_tables
+
+        init_grading_tables()
+    except Exception as e:
+        logger.warning(f"Grading tables init warning (may be DB unreachable in dev): {e}")
+    yield
+    # Shutdown: no-op
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -72,6 +97,7 @@ app = FastAPI(
     title="ResultApp Provisioning Service",
     description="Automates isolated RosarioSIS instances on DigitalOcean Droplet for resultapp.org",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS — restrict to known origins (Next.js / Vercel)
@@ -89,11 +115,6 @@ API_SECRET = os.getenv("API_SECRET_KEY", "")
 ENV = os.getenv("ENV", "production")
 if not API_SECRET and ENV == "production":
     logger.warning("API_SECRET_KEY not set! All provision requests will be rejected in production.")
-
-
-@app.on_event("startup")
-async def startup():
-    init_schools_registry()
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +530,19 @@ async def provision_status(subdomain: str):
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception(f"Unhandled exception for {request.url.path}: {exc}")
     return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error", "path": str(request.url.path)})
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Dynamic Grading Engine — mount router (keeps provisioner intact)
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.grading import router as grading_router
+
+    app.include_router(grading_router)
+    logger.info("[App] Grading engine router mounted (/api/v1/templates, /api/v1/records/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Grading router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Entrypoint

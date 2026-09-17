@@ -1,4 +1,5 @@
-import { SchoolRegistrationForm } from "@/components/forms/SchoolRegistrationForm";
+import { RegisterSchoolForm } from "@/components/forms/RegisterSchoolForm";
+// Phase 3: paid tier — keep side-by-side, not deleted: `SchoolRegistrationForm` remains at `@/components/forms/SchoolRegistrationForm`
 import { CheckCircle2, ShieldCheck, Zap, GraduationCap, Users, Sparkles } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import Link from "next/link";
@@ -130,14 +131,15 @@ export default function RegisterPage() {
             </div>
 
 
-            {/* form card — dark */}
+            {/* form card — dark — Phase 1: direct provision (no payment) */}
             <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6 md:p-7">
               <div className="mb-6">
                 <h2 className="text-base font-semibold tracking-tight text-white">School registration</h2>
-                <p className="mt-1 text-sm text-purple-200/60">Enter your school details. Your total will be calculated instantly.</p>
+                <p className="mt-1 text-sm text-purple-200/60">Enter your school details. Your portal at subdomain.resultapp.org will be provisioned securely.</p>
               </div>
 
-              <SchoolRegistrationForm />
+              <RegisterSchoolForm />
+              {/* Phase 3: paid flow remains available: import { SchoolRegistrationForm } from "@/components/forms/SchoolRegistrationForm" */}
 
               <p className="mt-6 text-center text-xs text-purple-200/50">
                 Already have a portal?{" "}
