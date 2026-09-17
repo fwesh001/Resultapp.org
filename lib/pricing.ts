@@ -36,3 +36,11 @@ export function getSliderPct(studentCount: number): number {
   const n = Math.max(50, Math.min(2000, Math.floor(Number(studentCount) || 50)));
   return ((n - 50) / (2000 - 50)) * 100;
 }
+
+export function formatNaira(amount: number): string {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
