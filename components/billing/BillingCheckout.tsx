@@ -159,7 +159,8 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
               body: JSON.stringify({
                 tenantId,
                 studentCount: n,
-                transactionId: res.transaction_id,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                transactionId: res.transaction_id || (res as any).id || res.tx_ref,
               }),
             });
             const data = await upgradeRes.json().catch(() => ({}));
