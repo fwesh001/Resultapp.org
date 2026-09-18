@@ -271,7 +271,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
             step={10}
             value={clampedSlider}
             onChange={(e) => handleCountChange(e.target.value)}
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
             style={{
               background: `linear-gradient(to right, rgb(147 51 234) 0%, rgb(168 85 247) ${sliderPct}%, rgba(88,28,135,0.35) ${sliderPct}%, rgba(88,28,135,0.35) 100%)`,
             }}
@@ -294,7 +294,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
             1000+ → ₦80
           </span>
         </div>
-        <style>{`input[type="range"]::-webkit-slider-thumb{appearance:none;height:18px;width:18px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} input[type="range"]::-moz-range-thumb{height:18px;width:18px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)}`}</style>
+        <style>{`input[type="range"]::-webkit-slider-thumb{appearance:none;height:26px;width:26px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} input[type="range"]::-moz-range-thumb{height:26px;width:26px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} @media (pointer:coarse){input[type="range"]::-webkit-slider-thumb{height:30px;width:30px} input[type="range"]::-moz-range-thumb{height:30px;width:30px}}`}</style>
       </div>
 
       {/* Pricing card */}
