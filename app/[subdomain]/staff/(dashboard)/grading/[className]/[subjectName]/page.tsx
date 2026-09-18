@@ -61,12 +61,23 @@ function validTerm(value: string | null): string {
   return value && (TERMS as readonly string[]).includes(value) ? value : "Term 1";
 }
 
+/** useParams values may arrive URL-encoded (e.g. "JSS%201"); never throw on stray `%`. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export default function FocusedGradingPage() {
   const params = useParams<{ subdomain: string; className: string; subjectName: string }>();
   const searchParams = useSearchParams();
   const tenantId = (params.subdomain || "").toLowerCase().trim();
   const className = params.className || "";
   const subjectName = params.subjectName || "";
+  const decodedClassName = safeDecode(className);
+  const decodedSubjectName = safeDecode(subjectName);
 
   const [term, setTerm] = useState(() => validTerm(searchParams.get("term")));
   const [bundle, setBundle] = useState<Bundle | null>(null);
@@ -91,8 +102,8 @@ export default function FocusedGradingPage() {
     try {
       const qs = new URLSearchParams({
         tenant_id: tenantId,
-        class_name: className,
-        subject_name: subjectName,
+        class_name: decodedClassName,
+        subject_name: decodedSubjectName,
         term,
       });
       const res = await fetch(`/api/staff/grading?${qs.toString()}`);
@@ -105,7 +116,7 @@ export default function FocusedGradingPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, className, subjectName, term]);
+  }, [tenantId, decodedClassName, decodedSubjectName, term]);
 
   // Initial + term-change load from the network (event-driven fetching,
   // not render-derived state).
@@ -195,8 +206,8 @@ export default function FocusedGradingPage() {
         body: JSON.stringify({
           tenant_id: tenantId,
           term,
-          subject_name: subjectName,
-          class_name: className,
+          subject_name: decodedSubjectName,
+          class_name: decodedClassName,
           assessment_key: focused.key,
           scores,
         }),
@@ -236,8 +247,8 @@ export default function FocusedGradingPage() {
         body: JSON.stringify({
           tenant_id: tenantId,
           term,
-          subject_name: subjectName,
-          class_name: className,
+          subject_name: decodedSubjectName,
+          class_name: decodedClassName,
           assessment_key: "behavioural",
           scores: items,
         }),
@@ -279,7 +290,7 @@ export default function FocusedGradingPage() {
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">
-              {className} • {subjectName}
+              {decodedClassName} • {decodedSubjectName}
             </h1>
             <p className="mt-1 text-sm text-purple-200/60">
               {bundle ? `${bundle.students.length} student${bundle.students.length === 1 ? "" : "s"} • ${bundle.template.name}` : "Focused grading sheet"}
@@ -330,7 +341,7 @@ export default function FocusedGradingPage() {
           {bundle.students.length === 0 ? (
             <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 p-8 text-center">
               <Users className="mx-auto h-8 w-8 text-amber-300" />
-              <h3 className="mt-3 text-sm font-semibold text-white">No students in {className} yet</h3>
+              <h3 className="mt-3 text-sm font-semibold text-white">No students in {decodedClassName} yet</h3>
               <p className="mt-1 text-sm text-purple-200/60">
                 Ask an admin to register students for this class first.
               </p>
@@ -390,7 +401,7 @@ export default function FocusedGradingPage() {
           if (!o) setFocused(null);
         }}
         title={focused ? `Entering scores for ${focused.key} • Max: ${focused.max}` : ""}
-        description={`${className} • ${subjectName} • ${term}`}
+        description={`${decodedClassName} • ${decodedSubjectName} • ${term}`}
         size="md"
       >
         {focused && bundle && (
@@ -463,7 +474,7 @@ export default function FocusedGradingPage() {
         open={behaviouralOpen}
         onOpenChange={setBehaviouralOpen}
         title="Behavioural Traits • A–E"
-        description={`${className} • ${subjectName} • ${term} — tap a student, grade each trait, save.`}
+        description={`${decodedClassName} • ${decodedSubjectName} • ${term} — tap a student, grade each trait, save.`}
         size="md"
       >
         {bundle && (
