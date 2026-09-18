@@ -13,7 +13,8 @@ export const metadata = {
 export default function RegisterPage() {
   return (
     <>
-      <div className="min-h-screen grid bg-[#0B0514] lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
+      <div className="min-h-screen bg-[#0B0514]">
+      <main id="main-content" className="grid lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
       {/* LEFT — Brand / Visual (sticky desktop, short banner mobile) */}
       <div className="relative hidden overflow-hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
         <div className="absolute inset-0">
