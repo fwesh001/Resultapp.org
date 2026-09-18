@@ -91,7 +91,7 @@ export default function Footer({ school, subdomain }: FooterProps) {
             <li>
               <Link
                 href={`/${subdomain}/admin/templates`}
-                className="text-purple-200/70 transition hover:text-white"
+                className="inline-flex min-h-[44px] items-center text-purple-200/70 transition hover:text-white"
               >
                 Template Builder
               </Link>
@@ -99,7 +99,7 @@ export default function Footer({ school, subdomain }: FooterProps) {
             <li>
               <Link
                 href={`/${subdomain}/admin/billing`}
-                className="text-purple-200/70 transition hover:text-white"
+                className="inline-flex min-h-[44px] items-center text-purple-200/70 transition hover:text-white"
               >
                 Billing
               </Link>
