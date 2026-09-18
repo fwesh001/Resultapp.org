@@ -301,6 +301,11 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS hero_bg_url VARCHAR(512);
         """)
+        # Report metadata: new term resumption date (single global per tenant, per user clarification)
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS new_term_begins VARCHAR(32);
+        """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
             SET subscription_status = 'unpaid'
@@ -397,7 +402,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                   created_at, updated_at
+                   new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s;
             """,
