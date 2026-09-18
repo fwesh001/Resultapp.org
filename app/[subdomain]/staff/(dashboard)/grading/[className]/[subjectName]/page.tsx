@@ -70,6 +70,19 @@ function safeDecode(value: string): string {
   }
 }
 
+function sanitize(value: string): string {
+  return value.replace(/\s+/g, "_");
+}
+
+function buildDraftKey(
+  tenantId: string,
+  className: string,
+  subjectName: string,
+  assessmentKey: string,
+): string {
+  return `draft_${tenantId}_${sanitize(className)}_${sanitize(subjectName)}_${sanitize(assessmentKey)}`;
+}
+
 export default function FocusedGradingPage() {
   const params = useParams<{ subdomain: string; className: string; subjectName: string }>();
   const searchParams = useSearchParams();
@@ -161,12 +174,27 @@ export default function FocusedGradingPage() {
 
   function openFocused(a: Assessment) {
     const existing = bundle?.grades || {};
-    const next: Record<string, string> = {};
+    const base: Record<string, string> = {};
     for (const s of bundle?.students || []) {
       const v = existing[s.student_id]?.[a.key];
-      if (v !== undefined && v !== null) next[s.student_id] = String(v);
+      if (v !== undefined && v !== null) base[s.student_id] = String(v);
     }
-    setDrafts(next);
+    // Restore from localStorage if draft exists (failsafe)
+    if (typeof window !== "undefined") {
+      const key = buildDraftKey(tenantId, decodedClassName, decodedSubjectName, a.key);
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Record<string, string>;
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === "string") base[k] = v;
+          }
+        } catch {
+          // ignore corrupt draft
+        }
+      }
+    }
+    setDrafts(base);
     setFieldErrors({});
     setFocused(a);
   }
@@ -189,6 +217,64 @@ export default function FocusedGradingPage() {
     }
     setTraitDrafts(next);
     setExpandedStudent(studentId);
+  }
+
+  // Auto-save failsafe: on every keystroke persist draft to localStorage
+  useEffect(() => {
+    if (!focused) return;
+    if (typeof window === "undefined") return;
+    const key = buildDraftKey(tenantId, decodedClassName, decodedSubjectName, focused.key);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(drafts));
+    } catch {
+      // quota or private mode — non-fatal
+    }
+  }, [drafts, focused, tenantId, decodedClassName, decodedSubjectName]);
+
+  function handleFocusedClose(nextOpen: boolean) {
+    if (nextOpen) return;
+    if (!focused) {
+      setFocused(null);
+      return;
+    }
+    const key = buildDraftKey(tenantId, decodedClassName, decodedSubjectName, focused.key);
+    let hasUnsaved = false;
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Record<string, string>;
+          const entered = Object.values(parsed).some((v) => String(v).trim() !== "");
+          if (entered) {
+            const saved = bundle?.grades || {};
+            for (const [sid, rawVal] of Object.entries(parsed)) {
+              if (String(rawVal).trim() === "") continue;
+              const savedVal = saved[sid]?.[focused.key];
+              if (savedVal === undefined || String(savedVal) !== String(rawVal).trim()) {
+                hasUnsaved = true;
+                break;
+              }
+            }
+            if (!hasUnsaved) {
+              const anySaved = Object.keys(saved).length > 0;
+              if (!anySaved && Object.values(parsed).some((v) => String(v).trim() !== "")) hasUnsaved = true;
+            }
+          }
+        } catch {
+          hasUnsaved = false;
+        }
+      } else {
+        const entered = Object.values(drafts).some((v) => String(v).trim() !== "");
+        if (entered) hasUnsaved = true;
+      }
+    }
+    if (hasUnsaved) {
+      const ok = window.confirm("You have unsaved scores. Close anyway?");
+      if (!ok) return;
+    }
+    setFocused(null);
+    setDrafts({});
+    setFieldErrors({});
   }
 
   async function handleSave() {
@@ -222,7 +308,14 @@ export default function FocusedGradingPage() {
         }
         return { ...prev, grades };
       });
+      // Clear draft on successful save
+      if (typeof window !== "undefined") {
+        const key = buildDraftKey(tenantId, decodedClassName, decodedSubjectName, focused.key);
+        window.localStorage.removeItem(key);
+      }
       setFocused(null);
+      setDrafts({});
+      setFieldErrors({});
       toast.success(`Saved ${focused.key} for ${scores.length} student${scores.length === 1 ? "" : "s"}`);
     } catch (err) {
       toast.error("Could not save scores", {
@@ -394,23 +487,22 @@ export default function FocusedGradingPage() {
         </>
       )}
 
-      {/* View 2a — Focused academic entry modal */}
+      {/* View 2a — Focused academic entry modal (failsafe, centered large) */}
       <Modal
         open={focused !== null}
-        onOpenChange={(o) => {
-          if (!o) setFocused(null);
-        }}
+        onOpenChange={handleFocusedClose}
         title={focused ? `Entering scores for ${focused.key} • Max: ${focused.max}` : ""}
         description={`${decodedClassName} • ${decodedSubjectName} • ${term}`}
-        size="md"
+        size="lg"
+        className="border-purple-500/20 bg-[#0B0514] text-white"
       >
         {focused && bundle && (
-          <div className="space-y-2">
-            <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+          <div className="space-y-3">
+            <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1 sm:max-h-[60vh]">
               {bundle.students.map((s) => {
                 const err = fieldErrors[s.student_id];
                 return (
-                  <div key={s.id} className="flex items-center gap-3">
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-purple-500/10 bg-purple-900/[0.02] px-3 py-2">
                     <span className="min-w-0 flex-1 truncate text-sm text-white">
                       {s.full_name}{" "}
                       <span className="font-mono text-xs text-purple-300/40">{s.student_id}</span>
@@ -436,8 +528,8 @@ export default function FocusedGradingPage() {
                       aria-label={`Score for ${s.full_name}`}
                       className={
                         err
-                          ? "h-10 w-24 rounded-xl border border-red-500/60 bg-[#0B0514] px-3 text-sm text-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                          : "h-10 w-24 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          ? "h-10 w-24 shrink-0 rounded-xl border border-red-500/60 bg-[#0B0514] px-3 text-sm text-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                          : "h-10 w-24 shrink-0 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                       }
                     />
                   </div>
@@ -449,6 +541,9 @@ export default function FocusedGradingPage() {
                 <AlertCircle className="h-3.5 w-3.5" /> Some scores exceed the maximum — fix the red fields to save.
               </p>
             )}
+            <p className="text-xs text-purple-300/30">
+              Draft auto-saves to <span className="font-mono text-purple-200/50">{focused ? buildDraftKey(tenantId, decodedClassName, decodedSubjectName, focused.key) : ""}</span>
+            </p>
             <button
               type="button"
               onClick={() => void handleSave()}
@@ -475,10 +570,11 @@ export default function FocusedGradingPage() {
         onOpenChange={setBehaviouralOpen}
         title="Behavioural Traits • A–E"
         description={`${decodedClassName} • ${decodedSubjectName} • ${term} — tap a student, grade each trait, save.`}
-        size="md"
+        size="lg"
+        className="border-purple-500/20 bg-[#0B0514] text-white"
       >
         {bundle && (
-          <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
             {bundle.students.map((s) => {
               const expanded = expandedStudent === s.student_id;
               const doneCount = traits.filter(
