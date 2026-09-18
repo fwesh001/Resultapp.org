@@ -509,11 +509,15 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-2 text-[11px] text-slate-500">
-            <span className="font-mono">
-              {tenantId} • {studentId} • {term} • {academicSession}
-            </span>
-            <span>ResultApp • Secure Terminal Report</span>
+          <div className="mt-4 flex items-center justify-center border-t border-slate-200 pt-2 text-[11px] font-medium text-slate-600">
+            <a
+              href="https://resultapp.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-slate-800 hover:underline print:text-slate-600 print:no-underline"
+            >
+              Powered by ResultApp.org
+            </a>
           </div>
         </div>
       </div>
