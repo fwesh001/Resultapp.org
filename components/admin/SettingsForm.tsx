@@ -163,6 +163,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="school-phone"
           name="phone"
           type="tel"
+          autoComplete="tel"
           defaultValue={school?.phone ?? ""}
           placeholder="e.g. +234 800 000 0000"
           className={inputClassName}
