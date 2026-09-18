@@ -125,7 +125,7 @@ export default async function TenantPage({
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           <Link
-            href={`/${subdomain}/staff/grading`}
+            href={`/${subdomain}/staff`}
             className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
           >
             <Users className="h-8 w-8 text-purple-300" />
