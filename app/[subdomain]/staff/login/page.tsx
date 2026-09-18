@@ -18,8 +18,8 @@ export default async function StaffLoginPage({
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
       <div className="w-full max-w-md">
-        <Link href={`/${subdomain}`} className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 hover:text-white">
-          <ArrowLeft className="h-4 w-4" /> Back to {school?.name || subdomain}
+        <Link href={`/${subdomain}`} className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-purple-300/60 hover:text-white">
+          <ArrowLeft className="h-4 w-4" /> Back to {school?.name ? toTitleCase(school.name) : subdomain}
         </Link>
 
         <div className="mt-6 rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
@@ -38,7 +38,7 @@ export default async function StaffLoginPage({
 
           <h2 className="mt-6 text-xl font-bold tracking-tight text-white">Welcome back</h2>
           <p className="mt-1 text-sm text-purple-200/60">
-            Sign in to access your workload for <span className="font-medium text-white">{school?.name || subdomain}</span>.
+            Sign in to access your workload for <span className="font-medium text-white">{school?.name ? toTitleCase(school.name) : subdomain}</span>.
           </p>
 
           <div className="mt-6">
