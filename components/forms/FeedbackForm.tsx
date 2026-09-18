@@ -31,8 +31,10 @@ export function FeedbackForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">Your idea</label>
+        <label htmlFor="feedback-idea" className="text-sm font-medium text-purple-100">Your idea</label>
         <textarea
+          id="feedback-idea"
+          name="idea"
           required
           rows={4}
           placeholder="I wish ResultApp could..."
@@ -41,8 +43,8 @@ export function FeedbackForm() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-purple-100">Rate your experience</label>
-        <div className="flex items-center gap-1">
+        <span id="feedback-rating-label" className="text-sm font-medium text-purple-100">Rate your experience</span>
+        <div className="flex items-center gap-1" role="group" aria-labelledby="feedback-rating-label">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
@@ -50,8 +52,9 @@ export function FeedbackForm() {
               onMouseEnter={() => setHover(n)}
               onMouseLeave={() => setHover(0)}
               onClick={() => setRating(n)}
-              className="rounded-lg p-1 transition"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition"
               aria-label={`Rate ${n} stars`}
+              aria-pressed={rating === n}
             >
               <Star
                 className={`h-7 w-7 transition ${
