@@ -74,11 +74,17 @@ logger = logging.getLogger("provisioning")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure central registry + grading engine tables exist
+    # Startup: ensure central registry + grading engine + roster tables exist
     try:
         init_schools_registry()
     except Exception as e:
         logger.warning(f"Schools registry init warning: {e}")
+    try:
+        from services.db_manager import init_roster_registry
+
+        init_roster_registry()
+    except Exception as e:
+        logger.warning(f"Roster registry init warning: {e}")
     try:
         from database import init_grading_tables
 
@@ -651,6 +657,18 @@ try:
     logger.info("[App] Admin router mounted (/api/v1/admin/tenants, PATCH /api/v1/tenant/{tenant_id}/profile)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Admin router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
+# Allocations & Roster — per-tenant directory
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.allocations import router as allocations_router
+
+    app.include_router(allocations_router)
+    logger.info("[App] Allocations router mounted (/api/v1/tenant/{tenant_id}/roster)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Allocations router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Entrypoint
