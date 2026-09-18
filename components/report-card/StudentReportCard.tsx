@@ -53,6 +53,7 @@ interface ReportResponse {
   student_id: string;
   attendance?: { present: number | null; outOf: number | null };
   termMeta?: { termEnding: string | null; newTermBegins: string | null };
+  school?: { school_name?: string | null; address?: string | null; new_term_begins?: string | null } | null;
 }
 
 interface StudentReportCardProps {
@@ -87,6 +88,24 @@ function remarkFromGrade(grade: string): string {
 function formatDash(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
   return String(v);
+}
+
+function formatTermDate(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const s = String(raw).trim();
+  if (!s) return "—";
+  // Try ISO YYYY-MM-DD or YYYY/MM/DD
+  const d = new Date(s);
+  if (!isNaN(d.getTime()) && /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s)) {
+    const day = String(d.getDate()).padStart(2, "0");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mon = months[d.getMonth()] ?? "";
+    const year = d.getFullYear();
+    return `${day} ${mon} ${year}`;
+  }
+  // If already formatted like 09 Jan 2026 keep as is
+  if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(s)) return s;
+  return s;
 }
 
 export function StudentReportCard({ tenantId, studentId, term, isLocked = false, schoolName }: StudentReportCardProps) {
@@ -133,8 +152,11 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
     overallPositionOrdinal: null,
   };
   const academicSession = data?.academic_session ?? "";
-  const attendance = data?.attendance ?? { present: null, outOf: null };
-  const termMeta = data?.termMeta ?? { termEnding: null, newTermBegins: null };
+  const schoolFromReport = data?.school ?? null;
+  // Prefer report school address, else fallback to prop schoolName's tenant address via page wrapper? For now use report
+  const schoolAddress = (schoolFromReport?.address ?? "").trim() || "";
+  const rawResumption = (schoolFromReport?.new_term_begins ?? data?.termMeta?.newTermBegins ?? null) as string | null;
+  const newTermBeginsDisplay = rawResumption ? formatTermDate(rawResumption) : "—";
 
   if (loading) {
     return (
@@ -162,14 +184,6 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
   const displayGender = student?.gender ? student.gender.charAt(0).toUpperCase() + student.gender.slice(1).toLowerCase() : "—";
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
-  const attendanceText =
-    attendance.present !== null && attendance.outOf !== null
-      ? `${attendance.present} / ${attendance.outOf}`
-      : attendance.present !== null
-        ? `${attendance.present}`
-        : "—";
-  const termEnding = termMeta.termEnding ?? "—";
-  const newTermBegins = termMeta.newTermBegins ?? "—";
 
   return (
     <div className="relative mx-auto max-w-4xl">
@@ -178,40 +192,40 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
           id="report-card"
           className="mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
         >
-          {/* Official School Branding & Header — compact */}
+          {/* Official School Branding & Header — traditional */}
           <div className="mb-3 text-center">
             {schoolName ? (
               <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{schoolName}</h1>
             ) : (
               <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{tenantId.toUpperCase()}</h1>
             )}
-            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Official Terminal Academic Report</p>
-            {academicSession && (
-              <span className="mt-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
-                Academic Session: {academicSession} • {term}
-              </span>
-            )}
+            {schoolAddress ? (
+              <p className="mt-1 text-[11px] font-medium tracking-wide text-slate-600">{schoolAddress}</p>
+            ) : null}
             <div className="mx-auto mt-2 h-px w-20 bg-slate-200" />
           </div>
 
-          {/* Compact Bio-Data Grid — high-density 4-column desktop */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 mb-3 text-xs grid grid-cols-2 md:grid-cols-4 gap-2 gap-y-1.5">
-            <div className="col-span-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Full Name</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight truncate">{displayName}</p>
-            </div>
+          {/* Top-Center Student Name — uppercase bold, centered, allow wrap */}
+          <div className="mb-3 text-center">
+            <p className="font-bold uppercase tracking-wide text-slate-900 text-sm md:text-base leading-tight break-words">{displayName.toUpperCase()}</p>
+          </div>
+
+          {/* Redesigned Two-Row Bio-Data Grid — compact */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 mb-3 text-xs grid grid-cols-3 gap-2">
+            {/* First Row: CLASS | ADMISSION NO. | SEX */}
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Sex / Gender</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{displayGender}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Class</p>
+              <p className="mt-0.5 font-semibold text-slate-900 leading-tight truncate">{displayClass}</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Admission No.</p>
-              <p className="mt-0.5 font-mono font-semibold text-slate-900 leading-tight">{studentId}</p>
+              <p className="mt-0.5 font-mono font-semibold text-slate-900 leading-tight truncate">{studentId}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Class</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{displayClass}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Sex</p>
+              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{displayGender}</p>
             </div>
+            {/* Second Row: NO. IN CLASS | POSITION | NEW TERM BEGINS */}
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">No. in Class</p>
               <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{noInClass ? String(noInClass) : "—"}</p>
@@ -221,21 +235,8 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
               <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{overallPos !== "—" && noInClass ? `${overallPos} of ${noInClass}` : "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Attendance</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{attendanceText}</p>
-              <p className="text-[10px] leading-none text-slate-500">Present / Out of</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Term Ending</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{formatDash(termEnding)}</p>
-            </div>
-            <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">New Term Begins</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{formatDash(newTermBegins)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Session</p>
-              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{academicSession || "—"}</p>
+              <p className="mt-0.5 font-semibold text-slate-900 leading-tight">{newTermBeginsDisplay}</p>
             </div>
           </div>
 
