@@ -1,5 +1,6 @@
 import StaffLoginForm from "@/components/staff/StaffLoginForm";
 import { getTenant } from "@/lib/tenant";
+import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
 import { GraduationCap, ShieldCheck, ArrowLeft } from "lucide-react";
 
