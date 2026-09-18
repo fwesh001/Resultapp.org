@@ -190,7 +190,7 @@ export default function SuperAdminPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-purple-300/30">
-          Real-time • <span className="font-mono">GET /api/superadmin/tenants</span> • <span className="font-mono">no-store</span> • {tenants.length} rows
+          Live data • {tenants.length} {tenants.length === 1 ? "school" : "schools"}
         </p>
       </div>
     </div>
