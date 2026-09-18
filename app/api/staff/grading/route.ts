@@ -8,7 +8,11 @@ import { cookies } from "next/headers";
  * only forwards when the session's tenant matches the requested tenant.
  * Injects X-API-SECRET-KEY server-side; the secret never reaches the browser.
  *
- * GET  ?tenant_id=&class_name=&subject_name=&term=Term 1
+ * GET modes:
+ *  - Hub mode (no class/subject): ?tenant_id=&tenantId — returns { allocations, template }
+ *    by fan-out to /staff/{staffId}/dashboard + /templates/{tenantId} in parallel.
+ *  - Bundle mode: ?tenant_id=&class_name=&subject_name=&term=Term 1 — forwards to
+ *    /api/v1/tenant/{tenant_id}/staff/grading/{class}/{subject}?term=
  * POST { tenant_id, term, subject_name, class_name, assessment_key, scores }
  */
 
@@ -35,15 +39,16 @@ interface StaffSession {
   tenant_id?: string;
 }
 
-async function getSessionTenant(): Promise<string | null> {
+async function getSessionDetails(): Promise<{ tenant: string; staffId: string } | null> {
   try {
     const cookieStore = await cookies();
     const raw = cookieStore.get("staff_session")?.value;
     if (!raw) return null;
     const session = JSON.parse(raw) as StaffSession;
     const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-    if (!tenant || !session?.staff) return null;
-    return tenant;
+    const staffId = String(session?.staff?.staff_id || session?.staff?.id || "").trim();
+    if (!tenant || !staffId || !session?.staff) return null;
+    return { tenant, staffId };
   } catch {
     return null;
   }
@@ -73,26 +78,20 @@ function backendError(data: unknown, text: string, status: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const sessionTenant = await getSessionTenant();
-  if (!sessionTenant) return unauthorized();
+  const session = await getSessionDetails();
+  if (!session) return unauthorized();
 
   const params = req.nextUrl.searchParams;
-  const tenantId = String(
-    params.get("tenant_id") ?? params.get("tenantId") ?? "",
-  )
+  // Hub mode may omit tenant_id -> fallback to session tenant
+  let tenantId = String(params.get("tenant_id") ?? params.get("tenantId") ?? "")
     .toLowerCase()
     .trim();
+  if (!tenantId) tenantId = session.tenant;
   const className = String(params.get("class_name") ?? "").trim();
   const subjectName = String(params.get("subject_name") ?? "").trim();
   const term = String(params.get("term") ?? "Term 1").trim();
 
-  if (!tenantId || !className || !subjectName) {
-    return NextResponse.json(
-      { success: false, error: "Missing tenant_id, class_name or subject_name" },
-      { status: 400 },
-    );
-  }
-  if (tenantId !== sessionTenant) {
+  if (tenantId !== session.tenant) {
     return NextResponse.json(
       { success: false, error: "Session does not belong to this school" },
       { status: 403 },
@@ -107,8 +106,94 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const base = getBackendBase();
+
+  // Hub mode: no class/subject -> allocations + active template
+  if (!className || !subjectName) {
+    const dashboardUrl = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/${encodeURIComponent(session.staffId)}/dashboard`;
+    const templatesUrl = `${base}/api/v1/templates/${encodeURIComponent(tenantId)}`;
+
+    let dashboardRes: Response;
+    let templatesRes: Response;
+    try {
+      [dashboardRes, templatesRes] = await Promise.all([
+        fetch(dashboardUrl, {
+          headers: { "X-API-SECRET-KEY": secret },
+          cache: "no-store",
+        }),
+        fetch(templatesUrl, {
+          headers: { "X-API-SECRET-KEY": secret },
+          cache: "no-store",
+        }),
+      ]);
+    } catch (e) {
+      console.error("[api/staff/grading GET hub] backend fetch failed", e);
+      return NextResponse.json(
+        { success: false, error: "Could not reach grading service" },
+        { status: 502 },
+      );
+    }
+
+    const dashText = await dashboardRes.text();
+    const tmplText = await templatesRes.text();
+    let dashData: unknown;
+    let tmplData: unknown;
+    try {
+      dashData = JSON.parse(dashText);
+    } catch {
+      dashData = { raw: dashText };
+    }
+    try {
+      tmplData = JSON.parse(tmplText);
+    } catch {
+      tmplData = { raw: tmplText };
+    }
+
+    if (!dashboardRes.ok) return backendError(dashData, dashText, dashboardRes.status);
+    // Templates: allow empty array (no template) -> return null instead of error; but bubble real errors
+    if (!templatesRes.ok) {
+      // If 404 / empty, treat as no template
+      const isNotFound = templatesRes.status === 404;
+      if (!isNotFound) return backendError(tmplData, tmplText, templatesRes.status);
+    }
+
+    const allocations = (dashData as { allocations?: unknown })?.allocations ?? [];
+    // Backend list_templates returns array directly
+    let template: unknown = null;
+    if (Array.isArray(tmplData)) {
+      template = tmplData.length > 0 ? tmplData[0] : null;
+    } else if (tmplData && typeof tmplData === "object" && Array.isArray((tmplData as { data?: unknown }).data)) {
+      const arr = (tmplData as { data: unknown[] }).data;
+      template = arr.length > 0 ? arr[0] : null;
+    } else if (tmplData && typeof tmplData === "object") {
+      // Single object case
+      template = tmplData;
+      // If it's an error wrapper without array, null out if it looks like error
+      if ((template as { detail?: unknown }).detail && !Array.isArray(template)) {
+        template = null;
+      }
+    }
+
+    return NextResponse.json(
+      {
+        allocations,
+        template,
+        tenant_id: tenantId,
+      },
+      { status: 200 },
+    );
+  }
+
+  // Bundle mode: class + subject present
+  if (!tenantId || !className || !subjectName) {
+    return NextResponse.json(
+      { success: false, error: "Missing tenant_id, class_name or subject_name" },
+      { status: 400 },
+    );
+  }
+
   const url =
-    `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading` +
+    `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading` +
     `/${encodeURIComponent(className)}/${encodeURIComponent(subjectName)}` +
     `?term=${encodeURIComponent(term)}`;
 
@@ -138,8 +223,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sessionTenant = await getSessionTenant();
-  if (!sessionTenant) return unauthorized();
+  const session = await getSessionDetails();
+  if (!session) return unauthorized();
 
   let body: Record<string, unknown>;
   try {
@@ -160,7 +245,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (tenantId !== sessionTenant) {
+  if (tenantId !== session.tenant) {
     return NextResponse.json(
       { success: false, error: "Session does not belong to this school" },
       { status: 403 },
