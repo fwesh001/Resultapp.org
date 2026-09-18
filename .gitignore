@@ -77,6 +77,9 @@ config/secrets/
 # vercel
 .vercel
 
+# runtime branding uploads (served from public/, never commit)
+public/uploads/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
