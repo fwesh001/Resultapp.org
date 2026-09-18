@@ -195,7 +195,7 @@ def get_grading_bundle(
         cur = conn.cursor()
 
         cur.execute(
-            f"SELECT id, student_id, full_name, class_name FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s ORDER BY full_name",
+            f"SELECT id, student_id, full_name, class_name, gender FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s ORDER BY full_name",
             (tid, class_name),
         )
         students = _serialize_rows(cur, cur.fetchall())
