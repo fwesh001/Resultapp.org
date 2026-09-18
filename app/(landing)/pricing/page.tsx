@@ -67,7 +67,7 @@ export default function PricingPage() {
         <div className="mx-auto mt-10 max-w-[860px] text-center">
           <Link
             href="/register"
-            className="group inline-flex items-center justify-center gap-2 rounded-full bg-purple-600 px-10 py-4 text-base font-semibold text-white shadow-[0_0_40px_rgba(147,51,234,0.45)] transition-all hover:bg-purple-500 hover:shadow-[0_0_60px_rgba(147,51,234,0.6)] animate-pulse hover:animate-none"
+            className="group inline-flex items-center justify-center gap-2 rounded-full bg-purple-600 px-10 py-4 text-base font-semibold text-white shadow-[0_0_40px_rgba(147,51,234,0.45)] transition-all hover:bg-purple-500 hover:shadow-[0_0_60px_rgba(147,51,234,0.6)] motion-safe:animate-pulse hover:motion-safe:animate-none"
           >
             Get Started Now
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
