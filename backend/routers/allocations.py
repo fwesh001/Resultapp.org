@@ -289,8 +289,8 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
 
             cur.execute(
                 f"""
-                INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
+                VALUES (%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))
                 RETURNING id, subdomain, staff_id, full_name, email, phone, role, created_at;
                 """,
                 (tid, staff_id, full_name, email, phone, role),
