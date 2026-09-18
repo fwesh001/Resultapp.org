@@ -304,7 +304,7 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false 
           <div className="flex justify-between border-t border-zinc-200 pt-6 text-xs text-zinc-600 print:border-black">
             <div>
               <div className="h-10 w-40 border-b border-zinc-400" />
-              <p className="mt-1 font-medium">Class Teacher</p>
+              <p className="mt-1 font-medium">Class Staff</p>
             </div>
             <div className="text-right">
               <div className="h-10 w-40 border-b border-zinc-400" />
