@@ -66,6 +66,9 @@ def _normalize_school_row(row: dict):
     row["location"] = ", ".join(filter(None, [city, state])) or None
     row["status"] = "active" if row.get("is_active") else "inactive"
     row["id"] = str(row.get("id", ""))
+    # new_term_begins is VARCHAR date string, keep as is or empty
+    if "new_term_begins" in row and row["new_term_begins"] is not None:
+        row["new_term_begins"] = str(row["new_term_begins"]).strip()
     for ts_field in ("created_at", "updated_at"):
         value = row.get(ts_field)
         if isinstance(value, datetime):
@@ -95,7 +98,7 @@ def list_tenants():
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                   created_at, updated_at
+                   new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             ORDER BY created_at DESC
             """
@@ -138,6 +141,7 @@ class TenantProfileUpdate(BaseModel):
     address: Optional[str] = None
     logo_url: Optional[str] = None
     hero_bg_url: Optional[str] = None
+    new_term_begins: Optional[str] = None
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
@@ -166,11 +170,11 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             raise HTTPException(status_code=400, detail="school_name too long (max 120 chars)")
         data["school_name"] = name
     # Normalize blank optional strings to NULL so cleared fields don't store ""
-    for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url"):
+    for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
@@ -190,7 +194,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      created_at, updated_at;
+                      new_term_begins, created_at, updated_at;
             """,
             tuple(values),
         )
