@@ -278,6 +278,7 @@ def init_schools_registry() -> None:
                 state         VARCHAR(100),
                 country       VARCHAR(100) DEFAULT 'NG',
                 logo_url      TEXT,
+                hero_bg_url   VARCHAR(512),
                 motto         TEXT,
                 proprietor_name VARCHAR(200),
                 registration_number VARCHAR(100),
@@ -294,6 +295,11 @@ def init_schools_registry() -> None:
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'unpaid';
+        """)
+        # Settings pipeline: hero background image for the tenant landing page
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS hero_bg_url VARCHAR(512);
         """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
@@ -325,10 +331,10 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
             f"""
             INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                 (subdomain, school_name, email, phone, address, city, state, country,
-                 logo_url, motto, proprietor_name, registration_number,
+                 logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                  is_verified, is_active, subscription_plan, subscription_status, student_count)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (subdomain) DO UPDATE SET
                 school_name = EXCLUDED.school_name,
                 email = EXCLUDED.email,
@@ -338,6 +344,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                 state = EXCLUDED.state,
                 country = EXCLUDED.country,
                 logo_url = EXCLUDED.logo_url,
+                hero_bg_url = EXCLUDED.hero_bg_url,
                 motto = EXCLUDED.motto,
                 proprietor_name = EXCLUDED.proprietor_name,
                 registration_number = EXCLUDED.registration_number,
@@ -354,6 +361,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                 kwargs.get("state"),
                 kwargs.get("country", "NG"),
                 kwargs.get("logo_url"),
+                kwargs.get("hero_bg_url"),
                 kwargs.get("motto"),
                 kwargs.get("proprietor_name"),
                 kwargs.get("registration_number"),
@@ -387,7 +395,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
         cur.execute(
             f"""
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
-                   logo_url, motto, proprietor_name, registration_number,
+                   logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
                    created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
