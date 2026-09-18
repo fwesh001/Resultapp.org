@@ -120,16 +120,16 @@ export default async function TenantPage({
       <section className="mx-auto max-w-5xl px-6 py-14">
         <h2 className="text-center text-2xl font-semibold">Staff Portals</h2>
         <p className="mt-2 text-center text-sm text-purple-200/70">
-          Quick access for teachers and administrators.
+          Quick access for staff and administrators.
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           <Link
-            href={`/${subdomain}/teacher/grading`}
+            href={`/${subdomain}/staff/grading`}
             className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
           >
             <Users className="h-8 w-8 text-purple-300" />
-            <h3 className="mt-3 text-lg font-semibold">Teacher Portal</h3>
+            <h3 className="mt-3 text-lg font-semibold">Staff Portal</h3>
             <p className="mt-1 text-sm text-purple-200/70">
               Enter scores and grade student results.
             </p>
