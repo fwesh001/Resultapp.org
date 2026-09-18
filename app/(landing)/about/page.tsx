@@ -1,4 +1,5 @@
 import { PageHero } from "@/components/ui/PageHero";
+import Image from "next/image";
 import { Target, Shield } from "lucide-react";
 
 export default function AboutPage() {
@@ -15,9 +16,12 @@ export default function AboutPage() {
           <div className="relative grid gap-8 md:grid-cols-2 md:gap-12 md:items-center">
             <div className="relative order-1">
               <div className="overflow-hidden rounded-[1.4rem] border border-purple-500/15 bg-purple-900/10 shadow-[0_0_40px_rgba(147,51,234,0.12)] isolate">
-                <img
+                <Image
                   src="/our_mission.jpg"
                   alt="Students collaborating"
+                  width={1408}
+                  height={768}
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   className="block h-[240px] w-full max-w-full object-cover object-center md:h-[300px]"
                 />
               </div>
@@ -63,9 +67,12 @@ export default function AboutPage() {
 
             <div className="relative order-1 md:order-2">
               <div className="overflow-hidden rounded-[1.4rem] border border-purple-500/15 bg-purple-900/10 shadow-[0_0_40px_rgba(147,51,234,0.12)] isolate">
-                <img
+                <Image
                   src="/our_value.jpg"
                   alt="Team values"
+                  width={1408}
+                  height={666}
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   className="block h-[240px] w-full max-w-full object-cover object-center md:h-[300px]"
                 />
               </div>
