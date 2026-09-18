@@ -156,8 +156,16 @@ export default async function AdminDashboardPage({
 
         {/* Grading Progress */}
         <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">Grading Progress</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-base font-semibold">
+              Grading Progress
+              <span
+                title="Placeholder metric — live data coming soon"
+                className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
+              >
+                Demo
+              </span>
+            </h2>
             <span className="text-sm font-semibold text-purple-300">
               65% complete
             </span>
