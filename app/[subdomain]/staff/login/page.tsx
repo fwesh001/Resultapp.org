@@ -45,8 +45,8 @@ export default async function StaffLoginPage({
             <StaffLoginForm tenantId={subdomain} />
           </div>
 
-          <p className="mt-4 rounded-xl border border-amber-500/15 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200/70">
-            Default PIN is <span className="font-mono font-bold text-amber-200">123456</span>. Please contact the Principal if you cannot log in.
+          <p className="mt-4 rounded-xl border border-purple-500/15 bg-purple-500/10 px-3 py-2 text-xs leading-5 text-purple-200/70">
+            Your login credentials were issued by your school. Please contact the Principal if you cannot log in.
           </p>
 
           <p className="mt-4 text-center text-xs text-purple-300/30">
