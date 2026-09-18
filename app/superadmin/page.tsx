@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Building2, CheckCircle2, DollarSign, School, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { calculateTieredTotal, formatNaira } from "@/lib/pricing";
+import { toTitleCase } from "@/lib/format";
 
 interface Tenant {
   id: string;
@@ -115,15 +116,15 @@ export default function SuperAdminPage() {
           </span>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Super Admin — Tenants</h1>
-            <p className="text-sm text-purple-200/60">Platform owner view • real-time via FastAPI <span className="font-mono">GET /api/v1/admin/tenants</span></p>
+            <p className="text-sm text-purple-200/60">Platform owner view • Live tenant registry</p>
           </div>
         </div>
 
         {/* KPIs */}
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          <KpiCard icon={Building2} label="Total Schools" value={kpis.total} sub="ORDER BY created_at DESC" />
-          <KpiCard icon={CheckCircle2} label="Active Schools" value={kpis.active} sub="subscription_status === 'active'" />
-          <KpiCard icon={DollarSign} label="Total Revenue" value={formatNaira(kpis.revenue)} sub="sum(calculateTieredTotal) active only" />
+          <KpiCard icon={Building2} label="Total Schools" value={kpis.total} sub="Newest first" />
+          <KpiCard icon={CheckCircle2} label="Active Schools" value={kpis.active} sub="Status: active" />
+          <KpiCard icon={DollarSign} label="Total Revenue" value={formatNaira(kpis.revenue)} sub="Active schools only" />
         </div>
 
         {/* Table */}
@@ -153,7 +154,7 @@ export default function SuperAdminPage() {
                     return (
                       <tr key={t.id || t.subdomain} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
                         <td className="px-4 py-3 font-mono text-sm font-medium text-white">{t.subdomain}</td>
-                        <td className="px-4 py-3">{t.school_name}</td>
+                        <td className="px-4 py-3">{toTitleCase(t.school_name)}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
