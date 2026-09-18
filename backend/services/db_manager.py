@@ -415,6 +415,81 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Allocations & Roster — per-tenant directory (Phase: Allocations)
+# ---------------------------------------------------------------------------
+
+TENANT_STUDENTS_TABLE = "tenant_students"
+TENANT_STAFF_TABLE = "tenant_staff"
+TENANT_ALLOCATIONS_TABLE = "tenant_allocations"
+
+
+def init_roster_registry() -> None:
+    """Create tenant_students, tenant_staff, tenant_allocations if they don't exist."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+
+        # Students
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_STUDENTS_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                student_id VARCHAR(60) NOT NULL,
+                full_name VARCHAR(120) NOT NULL,
+                class_name VARCHAR(60) NOT NULL,
+                gender VARCHAR(20),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, student_id)
+            );
+        """)
+
+        # Staff
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_STAFF_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                staff_id VARCHAR(60) NOT NULL,
+                full_name VARCHAR(120) NOT NULL,
+                email VARCHAR(255),
+                phone VARCHAR(20),
+                role VARCHAR(50) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, staff_id)
+            );
+        """)
+
+        # Allocations — subject → staff → class
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_ALLOCATIONS_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                subject_name VARCHAR(120) NOT NULL,
+                staff_name VARCHAR(120) NOT NULL,
+                class_name VARCHAR(60) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, subject_name, class_name)
+            );
+        """)
+
+        # Indexes for fast subdomain-scoped lookups
+        for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE]:
+            cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_subdomain ON {tbl}(subdomain);")
+            cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_created_at ON {tbl}(created_at DESC);")
+
+        conn.commit()
+        logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations)")
+    except Exception as e:
+        logger.error(f"[DB] Failed to initialize roster registry: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
 def _row_to_dict(row, cursor) -> Dict[str, Any]:
     """Convert a psycopg2 cursor row to a dict using cursor column names."""
     if row is None:
