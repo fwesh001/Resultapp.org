@@ -447,7 +447,7 @@ def init_roster_registry() -> None:
             );
         """)
 
-        # Staff
+        # Staff — with password_hash for Staff Authentication (default PIN 123456 hashed via pgcrypto)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TENANT_STAFF_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -457,10 +457,16 @@ def init_roster_registry() -> None:
                 email VARCHAR(255),
                 phone VARCHAR(20),
                 role VARCHAR(50) NOT NULL,
+                password_hash VARCHAR(255),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(subdomain, staff_id)
             );
         """)
+        # Ensure existing deployments get password_hash column (NOT NULL constraint added after backfill)
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
+        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
+        # Enforce NOT NULL after backfill (idempotent)
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
 
         # Allocations — subject → staff → class
         cur.execute(f"""
