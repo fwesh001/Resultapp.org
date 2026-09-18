@@ -156,9 +156,16 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
         if (!res.ok) {
           throw new Error((json as { error?: string }).error || `Failed to load report (${res.status})`);
         }
-        if (!cancelled) setData(json as ReportResponse);
+        if (!cancelled) {
+          const response = json as ReportResponse;
+          setData(response);
+          announceReportReady(!!(response.student && (response.grades?.length ?? 0) > 0));
+        }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load report");
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load report");
+          announceReportReady(false);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
