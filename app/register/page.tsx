@@ -44,7 +44,7 @@ export default function RegisterPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-[36ch] text-sm leading-6 text-purple-200/70">
-              Say goodbye to manual errors and printing costs. Your portal at <span className="font-mono text-purple-200">yourschool.resultapp.org</span> goes live right after payment.
+              Say goodbye to manual errors and printing costs.               Your portal at <span className="font-mono text-purple-200">yourschool.resultapp.org</span> goes live right after registration.
             </p>
 
             <div className="mt-8 grid gap-3">
