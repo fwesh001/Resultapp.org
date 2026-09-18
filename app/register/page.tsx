@@ -174,12 +174,12 @@ export default function RegisterPage() {
               </ol>
             </div>
 
-            <p className="mt-6 text-center text-xs text-purple-200/40">
-              Questions? Email support@resultapp.org • WhatsApp +234 800 RESULTAPP
+            <p className="mt-6 text-center text-xs text-purple-200/70">
+              Questions? Email support@resultapp.org • WhatsApp +234 702 506 7494
             </p>
           </div>
         </div>
-      </div>
+      </main>
       </div>
       <Footer />
     </>
