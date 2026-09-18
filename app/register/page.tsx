@@ -152,8 +152,8 @@ export default function RegisterPage() {
 
             <ul className="mt-5 space-y-2.5 text-sm">
               {[
-                "Instant subdomain provisioning after payment",
-                "Secure checkout via Flutterwave (card, transfer, USSD)",
+                "Instant subdomain provisioning after registration",
+                "Secure provisioning with instant SSL and admin onboarding",
                 "Admin account + student slots credited automatically",
               ].map((item) => (
                 <li key={item} className="flex gap-2">
