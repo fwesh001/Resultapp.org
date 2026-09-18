@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle, Lock, CreditCard } from "lucide-react";
+import { AlertCircle, Lock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
 
@@ -234,20 +234,55 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-white/5 px-6 py-8 text-center text-sm text-purple-200 backdrop-blur print:hidden">
-        <span className="inline-flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading report for {studentId} — {term}…
-        </span>
+      <div
+        role="status"
+        aria-label={`Loading report for ${studentId}`}
+        className="mx-auto max-w-4xl rounded-2xl bg-white p-4 shadow-2xl motion-safe:animate-pulse md:p-6 print:hidden"
+      >
+        <div className="mx-auto h-6 w-2/3 rounded bg-slate-200" />
+        <div className="mx-auto mt-2 h-4 w-1/3 rounded bg-slate-100" />
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-10 rounded-lg bg-slate-100" />
+          ))}
+        </div>
+        <div className="mt-4 space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-8 rounded-lg bg-slate-100" />
+          ))}
+        </div>
+        <span className="sr-only">Loading report for {studentId} — {term}…</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="mx-auto max-w-4xl rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 print:hidden">
-        <span className="inline-flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </span>
+      <div className="mx-auto max-w-4xl space-y-4">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 print:hidden">
+          <span className="inline-flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </span>
+        </div>
+        {isLocked && (
+          <div className="w-full rounded-2xl border border-red-500/50 bg-zinc-900 p-6 text-center shadow-2xl print:hidden">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/30">
+              <Lock className="h-6 w-6 text-red-400" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-white">Subscription Payment Required</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
+              Report card generation is locked. Upgrade your subscription to print and download official report sheets for {term}.
+            </p>
+            <Button
+              onClick={() => (window.location.href = `/${tenantId}/admin/billing`)}
+              className="mt-5 w-full gap-2 rounded-full bg-red-600 font-semibold text-white hover:bg-red-500"
+              size="lg"
+            >
+              <CreditCard className="h-4 w-4" /> Upgrade to Print
+            </Button>
+            <p className="mt-3 text-xs text-zinc-500">Need help? contact@resultapp.org</p>
+          </div>
+        )}
       </div>
     );
   }
