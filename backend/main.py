@@ -695,6 +695,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Staff grading router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Report Card — professional Digital Paper
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.report import router as report_router
+
+    app.include_router(report_router)
+    logger.info("[App] Report router mounted (/api/v1/tenant/{tenant_id}/report/{student_id})")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Report router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
