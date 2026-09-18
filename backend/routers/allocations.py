@@ -352,6 +352,124 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
 
 
 # ---------------------------------------------------------------------------
+# PATCH — update student/staff (partial, ID immutable)
+# ---------------------------------------------------------------------------
+
+class RosterPatch(BaseModel):
+    full_name: Opt[str] = None
+    class_name: Opt[str] = None
+    gender: Opt[str] = None
+    email: Opt[str] = None
+    phone: Opt[str] = None
+    role: Opt[str] = None
+
+
+@router.patch("/{record_type}/{record_id}", summary="Update a roster record (partial)")
+def update_roster_record(tenant_id: str, record_type: str, record_id: str, payload: RosterPatch):
+    tid = _validate_tenant_id(tenant_id)
+
+    if record_type not in ("student", "staff"):
+        raise HTTPException(status_code=400, detail="record_type must be student or staff for PATCH")
+
+    # Validate UUID
+    import uuid
+
+    try:
+        uuid.UUID(record_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid record id (must be UUID)")
+
+    # Build dynamic SET clause — sparse updates only provided fields
+    updates: dict[str, object] = {}
+    if record_type == "student":
+        if payload.full_name is not None:
+            v = payload.full_name.strip()
+            if not v:
+                raise HTTPException(status_code=400, detail="full_name cannot be empty")
+            updates["full_name"] = v
+        if payload.class_name is not None:
+            v = payload.class_name.strip()
+            if not v:
+                raise HTTPException(status_code=400, detail="class_name cannot be empty")
+            updates["class_name"] = v
+        if payload.gender is not None:
+            v = payload.gender.strip()
+            if v and v.lower() not in ("male", "female"):
+                raise HTTPException(status_code=400, detail="gender must be Male or Female")
+            updates["gender"] = v or None
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updatable fields provided (full_name, class_name, gender)")
+
+        table = "tenant_students"
+        returning = "id, subdomain, student_id, full_name, class_name, gender, created_at"
+
+    else:  # staff
+        if payload.full_name is not None:
+            v = payload.full_name.strip()
+            if not v:
+                raise HTTPException(status_code=400, detail="full_name cannot be empty")
+            updates["full_name"] = v
+        if payload.email is not None:
+            v = payload.email.strip()
+            updates["email"] = v or None
+        if payload.phone is not None:
+            v = payload.phone.strip()
+            updates["phone"] = v or None
+        if payload.role is not None:
+            v = payload.role.strip()
+            allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
+            if v not in allowed_roles:
+                raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
+            updates["role"] = v
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updatable fields provided (full_name, email, phone, role)")
+
+        table = "tenant_staff"
+        returning = "id, subdomain, staff_id, full_name, email, phone, role, created_at"
+
+    # Do NOT allow updating student_id / staff_id per spec (ID immutable)
+    set_clause = ", ".join(f"{col} = %s" for col in updates)
+    values = list(updates.values()) + [record_id, tid]
+
+    from services.db_manager import _connect_as_superuser, _row_to_dict
+    from datetime import datetime
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {table} SET {set_clause} WHERE id = %s AND subdomain = %s RETURNING {returning};",
+            tuple(values),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"{record_type} not found")
+        row = cur.fetchone()
+        conn.commit()
+        d = _row_to_dict(row, cur)
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        d["id"] = str(d["id"])
+        return {"type": record_type, "record": d}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[roster] patch failed {record_type} {record_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # DELETE — remove by type and id
 # ---------------------------------------------------------------------------
 
