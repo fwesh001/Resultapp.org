@@ -77,7 +77,7 @@ export default async function AdminDashboardPage({
     },
     {
       label: "View Reports",
-      href: `/${subdomain}/teacher/grading`,
+      href: `/${subdomain}/staff/grading`,
       icon: FileBarChart,
     },
   ];
@@ -151,7 +151,7 @@ export default async function AdminDashboardPage({
             </span>
           </div>
           <p className="mt-1 text-sm text-purple-200/60">
-            Teachers have submitted most Term 1 scores.
+            Staff have submitted most Term 1 scores.
           </p>
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/5">
             <div
