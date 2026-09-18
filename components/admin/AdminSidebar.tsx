@@ -15,11 +15,13 @@ import { toTitleCase } from "@/lib/format";
 interface AdminSidebarProps {
   subdomain: string;
   schoolName: string;
+  onNavigate?: () => void;
 }
 
 export default function AdminSidebar({
   subdomain,
   schoolName,
+  onNavigate,
 }: AdminSidebarProps) {
   const pathname = usePathname();
 
@@ -59,7 +61,7 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
       <div className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5">
         <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
           <GraduationCap className="h-5 w-5 text-purple-300" />
@@ -80,6 +82,7 @@ export default function AdminSidebar({
             <Link
               key={item.label}
               href={item.href}
+              onClick={onNavigate}
               className={
                 active
                   ? "flex items-center gap-3 rounded-lg border-r-2 border-purple-500 bg-purple-600/20 px-3 py-2.5 text-sm font-medium text-purple-300"
@@ -96,6 +99,7 @@ export default function AdminSidebar({
       <div className="border-t border-purple-500/20 p-4">
         <Link
           href={`/${subdomain}`}
+          onClick={onNavigate}
           className="block rounded-lg px-3 py-2 text-xs text-zinc-500 transition hover:bg-white/5 hover:text-white"
         >
           ← Back to school portal
