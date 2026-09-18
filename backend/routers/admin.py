@@ -93,7 +93,7 @@ def list_tenants():
         cur.execute(
             f"""
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
-                   logo_url, motto, proprietor_name, registration_number,
+                   logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
                    created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
@@ -113,6 +113,108 @@ def list_tenants():
         from fastapi import HTTPException as _HTTPException
 
         raise _HTTPException(status_code=500, detail=f"Failed to list tenants: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Tenant profile & branding — PATCH /api/v1/tenant/{tenant_id}/profile
+# ---------------------------------------------------------------------------
+
+# Separate router (no /api/v1/admin prefix) so the route lives at
+# /api/v1/tenant/{tenant_id}/profile. Protected by the same API secret.
+profile_router = APIRouter(tags=["tenancy"], dependencies=[Depends(_verify_superadmin_secret)])
+
+
+class TenantProfileUpdate(BaseModel):
+    school_name: Optional[str] = None
+    motto: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    logo_url: Optional[str] = None
+    hero_bg_url: Optional[str] = None
+
+
+@profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
+def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
+    """
+    Update a tenant's public profile (school_name, motto, phone, email,
+    address, logo_url, hero_bg_url) via raw psycopg2
+    UPDATE schools SET ... WHERE subdomain = %s.
+    Returns the updated tenant. Protected by verify_api_secret.
+    """
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS, TenantMetadata
+
+    tid = (tenant_id or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid.startswith("-") or tid.endswith("-"):
+        raise HTTPException(status_code=400, detail="Invalid tenant_id")
+    if tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail=f"Tenant '{tid}' is reserved")
+
+    data = payload.model_dump(exclude_none=True)
+    if "school_name" in data:
+        name = (data["school_name"] or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="school_name cannot be empty")
+        if len(name) > 120:
+            raise HTTPException(status_code=400, detail="school_name too long (max 120 chars)")
+        data["school_name"] = name
+    # Normalize blank optional strings to NULL so cleared fields don't store ""
+    for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url"):
+        if key in data and isinstance(data[key], str) and not data[key].strip():
+            data[key] = None
+
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url")
+    updates = {k: data[k] for k in allowed if k in data}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No profile fields provided")
+
+    set_clause = ", ".join(f"{col} = %s" for col in updates)
+    values = list(updates.values()) + [tid]
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET {set_clause}, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
+                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
+                      is_verified, is_active, subscription_plan, subscription_status, student_count,
+                      created_at, updated_at;
+            """,
+            tuple(values),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        row = cur.fetchone()
+        conn.commit()
+        school = _normalize_school_row(_row_to_dict(row, cur))
+        _logger.info(f"[admin] Tenant {tid} profile updated ({', '.join(updates)})")
+        return {
+            "success": True,
+            "message": f"Tenant {tid} profile updated",
+            "school": TenantMetadata(**school).model_dump(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] update_tenant_profile failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Profile update failed: {e}")
     finally:
         if conn:
             try:
