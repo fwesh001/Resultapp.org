@@ -77,7 +77,7 @@ export default async function AdminDashboardPage({
     },
     {
       label: "View Reports",
-      href: `/${subdomain}/staff/grading`,
+      href: `/${subdomain}/staff`,
       icon: FileBarChart,
     },
   ];
