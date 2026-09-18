@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
+import { toTitleCase } from "@/lib/format";
 import ResultLookupWidget from "@/components/landing/ResultLookupWidget";
+import Navbar from "@/components/landing/Navbar";
+import Footer from "@/components/landing/Footer";
 import {
   ShieldCheck,
   GraduationCap,
@@ -27,25 +30,32 @@ export default async function TenantPage({
   if (!school) {
     return (
       <main className="min-h-screen bg-[#0B0514] text-white">
-        <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
+        <Navbar schoolName={routeSubdomain} subdomain={routeSubdomain} />
+        <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
           <GraduationCap className="h-12 w-12 text-purple-400" />
           <h1 className="mt-4 text-3xl font-bold">
-            School not found ({routeSubdomain})
+            School not found ({toTitleCase(routeSubdomain)})
           </h1>
           <p className="mt-2 text-purple-200/70">
             School data unavailable — backend unreachable or subdomain not
             provisioned.
           </p>
-          <footer className="mt-10 text-sm text-purple-300/50">
-            Powered by ResultApp.org • Academic Registry Portal
-          </footer>
         </div>
+        <footer className="border-t border-purple-500/20 py-6 text-center text-sm text-purple-300/60">
+          Powered by ResultApp.org • Academic Registry Portal
+        </footer>
       </main>
     );
   }
 
   return (
     <main className="min-h-screen bg-[#0B0514] text-white">
+      <Navbar
+        schoolName={school.name}
+        subdomain={subdomain}
+        logoUrl={school.logoUrl}
+      />
+
       {/* Section 1 — Hero */}
       <section className="border-b border-purple-500/20 bg-purple-900/[0.04]">
         <div className="mx-auto max-w-5xl px-6 py-14 text-center">
@@ -60,7 +70,7 @@ export default async function TenantPage({
           </div>
 
           <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-5xl">
-            {school.name}
+            {toTitleCase(school.name)}
           </h1>
           {school.motto && (
             <p className="mt-3 text-lg italic text-purple-300">
@@ -76,7 +86,10 @@ export default async function TenantPage({
       </section>
 
       {/* Section 2 — Result Lookup */}
-      <section className="mx-auto flex max-w-5xl flex-col items-center px-6 py-12">
+      <section
+        id="result-checker"
+        className="mx-auto flex max-w-5xl scroll-mt-24 flex-col items-center px-6 py-12"
+      >
         <h2 className="text-2xl font-semibold">Check Results Online</h2>
         <p className="mt-2 text-center text-sm text-purple-200/70">
           Parents — enter your child&apos;s Student ID and select a term to view
@@ -132,10 +145,7 @@ export default async function TenantPage({
         </div>
       </section>
 
-      {/* Section 4 — Footer */}
-      <footer className="border-t border-purple-500/20 py-6 text-center text-sm text-purple-300/60">
-        Powered by ResultApp.org • Academic Registry Portal
-      </footer>
+      <Footer school={school} subdomain={subdomain} />
     </main>
   );
 }
