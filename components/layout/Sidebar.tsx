@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+export const dashboardNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/students", label: "Students", icon: Users },
   { href: "/dashboard/results", label: "Results", icon: FileBarChart },
@@ -21,6 +21,8 @@ const navItems = [
   { href: "/dashboard/credits", label: "Credits & Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
+
+const navItems = dashboardNavItems;
 
 export function Sidebar() {
   const pathname = usePathname();
