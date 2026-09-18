@@ -1,40 +1,34 @@
-/**
- * Allocations & Roster placeholder.
- */
-export default function AllocationsPage() {
-  const tabs = ["Students", "Staff", "Subjects"];
+import { getTenant } from "@/lib/tenant";
+import { AllocationsManager } from "@/components/admin/AllocationsManager";
+
+export const dynamic = "force-dynamic";
+
+export default async function AllocationsPage({
+  params,
+}: {
+  params: Promise<{ subdomain: string }>;
+}) {
+  const { subdomain } = await params;
+  const tenantId = subdomain.toLowerCase().trim();
+  const school = await getTenant(tenantId);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <h1 className="text-2xl font-bold tracking-tight">
-        Allocations &amp; Roster
-      </h1>
-      <p className="mt-1 text-sm text-purple-200/60">
-        Manage class allocations across students, staff, and subjects.
-      </p>
-
-      {/* Simulated sub-nav */}
-      <div className="mt-6 flex flex-wrap gap-2 border-b border-purple-500/15 pb-4">
-        {tabs.map((tab, index) => (
-          <button
-            key={tab}
-            type="button"
-            className={
-              index === 0
-                ? "rounded-full bg-purple-600/20 px-4 py-2 text-sm font-medium text-purple-200"
-                : "rounded-full border border-purple-500/15 px-4 py-2 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
-            }
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Allocations & Roster</h1>
+          <p className="mt-1 text-sm text-purple-200/60">
+            Manage students, staff & subject allocations for{" "}
+            <span className="font-mono font-medium text-white">{school?.name || tenantId}</span>
+            <span className="ml-2 rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-mono text-purple-200">
+              {tenantId}
+            </span>
+          </p>
+        </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
-        <p className="text-sm text-purple-200/60">
-          Roster management is coming soon. This section will list students,
-          staff assignments, and subject allocations.
-        </p>
+      <div className="mt-6">
+        <AllocationsManager tenantId={tenantId} />
       </div>
     </div>
   );
