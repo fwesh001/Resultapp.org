@@ -13,6 +13,21 @@ interface StaffShellProps {
 
 export default function StaffShell({ subdomain, schoolName, children }: StaffShellProps) {
   const [open, setOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Escape to close + initial focus when the mobile drawer opens.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const firstFocusable = drawerRef.current?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled])',
+    );
+    firstFocusable?.focus();
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open ]);
 
   return (
     <div className="flex h-screen bg-[#0B0514] text-white">
@@ -21,7 +36,13 @@ export default function StaffShell({ subdomain, schoolName, children }: StaffShe
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div
+          ref={drawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${toTitleCase(schoolName)} staff menu`}
+          className="fixed inset-0 z-50 md:hidden"
+        >
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute left-0 top-0 h-full shadow-2xl">
             <StaffSidebar subdomain={subdomain} schoolName={schoolName} onNavigate={() => setOpen(false)} />
