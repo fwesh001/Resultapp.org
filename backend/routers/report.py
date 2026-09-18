@@ -1,11 +1,12 @@
 """
-Report Card — Digital Paper.
+Report Card — Digital Paper (Granular CA Edition).
 GET /api/v1/tenant/{tenant_id}/report/{student_id}?term=Term 1
 
 Queries tenant_students (bio), active grading_templates, tenant_grades (primary)
 with graceful fallback to legacy student_academic_records / student_behavioral_records.
+Supports granular CA components A1/A2/T1/T2/Exam via exact + alias map.
+Calculates per-subject totals, class averages, subject positions, overall ranking.
 Always returns 200 even if student is null so frontend can show admission-number banner.
-Computes totalScore / average / overallGrade via Nigerian thresholds.
 """
 
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,101 @@ from database import get_db
 logger = logging.getLogger(__name__)
 
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
+
+CANONICAL_KEYS = ["A1", "A2", "T1", "T2", "Exam"]
+# Alias map: normalized lower key -> canonical
+ALIAS_MAP: Dict[str, str] = {
+    "a1": "A1",
+    "a 1": "A1",
+    "assignment 1": "A1",
+    "assignment1": "A1",
+    "ass 1": "A1",
+    "a2": "A2",
+    "a 2": "A2",
+    "assignment 2": "A2",
+    "assignment2": "A2",
+    "ass 2": "A2",
+    "t1": "T1",
+    "t 1": "T1",
+    "test 1": "T1",
+    "test1": "T1",
+    "ca1": "T1",
+    "ca 1": "T1",
+    "ca": "T1",
+    "t2": "T2",
+    "t 2": "T2",
+    "test 2": "T2",
+    "test2": "T2",
+    "ca2": "T2",
+    "ca 2": "T2",
+    "exam": "Exam",
+    "examination": "Exam",
+    "final": "Exam",
+    "final exam": "Exam",
+    "finalexam": "Exam",
+}
+
+
+def _normalize_key(raw: str) -> Optional[str]:
+    k = (raw or "").strip()
+    if not k:
+        return None
+    low = k.lower()
+    # direct canonical case-insensitive
+    for cand in CANONICAL_KEYS:
+        if low == cand.lower():
+            return cand
+    # alias lookup
+    if low in ALIAS_MAP:
+        return ALIAS_MAP[low]
+    # try removing extra spaces/punct
+    low2 = low.replace("-", " ").replace("_", " ").strip()
+    # collapse multiple spaces
+    low2 = " ".join(low2.split())
+    if low2 in ALIAS_MAP:
+        return ALIAS_MAP[low2]
+    return None
+
+
+def _extract_breakdown(academic_scores: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Map arbitrary stored keys to canonical A1/A2/T1/T2/Exam using alias fallback."""
+    out: Dict[str, Optional[float]] = {k: None for k in CANONICAL_KEYS}
+    if not isinstance(academic_scores, dict):
+        return out
+    for raw_key, raw_val in academic_scores.items():
+        canon = _normalize_key(str(raw_key))
+        if canon is None:
+            continue
+        # only take first occurrence wins, but allow overwrite if later? keep first
+        if out[canon] is not None:
+            continue
+        try:
+            v = float(raw_val)
+            # keep as is; do not cap per component here
+            out[canon] = round(v, 2) if v == v else None  # NaN guard
+        except Exception:
+            out[canon] = None
+    return out
+
+
+def _has_any_granular(breakdown: Dict[str, Optional[float]]) -> bool:
+    return any(v is not None for v in breakdown.values())
+
+
+def _ordinal(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        suffix = "th"
+    else:
+        r = n % 10
+        if r == 1:
+            suffix = "st"
+        elif r == 2:
+            suffix = "nd"
+        elif r == 3:
+            suffix = "rd"
+        else:
+            suffix = "th"
+    return f"{n}{suffix}"
 
 
 async def _verify_report_secret(
@@ -139,7 +235,23 @@ def _academic_session() -> str:
     return f"{y-1}/{y}"
 
 
-@router.get("/{student_id}", summary="Report card bundle: student bio + template + grades + behavioural + summary")
+def _compute_simple_granular_total(breakdown: Dict[str, Optional[float]]) -> Optional[float]:
+    """Simple sum A1+A2+T1+T2+Exam if any granular present, else None to signal fallback."""
+    if not _has_any_granular(breakdown):
+        return None
+    s = 0.0
+    has = False
+    for k in CANONICAL_KEYS:
+        v = breakdown.get(k)
+        if v is not None:
+            s += float(v)
+            has = True
+    if not has:
+        return None
+    return round(min(s, 100.0), 2)
+
+
+@router.get("/{student_id}", summary="Report card bundle: student bio + template + grades + behavioural + summary + rankings")
 def get_report_bundle(
     tenant_id: str,
     student_id: str,
@@ -193,7 +305,21 @@ def get_report_bundle(
         grades_out: List[Dict[str, Any]] = []
         behavioural_merged: Dict[str, str] = {}
 
+        class_student_ids: List[str] = []
+        class_name: Optional[str] = None
+
         if student is not None:
+            class_name = student.get("class_name")
+            # Fetch classmates for ranking
+            try:
+                cur.execute(
+                    f"SELECT student_id FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s",
+                    (tid, class_name),
+                )
+                class_student_ids = [r[0] for r in cur.fetchall() if r[0]]
+            except Exception:
+                class_student_ids = [sid]
+
             # Primary source: tenant_grades
             cur.execute(
                 f"SELECT subject_name, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND student_id = %s AND term = %s ORDER BY subject_name",
@@ -215,13 +341,23 @@ def get_report_bundle(
                         vv = str(v).strip().upper()
                         if kk and vv:
                             behavioural_merged[kk] = vv
-                    total = _compute_total(academic_structure, academic_scores)
+
+                    # Granular breakdown with alias fallback
+                    breakdown = _extract_breakdown(academic_scores)
+                    granular_total = _compute_simple_granular_total(breakdown)
+                    if granular_total is not None:
+                        total = granular_total
+                    else:
+                        total = _compute_total(academic_structure, academic_scores)
+
                     grade = _grade_from_total(total)
                     remark = _remark_from_grade(grade)
+                    # Prepare display breakdown; keep dash for missing by converting None -> not included, frontend will render —
                     grades_out.append(
                         {
                             "subject_name": subject_name,
                             "academic_scores": academic_scores,
+                            "breakdown": {k: (v if v is not None else None) for k, v in breakdown.items()},
                             "total": total,
                             "grade": grade,
                             "remark": remark,
@@ -242,20 +378,30 @@ def get_report_bundle(
             )
             for rec in legacy_academic:
                 scores = getattr(rec, "scores", {}) or {}
+                breakdown = _extract_breakdown(scores)
+                granular_total = _compute_simple_granular_total(breakdown)
                 total = getattr(rec, "total_score", None)
-                if total is None:
-                    total = _compute_total(academic_structure, scores)
-                try:
-                    total_f = float(total)
-                except Exception:
-                    total_f = 0.0
-                grade = _grade_from_total(total_f)
+                if granular_total is not None:
+                    total_f = float(granular_total)
+                elif total is not None:
+                    try:
+                        total_f = float(total)
+                    except Exception:
+                        total_f = _compute_total(academic_structure, scores)
+                else:
+                    # try granular first if legacy has granular keys
+                    if _has_any_granular(breakdown):
+                        total_f = float(_compute_simple_granular_total(breakdown) or 0)
+                    else:
+                        total_f = _compute_total(academic_structure, scores)
+                grade = _grade_from_total(float(total_f))
                 remark = _remark_from_grade(grade)
                 grades_out.append(
                     {
                         "subject_name": getattr(rec, "subject", ""),
                         "academic_scores": scores,
-                        "total": round(total_f, 2),
+                        "breakdown": {k: (v if v is not None else None) for k, v in breakdown.items()},
+                        "total": round(float(total_f), 2),
                         "grade": grade,
                         "remark": remark,
                     }
@@ -279,10 +425,142 @@ def get_report_bundle(
                         if kk and vv:
                             behavioural_merged[kk] = vv
 
-        # Compute summary
+        # --- Class statistics & overall ranking ---
+        # Defaults
+        no_in_class = len(class_student_ids) if student is not None else 0
+        overall_position: Optional[int] = None
+        overall_position_ordinal: Optional[str] = None
+
+        # Data structures for stats
+        # For each subject, we need list of peer totals
+        # For overall ranking, grand totals per peer
+
+        if student is not None and grades_out and class_name and class_student_ids:
+            # Build subject list from this student's grades
+            subject_names = [g["subject_name"] for g in grades_out]
+
+            # Bulk fetch peers' grades for those subjects/term (tenant_grades primary)
+            # Map: subject -> list of totals per peer
+            subject_totals_map: Dict[str, List[float]] = {s: [] for s in subject_names}
+            grand_totals_map: Dict[str, float] = {sid_peer: 0.0 for sid_peer in class_student_ids}
+
+            try:
+                # Fetch from tenant_grades bulk
+                # Use psycopg2 ANY for arrays
+                if subject_names:
+                    cur.execute(
+                        f"""
+                        SELECT student_id, subject_name, academic_scores
+                        FROM {TENANT_GRADES_TABLE}
+                        WHERE subdomain = %s AND term = %s AND subject_name = ANY(%s) AND student_id = ANY(%s)
+                        """,
+                        (tid, term, subject_names, class_student_ids),
+                    )
+                    peer_rows = cur.fetchall()
+                    # Group by peer and subject, compute granular total per row
+                    # For accurate grand totals, need per peer per subject total
+                    peer_subject_total: Dict[tuple, float] = {}
+                    for pr_sid, pr_subj, pr_scores in peer_rows:
+                        pr_scores = pr_scores or {}
+                        if not isinstance(pr_scores, dict):
+                            pr_scores = {}
+                        br = _extract_breakdown(pr_scores)
+                        gt = _compute_simple_granular_total(br)
+                        if gt is None:
+                            gt = _compute_total(academic_structure, pr_scores)
+                        peer_subject_total[(pr_sid, pr_subj)] = float(gt)
+
+                    # Populate subject totals map and grand totals
+                    for subj in subject_names:
+                        for peer_sid in class_student_ids:
+                            tot = peer_subject_total.get((peer_sid, subj))
+                            if tot is None:
+                                # No record for this peer/subject -> treat as 0 for average but still counts towards denominator
+                                tot = 0.0
+                            subject_totals_map[subj].append(float(tot))
+                            grand_totals_map[peer_sid] += float(tot)
+
+                    # Fallback supplement from legacy if tenant_grades gave sparse data and legacy exists
+                    # Check if any subject has zero totals for all peers but legacy may have data
+                    # Simple heuristic: if all totals for a subject are 0 and grades_out came from legacy, legacy already covered.
+                    # But to handle mixed migration, we could also supplement legacy totals if peer_subject_total missing and legacy has record
+                    # For brevity, only supplement if tenant_grades peer_rows empty
+                    if not peer_rows:
+                        # Try legacy bulk
+                        legacy_rows = (
+                            db.query(models.StudentAcademicRecord)
+                            .filter(
+                                models.StudentAcademicRecord.tenant_id == tid,
+                                models.StudentAcademicRecord.term == term,
+                                models.StudentAcademicRecord.subject.in_(subject_names),
+                                models.StudentAcademicRecord.student_id.in_(class_student_ids),
+                            )
+                            .all()
+                        )
+                        # Reset maps
+                        subject_totals_map = {s: [] for s in subject_names}
+                        grand_totals_map = {sid_peer: 0.0 for sid_peer in class_student_ids}
+                        leg_map: Dict[tuple, float] = {}
+                        for rec in legacy_rows:
+                            k = (rec.student_id, rec.subject)
+                            sc = getattr(rec, "scores", {}) or {}
+                            br = _extract_breakdown(sc)
+                            gt = _compute_simple_granular_total(br)
+                            if gt is None:
+                                gt_val = getattr(rec, "total_score", None)
+                                if gt_val is None:
+                                    gt_val = _compute_total(academic_structure, sc)
+                                try:
+                                    gt = float(gt_val)
+                                except Exception:
+                                    gt = 0.0
+                            leg_map[k] = float(gt)  # type: ignore
+                        for subj in subject_names:
+                            for peer_sid in class_student_ids:
+                                tot = leg_map.get((peer_sid, subj), 0.0)
+                                subject_totals_map[subj].append(float(tot))
+                                grand_totals_map[peer_sid] += float(tot)
+            except Exception as e:
+                logger.warning(f"[report:classStats] bulk fetch failed for {tid}/{class_name}/{term}: {e}")
+                # keep maps with zeros
+
+            # Now enrich grades_out with classAverage and subjectPosition
+            for g in grades_out:
+                subj = g["subject_name"]
+                totals_for_subj = subject_totals_map.get(subj, [])
+                if totals_for_subj and no_in_class > 0:
+                    avg = round(sum(totals_for_subj) / no_in_class, 1)
+                else:
+                    # fallback average of this subject alone (just my total) if no peers
+                    avg = round(float(g["total"]), 1) if no_in_class else 0.0
+                g["classAverage"] = avg
+
+                # Standard competition ranking: 1 + count of strictly greater totals
+                my_total = float(g["total"])
+                greater = sum(1 for t in totals_for_subj if t > my_total)
+                pos = greater + 1 if totals_for_subj else 1
+                g["subjectPosition"] = pos
+                g["subjectPositionOrdinal"] = _ordinal(pos)
+
+                # Also expose A1..Exam breakdown already in g["breakdown"]
+
+            # Overall ranking
+            my_grand_total = grand_totals_map.get(sid, 0.0)
+            # Count peers with greater grand total
+            greater_overall = sum(1 for v in grand_totals_map.values() if v > my_grand_total)
+            overall_position = (greater_overall + 1) if grand_totals_map else 1
+            overall_position_ordinal = _ordinal(overall_position)
+        else:
+            # No student or no grades: keep subject stats null
+            for g in grades_out:
+                g["classAverage"] = None
+                g["subjectPosition"] = None
+                g["subjectPositionOrdinal"] = None
+
+        # Compute summary (overall already via grades_out totals, but ensure consistent)
         subjects_count = len(grades_out)
         if subjects_count > 0:
-            total_score = round(sum(g["total"] for g in grades_out), 2)
+            total_score = round(sum(float(g["total"]) for g in grades_out), 2)
             avg_raw = total_score / subjects_count
             average = round(avg_raw, 1)
             overall_grade = _grade_from_total(average)
@@ -304,11 +582,17 @@ def get_report_bundle(
                 "overallGrade": overall_grade,
                 "overallRemark": overall_remark,
                 "subjectsCount": subjects_count,
+                "noInClass": no_in_class,
+                "overallPosition": overall_position,
+                "overallPositionOrdinal": overall_position_ordinal,
             },
             "term": term,
             "academic_session": _academic_session(),
             "tenant_id": tid,
             "student_id": sid,
+            # Optional metadata for frontend Bio header — dashed for now, future admin term-settings
+            "attendance": {"present": None, "outOf": None},
+            "termMeta": {"termEnding": None, "newTermBegins": None},
         }
     except HTTPException:
         raise
