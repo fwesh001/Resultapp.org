@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
 import { BookOpen, Users, FileText } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
@@ -89,13 +89,12 @@ export default async function StaffDashboardPage({
               <p className="mt-3 text-xs font-medium uppercase tracking-wide text-purple-300/60">{a.class_name}</p>
               <h3 className="mt-1 text-base font-semibold text-white">{a.subject_name}</h3>
               <p className="mt-1 text-xs text-purple-200/50">Assigned as {a.staff_name}</p>
-              <Button
-                size="sm"
-                className="mt-4 w-full gap-1.5 rounded-full bg-purple-600 text-white hover:bg-purple-500"
-                disabled
+              <Link
+                href={`/${subdomain}/staff/grading/${encodeURIComponent(a.class_name)}/${encodeURIComponent(a.subject_name)}?term=${encodeURIComponent("Term 1")}`}
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-purple-600 py-2 text-sm font-medium text-white transition hover:bg-purple-500"
               >
                 <FileText className="h-4 w-4" /> Open Grading Sheet
-              </Button>
+              </Link>
             </div>
           ))}
         </div>
