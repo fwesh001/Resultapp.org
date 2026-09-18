@@ -651,7 +651,7 @@ export function SchoolRegistrationForm() {
       {/* Submit — pulsing electric purple */}
       <Button
         type="submit"
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 animate-pulse hover:animate-none"
+        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 motion-safe:animate-pulse hover:motion-safe:animate-none"
         disabled={isSubmitting}
         size="lg"
       >
