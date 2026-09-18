@@ -251,6 +251,163 @@ def _compute_simple_granular_total(breakdown: Dict[str, Optional[float]]) -> Opt
     return round(min(s, 100.0), 2)
 
 
+# --- Smart Component Normalizer (Dynamic Grouped Headers) ---
+GROUP_KEYWORDS = {
+    "ASSIGNMENT": ["assignment", "a1", "a2", "ca"],
+    "TESTS": ["test", "t1", "t2", "quiz"],
+    "EXAM": ["exam", "examination", "terminal"],
+}
+
+
+def _group_for_item_name(raw_name: str) -> str:
+    name = (raw_name or "").strip().lower()
+    # collapse spaces/underscores/dashes for comparison
+    norm = " ".join(name.replace("-", " ").replace("_", " ").split())
+    # Check Exam first (most specific, to avoid "exam" containing "am")
+    for kw in GROUP_KEYWORDS["EXAM"]:
+        if kw in norm or norm == kw:
+            return "EXAM"
+    for kw in GROUP_KEYWORDS["TESTS"]:
+        if kw == norm or kw in norm.split() or norm == kw or (kw in norm and kw in ["test", "quiz"]):
+            # allow substring for test/quiz
+            if kw in norm:
+                return "TESTS"
+    for kw in GROUP_KEYWORDS["ASSIGNMENT"]:
+        if kw == norm or kw in norm.split() or norm in ["a1", "a2"] or kw in norm:
+            if kw in norm:
+                return "ASSIGNMENT"
+    # fallback check for exact canonical after alias normalization
+    canon = _normalize_key(raw_name)
+    if canon in ("A1", "A2"):
+        return "ASSIGNMENT"
+    if canon in ("T1", "T2"):
+        return "TESTS"
+    if canon == "Exam":
+        return "EXAM"
+    return "OTHER"
+
+
+def _collect_template_items(academic_structure: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    if not isinstance(academic_structure, dict):
+        return items
+    comps = academic_structure.get("components")
+    if isinstance(comps, list) and comps:
+        for comp in comps:
+            if not isinstance(comp, dict):
+                continue
+            comp_items = comp.get("items")
+            if isinstance(comp_items, list) and comp_items:
+                for it in comp_items:
+                    if not isinstance(it, dict):
+                        continue
+                    name = str(it.get("name") or "").strip()
+                    if not name:
+                        continue
+                    try:
+                        max_s = float(it.get("max_score") if it.get("max_score") is not None else it.get("max") if it.get("max") is not None else 0)
+                    except Exception:
+                        max_s = 0
+                    items.append({"name": name, "max": max_s, "raw": it})
+            else:
+                # component as single item (e.g., Exam weight 60 max 60)
+                name = str(comp.get("name") or "").strip()
+                if not name:
+                    continue
+                try:
+                    max_s = float(comp.get("max_score") if comp.get("max_score") is not None else comp.get("max") if comp.get("max") is not None else comp.get("weight") or 0)
+                except Exception:
+                    max_s = 0
+                # Avoid duplicating if already added via items
+                if not any(i["name"].lower() == name.lower() for i in items):
+                    items.append({"name": name, "max": max_s, "raw": comp})
+        return items
+    # Fallback legacy shapes: max_scores dict
+    max_scores = academic_structure.get("max_scores") or academic_structure.get("maxScores")
+    if isinstance(max_scores, dict) and max_scores:
+        for k, v in max_scores.items():
+            name = str(k).strip()
+            if not name:
+                continue
+            try:
+                max_s = float(v)
+            except Exception:
+                continue
+            items.append({"name": name, "max": max_s, "raw": {}})
+        return items
+    # Fallback generic dict with numeric values (e.g., {"CA": {"A1":10}})
+    for k, v in academic_structure.items():
+        if k.lower() in {"components", "categories", "weights", "category_weights", "max_scores", "maxscores"}:
+            continue
+        if isinstance(v, dict):
+            for ik, iv in v.items():
+                try:
+                    items.append({"name": str(ik).strip(), "max": float(iv), "raw": {}})
+                except Exception:
+                    continue
+        elif isinstance(v, (int, float)):
+            try:
+                items.append({"name": str(k).strip(), "max": float(v), "raw": {}})
+            except Exception:
+                continue
+    return items
+
+
+def _build_grouped_template(academic_structure: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    raw_items = _collect_template_items(academic_structure)
+    if not raw_items:
+        return None
+    total_max = sum(i["max"] for i in raw_items if i["max"] and i["max"] > 0)
+    if total_max <= 0:
+        total_max = sum(i["max"] for i in raw_items) or 100.0
+        if total_max <= 0:
+            total_max = 100.0
+
+    groups: Dict[str, List[Dict[str, Any]]] = {"ASSIGNMENT": [], "TESTS": [], "EXAM": [], "OTHER": []}
+    for it in raw_items:
+        grp = _group_for_item_name(it["name"])
+        # canonical display key: use normalized short if possible, else original trimmed
+        canon = _normalize_key(it["name"])
+        display_key = canon if canon else it["name"].strip()
+        # Avoid duplicate display keys within same group
+        max_v = float(it["max"] or 0)
+        weight = round((max_v / total_max) * 100, 1) if total_max else 0.0
+        entry = {
+            "key": display_key,
+            "originalName": it["name"],
+            "max": round(max_v, 2),
+            "weightPct": weight,
+        }
+        # dedupe by key case-insensitive within group
+        if not any(e["key"].lower() == display_key.lower() for e in groups[grp]):
+            groups[grp].append(entry)
+
+    # Build ordered list, dynamic colSpan = len(items)
+    ordered_labels = ["ASSIGNMENT", "TESTS", "EXAM", "OTHER"]
+    groups_out: List[Dict[str, Any]] = []
+    for label in ordered_labels:
+        its = groups[label]
+        if not its:
+            continue
+        # sort within group by original order preservation (already)
+        groups_out.append(
+            {
+                "label": label,
+                "keys": [e["key"] for e in its],
+                "items": its,
+                "maxSum": round(sum(e["max"] for e in its), 2),
+                "weightSum": round(sum(e["weightPct"] for e in its), 1),
+            }
+        )
+    if not groups_out:
+        return None
+    return {
+        "groups": groups_out,
+        "totalMax": round(total_max, 2),
+        "totalWeight": round(sum(e["weightPct"] for g in groups_out for e in g["items"]), 1),
+    }
+
+
 @router.get("/{student_id}", summary="Report card bundle: student bio + template + grades + behavioural + summary + rankings")
 def get_report_bundle(
     tenant_id: str,
@@ -277,6 +434,7 @@ def get_report_bundle(
     template = _get_active_template(db, tid)
     template_payload = _template_payload(template)
     academic_structure = getattr(template, "academic_structure", None) if template else None
+    grouped_template = _build_grouped_template(academic_structure)
 
     # Fetch student bio from tenant_students
     student = None
@@ -584,6 +742,7 @@ def get_report_bundle(
         return {
             "student": student,
             "template": template_payload,
+            "groupedTemplate": grouped_template,
             "grades": grades_out,
             "behavioural": behavioural_merged,
             "summary": {
