@@ -33,6 +33,7 @@ export default async function ReportPage({
         studentId={studentId}
         term={effectiveTerm}
         schoolName={school?.name || null}
+        canPrint={!isLocked}
       />
       {isLocked && (
         <div className="mx-auto mb-3 flex max-w-4xl justify-center print:hidden">
