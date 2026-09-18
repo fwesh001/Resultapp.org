@@ -56,52 +56,68 @@ export default async function TenantPage({
         logoUrl={school.logoUrl}
       />
 
-      {/* Section 1 — Hero */}
-      <section className="border-b border-purple-500/20 bg-purple-900/[0.04]">
-        <div className="mx-auto max-w-5xl px-6 py-14 text-center">
-          <div className="flex items-center justify-center gap-3">
-            <GraduationCap className="h-10 w-10 text-purple-400" />
-            {school.isVerified && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-900/20 px-3 py-1 text-xs font-medium text-purple-200">
-                <ShieldCheck className="h-4 w-4 text-purple-300" />
-                Verified School
-              </span>
-            )}
-          </div>
-
-          <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-5xl">
-            {toTitleCase(school.name)}
-          </h1>
-          {school.motto && (
-            <p className="mt-3 text-lg italic text-purple-300">
-              &ldquo;{school.motto}&rdquo;
-            </p>
-          )}
-
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-purple-200/80">
-            {school.email && <span>{school.email}</span>}
-            {school.phone && <span>{school.phone}</span>}
-          </div>
-        </div>
-      </section>
-
-      {/* Section 2 — Result Lookup */}
+      {/* Section 1 — Hero with dynamic background */}
       <section
         id="result-checker"
-        className="mx-auto flex max-w-5xl scroll-mt-24 flex-col items-center px-6 py-12"
+        className="relative scroll-mt-24 overflow-hidden border-b border-purple-500/20 bg-[#0B0514] bg-cover bg-center"
+        style={{
+          backgroundImage: school.heroBgUrl
+            ? `url(${school.heroBgUrl})`
+            : "none",
+        }}
       >
-        <h2 className="text-2xl font-semibold">Check Results Online</h2>
-        <p className="mt-2 text-center text-sm text-purple-200/70">
-          Parents — enter your child&apos;s Student ID and select a term to view
-          the report card.
-        </p>
-        <div className="mt-6 flex w-full justify-center">
-          <ResultLookupWidget subdomain={subdomain} />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0514]/95 via-[#0B0514]/80 to-transparent" />
+        <div className="relative mx-auto max-w-5xl px-6 py-14">
+          <div className="max-w-xl text-left">
+            <div className="flex items-center gap-3">
+              {school.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={school.logoUrl}
+                  alt={`${toTitleCase(school.name)} logo`}
+                  className="h-16 w-16 rounded-2xl border border-purple-500/20 object-cover"
+                />
+              ) : (
+                <GraduationCap className="h-12 w-12 text-purple-400" />
+              )}
+              {school.isVerified && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-900/20 px-3 py-1 text-xs font-medium text-purple-200">
+                  <ShieldCheck className="h-4 w-4 text-purple-300" />
+                  Verified School
+                </span>
+              )}
+            </div>
+
+            <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-5xl">
+              {toTitleCase(school.name)}
+            </h1>
+            {school.motto && (
+              <p className="mt-3 text-lg italic text-purple-300">
+                &ldquo;{school.motto}&rdquo;
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-purple-200/80">
+              {school.email && <span>{school.email}</span>}
+              {school.phone && <span>{school.phone}</span>}
+            </div>
+
+            <h2 className="mt-8 text-2xl font-semibold">
+              Check Results Online
+            </h2>
+            <p className="mt-2 text-sm text-purple-200/70">
+              Parents — enter your child&apos;s Student ID and select a term
+              to view the report card.
+            </p>
+            <div className="mt-6 w-full">
+              <ResultLookupWidget subdomain={subdomain} />
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Section 3 — Staff Portals */}
-      <section className="mx-auto max-w-5xl px-6 pb-14">
+      {/* Section 2 — Staff Portals */}
+      <section className="mx-auto max-w-5xl px-6 py-14">
         <h2 className="text-center text-2xl font-semibold">Staff Portals</h2>
         <p className="mt-2 text-center text-sm text-purple-200/70">
           Quick access for teachers and administrators.
