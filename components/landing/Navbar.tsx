@@ -16,7 +16,7 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
 
   const links = [
     { label: "Check Result", href: `/${subdomain}#result-checker` },
-    { label: "Teacher Portal", href: `/${subdomain}/teacher/grading` },
+    { label: "Staff Portal", href: `/${subdomain}/staff/grading` },
     { label: "Admin", href: `/${subdomain}/admin/templates` },
   ];
 
