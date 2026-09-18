@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, Bug, CheckCircle2 } from "lucide-react";
+import { Bug, CheckCircle2 } from "lucide-react";
+import UploadField from "@/components/ui/UploadField";
 
 export function BugReportForm() {
   const [sent, setSent] = useState(false);
@@ -49,13 +50,16 @@ export function BugReportForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">Screenshot or file (optional)</label>
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-purple-500/20 bg-purple-950/20 px-6 py-8 text-center hover:border-purple-500/30 hover:bg-purple-900/10">
-          <Upload className="h-6 w-6 text-purple-400" />
-          <span className="text-sm text-purple-200">Click to upload or drag and drop</span>
-          <span className="text-xs text-purple-300/50">PNG, JPG, PDF up to 5MB</span>
-          <input type="file" className="hidden" />
-        </label>
+        <UploadField
+          id="bug-screenshot"
+          label="Screenshot or file (optional)"
+          name="screenshot_url"
+          allowUrl={false}
+          accept="image/*,.pdf"
+          extraFields={{ subdomain: "shared", kind: "bug-report" }}
+          helper="PNG, JPG, PDF up to 5MB"
+          preview="image"
+        />
       </div>
 
       <button
