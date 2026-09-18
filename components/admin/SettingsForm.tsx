@@ -109,6 +109,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="school-name"
           name="school_name"
           type="text"
+          autoComplete="organization"
           defaultValue={school?.name ?? ""}
           placeholder="e.g. Victory High School"
           className={inputClassName}
@@ -126,6 +127,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="school-motto"
           name="motto"
           type="text"
+          autoComplete="off"
           defaultValue={school?.motto ?? ""}
           placeholder="e.g. Excellence through discipline"
           className={inputClassName}
@@ -143,6 +145,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="school-email"
           name="email"
           type="email"
+          autoComplete="email"
           defaultValue={school?.email ?? ""}
           placeholder="e.g. info@school.edu"
           className={inputClassName}
