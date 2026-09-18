@@ -24,6 +24,7 @@ interface TenantRegistrySchool {
   state: string | null;
   country: string | null;
   logo_url: string | null;
+  hero_bg_url: string | null;
   motto: string | null;
   proprietor_name: string | null;
   registration_number: string | null;
@@ -64,6 +65,7 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     state: raw.state ?? locationParts[1] ?? undefined,
     country: raw.country ?? "NG",
     logoUrl: raw.logo_url ?? undefined,
+    heroBgUrl: raw.hero_bg_url ?? undefined,
     motto: raw.motto ?? undefined,
     proprietorName: raw.proprietor_name ?? undefined,
     registrationNumber: raw.registration_number ?? undefined,
