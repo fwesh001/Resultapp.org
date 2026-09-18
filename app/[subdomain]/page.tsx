@@ -48,6 +48,9 @@ export default async function TenantPage({
     );
   }
 
+  // Default hero artwork until the school uploads its own background.
+  const heroBg = school.heroBgUrl || "/bento-csv-accent.avif";
+
   return (
     <main className="min-h-screen bg-[#0B0514] text-white">
       <Navbar
@@ -60,11 +63,7 @@ export default async function TenantPage({
       <section
         id="result-checker"
         className="relative scroll-mt-24 overflow-hidden border-b border-purple-500/20 bg-[#0B0514] bg-cover bg-center"
-        style={{
-          backgroundImage: school.heroBgUrl
-            ? `url(${school.heroBgUrl})`
-            : "none",
-        }}
+        style={{ backgroundImage: `url(${heroBg})` }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-[#0B0514]/95 via-[#0B0514]/80 to-transparent" />
         <div className="relative mx-auto max-w-5xl px-6 py-14">
@@ -101,15 +100,16 @@ export default async function TenantPage({
               {school.email && <span>{school.email}</span>}
               {school.phone && <span>{school.phone}</span>}
             </div>
+          </div>
 
-            <h2 className="mt-8 text-2xl font-semibold">
-              Check Results Online
-            </h2>
+          {/* Result lookup — centered */}
+          <div className="mx-auto mt-12 max-w-xl text-center">
+            <h2 className="text-2xl font-semibold">Check Results Online</h2>
             <p className="mt-2 text-sm text-purple-200/70">
               Parents — enter your child&apos;s Student ID and select a term
               to view the report card.
             </p>
-            <div className="mt-6 w-full">
+            <div className="mt-6 flex w-full justify-center">
               <ResultLookupWidget subdomain={subdomain} />
             </div>
           </div>
