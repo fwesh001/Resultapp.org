@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 
 /**
  * Settings Proxy — PATCH /api/admin/settings
- * Body: { subdomain, school_name?, motto?, phone?, email?, address?, logo_url?, hero_bg_url? }
+ * Body: { subdomain, school_name?, motto?, phone?, email?, address?, new_term_begins?, logo_url?, hero_bg_url? }
  *
  * Securely forwards the payload to FastAPI
  * PATCH /api/v1/tenant/{tenant_id}/profile with X-API-SECRET-KEY,
@@ -34,6 +34,7 @@ const PROFILE_FIELDS = [
   "phone",
   "email",
   "address",
+  "new_term_begins",
   "logo_url",
   "hero_bg_url",
 ] as const;
