@@ -327,7 +327,7 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                     {staff.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-sm text-purple-200/40">
-                          No staff yet. Add teachers first.
+                          No staff yet. Add staff first.
                         </td>
                       </tr>
                     ) : (
@@ -507,7 +507,7 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
         <div className="space-y-3">
           <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" />
           <Input label="Full Name" value={staffForm.full_name} onChange={(e) => setStaffForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Mr. Okoro" />
-          <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="teacher@school.edu" />
+          <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
           <Input label="Phone" value={staffForm.phone} onChange={(e) => setStaffForm((p) => ({ ...p, phone: e.target.value }))} placeholder="080..." />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Role</label>
@@ -617,7 +617,7 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
           </Button>
-          <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary teacher per class.</p>
+          <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
         </div>
       </Modal>
     </div>
