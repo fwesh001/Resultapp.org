@@ -3,11 +3,12 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
 /**
- * Branding image upload — POST /api/admin/uploads
- * FormData: { file: File, subdomain: string, kind: "logo" | "hero" }
+ * File upload — POST /api/admin/uploads
+ * FormData: { file: File, subdomain?: string, kind?: string }
  *
- * Stores validated images under public/uploads/<subdomain>/ and returns
- * the public URL, which the settings form saves as logo_url / hero_bg_url.
+ * Stores validated files under public/uploads/<subdomain>/ and returns
+ * the public URL. Used for branding images (logo/hero via the settings
+ * form), bug-report attachments, and other shared uploads.
  */
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -19,6 +20,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/avif": "avif",
   "image/gif": "gif",
   "image/svg+xml": "svg",
+  "application/pdf": "pdf",
 };
 
 export async function POST(req: NextRequest) {
@@ -33,11 +35,14 @@ export async function POST(req: NextRequest) {
   }
 
   const file = form.get("file");
-  const subdomain = String(form.get("subdomain") ?? "")
-    .toLowerCase()
-    .trim();
-  const kindRaw = String(form.get("kind") ?? "logo").toLowerCase().trim();
-  const kind = kindRaw === "hero" ? "hero" : "logo";
+  const rawSubdomain = String(form.get("subdomain") ?? "").toLowerCase().trim();
+  // Shared uploads (e.g. bug-report attachments) land in "shared".
+  const subdomain = rawSubdomain === "" ? "shared" : rawSubdomain;
+  const kind =
+    String(form.get("kind") ?? "file")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 20) || "file";
 
   if (!/^[a-z0-9-]{3,30}$/.test(subdomain)) {
     return NextResponse.json(
@@ -56,14 +61,14 @@ export async function POST(req: NextRequest) {
   const ext = MIME_TO_EXT[file.type];
   if (!ext) {
     return NextResponse.json(
-      { success: false, error: "Only image files (png, jpg, webp, avif, gif, svg) are allowed" },
+      { success: false, error: "Only image and PDF files (png, jpg, webp, avif, gif, svg, pdf) are allowed" },
       { status: 400 },
     );
   }
 
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { success: false, error: "Image must be 5MB or less" },
+      { success: false, error: "File must be 5MB or less" },
       { status: 400 },
     );
   }
@@ -78,7 +83,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("[api/admin/uploads] write failed", e);
     return NextResponse.json(
-      { success: false, error: "Could not store the image" },
+      { success: false, error: "Could not store the file" },
       { status: 500 },
     );
   }
