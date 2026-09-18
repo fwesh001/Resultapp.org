@@ -13,11 +13,11 @@ export function Navbar() {
           <span className="text-[15px] font-semibold tracking-tight text-white">resultapp.org</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
-          <Link href="/pricing" className="text-purple-200/70 transition-colors hover:text-white">
+        <nav className="hidden items-center gap-2 text-sm font-medium md:flex">
+          <Link href="/pricing" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
             Pricing
           </Link>
-          <Link href="/about" className="text-purple-200/70 transition-colors hover:text-white">
+          <Link href="/about" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
             About
           </Link>
         </nav>
