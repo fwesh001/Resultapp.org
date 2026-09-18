@@ -32,9 +32,31 @@ interface GradeRow {
   subjectPositionOrdinal?: string | null;
 }
 
+interface GroupedItem {
+  key: string;
+  originalName: string;
+  max: number;
+  weightPct: number;
+}
+
+interface GroupedGroup {
+  label: string;
+  keys: string[];
+  items: GroupedItem[];
+  maxSum: number;
+  weightSum: number;
+}
+
+interface GroupedTemplate {
+  groups: GroupedGroup[];
+  totalMax: number;
+  totalWeight: number;
+}
+
 interface ReportResponse {
   student: ReportStudent | null;
   template: GradingTemplatePayload | null;
+  groupedTemplate?: GroupedTemplate | null;
   grades: GradeRow[];
   behavioural: Record<string, string>;
   summary: {
@@ -158,6 +180,42 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
   const rawResumption = (schoolFromReport?.new_term_begins ?? data?.termMeta?.newTermBegins ?? null) as string | null;
   const newTermBeginsDisplay = rawResumption ? formatTermDate(rawResumption) : "—";
 
+  const groupedTemplate = (data as ReportResponse)?.groupedTemplate ?? null;
+  const hasGrouped = !!(groupedTemplate && groupedTemplate.groups && groupedTemplate.groups.length > 0);
+  const flatGroupedItems: GroupedItem[] = hasGrouped ? groupedTemplate!.groups.flatMap((g) => g.items) : [];
+  const totalSubCols = hasGrouped ? flatGroupedItems.length : 5;
+
+  function formatGroupedHeader(item: GroupedItem): string {
+    const maxStr = Number(item.max).toFixed(0).replace(/\.0$/, "");
+    const pctStr = Number(item.weightPct).toFixed(1).replace(/\.0$/, "");
+    // Show both compactly as A1 (10 • 10%) per spec, fallback to single if redundant
+    if (item.max > 0 && item.weightPct > 0) {
+      // If max string equals pct string and you want compact, still show both per spec
+      return `${item.key} (${maxStr} • ${pctStr}%)`;
+    }
+    if (item.max > 0) return `${item.key} (${maxStr})`;
+    if (item.weightPct > 0) return `${item.key} (${pctStr}%)`;
+    return item.key;
+  }
+
+  function getScoreForGroupedItem(row: GradeRow, item: GroupedItem): unknown {
+    const bd = row.breakdown || {};
+    // Try canonical key first, then originalName, then direct academic_scores lookups
+    if (bd[item.key] !== undefined && bd[item.key] !== null) return bd[item.key];
+    if (item.originalName && row.academic_scores[item.originalName] !== undefined) return row.academic_scores[item.originalName];
+    if (row.academic_scores[item.key] !== undefined) return row.academic_scores[item.key];
+    // Fallback case-insensitive search
+    const lowKey = item.key.toLowerCase();
+    for (const [k, v] of Object.entries(row.academic_scores)) {
+      if (k.toLowerCase() === lowKey) return v;
+      if (item.originalName && k.toLowerCase() === item.originalName.toLowerCase()) return v;
+    }
+    // Also try breakdown alias fallback
+    const canon = item.key;
+    if (bd[canon] !== undefined) return bd[canon];
+    return undefined;
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-white/5 px-6 py-8 text-center text-sm text-purple-200 backdrop-blur print:hidden">
@@ -257,37 +315,97 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full border-collapse border border-slate-300 text-xs">
                   <thead>
-                    <tr className="bg-slate-100 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-                      <th className="border border-slate-300 px-2 py-1">SUBJECT</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">A1</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">A2</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">T1</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">T2</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">EXAM</th>
-                      <th className="border border-slate-300 bg-slate-900 px-2 py-1 text-center text-white">TOTAL (100)</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">CLASS AVERAGE</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">POSITION</th>
-                      <th className="border border-slate-300 px-2 py-1">REMARKS</th>
-                      <th className="border border-slate-300 px-2 py-1 text-center">SIGN</th>
-                    </tr>
+                    {hasGrouped ? (
+                      <>
+                        <tr className="bg-slate-100 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                          <th rowSpan={2} className="border border-slate-300 px-2 py-1 align-middle">
+                            SUBJECT
+                          </th>
+                          {groupedTemplate!.groups.map((g) => (
+                            <th
+                              key={g.label}
+                              colSpan={g.items.length}
+                              className="border border-slate-300 px-2 py-1 text-center align-middle"
+                            >
+                              {g.label}
+                            </th>
+                          ))}
+                          <th rowSpan={2} className="border border-slate-300 bg-slate-900 px-2 py-1 text-center text-white align-middle">
+                            TOTAL (100)
+                          </th>
+                          <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-center align-middle">
+                            CLASS AVERAGE
+                          </th>
+                          <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-center align-middle">
+                            POSITION
+                          </th>
+                          <th rowSpan={2} className="border border-slate-300 px-2 py-1 align-middle">
+                            REMARKS
+                          </th>
+                          <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-center align-middle">
+                            SIGN
+                          </th>
+                        </tr>
+                        <tr className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                          {flatGroupedItems.map((it) => (
+                            <th key={`${it.key}-${it.originalName}`} className="border border-slate-300 px-1 py-1 text-center whitespace-nowrap">
+                              {formatGroupedHeader(it)}
+                            </th>
+                          ))}
+                        </tr>
+                      </>
+                    ) : (
+                      <tr className="bg-slate-100 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                        <th className="border border-slate-300 px-2 py-1">SUBJECT</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">A1</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">A2</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">T1</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">T2</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">EXAM</th>
+                        <th className="border border-slate-300 bg-slate-900 px-2 py-1 text-center text-white">TOTAL (100)</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">CLASS AVERAGE</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">POSITION</th>
+                        <th className="border border-slate-300 px-2 py-1">REMARKS</th>
+                        <th className="border border-slate-300 px-2 py-1 text-center">SIGN</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
                     {grades.map((row) => {
-                      const bd = row.breakdown || {};
-                      const a1 = bd.A1 ?? row.academic_scores["A1"] ?? row.academic_scores["A 1"] ?? row.academic_scores["Assignment 1"];
-                      const a2 = bd.A2 ?? row.academic_scores["A2"] ?? row.academic_scores["Assignment 2"];
-                      const t1 = bd.T1 ?? row.academic_scores["T1"] ?? row.academic_scores["Test 1"];
-                      const t2 = bd.T2 ?? row.academic_scores["T2"] ?? row.academic_scores["Test 2"];
-                      const exam = bd.Exam ?? row.academic_scores["Exam"] ?? row.academic_scores["EXAM"];
                       const fmt = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
                       return (
                         <tr key={row.subject_name} className="even:bg-slate-50">
                           <td className="border border-slate-300 px-2 py-1 font-medium text-slate-900">{row.subject_name}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center">{fmt(a1)}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center">{fmt(a2)}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center">{fmt(t1)}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center">{fmt(t2)}</td>
-                          <td className="border border-slate-300 px-2 py-1 text-center">{fmt(exam)}</td>
+                          {hasGrouped ? (
+                            flatGroupedItems.map((it) => {
+                              const v = getScoreForGroupedItem(row, it);
+                              return (
+                                <td key={`${row.subject_name}-${it.key}-${it.originalName}`} className="border border-slate-300 px-2 py-1 text-center">
+                                  {fmt(v)}
+                                </td>
+                              );
+                            })
+                          ) : (
+                            <>
+                              {(() => {
+                                const bd = row.breakdown || {};
+                                const a1 = bd.A1 ?? row.academic_scores["A1"] ?? row.academic_scores["A 1"] ?? row.academic_scores["Assignment 1"];
+                                const a2 = bd.A2 ?? row.academic_scores["A2"] ?? row.academic_scores["Assignment 2"];
+                                const t1 = bd.T1 ?? row.academic_scores["T1"] ?? row.academic_scores["Test 1"];
+                                const t2 = bd.T2 ?? row.academic_scores["T2"] ?? row.academic_scores["Test 2"];
+                                const exam = bd.Exam ?? row.academic_scores["Exam"] ?? row.academic_scores["EXAM"];
+                                return (
+                                  <>
+                                    <td className="border border-slate-300 px-2 py-1 text-center">{fmt(a1)}</td>
+                                    <td className="border border-slate-300 px-2 py-1 text-center">{fmt(a2)}</td>
+                                    <td className="border border-slate-300 px-2 py-1 text-center">{fmt(t1)}</td>
+                                    <td className="border border-slate-300 px-2 py-1 text-center">{fmt(t2)}</td>
+                                    <td className="border border-slate-300 px-2 py-1 text-center">{fmt(exam)}</td>
+                                  </>
+                                );
+                              })()}
+                            </>
+                          )}
                           <td className="border border-slate-300 px-2 py-1 text-center font-bold text-slate-900">{Number(row.total).toFixed(0)}</td>
                           <td className="border border-slate-300 px-2 py-1 text-center">
                             {row.classAverage !== null && row.classAverage !== undefined ? Number(row.classAverage).toFixed(1) : "—"}
@@ -300,9 +418,9 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
                         </tr>
                       );
                     })}
-                    {/* Footer summary rows — tight */}
+                    {/* Footer summary rows — tight, colSpan dynamic */}
                     <tr className="bg-slate-50 font-bold text-xs">
-                      <td className="border border-slate-300 px-2 py-1 text-right" colSpan={6}>
+                      <td className="border border-slate-300 px-2 py-1 text-right" colSpan={hasGrouped ? 1 + totalSubCols : 6}>
                         TOTAL:
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center font-bold text-slate-900">{summary.totalScore.toFixed(0)}</td>
@@ -311,7 +429,7 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
                       </td>
                     </tr>
                     <tr className="bg-slate-900 text-white text-xs font-bold">
-                      <td className="border border-slate-300 px-2 py-1 text-right" colSpan={6}>
+                      <td className="border border-slate-300 px-2 py-1 text-right" colSpan={hasGrouped ? 1 + totalSubCols : 6}>
                         AVERAGE:
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center">{summary.average.toFixed(1)}</td>
