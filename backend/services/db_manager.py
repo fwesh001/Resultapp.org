@@ -423,6 +423,9 @@ TENANT_STUDENTS_TABLE = "tenant_students"
 TENANT_STAFF_TABLE = "tenant_staff"
 TENANT_ALLOCATIONS_TABLE = "tenant_allocations"
 TENANT_SUBJECTS_TABLE = "tenant_subjects"
+TENANT_GRADES_TABLE = "tenant_grades"
+
+VALID_TERMS = ("Term 1", "Term 2", "Term 3")
 
 
 def init_roster_registry() -> None:
@@ -492,10 +495,29 @@ def init_roster_registry() -> None:
             );
         """)
 
+        # Grades — per-student per-subject per-term scores (focused grading workflow)
+        # student_id is a logical link to tenant_students.student_id (not enforced as FK
+        # so roster edits never cascade-delete grades).
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_GRADES_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                student_id VARCHAR(60) NOT NULL,
+                subject_name VARCHAR(120) NOT NULL,
+                term VARCHAR(64) NOT NULL CHECK (term IN ('Term 1', 'Term 2', 'Term 3')),
+                academic_scores JSONB DEFAULT '{{}}'::jsonb,
+                behavioural_traits JSONB DEFAULT '{{}}'::jsonb,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, student_id, subject_name, term)
+            );
+        """)
+
         # Indexes for fast subdomain-scoped lookups
-        for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE]:
+        for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE, TENANT_GRADES_TABLE]:
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_subdomain ON {tbl}(subdomain);")
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_created_at ON {tbl}(created_at DESC);")
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_subject_term ON {TENANT_GRADES_TABLE}(subject_name, term);")
 
         conn.commit()
         logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations, tenant_subjects)")
