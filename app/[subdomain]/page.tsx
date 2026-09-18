@@ -97,8 +97,16 @@ export default async function TenantPage({
             )}
 
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-purple-200/80">
-              {school.email && <span>{school.email}</span>}
-              {school.phone && <span>{school.phone}</span>}
+              {school.email && (
+                <a href={`mailto:${school.email}`} className="transition hover:text-white">
+                  {school.email}
+                </a>
+              )}
+              {school.phone && (
+                <a href={`tel:${school.phone.replace(/\s+/g, "")}`} className="transition hover:text-white">
+                  {school.phone}
+                </a>
+              )}
             </div>
           </div>
 
