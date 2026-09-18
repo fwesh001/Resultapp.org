@@ -30,8 +30,10 @@ export function BugReportForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">What happened?</label>
+        <label htmlFor="bug-what" className="text-sm font-medium text-purple-100">What happened?</label>
         <textarea
+          id="bug-what"
+          name="what"
           required
           rows={3}
           placeholder="Describe the issue you encountered..."
@@ -40,8 +42,10 @@ export function BugReportForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">What did you expect to happen?</label>
+        <label htmlFor="bug-expected" className="text-sm font-medium text-purple-100">What did you expect to happen?</label>
         <textarea
+          id="bug-expected"
+          name="expected"
           required
           rows={3}
           placeholder="What should have happened instead?"
@@ -64,7 +68,7 @@ export function BugReportForm() {
 
       <button
         type="submit"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.35)] hover:bg-purple-500 animate-pulse hover:animate-none"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.35)] hover:bg-purple-500 motion-safe:animate-pulse hover:motion-safe:animate-none"
       >
         Submit Bug Report
       </button>
