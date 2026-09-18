@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
@@ -13,6 +13,16 @@ interface NavbarProps {
 
 export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) {
   const [open, setOpen] = useState(false);
+
+  // Escape closes the mobile dropdown.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open ]);
 
   const links = [
     { label: "Check Result", href: `/${subdomain}#result-checker` },
