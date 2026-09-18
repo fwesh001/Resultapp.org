@@ -115,7 +115,7 @@ export default function RegisterPage() {
               <span className="flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/20 bg-purple-950/30 text-purple-300">
                 2
               </span>
-              <span className="text-purple-300/60">Payment</span>
+              <span className="text-purple-300/60">Setup</span>
               <span className="h-px w-6 bg-purple-500/20 sm:w-8" />
               <span className="flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/15 bg-purple-950/20 text-purple-400/60">
                 3
