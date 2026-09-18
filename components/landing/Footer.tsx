@@ -74,7 +74,7 @@ export default function Footer({ school, subdomain }: FooterProps) {
             <li>
               <Link
                 href={`/${subdomain}/staff`}
-                className="text-purple-200/70 transition hover:text-white"
+                className="inline-flex min-h-[44px] items-center text-purple-200/70 transition hover:text-white"
               >
                 Staff Portal
               </Link>
