@@ -158,6 +158,25 @@ export default function UploadField({
     };
   }, []);
 
+  // Sync with late-arriving defaultValue (e.g. async tenant data) so the
+  // field never flashes a stale empty/invalid state after mount.
+  const initialDefaultRef = useRef(defaultValue);
+  useEffect(() => {
+    if (defaultValue !== initialDefaultRef.current) {
+      initialDefaultRef.current = defaultValue;
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setValue(defaultValue);
+      setPreviewUrl(defaultValue || fallbackPreview || "");
+      setPreviewIsImage(!defaultValue ? !!fallbackPreview : true);
+      setFileMeta(null);
+      setProgress(null);
+      setUploadError(null);
+    }
+  }, [defaultValue, fallbackPreview]);
+
   function setLocalPreview(file: File) {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const isImage = file.type.startsWith("image/");
@@ -270,8 +289,8 @@ export default function UploadField({
               onClick={() => setMode(m)}
               className={
                 mode === m
-                  ? "rounded-full bg-purple-600/20 px-4 py-1.5 text-xs font-medium text-purple-200"
-                  : "rounded-full border border-purple-500/15 px-4 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  ? "inline-flex min-h-[44px] items-center rounded-full bg-purple-600/20 px-4 py-1.5 text-xs font-medium text-purple-200"
+                  : "inline-flex min-h-[44px] items-center rounded-full border border-purple-500/15 px-4 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
               }
             >
               {m === "url" ? "File URL" : "Upload file"}
@@ -309,7 +328,7 @@ export default function UploadField({
                   <button
                     type="button"
                     onClick={clearSelection}
-                    className={`shrink-0 text-xs underline-offset-4 hover:underline ${muted}`}
+                    className={`inline-flex min-h-[44px] shrink-0 items-center px-2 text-xs underline-offset-4 hover:underline ${muted}`}
                   >
                     Remove
                   </button>
