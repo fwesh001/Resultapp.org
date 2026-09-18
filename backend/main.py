@@ -166,6 +166,7 @@ class TenantMetadata(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = "NG"
     logo_url: Optional[str] = None
+    hero_bg_url: Optional[str] = None
     motto: Optional[str] = None
     proprietor_name: Optional[str] = None
     registration_number: Optional[str] = None
@@ -352,7 +353,7 @@ def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
                 updated_at = NOW()
             WHERE subdomain = %s
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
-                      logo_url, motto, proprietor_name, registration_number,
+                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
                       created_at, updated_at;
             """,
@@ -643,10 +644,11 @@ except Exception as e:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 try:
-    from routers.admin import router as admin_router
+    from routers.admin import router as admin_router, profile_router as admin_profile_router
 
     app.include_router(admin_router)
-    logger.info("[App] Admin router mounted (/api/v1/admin/tenants)")
+    app.include_router(admin_profile_router)
+    logger.info("[App] Admin router mounted (/api/v1/admin/tenants, PATCH /api/v1/tenant/{tenant_id}/profile)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Admin router not mounted: {e}")
 
