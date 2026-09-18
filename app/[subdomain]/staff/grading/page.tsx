@@ -5,7 +5,7 @@ import { ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherGradingPage({
+export default async function StaffGradingPage({
   params,
 }: {
   params: Promise<{ subdomain: string }>;
@@ -21,7 +21,7 @@ export default async function TeacherGradingPage({
         <Link href="/" className="text-sm text-purple-300 hover:text-white">
           ← Back to {school?.name || tenantId}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Teacher Data Entry</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Staff Data Entry</h1>
         <p className="mt-1 text-sm text-purple-200/60">
           Select a grading template — the grid renders exactly the assessment items defined in its{" "}
           <span className="font-mono">academic_structure</span> with max-score enforcement.
