@@ -81,10 +81,10 @@ def _serialize_rows(cursor, rows):
 
 
 # ---------------------------------------------------------------------------
-# GET — fetch all three lists for tenant
+# GET — fetch all lists for tenant (now 4: students, staff, allocations, subjects)
 # ---------------------------------------------------------------------------
 
-@router.get("", summary="List students, staff, allocations for tenant")
+@router.get("", summary="List students, staff, allocations, subjects for tenant")
 def list_roster(tenant_id: str):
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant_exists(tid)
@@ -93,6 +93,7 @@ def list_roster(tenant_id: str):
         TENANT_STUDENTS_TABLE,
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
+        TENANT_SUBJECTS_TABLE,
         _connect_as_superuser,
     )
 
@@ -119,7 +120,13 @@ def list_roster(tenant_id: str):
         )
         allocations = _serialize_rows(cur, cur.fetchall())
 
-        return {"subdomain": tid, "students": students, "staff": staff, "allocations": allocations}
+        cur.execute(
+            f"SELECT id, subdomain, subject_name, created_at FROM {TENANT_SUBJECTS_TABLE} WHERE subdomain = %s ORDER BY created_at DESC",
+            (tid,),
+        )
+        subjects = _serialize_rows(cur, cur.fetchall())
+
+        return {"subdomain": tid, "students": students, "staff": staff, "allocations": allocations, "subjects": subjects}
     except HTTPException:
         raise
     except Exception as e:
@@ -138,10 +145,10 @@ def list_roster(tenant_id: str):
 # ---------------------------------------------------------------------------
 
 from pydantic import BaseModel, Field
-from typing import Optional as Opt
+from typing import Optional as Opt, List
 
 class RosterCreate(BaseModel):
-    type: Literal["student", "staff", "allocation"] = Field(..., description='Record type')
+    type: Literal["student", "staff", "allocation", "subject", "bulk_subjects"] = Field(..., description='Record type')
     # student
     student_id: Opt[str] = None
     full_name: Opt[str] = None
@@ -152,9 +159,11 @@ class RosterCreate(BaseModel):
     email: Opt[str] = None
     phone: Opt[str] = None
     role: Opt[str] = None
-    # allocation
+    # allocation / subject
     subject_name: Opt[str] = None
     staff_name: Opt[str] = None
+    subjects: Opt[List[str]] = None
+    subject_names: Opt[List[str]] = None
 
 
 @router.post("", status_code=201, summary="Create one roster record")
@@ -166,6 +175,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
         TENANT_STUDENTS_TABLE,
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
+        TENANT_SUBJECTS_TABLE,
         _connect_as_superuser,
         _row_to_dict,
     )
@@ -177,6 +187,65 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+
+        if typ == "subject":
+            subject_name = (payload.subject_name or "").strip()
+            if not subject_name:
+                raise HTTPException(status_code=400, detail="subject requires subject_name")
+            cur.execute(
+                f"""
+                INSERT INTO {TENANT_SUBJECTS_TABLE} (subdomain, subject_name)
+                VALUES (%s, %s)
+                RETURNING id, subdomain, subject_name, created_at;
+                """,
+                (tid, subject_name),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            d = _row_to_dict(row, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            d["id"] = str(d["id"])
+            return {"type": "subject", "record": d}
+
+        if typ == "bulk_subjects":
+            raw_list = payload.subjects if payload.subjects is not None else payload.subject_names
+            if raw_list is None:
+                raise HTTPException(status_code=400, detail="bulk_subjects requires subjects array")
+            names = [str(n).strip() for n in raw_list if str(n).strip()]
+            if not names:
+                raise HTTPException(status_code=400, detail="bulk_subjects requires at least one subject")
+            # dedupe case-insensitive, preserve first case
+            seen: dict[str, str] = {}
+            for n in names:
+                k = n.lower()
+                if k not in seen:
+                    seen[k] = n
+            uniq = list(seen.values())
+            # Bulk insert with ON CONFLICT DO NOTHING
+            placeholders = ", ".join(["(%s, %s)"] * len(uniq))
+            flat: list[str] = []
+            for n in uniq:
+                flat.extend([tid, n])
+            cur.execute(
+                f"""
+                INSERT INTO {TENANT_SUBJECTS_TABLE} (subdomain, subject_name)
+                VALUES {placeholders}
+                ON CONFLICT (subdomain, subject_name) DO NOTHING
+                RETURNING id, subdomain, subject_name, created_at;
+                """,
+                tuple(flat),
+            )
+            rows = cur.fetchall()
+            conn.commit()
+            records = []
+            for r in rows:
+                d = _row_to_dict(r, cur)
+                if isinstance(d.get("created_at"), datetime):
+                    d["created_at"] = d["created_at"].isoformat()
+                d["id"] = str(d["id"])
+                records.append(d)
+            return {"type": "bulk_subjects", "records": records, "count": len(records), "requested": len(uniq)}
 
         if typ == "student":
             student_id = (payload.student_id or "").strip()
@@ -294,10 +363,11 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
         "student": "tenant_students",
         "staff": "tenant_staff",
         "allocation": "tenant_allocations",
+        "subject": "tenant_subjects",
     }
     table = mapping.get(record_type)
     if not table:
-        raise HTTPException(status_code=400, detail="record_type must be student|staff|allocation")
+        raise HTTPException(status_code=400, detail="record_type must be student|staff|allocation|subject")
 
     # Validate UUID
     import uuid
