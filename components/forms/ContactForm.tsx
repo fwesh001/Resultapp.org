@@ -25,24 +25,32 @@ export function ContactForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-6 backdrop-blur">
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">Your Name</label>
+        <label htmlFor="contact-name" className="text-sm font-medium text-purple-100">Your Name</label>
         <input
+          id="contact-name"
+          name="name"
           required
           placeholder="Adaeze Okafor"
+          autoComplete="name"
           className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">School Name</label>
+        <label htmlFor="contact-school" className="text-sm font-medium text-purple-100">School Name</label>
         <input
+          id="contact-school"
+          name="school"
           required
           placeholder="Victory High School"
+          autoComplete="organization"
           className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-purple-100">Message</label>
+        <label htmlFor="contact-message" className="text-sm font-medium text-purple-100">Message</label>
         <textarea
+          id="contact-message"
+          name="message"
           required
           rows={4}
           placeholder="How can we help you?"
@@ -51,7 +59,7 @@ export function ContactForm() {
       </div>
       <button
         type="submit"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.35)] transition hover:bg-purple-500 hover:shadow-[0_0_36px_rgba(147,51,234,0.5)] animate-pulse hover:animate-none"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.35)] transition hover:bg-purple-500 hover:shadow-[0_0_36px_rgba(147,51,234,0.5)] motion-safe:animate-pulse hover:motion-safe:animate-none"
       >
         <Send className="h-4 w-4" /> Send Message
       </button>
