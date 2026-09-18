@@ -110,7 +110,7 @@ export default function Footer({ school, subdomain }: FooterProps) {
 
       {/* Bottom sub-footer */}
       <div className="border-t border-purple-500/20">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-8 py-5 text-center text-xs text-purple-300/60 md:flex-row md:text-left">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-8 py-5 text-center text-xs text-purple-200/70 md:flex-row md:text-left">
           <p>
             © {year} {toTitleCase(school.name)}. All rights reserved.
           </p>
