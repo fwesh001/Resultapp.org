@@ -1,4 +1,5 @@
 import { getTenant } from "@/lib/tenant";
+import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
 import { Lock, CreditCard, Sparkles, ShieldCheck, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { BillingCheckout } from "@/components/billing/BillingCheckout";
