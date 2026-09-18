@@ -518,9 +518,12 @@ def init_roster_registry() -> None:
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_subdomain ON {tbl}(subdomain);")
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_created_at ON {tbl}(created_at DESC);")
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_subject_term ON {TENANT_GRADES_TABLE}(subject_name, term);")
+        # Spec-required indexes for tenant_grades (Failsafe Grading Workflow)
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_subdomain_subject_term ON {TENANT_GRADES_TABLE}(subdomain, subject_name, term);")
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_student_id ON {TENANT_GRADES_TABLE}(student_id);")
 
         conn.commit()
-        logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations, tenant_subjects)")
+        logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations, tenant_subjects, tenant_grades)")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize roster registry: {e}")
         if conn:
