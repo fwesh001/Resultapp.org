@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GraduationCap, Menu, X } from "lucide-react";
 import StaffSidebar from "@/components/staff/StaffSidebar";
 import { toTitleCase } from "@/lib/format";
