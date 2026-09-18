@@ -42,11 +42,13 @@ export default async function AdminDashboardPage({
       label: "Total Students Enrolled",
       value: studentCount.toLocaleString(),
       icon: Users,
+      demo: false,
     },
     {
       label: "Active Staff",
       value: "12",
       icon: UserCheck,
+      demo: true,
     },
     {
       label: "Subscription",
@@ -56,11 +58,13 @@ export default async function AdminDashboardPage({
         </span>
       ),
       icon: CreditCard,
+      demo: false,
     },
     {
       label: "Current Term",
       value: "Term 1, 2026",
       icon: CalendarDays,
+      demo: true,
     },
   ];
 
