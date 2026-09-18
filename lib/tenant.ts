@@ -33,6 +33,7 @@ interface TenantRegistrySchool {
   subscription_plan: string | null;
   subscription_status: string | null;
   student_count: number;
+  new_term_begins: string | null;
   location: string | null;
   status: string | null;
   created_at: string;
@@ -69,6 +70,7 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     motto: raw.motto ?? undefined,
     proprietorName: raw.proprietor_name ?? undefined,
     registrationNumber: raw.registration_number ?? undefined,
+    newTermBegins: raw.new_term_begins ?? undefined,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     isVerified: raw.is_verified,
