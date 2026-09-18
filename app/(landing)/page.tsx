@@ -17,11 +17,12 @@ export default function HomePage() {
   return (
     <div className="text-purple-50 selection:bg-purple-600 selection:text-white">
       {/* ==================== ZONE A: Hero → Automated Grading — hero-preview.avif fixed ==================== */}
-      <div className="relative isolate overflow-hidden bg-[#0B0514]">
-        {/* fixed background layers — isolated stacking so -z not needed; use normal flow */}
+      <div className="relative isolate overflow-hidden bg-[#0B0514] [clip-path:inset(0)]">
+        {/* Viewport-fixed background layer, clipped to this section via
+            clip-path so mobile browsers skip background-attachment repaints */}
         <div
           aria-hidden
-          className="absolute inset-0 bg-cover bg-center bg-fixed"
+          className="fixed inset-0 bg-cover bg-center"
           style={{ backgroundImage: "url('/hero-preview.avif')" }}
         />
         {/* 75% dark overlay for readability — was invisible before due to -z behind body */}
@@ -331,11 +332,12 @@ export default function HomePage() {
       </div>
 
       {/* ==================== ZONE B: Pricing → CTA — bento-csv-accent.avif fixed ==================== */}
-      <div className="relative isolate overflow-hidden bg-[#0B0514]">
-        {/* fixed background — isolated so it renders above body white */}
+      <div className="relative isolate overflow-hidden bg-[#0B0514] [clip-path:inset(0)]">
+        {/* Viewport-fixed background layer, clipped to this section via
+            clip-path so mobile browsers skip background-attachment repaints */}
         <div
           aria-hidden
-          className="absolute inset-0 bg-cover bg-center bg-fixed"
+          className="fixed inset-0 bg-cover bg-center"
           style={{ backgroundImage: "url('/bento-csv-accent.avif')" }}
         />
         {/* light veil — was 80%+90% now ~38% so bento-csv-accent shows VERY well */}
