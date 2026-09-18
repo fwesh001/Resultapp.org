@@ -57,10 +57,10 @@ export default function Footer({ school, subdomain }: FooterProps) {
           <ul className="mt-3 space-y-2 text-sm">
             <li>
               <Link
-                href={`/${subdomain}/teacher/grading`}
+                href={`/${subdomain}/staff/grading`}
                 className="text-purple-200/70 transition hover:text-white"
               >
-                Teacher Portal
+                Staff Portal
               </Link>
             </li>
           </ul>
