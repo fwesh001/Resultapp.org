@@ -4,6 +4,15 @@ import * as React from "react";
 import { useEffect, useState } from "react";
 import { Loader2, AlertCircle, Lock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
+
+function announceReportReady(canPrint: boolean) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(REPORT_READY_EVENT, { detail: { canPrint } }),
+    );
+  }
+}
 
 interface GradingTemplatePayload {
   id: number | string | null;
