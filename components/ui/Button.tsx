@@ -16,10 +16,10 @@ const variantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
 };
 
 const sizeStyles: Record<NonNullable<ButtonProps["size"]>, string> = {
-  default: "h-10 px-4 py-2",
-  sm: "h-8 rounded-md px-3 text-sm",
-  lg: "h-12 rounded-full px-8 text-base",
-  icon: "h-10 w-10",
+  default: "min-h-[44px] px-4 py-2",
+  sm: "min-h-[44px] min-w-[44px] rounded-md px-3 text-sm",
+  lg: "min-h-[48px] rounded-full px-8 text-base",
+  icon: "min-h-[44px] min-w-[44px]",
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
