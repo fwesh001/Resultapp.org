@@ -269,7 +269,8 @@ def get_report_bundle(
     # Ensure tenant exists — 404 if school unknown (distinct from student null case)
     from services.db_manager import get_school_by_subdomain
 
-    if get_school_by_subdomain(tid) is None:
+    school_info = get_school_by_subdomain(tid)
+    if school_info is None:
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
 
     # Fetch template (may be null)
@@ -571,6 +572,15 @@ def get_report_bundle(
             overall_grade = "F"
             overall_remark = _remark_from_grade(overall_grade)
 
+        # Build school payload for header / resumption
+        school_address = (school_info.get("address") or "").strip() if school_info else ""
+        raw_new_term = (school_info.get("new_term_begins") or "").strip() if school_info else ""
+        school_payload = {
+            "school_name": school_info.get("school_name") if school_info else None,
+            "address": school_address or None,
+            "new_term_begins": raw_new_term or None,
+        }
+
         return {
             "student": student,
             "template": template_payload,
@@ -590,9 +600,10 @@ def get_report_bundle(
             "academic_session": _academic_session(),
             "tenant_id": tid,
             "student_id": sid,
-            # Optional metadata for frontend Bio header — dashed for now, future admin term-settings
+            "school": school_payload,
+            # Optional metadata for frontend Bio header
             "attendance": {"present": None, "outOf": None},
-            "termMeta": {"termEnding": None, "newTermBegins": None},
+            "termMeta": {"termEnding": None, "newTermBegins": raw_new_term or None},
         }
     except HTTPException:
         raise
