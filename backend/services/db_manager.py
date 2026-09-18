@@ -422,6 +422,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
 TENANT_STUDENTS_TABLE = "tenant_students"
 TENANT_STAFF_TABLE = "tenant_staff"
 TENANT_ALLOCATIONS_TABLE = "tenant_allocations"
+TENANT_SUBJECTS_TABLE = "tenant_subjects"
 
 
 def init_roster_registry() -> None:
@@ -474,13 +475,24 @@ def init_roster_registry() -> None:
             );
         """)
 
+        # Subjects — master list per tenant (for relational Allocate)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_SUBJECTS_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                subject_name VARCHAR(120) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, subject_name)
+            );
+        """)
+
         # Indexes for fast subdomain-scoped lookups
-        for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE]:
+        for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE]:
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_subdomain ON {tbl}(subdomain);")
             cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_created_at ON {tbl}(created_at DESC);")
 
         conn.commit()
-        logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations)")
+        logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations, tenant_subjects)")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize roster registry: {e}")
         if conn:
