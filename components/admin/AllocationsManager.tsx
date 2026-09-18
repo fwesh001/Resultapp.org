@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles } from "lucide-react";
+import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -39,6 +39,12 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Filters & search & editing
+  const [searchTerm, setSearchTerm] = useState("");
+  const [studentClassFilter, setStudentClassFilter] = useState<string>("All");
+  const [allocateClassFilter, setAllocateClassFilter] = useState<string>("All");
+  const [editingRecord, setEditingRecord] = useState<Student | Staff | null>(null);
+
   // modals
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -58,7 +64,7 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
     return Array.from(new Set(students.map((s) => s.class_name).filter(Boolean))).sort();
   }, [students]);
 
-  // Group allocations by class for easy reading
+  // Group allocations by class for easy reading (filtered later)
   const allocationsByClass = useMemo(() => {
     const sorted = [...allocations].sort((a, b) => a.class_name.localeCompare(b.class_name) || a.subject_name.localeCompare(b.subject_name));
     const grouped = new Map<string, Allocation[]>();
@@ -98,7 +104,139 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
     return () => clearTimeout(t);
   }, [success]);
 
+  // Reset filters when tenant changes? Keep search global
+  const q = searchTerm.toLowerCase().trim();
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const matchesSearch = !q || [s.student_id, s.full_name, s.class_name].some((v) => v.toLowerCase().includes(q));
+      const matchesClass = studentClassFilter === "All" || s.class_name === studentClassFilter;
+      return matchesSearch && matchesClass;
+    });
+  }, [students, q, studentClassFilter]);
+
+  const filteredStaff = useMemo(() => {
+    if (!q) return staff;
+    return staff.filter((m) => [m.staff_id, m.full_name, m.email || "", m.role].some((v) => v.toLowerCase().includes(q)));
+  }, [staff, q]);
+
+  const filteredSubjects = useMemo(() => {
+    if (!q) return subjects;
+    return subjects.filter((s) => s.subject_name.toLowerCase().includes(q));
+  }, [subjects, q]);
+
+  const filteredAllocations = useMemo(() => {
+    return allocations.filter((a) => {
+      const matchesSearch = !q || [a.subject_name, a.staff_name, a.class_name].some((v) => v.toLowerCase().includes(q));
+      const matchesClass = allocateClassFilter === "All" || a.class_name === allocateClassFilter;
+      return matchesSearch && matchesClass;
+    });
+  }, [allocations, q, allocateClassFilter]);
+
+  const filteredAllocationsByClass = useMemo(() => {
+    const sorted = [...filteredAllocations].sort((a, b) => a.class_name.localeCompare(b.class_name) || a.subject_name.localeCompare(b.subject_name));
+    const grouped = new Map<string, Allocation[]>();
+    for (const a of sorted) {
+      if (!grouped.has(a.class_name)) grouped.set(a.class_name, []);
+      grouped.get(a.class_name)!.push(a);
+    }
+    return grouped;
+  }, [filteredAllocations]);
+
+  function openAddStudent() {
+    setEditingRecord(null);
+    setStudentForm({ student_id: "", full_name: "", class_name: "", gender: "" });
+    setShowStudentModal(true);
+  }
+
+  function openEditStudent(s: Student) {
+    setEditingRecord(s);
+    setStudentForm({ student_id: s.student_id, full_name: s.full_name, class_name: s.class_name, gender: s.gender || "" });
+    setShowStudentModal(true);
+  }
+
+  function openAddStaff() {
+    setEditingRecord(null);
+    setStaffForm({ staff_id: "", full_name: "", email: "", phone: "", role: "Teacher" });
+    setShowStaffModal(true);
+  }
+
+  function openEditStaff(m: Staff) {
+    setEditingRecord(m);
+    setStaffForm({ staff_id: m.staff_id, full_name: m.full_name, email: m.email || "", phone: m.phone || "", role: m.role as typeof STAFF_ROLES[number] });
+    setShowStaffModal(true);
+  }
+
+  function closeStudentModal(open: boolean) {
+    setShowStudentModal(open);
+    if (!open) {
+      setEditingRecord(null);
+      setStudentForm({ student_id: "", full_name: "", class_name: "", gender: "" });
+    }
+  }
+
+  function closeStaffModal(open: boolean) {
+    setShowStaffModal(open);
+    if (!open) {
+      setEditingRecord(null);
+      setStaffForm({ staff_id: "", full_name: "", email: "", phone: "", role: "Teacher" });
+    }
+  }
+
   async function handleCreate(type: "student" | "staff" | "allocation" | "subject" | "bulk_subjects") {
+    // If editing, delegate to PATCH
+    const isEditingStudent = type === "student" && editingRecord && "student_id" in editingRecord;
+    const isEditingStaff = type === "staff" && editingRecord && "staff_id" in editingRecord;
+
+    if (isEditingStudent || isEditingStaff) {
+      const recordType = type as "student" | "staff";
+      const recId = (editingRecord as Student | Staff).id;
+      // Build sparse payload — only updatable fields
+      const patchPayload: Record<string, unknown> = {};
+      if (type === "student") {
+        if (!studentForm.full_name.trim() || !studentForm.class_name.trim()) {
+          setError("Full Name and Class are required");
+          return;
+        }
+        patchPayload.full_name = studentForm.full_name.trim();
+        patchPayload.class_name = studentForm.class_name.trim();
+        if (studentForm.gender) patchPayload.gender = studentForm.gender;
+        else patchPayload.gender = null;
+      } else {
+        if (!staffForm.full_name.trim() || !staffForm.role.trim()) {
+          setError("Full Name and Role are required");
+          return;
+        }
+        patchPayload.full_name = staffForm.full_name.trim();
+        patchPayload.email = staffForm.email.trim() || null;
+        patchPayload.phone = staffForm.phone.trim() || null;
+        patchPayload.role = staffForm.role;
+      }
+
+      setSubmitting(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}&type=${recordType}&id=${encodeURIComponent(recId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchPayload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed ${res.status}`);
+        setSuccess(`${recordType.charAt(0).toUpperCase() + recordType.slice(1)} updated`);
+        if (type === "student") closeStudentModal(false);
+        else closeStaffModal(false);
+        setEditingRecord(null);
+        await fetchAll();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Update failed");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Otherwise create
     setSubmitting(true);
     setError(null);
     let payload: Record<string, unknown> = { tenant_id: tenantId, type };
@@ -206,6 +344,9 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
     { key: "Allocate", label: "Allocate", icon: Layers },
   ];
 
+  const isEditingStudent = !!(editingRecord && activeTab === "Students" && "student_id" in editingRecord);
+  const isEditingStaff = !!(editingRecord && activeTab === "Staff" && "staff_id" in editingRecord);
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -228,6 +369,36 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
             </button>
           );
         })}
+      </div>
+
+      {/* Shared Search Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-300/40" />
+          <input
+            type="search"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 pl-10 pr-3 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          />
+        </div>
+        {activeTab === "Students" && (
+          <select
+            value={studentClassFilter}
+            onChange={(e) => setStudentClassFilter(e.target.value)}
+            className="flex h-10 w-full sm:w-40 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          >
+            <option value="All" className="bg-[#0B0514]">
+              All Classes
+            </option>
+            {availableClasses.map((c) => (
+              <option key={c} value={c} className="bg-[#0B0514]">
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Toasts */}
@@ -255,8 +426,8 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
           {activeTab === "Students" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Registered Students ({students.length})</h3>
-                <Button onClick={() => setShowStudentModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                <h3 className="text-sm font-semibold text-white">Registered Students ({filteredStudents.length}/{students.length})</h3>
+                <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                   <Plus className="h-4 w-4" /> Add Student
                 </Button>
               </div>
@@ -273,26 +444,35 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.length === 0 ? (
+                    {filteredStudents.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-sm text-purple-200/40">
-                          No students yet. Add your first student.
+                          {students.length === 0 ? "No students yet. Add your first student." : "No students match search/filter."}
                         </td>
                       </tr>
                     ) : (
-                      students.map((s) => (
+                      filteredStudents.map((s) => (
                         <tr key={s.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
                           <td className="px-4 py-3 font-mono text-xs">{s.student_id}</td>
                           <td className="px-4 py-3 font-medium text-white">{s.full_name}</td>
                           <td className="px-4 py-3">{s.class_name}</td>
                           <td className="px-4 py-3">{s.gender || "—"}</td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleDelete("student", s.id)}
-                              className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <div className="inline-flex gap-1.5">
+                              <button
+                                onClick={() => openEditStudent(s)}
+                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-900/10 p-2 text-purple-300 hover:bg-purple-900/20"
+                                aria-label="Edit student"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete("student", s.id)}
+                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -307,8 +487,8 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
           {activeTab === "Staff" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Staff Members ({staff.length})</h3>
-                <Button onClick={() => setShowStaffModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                <h3 className="text-sm font-semibold text-white">Staff Members ({filteredStaff.length}/{staff.length})</h3>
+                <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                   <Plus className="h-4 w-4" /> Add Staff
                 </Button>
               </div>
@@ -324,14 +504,14 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {staff.length === 0 ? (
+                    {filteredStaff.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-sm text-purple-200/40">
-                          No staff yet. Add staff first.
+                          {staff.length === 0 ? "No staff yet. Add staff first." : "No staff match search."}
                         </td>
                       </tr>
                     ) : (
-                      staff.map((m) => (
+                      filteredStaff.map((m) => (
                         <tr key={m.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
                           <td className="px-4 py-3 font-mono text-xs">{m.staff_id}</td>
                           <td className="px-4 py-3 font-medium text-white">{m.full_name}</td>
@@ -340,12 +520,21 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                             <span className="rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200">{m.role}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleDelete("staff", m.id)}
-                              className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <div className="inline-flex gap-1.5">
+                              <button
+                                onClick={() => openEditStaff(m)}
+                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-900/10 p-2 text-purple-300 hover:bg-purple-900/20"
+                                aria-label="Edit staff"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete("staff", m.id)}
+                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -360,7 +549,7 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
           {activeTab === "Subjects" && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-white">Master Subjects ({subjects.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Master Subjects ({filteredSubjects.length}/{subjects.length})</h3>
                 <div className="flex gap-2">
                   <Button
                     onClick={() => handleCreate("bulk_subjects")}
@@ -387,14 +576,14 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {subjects.length === 0 ? (
+                    {filteredSubjects.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="px-4 py-8 text-center text-sm text-purple-200/40">
-                          No subjects yet. Add manually or use Quick Add.
+                          {subjects.length === 0 ? "No subjects yet. Add manually or use Quick Add." : "No subjects match search."}
                         </td>
                       </tr>
                     ) : (
-                      subjects.map((s) => (
+                      filteredSubjects.map((s) => (
                         <tr key={s.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
                           <td className="px-4 py-3 font-medium text-white">{s.subject_name}</td>
                           <td className="px-4 py-3 text-xs text-purple-300/50">{new Date(s.created_at).toLocaleDateString()}</td>
@@ -419,15 +608,36 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
           {activeTab === "Allocate" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Allocate — Command Center ({allocations.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Allocate — Command Center ({filteredAllocations.length}/{allocations.length})</h3>
                 <Button onClick={() => setShowAllocModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                   <Plus className="h-4 w-4" /> Assign Subject
                 </Button>
               </div>
 
-              {allocations.length > 0 ? (
+              {/* Class sub-tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {["All", ...availableClasses].map((cls) => (
+                  <button
+                    key={cls}
+                    type="button"
+                    onClick={() => setAllocateClassFilter(cls)}
+                    className={
+                      allocateClassFilter === cls
+                        ? "shrink-0 rounded-full bg-purple-600 px-3 py-1.5 text-xs font-medium text-white shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+                        : "shrink-0 rounded-full border border-purple-500/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                    }
+                  >
+                    {cls}
+                  </button>
+                ))}
+                {availableClasses.length === 0 && (
+                  <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">No classes yet</span>
+                )}
+              </div>
+
+              {filteredAllocations.length > 0 ? (
                 <div className="space-y-6">
-                  {Array.from(allocationsByClass.entries()).map(([className, rows]) => (
+                  {Array.from(filteredAllocationsByClass.entries()).map(([className, rows]) => (
                     <div key={className} className="overflow-hidden rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
                       <div className="border-b border-purple-500/10 bg-purple-950/30 px-4 py-2">
                         <span className="rounded-full bg-purple-600/20 px-3 py-1 text-xs font-semibold text-purple-200">{className}</span>
@@ -463,7 +673,11 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
                 </div>
               ) : (
                 <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-8 text-center text-sm text-purple-200/40">
-                  No allocations yet. Use <span className="font-medium text-white">Assign Subject</span> to map a subject to a class and staff member.
+                  {allocations.length === 0 ? (
+                    <>No allocations yet. Use <span className="font-medium text-white">Assign Subject</span> to map a subject to a class and staff member.</>
+                  ) : (
+                    <>No allocations match filter “{allocateClassFilter}” or search “{searchTerm}”.</>
+                  )}
                 </div>
               )}
             </div>
@@ -471,15 +685,27 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
         </>
       )}
 
-      {/* Add Student Modal */}
-      <Modal open={showStudentModal} onOpenChange={setShowStudentModal} title="Add Student" description="Admission No, Full Name, Class — Gender optional" className="border-purple-500/20 bg-[#0B0514] text-white">
+      {/* Add/Edit Student Modal */}
+      <Modal
+        open={showStudentModal}
+        onOpenChange={closeStudentModal}
+        title={isEditingStudent ? "Edit Student" : "Add Student"}
+        description={isEditingStudent ? "Update Full Name, Class, Gender — Admission No is locked" : "Admission No, Full Name, Class — Gender optional"}
+        className="border-purple-500/20 bg-[#0B0514] text-white"
+      >
         <div className="space-y-3">
-          <Input label="Admission No" value={studentForm.student_id} onChange={(e) => setStudentForm((p) => ({ ...p, student_id: e.target.value }))} placeholder="e.g., VHS/001" />
+          <Input
+            label="Admission No"
+            value={studentForm.student_id}
+            onChange={(e) => setStudentForm((p) => ({ ...p, student_id: e.target.value }))}
+            placeholder="e.g., VHS/001"
+            disabled={isEditingStudent}
+          />
           <Input label="Full Name" value={studentForm.full_name} onChange={(e) => setStudentForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Ada Okoro" />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Class</label>
-            <input value={studentForm.class_name} onChange={(e) => setStudentForm((p) => ({ ...p, class_name: e.target.value }))} placeholder="e.g., JSS 1, SS 2A" list="class-suggestions" className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
-            <datalist id="class-suggestions">
+            <input value={studentForm.class_name} onChange={(e) => setStudentForm((p) => ({ ...p, class_name: e.target.value }))} placeholder="e.g., JSS 1, SS 2A" list="class-suggestions-edit" className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+            <datalist id="class-suggestions-edit">
               <option value="JSS 1" />
               <option value="JSS 2" />
               <option value="JSS 3" />
@@ -496,16 +722,27 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
               <option value="Female">Female</option>
             </select>
           </div>
-          <Button onClick={() => handleCreate("student")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Student
+          <Button
+            onClick={() => handleCreate("student")}
+            disabled={submitting}
+            className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStudent ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {isEditingStudent ? "Save Changes" : "Add Student"}
           </Button>
         </div>
       </Modal>
 
-      {/* Add Staff Modal */}
-      <Modal open={showStaffModal} onOpenChange={setShowStaffModal} title="Add Staff" description="Staff ID, Full Name, Email, Role" className="border-purple-500/20 bg-[#0B0514] text-white">
+      {/* Add/Edit Staff Modal */}
+      <Modal
+        open={showStaffModal}
+        onOpenChange={closeStaffModal}
+        title={isEditingStaff ? "Edit Staff" : "Add Staff"}
+        description={isEditingStaff ? "Update Full Name, Email, Phone, Role — Staff ID is locked" : "Staff ID, Full Name, Email, Role"}
+        className="border-purple-500/20 bg-[#0B0514] text-white"
+      >
         <div className="space-y-3">
-          <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" />
+          <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" disabled={isEditingStaff} />
           <Input label="Full Name" value={staffForm.full_name} onChange={(e) => setStaffForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Mr. Okoro" />
           <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
           <Input label="Phone" value={staffForm.phone} onChange={(e) => setStaffForm((p) => ({ ...p, phone: e.target.value }))} placeholder="080..." />
@@ -519,8 +756,13 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
               ))}
             </select>
           </div>
-          <Button onClick={() => handleCreate("staff")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Staff
+          <Button
+            onClick={() => handleCreate("staff")}
+            disabled={submitting}
+            className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStaff ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {isEditingStaff ? "Save Changes" : "Add Staff"}
           </Button>
         </div>
       </Modal>
