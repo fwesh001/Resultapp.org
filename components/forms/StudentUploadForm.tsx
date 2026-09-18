@@ -5,9 +5,9 @@ import { useState } from "react";
 import { Upload, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import UploadField from "@/components/ui/UploadField";
 
 export function StudentUploadForm() {
-  const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -34,28 +34,16 @@ export function StudentUploadForm() {
         <Input label="Session" name="session" placeholder="2025/2026" required />
       </div>
 
-      <div className="rounded-lg border-2 border-dashed p-6 text-center">
-        <Upload className="mx-auto h-8 w-8 text-zinc-400" />
-        <div className="mt-2">
-          <label className="cursor-pointer text-sm font-medium text-blue-600 hover:underline">
-            Choose file
-            <input
-              type="file"
-              name="file"
-              accept=".csv,.xlsx,.xls"
-              className="hidden"
-              onChange={(e) => setFileName(e.target.files?.[0]?.name || null)}
-              required
-            />
-          </label>
-          <span className="text-sm text-zinc-500"> or drag and drop</span>
-        </div>
-        {fileName ? (
-          <p className="mt-2 text-sm font-medium">{fileName}</p>
-        ) : (
-          <p className="mt-1 text-xs text-zinc-500">CSV, XLSX up to 5MB</p>
-        )}
-      </div>
+      <UploadField
+        id="student-file"
+        behavior="select"
+        name="file"
+        required
+        accept=".csv,.xlsx,.xls"
+        preview="file"
+        tone="light"
+        helper="CSV, XLSX up to 5MB"
+      />
 
       <Button type="submit" disabled={loading} className="w-full gap-2">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
