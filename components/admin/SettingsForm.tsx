@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { School } from "@/types/school";
 
 interface SettingsFormProps {
@@ -8,12 +10,71 @@ interface SettingsFormProps {
 
 /**
  * Client-side school profile form.
- * Rendered by the settings Server Component with real tenant data
- * as input defaultValues.
+ * PATCHes branding data through the Next.js settings proxy,
+ * which forwards to FastAPI with the API secret.
  */
 export default function SettingsForm({ school }: SettingsFormProps) {
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setIsSubmitting(true);
+    setSuccess(null);
+    setError(null);
+
+    const subdomain = school?.slug ?? "";
+    if (!subdomain) {
+      setError("Unknown school subdomain — cannot save.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+    const payload: Record<string, string> = { subdomain };
+    for (const field of [
+      "school_name",
+      "motto",
+      "email",
+      "phone",
+      "address",
+      "logo_url",
+      "hero_bg_url",
+    ]) {
+      const value = formData.get(field);
+      if (typeof value === "string") {
+        payload[field] = value.trim();
+      }
+    }
+
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || "Failed to save settings.");
+      }
+
+      setSuccess(data.message || "School profile updated successfully.");
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const inputClassName =
@@ -24,6 +85,17 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       onSubmit={handleSubmit}
       className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6"
     >
+      {success && (
+        <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {success}
+        </p>
+      )}
+      {error && (
+        <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </p>
+      )}
+
       <div>
         <label
           htmlFor="school-name"
@@ -33,7 +105,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         </label>
         <input
           id="school-name"
-          name="name"
+          name="school_name"
           type="text"
           defaultValue={school?.name ?? ""}
           placeholder="e.g. Victory High School"
@@ -109,11 +181,46 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         />
       </div>
 
+      <div>
+        <label
+          htmlFor="school-logo-url"
+          className="block text-sm font-medium text-purple-200"
+        >
+          Logo URL
+        </label>
+        <input
+          id="school-logo-url"
+          name="logo_url"
+          type="url"
+          defaultValue={school?.logoUrl ?? ""}
+          placeholder="https://..."
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label
+          htmlFor="school-hero-bg-url"
+          className="block text-sm font-medium text-purple-200"
+        >
+          Hero background image URL
+        </label>
+        <input
+          id="school-hero-bg-url"
+          name="hero_bg_url"
+          type="url"
+          defaultValue={school?.heroBgUrl ?? ""}
+          placeholder="https://..."
+          className={inputClassName}
+        />
+      </div>
+
       <button
         type="submit"
-        className="w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514]"
+        disabled={isSubmitting}
+        className="w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Save Changes
+        {isSubmitting ? "Saving..." : "Save Changes"}
       </button>
     </form>
   );
