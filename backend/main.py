@@ -683,6 +683,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Staff auth router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Staff Focused Grading — per-tenant score entry
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.staff_grading import router as staff_grading_router
+
+    app.include_router(staff_grading_router)
+    logger.info("[App] Staff grading router mounted (/api/v1/tenant/{tenant_id}/staff/grading)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Staff grading router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
