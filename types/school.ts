@@ -15,6 +15,7 @@ export interface School {
   state?: string;
   country?: string; // default "NG"
   logoUrl?: string;
+  heroBgUrl?: string;
   motto?: string;
   proprietorName?: string;
   registrationNumber?: string;
