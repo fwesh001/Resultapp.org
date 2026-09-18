@@ -4,9 +4,10 @@ import { PricingCalculator } from "@/components/ui/PricingCalculator";
 
 export default function PricingPage() {
   return (
-    <div className="relative isolate overflow-hidden bg-[#0B0514] text-purple-50 selection:bg-purple-600 selection:text-white">
-      {/* bento-csv-accent fixed background — same prominent style as landing Zone B */}
-      <div aria-hidden className="absolute inset-0 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('/bento-csv-accent.avif')" }} />
+    <div className="relative isolate overflow-hidden bg-[#0B0514] text-purple-50 selection:bg-purple-600 selection:text-white [clip-path:inset(0)]">
+      {/* Viewport-fixed background layer, clipped to this section via
+          clip-path so mobile browsers skip background-attachment repaints */}
+      <div aria-hidden className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/bento-csv-accent.avif')" }} />
       <div aria-hidden className="absolute inset-0 bg-[#0B0514]/38" />
       <div aria-hidden className="absolute inset-0 bg-violet-950/12 mix-blend-multiply" />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-[#0B0514]/10 via-transparent to-[#0B0514]/55" />
