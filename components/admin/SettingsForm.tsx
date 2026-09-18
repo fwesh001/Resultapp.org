@@ -41,6 +41,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       "email",
       "phone",
       "address",
+      "new_term_begins",
       "logo_url",
       "hero_bg_url",
     ]) {
@@ -170,16 +171,36 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           htmlFor="school-address"
           className="block text-sm font-medium text-purple-200"
         >
-          Address
+          School Address
         </label>
         <textarea
           id="school-address"
           name="address"
-          rows={3}
+          rows={2}
           defaultValue={school?.address ?? ""}
-          placeholder="School address"
+          placeholder="e.g. Off Student Village Road, Nasarawa"
           className={inputClassName}
         />
+        <p className="mt-1 text-xs text-purple-300/40">Shown beneath the school name on the report header.</p>
+      </div>
+
+      <div>
+        <label
+          htmlFor="new-term-begins"
+          className="block text-sm font-medium text-purple-200"
+        >
+          New Term Begins
+        </label>
+        <input
+          id="new-term-begins"
+          name="new_term_begins"
+          type="date"
+          defaultValue={school?.newTermBegins ? String(school.newTermBegins).slice(0, 10) : ""}
+          className={inputClassName}
+        />
+        <p className="mt-1 text-xs text-purple-300/40">
+          Resumption date for the next term (e.g., 2026-01-09). Displayed as “09 Jan 2026” on report cards. Leave empty for “—”.
+        </p>
       </div>
 
       <UploadField
