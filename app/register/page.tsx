@@ -167,7 +167,7 @@ export default function RegisterPage() {
               <p className="text-sm font-medium text-white">How it works</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-purple-200/60">
                 <li>Fill school & admin details</li>
-                <li>Pay via Flutterwave modal</li>
+                <li>We verify and provision your portal automatically</li>
                 <li>
                   Portal at <span className="font-mono text-purple-200">subdomain.resultapp.org</span> is auto-created
                 </li>
