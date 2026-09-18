@@ -41,7 +41,7 @@ export default async function BillingPage({
             </div>
             <h1 className="mt-5 text-2xl font-bold tracking-tight text-white">Your subscription is active</h1>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              <span className="font-mono font-medium text-white">{school?.name || tenantId}</span> is unlocked for report
+              <span className="font-medium text-white">{school?.name ? toTitleCase(school.name) : tenantId}</span> is unlocked for report
               card printing. Student count: <span className="font-semibold text-white">{school?.credits?.balance ?? (school as unknown as { student_count?: number })?.student_count ?? "—"}</span>
             </p>
 
@@ -96,7 +96,7 @@ export default async function BillingPage({
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-white">Billing & Subscription</h1>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
             Unlock report card printing for{" "}
-            <span className="font-mono font-medium text-white">{school?.name || tenantId}</span> — currently{" "}
+            <span className="font-medium text-white">{school?.name ? toTitleCase(school.name) : tenantId}</span> — currently{" "}
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${isLocked ? "bg-red-500/15 text-red-300" : "bg-amber-500/15 text-amber-300"}`}>
               {rawStatus}
             </span>
