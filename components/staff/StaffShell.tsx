@@ -1,0 +1,53 @@
+"use client";
+
+import { useState } from "react";
+import { GraduationCap, Menu, X } from "lucide-react";
+import StaffSidebar from "@/components/staff/StaffSidebar";
+import { toTitleCase } from "@/lib/format";
+
+interface StaffShellProps {
+  subdomain: string;
+  schoolName: string;
+  children: React.ReactNode;
+}
+
+export default function StaffShell({ subdomain, schoolName, children }: StaffShellProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen bg-[#0B0514] text-white">
+      <div className="hidden md:flex">
+        <StaffSidebar subdomain={subdomain} schoolName={schoolName} />
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute left-0 top-0 h-full shadow-2xl">
+            <StaffSidebar subdomain={subdomain} schoolName={schoolName} onNavigate={() => setOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-3 border-b border-purple-500/20 bg-[#0B0514]/90 px-4 py-3 backdrop-blur-md md:hidden">
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            className="inline-flex items-center justify-center rounded-lg border border-purple-500/20 p-2 text-purple-200 transition hover:bg-purple-900/20"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
+            <GraduationCap className="h-4 w-4 text-purple-300" />
+          </span>
+          <span className="truncate text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</span>
+        </div>
+
+        <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
+      </div>
+    </div>
+  );
+}
