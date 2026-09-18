@@ -671,6 +671,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Allocations router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Staff Authentication & Dashboard — per-tenant staff portal
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.staff_auth import router as staff_auth_router
+
+    app.include_router(staff_auth_router)
+    logger.info("[App] Staff auth router mounted (/api/v1/tenant/{tenant_id}/staff/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Staff auth router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
