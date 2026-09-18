@@ -293,7 +293,7 @@ export function TeacherDataEntry({ tenantId }: TeacherDataEntryProps) {
           <p className="font-mono text-sm font-semibold text-purple-100">{tenantId}</p>
         </div>
         <span className="ml-auto rounded-full border border-purple-500/15 bg-purple-900/20 px-3 py-1 text-xs font-medium text-purple-200">
-          Teacher Entry • Academic
+          Staff Entry • Academic
         </span>
       </div>
 
