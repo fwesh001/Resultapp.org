@@ -181,6 +181,7 @@ class TenantMetadata(BaseModel):
     subscription_plan: Optional[str] = None
     subscription_status: Optional[str] = None
     student_count: int = 0
+    new_term_begins: Optional[str] = None
     location: Optional[str] = None
     status: str = "inactive"
     created_at: str
@@ -361,7 +362,7 @@ def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      created_at, updated_at;
+                      new_term_begins, created_at, updated_at;
             """,
             (int(payload.student_count), tid),
         )
