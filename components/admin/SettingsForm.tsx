@@ -181,6 +181,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="school-address"
           name="address"
           rows={2}
+          autoComplete="street-address"
           defaultValue={school?.address ?? ""}
           placeholder="e.g. Off Student Village Road, Nasarawa"
           className={inputClassName}
