@@ -83,7 +83,7 @@ export function PricingCalculator() {
               step={10}
               value={students}
               onChange={(e) => setStudents(Number(e.target.value))}
-              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60"
+              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
               style={{
                 background: `linear-gradient(to right, rgb(147 51 234) 0%, rgb(168 85 247) ${pct}%, rgba(88,28,135,0.35) ${pct}%, rgba(88,28,135,0.35) 100%)`,
               }}
@@ -151,8 +151,8 @@ export function PricingCalculator() {
       <style jsx>{`
         input[type="range"]::-webkit-slider-thumb {
           appearance: none;
-          height: 22px;
-          width: 22px;
+          height: 26px;
+          width: 26px;
           border-radius: 9999px;
           background: white;
           border: 4px solid rgb(147 51 234);
@@ -164,13 +164,23 @@ export function PricingCalculator() {
           transform: scale(1.1);
         }
         input[type="range"]::-moz-range-thumb {
-          height: 22px;
-          width: 22px;
+          height: 26px;
+          width: 26px;
           border-radius: 9999px;
           background: white;
           border: 4px solid rgb(147 51 234);
           box-shadow: 0 0 20px rgba(147, 51, 234, 0.6);
           cursor: pointer;
+        }
+        @media (pointer: coarse) {
+          input[type="range"]::-webkit-slider-thumb {
+            height: 30px;
+            width: 30px;
+          }
+          input[type="range"]::-moz-range-thumb {
+            height: 30px;
+            width: 30px;
+          }
         }
       `}</style>
     </div>
