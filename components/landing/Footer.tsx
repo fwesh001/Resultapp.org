@@ -27,8 +27,24 @@ export default function Footer({ school, subdomain }: FooterProps) {
           </p>
           <div className="mt-3 space-y-1.5 text-sm text-purple-200/70">
             <p>{location || "Address not provided"}</p>
-            <p>{school.phone || "Phone not provided"}</p>
-            <p>{school.email || "Email not provided"}</p>
+            {school.phone ? (
+              <p>
+                <a href={`tel:${school.phone.replace(/\s+/g, "")}`} className="transition hover:text-white">
+                  {school.phone}
+                </a>
+              </p>
+            ) : (
+              <p>Phone not provided</p>
+            )}
+            {school.email ? (
+              <p>
+                <a href={`mailto:${school.email}`} className="transition hover:text-white">
+                  {school.email}
+                </a>
+              </p>
+            ) : (
+              <p>Email not provided</p>
+            )}
           </div>
         </div>
 
