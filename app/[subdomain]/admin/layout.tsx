@@ -1,9 +1,10 @@
 import { getTenant } from "@/lib/tenant";
-import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminShell from "@/components/admin/AdminShell";
 
 /**
- * Admin portal layout — persistent sidebar wrapping
- * dashboard, allocations, templates, settings, and billing.
+ * Admin portal layout — responsive shell (fixed sidebar on md+,
+ * hamburger drawer on mobile) wrapping dashboard, allocations,
+ * templates, settings, and billing.
  */
 export default async function AdminLayout({
   children,
@@ -19,9 +20,8 @@ export default async function AdminLayout({
   const schoolName = school?.name ?? routeSubdomain;
 
   return (
-    <div className="flex h-screen bg-[#0B0514] text-white">
-      <AdminSidebar subdomain={subdomain} schoolName={schoolName} />
-      <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
-    </div>
+    <AdminShell subdomain={subdomain} schoolName={schoolName}>
+      {children}
+    </AdminShell>
   );
 }
