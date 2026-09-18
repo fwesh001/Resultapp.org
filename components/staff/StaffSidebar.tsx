@@ -11,11 +11,11 @@ interface StaffSidebarProps {
   onNavigate?: () => void;
 }
 
-const nav = [
+const nav: Array<{ label: string; href: string | ((sub: string) => string); icon: typeof LayoutDashboard; external?: boolean }> = [
   { label: "Dashboard", href: "", icon: LayoutDashboard },
+  { label: "My Classes", href: "/classes", icon: Users },
   { label: "My Grading", href: "/grading", icon: GraduationCap },
-  { label: "Allocations", href: (sub: string) => `/${sub}/admin/allocations`, icon: Users, external: true },
-] as const;
+];
 
 export default function StaffSidebar({ subdomain, schoolName, onNavigate }: StaffSidebarProps) {
   const pathname = usePathname();
