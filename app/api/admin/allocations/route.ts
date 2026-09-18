@@ -95,6 +95,53 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  const secret = getSecret();
+  if (!secret) return NextResponse.json({ success: false, error: "Server misconfigured" }, { status: 500 });
+
+  const { searchParams } = new URL(req.url);
+  let tenantId = (searchParams.get("tenant_id") || searchParams.get("tenantId") || "").toLowerCase().trim();
+  const type = (searchParams.get("type") || "").trim();
+  const id = (searchParams.get("id") || "").trim();
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    // body may be empty if query-only PATCH (still allow)
+    body = {};
+  }
+
+  if (!tenantId) tenantId = resolveTenantId(req, body);
+  // Prefer body tenant if still missing
+  if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
+  const rType = type || String((body.type as string) || "").trim();
+  const rId = id || String((body.id as string) || "").trim();
+  if (!rType || !rId) return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
+
+  // Forward only updatable fields (strip tenant_id/type/id)
+  const { tenant_id, tenantId: _tid, type: _t, id: _id, ...payload } = body as Record<string, unknown>;
+  const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster/${encodeURIComponent(rType)}/${encodeURIComponent(rId)}`;
+  try {
+    const r = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const detail = (data as { detail?: unknown })?.detail ?? (data as { error?: unknown })?.error ?? "Update failed";
+      const msg = Array.isArray(detail) ? (detail as Array<{ msg?: string }>).map((d) => d.msg || JSON.stringify(d)).join("; ") : String(detail);
+      return NextResponse.json({ success: false, error: msg, raw: data }, { status: r.status });
+    }
+    return NextResponse.json(data, { status: 200 });
+  } catch (e) {
+    console.error("[allocations proxy PATCH] failed", e);
+    return NextResponse.json({ success: false, error: "Could not reach roster service" }, { status: 502 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const secret = getSecret();
   if (!secret) return NextResponse.json({ success: false, error: "Server misconfigured" }, { status: 500 });
