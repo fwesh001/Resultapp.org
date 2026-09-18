@@ -144,10 +144,10 @@ export default async function BillingPage({
               Manage Templates
             </Link>
             <Link
-              href={`/${tenantId}/teacher/grading`}
+              href={`/${tenantId}/staff/grading`}
               className="inline-flex w-full items-center justify-center rounded-full border border-purple-500/15 bg-purple-500/10 px-6 py-3 text-sm font-medium text-purple-200 hover:bg-purple-500/15"
             >
-              Teacher Grading
+              Staff Grading
             </Link>
           </div>
 
