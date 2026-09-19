@@ -34,6 +34,7 @@ interface TenantRegistrySchool {
   subscription_status: string | null;
   student_count: number;
   credit_balance: number | null;
+  id_prefix: string | null;
   new_term_begins: string | null;
   location: string | null;
   status: string | null;
