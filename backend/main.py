@@ -525,6 +525,16 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Failed to register school '{subdomain}' in registry: {e}")
 
+        # Credit & Command: trial grant (best-effort, idempotent — never blocks provision)
+        try:
+            from services.db_manager import grant_initial_credits, TRIAL_CREDITS
+
+            grant = int(payload.initial_credits) if payload.initial_credits is not None else TRIAL_CREDITS
+            grant_initial_credits(subdomain, grant)
+            logger.info(f"[PROVISION] Trial grant of {grant} credits for '{subdomain}'")
+        except Exception as e:
+            logger.warning(f"[PROVISION] Failed to grant trial credits for '{subdomain}': {e}")
+
         return ProvisionResponse(
             success=True,
             message=f"Successfully provisioned {domain} for {school_name}",
