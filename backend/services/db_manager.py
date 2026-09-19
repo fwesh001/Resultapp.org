@@ -317,35 +317,6 @@ def init_schools_registry() -> None:
             SET credit_balance = 0
             WHERE credit_balance IS NULL;
         """)
-        # One-time migration: paid tenants keep working — convert their
-        # legacy student_count quota into an opening credit balance with a
-        # matching PURCHASE ledger row. Guarded by ledger absence so
-        # replays (and legitimately spent-down balances) are never re-credited.
-        cur.execute(f"""
-            INSERT INTO {CREDIT_LEDGER_TABLE}
-                (subdomain, amount, transaction_type, reference_id, description)
-            SELECT subdomain, student_count, 'PURCHASE',
-                   'backfill:' || subdomain,
-                   'Legacy quota migrated to credit balance'
-            FROM {SCHOOLS_REGISTRY_TABLE} s
-            WHERE s.subscription_status = 'active'
-              AND COALESCE(s.student_count, 0) > 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
-                  WHERE l.subdomain = s.subdomain
-              )
-            ON CONFLICT (reference_id) DO NOTHING;
-        """)
-        cur.execute(f"""
-            UPDATE {SCHOOLS_REGISTRY_TABLE} s
-            SET credit_balance = s.student_count
-            WHERE s.subscription_status = 'active'
-              AND COALESCE(s.credit_balance, 0) = 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
-                  WHERE l.subdomain = s.subdomain
-              );
-        """)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS credit_ledger (
                 id               SERIAL PRIMARY KEY,
@@ -380,6 +351,36 @@ def init_schools_registry() -> None:
         cur.execute("""
             CREATE INDEX IF NOT EXISTS ix_publications_lookup
             ON result_publications (subdomain, student_id, term);
+        """)
+        # One-time migration: paid tenants keep working — convert their
+        # legacy student_count quota into an opening credit balance with a
+        # matching PURCHASE ledger row. Guarded by ledger absence so
+        # replays (and legitimately spent-down balances) are never re-credited.
+        # NOTE: Must run AFTER tables are created (otherwise rollback wipes DDL).
+        cur.execute(f"""
+            INSERT INTO {CREDIT_LEDGER_TABLE}
+                (subdomain, amount, transaction_type, reference_id, description)
+            SELECT subdomain, student_count, 'PURCHASE',
+                   'backfill:' || subdomain,
+                   'Legacy quota migrated to credit balance'
+            FROM {SCHOOLS_REGISTRY_TABLE} s
+            WHERE s.subscription_status = 'active'
+              AND COALESCE(s.student_count, 0) > 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
+                  WHERE l.subdomain = s.subdomain
+              )
+            ON CONFLICT (reference_id) DO NOTHING;
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE} s
+            SET credit_balance = s.student_count
+            WHERE s.subscription_status = 'active'
+              AND COALESCE(s.credit_balance, 0) = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
+                  WHERE l.subdomain = s.subdomain
+              );
         """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
