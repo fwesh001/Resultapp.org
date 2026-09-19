@@ -417,6 +417,18 @@ def get_slots_balance_endpoint(tenant_id: str):
     return {"subdomain": tid, "slots_balance": get_slots_balance(tid)}
 
 
+@router.get("/billing-ledger", summary="Unified billing ledger (SLOT/CREDIT)")
+def get_billing_ledger_endpoint(
+    tenant_id: str, token_type: str | None = None, limit: int = 50, offset: int = 0
+):
+    from services.db_manager import get_billing_ledger
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+    entries = get_billing_ledger(tid, token_type=token_type, limit=limit, offset=offset)
+    return {"subdomain": tid, "entries": entries, "token_type": token_type, "limit": limit, "offset": offset}
+
+
 @router.get("/config/credit-price", summary="Fetch flat credit price (NGN)")
 def get_credit_price_endpoint(tenant_id: str):
     from services.db_manager import get_credit_price
