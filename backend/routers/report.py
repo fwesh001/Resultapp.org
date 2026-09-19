@@ -408,7 +408,7 @@ def _build_grouped_template(academic_structure: Optional[Dict[str, Any]]) -> Opt
     }
 
 
-@router.get("/{student_id}", summary="Report card bundle: student bio + template + grades + behavioural + summary + rankings")
+@router.get("/{student_id:path}", summary="Report card bundle: student bio + template + grades + behavioural + summary + rankings")
 def get_report_bundle(
     tenant_id: str,
     student_id: str,
@@ -453,7 +453,7 @@ def get_report_bundle(
         conn = _connect_as_superuser()
         cur = conn.cursor()
         cur.execute(
-            f"SELECT student_id, full_name, class_name, gender FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND student_id = %s LIMIT 1",
+            f"SELECT student_id, full_name, class_name, gender FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) LIMIT 1",
             (tid, sid),
         )
         row = cur.fetchone()
@@ -487,9 +487,9 @@ def get_report_bundle(
             except Exception:
                 class_student_ids = [sid]
 
-            # Primary source: tenant_grades
+            # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows
             cur.execute(
-                f"SELECT subject_name, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND student_id = %s AND term = %s ORDER BY subject_name",
+                f"SELECT subject_name, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY subject_name",
                 (tid, sid, term),
             )
             rows = cur.fetchall()
@@ -531,13 +531,14 @@ def get_report_bundle(
                         }
                     )
 
-        # Fallback to legacy if tenant_grades yielded nothing but student exists
+        # Fallback to legacy if tenant_grades yielded nothing but student exists — case-insensitive during migration
         if student is not None and not grades_out:
+            from sqlalchemy import func as _func
             legacy_academic = (
                 db.query(models.StudentAcademicRecord)
                 .filter(
                     models.StudentAcademicRecord.tenant_id == tid,
-                    models.StudentAcademicRecord.student_id == sid,
+                    _func.lower(models.StudentAcademicRecord.student_id) == _func.lower(sid),
                     models.StudentAcademicRecord.term == term,
                 )
                 .order_by(models.StudentAcademicRecord.subject)
@@ -575,11 +576,12 @@ def get_report_bundle(
                 )
             # Legacy behavioural fallback
             if not behavioural_merged:
+                from sqlalchemy import func as _func2
                 legacy_be = (
                     db.query(models.StudentBehavioralRecord)
                     .filter(
                         models.StudentBehavioralRecord.tenant_id == tid,
-                        models.StudentBehavioralRecord.student_id == sid,
+                        _func2.lower(models.StudentBehavioralRecord.student_id) == _func2.lower(sid),
                         models.StudentBehavioralRecord.term == term,
                     )
                     .order_by(models.StudentBehavioralRecord.created_at.desc())
@@ -636,11 +638,17 @@ def get_report_bundle(
                         if gt is None:
                             gt = _compute_total(academic_structure, pr_scores)
                         peer_subject_total[(pr_sid, pr_subj)] = float(gt)
+                        # also store lower variant for case-insensitive lookup during migration
+                        _low = pr_sid.lower() if isinstance(pr_sid, str) else str(pr_sid).lower()
+                        if _low != pr_sid:
+                            peer_subject_total[(_low, pr_subj)] = float(gt)
 
                     # Populate subject totals map and grand totals
                     for subj in subject_names:
                         for peer_sid in class_student_ids:
                             tot = peer_subject_total.get((peer_sid, subj))
+                            if tot is None:
+                                tot = peer_subject_total.get((peer_sid.lower() if isinstance(peer_sid, str) else str(peer_sid).lower(), subj))
                             if tot is None:
                                 # No record for this peer/subject -> treat as 0 for average but still counts towards denominator
                                 tot = 0.0
@@ -653,14 +661,15 @@ def get_report_bundle(
                     # But to handle mixed migration, we could also supplement legacy totals if peer_subject_total missing and legacy has record
                     # For brevity, only supplement if tenant_grades peer_rows empty
                     if not peer_rows:
-                        # Try legacy bulk
+                        # Try legacy bulk — case-insensitive for migration window
+                        from sqlalchemy import func as _func3
                         legacy_rows = (
                             db.query(models.StudentAcademicRecord)
                             .filter(
                                 models.StudentAcademicRecord.tenant_id == tid,
                                 models.StudentAcademicRecord.term == term,
                                 models.StudentAcademicRecord.subject.in_(subject_names),
-                                models.StudentAcademicRecord.student_id.in_(class_student_ids),
+                                _func3.lower(models.StudentAcademicRecord.student_id).in_([s.lower() for s in class_student_ids]),
                             )
                             .all()
                         )
@@ -669,7 +678,7 @@ def get_report_bundle(
                         grand_totals_map = {sid_peer: 0.0 for sid_peer in class_student_ids}
                         leg_map: Dict[tuple, float] = {}
                         for rec in legacy_rows:
-                            k = (rec.student_id, rec.subject)
+                            k = (rec.student_id.lower() if isinstance(rec.student_id, str) else str(rec.student_id).lower(), rec.subject)
                             sc = getattr(rec, "scores", {}) or {}
                             br = _extract_breakdown(sc)
                             gt = _compute_simple_granular_total(br)
@@ -684,7 +693,10 @@ def get_report_bundle(
                             leg_map[k] = float(gt)  # type: ignore
                         for subj in subject_names:
                             for peer_sid in class_student_ids:
-                                tot = leg_map.get((peer_sid, subj), 0.0)
+                                tot = leg_map.get((peer_sid.lower() if isinstance(peer_sid, str) else str(peer_sid).lower(), subj), 0.0)
+                                # fallback try original case
+                                if tot == 0.0:
+                                    tot = leg_map.get((peer_sid, subj), 0.0)
                                 subject_totals_map[subj].append(float(tot))
                                 grand_totals_map[peer_sid] += float(tot)
             except Exception as e:
@@ -711,8 +723,16 @@ def get_report_bundle(
 
                 # Also expose A1..Exam breakdown already in g["breakdown"]
 
-            # Overall ranking
-            my_grand_total = grand_totals_map.get(sid, 0.0)
+            # Overall ranking — case-insensitive lookup for pre-migration UPPER rows
+            my_grand_total = grand_totals_map.get(sid, None)
+            if my_grand_total is None:
+                # try lower/upper variant
+                for k, v in grand_totals_map.items():
+                    if k.lower() == sid.lower():
+                        my_grand_total = v
+                        break
+                if my_grand_total is None:
+                    my_grand_total = 0.0
             # Count peers with greater grand total
             greater_overall = sum(1 for v in grand_totals_map.values() if v > my_grand_total)
             overall_position = (greater_overall + 1) if grand_totals_map else 1
