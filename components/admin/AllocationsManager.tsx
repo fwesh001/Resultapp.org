@@ -27,7 +27,7 @@ const STANDARD_SUBJECTS = [
   "Basic Technology",
 ];
 
-export function AllocationsManager({ tenantId }: { tenantId: string }) {
+export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenantId: string; idPrefix?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("Students");
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -143,9 +143,33 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
     return grouped;
   }, [filteredAllocations]);
 
+  // Prefix for new Admission Nos — uppercased configured id_prefix (e.g. VHS) or fallback to subdomain.
+  const idPrefix = useMemo(() => {
+    const raw = (idPrefixProp || tenantId).trim();
+    return raw ? raw.toUpperCase() : tenantId.toUpperCase();
+  }, [tenantId, idPrefixProp]);
+
+  // Keep prefix in sync if school.idPrefix becomes available via props later — no-op for now.
+
+  function nextAdmissionNo(prefix: string, existing: Student[]): string {
+    const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(\\d+)$`);
+    let max = 0;
+    for (const s of existing) {
+      const m = s.student_id.match(re);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (Number.isFinite(n) && n > max) max = n;
+      }
+    }
+    // If no prefixed IDs exist yet, fall back to total count + 1 so VHS/001 appears on first create.
+    const fallback = existing.filter((s) => s.subdomain.toLowerCase() === tenantId.toLowerCase()).length;
+    const nextNum = max > 0 ? max + 1 : fallback + 1;
+    return `${prefix}/${String(nextNum).padStart(3, "0")}`;
+  }
+
   function openAddStudent() {
     setEditingRecord(null);
-    setStudentForm({ student_id: "", full_name: "", class_name: "", gender: "" });
+    setStudentForm({ student_id: nextAdmissionNo(idPrefix, students), full_name: "", class_name: "", gender: "" });
     setShowStudentModal(true);
   }
 
@@ -694,13 +718,36 @@ export function AllocationsManager({ tenantId }: { tenantId: string }) {
         className="border-purple-500/20 bg-[#0B0514] text-white"
       >
         <div className="space-y-3">
-          <Input
-            label="Admission No"
-            value={studentForm.student_id}
-            onChange={(e) => setStudentForm((p) => ({ ...p, student_id: e.target.value }))}
-            placeholder="e.g., VHS/001"
-            disabled={isEditingStudent}
-          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                label="Admission No"
+                value={studentForm.student_id}
+                onChange={(e) => setStudentForm((p) => ({ ...p, student_id: e.target.value.toUpperCase() }))}
+                placeholder={`e.g., ${idPrefix}/001`}
+                disabled={isEditingStudent}
+              />
+            </div>
+            {!isEditingStudent && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setStudentForm((p) => ({ ...p, student_id: nextAdmissionNo(idPrefix, students) }))}
+                className="mb-[2px] shrink-0 rounded-xl border border-purple-500/20 bg-purple-900/20 text-purple-200 hover:bg-purple-800/30 hover:text-white"
+                title="Generate next Admission No"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Auto
+              </Button>
+            )}
+          </div>
+          {!isEditingStudent && (
+            <p className="text-xs text-purple-300/40">
+              Prefix <span className="font-mono text-purple-200">{idPrefix}</span> from Settings → auto-filled as{" "}
+              <span className="font-mono text-purple-200">{nextAdmissionNo(idPrefix, students)}</span>. Change it in Admin → Settings.
+            </p>
+          )}
           <Input label="Full Name" value={studentForm.full_name} onChange={(e) => setStudentForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Ada Okoro" />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Class</label>
