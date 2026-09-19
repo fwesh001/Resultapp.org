@@ -364,7 +364,11 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
             <History className="h-4 w-4 text-purple-300" /> Transaction history
           </h2>
           <div className="flex flex-wrap gap-1.5">
-            {(["all", "PURCHASE", "PUBLICATION_DEDUCTION", "INITIAL_GRANT"] as LedgerFilter[]).map((f) => (
+            {(
+              activeTab === "slots"
+                ? (["all", "SLOT_PURCHASE", "SLOT_CONSUMPTION", "SLOT_REFUND", "INITIAL_SLOTS"] as LedgerFilter[])
+                : (["all", "CREDIT_PURCHASE", "PURCHASE", "PUBLICATION_DEDUCTION", "INITIAL_GRANT"] as LedgerFilter[])
+            ).map((f) => (
               <button
                 key={f}
                 type="button"
@@ -376,7 +380,15 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                     : "border-purple-500/15 bg-purple-900/10 text-purple-200/70 hover:text-white"
                 }`}
               >
-                {f === "all" ? "All" : f === "PUBLICATION_DEDUCTION" ? "Publications" : f === "INITIAL_GRANT" ? "Grants" : "Purchases"}
+                {f === "all"
+                  ? "All"
+                  : f === "PUBLICATION_DEDUCTION"
+                    ? "Publications"
+                    : f === "INITIAL_GRANT" || f === "INITIAL_SLOTS"
+                      ? "Grants"
+                      : f.includes("SLOT")
+                        ? f.replace("SLOT_", "").replace("_", " ")
+                        : "Purchases"}
               </button>
             ))}
           </div>
@@ -408,7 +420,21 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${TYPE_STYLES[e.transaction_type] ?? "border-purple-500/15 bg-purple-900/10 text-purple-200/70"}`}>
-                        {e.transaction_type === "PUBLICATION_DEDUCTION" ? "Publication" : e.transaction_type === "INITIAL_GRANT" ? "Trial grant" : e.transaction_type === "PURCHASE" ? "Purchase" : e.transaction_type}
+                        {e.transaction_type === "PUBLICATION_DEDUCTION"
+                          ? "Publication"
+                          : e.transaction_type === "INITIAL_GRANT"
+                            ? "Trial grant"
+                            : e.transaction_type === "INITIAL_SLOTS"
+                              ? "Initial slots"
+                              : e.transaction_type === "SLOT_PURCHASE"
+                                ? "Slot purchase"
+                                : e.transaction_type === "SLOT_CONSUMPTION"
+                                  ? "Slot used"
+                                  : e.transaction_type === "SLOT_REFUND"
+                                    ? "Slot refund"
+                                    : e.transaction_type === "CREDIT_PURCHASE" || e.transaction_type === "PURCHASE"
+                                      ? "Credit purchase"
+                                      : e.transaction_type}
                       </span>
                     </td>
                     <td className={`whitespace-nowrap px-3 py-2.5 text-right font-semibold ${e.amount < 0 ? "text-red-300" : "text-emerald-300"}`}>
