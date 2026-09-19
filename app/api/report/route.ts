@@ -42,7 +42,16 @@ export async function GET(req: NextRequest) {
   )
     .toLowerCase()
     .trim();
-  const studentId = (searchParams.get("student_id") || searchParams.get("studentId") || "").trim();
+  const rawStudentId = (searchParams.get("student_id") || searchParams.get("studentId") || "").trim();
+  // Normalize prefix to lower case (vhs/005 not VHS/005)
+  const studentId = (() => {
+    const s = rawStudentId;
+    const idx = s.indexOf("/");
+    if (idx > -1) return s.slice(0, idx).toLowerCase() + s.slice(idx);
+    const m = s.match(/^([A-Za-z]+)(.*)$/);
+    if (m) return m[1].toLowerCase() + m[2];
+    return s.toLowerCase();
+  })();
   const term = (searchParams.get("term") || "Term 1").trim() || "Term 1";
 
   if (!tenantId || !studentId) {
