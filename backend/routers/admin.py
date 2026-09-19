@@ -184,11 +184,11 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             raise HTTPException(status_code=400, detail="current_session must be YYYY/YYYY (e.g. 2026/2027)")
         data["current_session"] = cs or None
     if "id_prefix" in data:
-        raw_prefix = (data["id_prefix"] or "").strip().upper()
+        raw_prefix = (data["id_prefix"] or "").strip().lower()
         if not raw_prefix:
             data["id_prefix"] = None
-        elif not __import__("re").match(r"^[A-Z0-9/-]{2,20}$", raw_prefix):
-            raise HTTPException(status_code=400, detail="id_prefix must be 2-20 chars (A-Z, 0-9, /, -)")
+        elif not __import__("re").match(r"^[a-z0-9/-]{2,20}$", raw_prefix):
+            raise HTTPException(status_code=400, detail="id_prefix must be 2-20 chars (a-z, 0-9, /, -)")
         else:
             data["id_prefix"] = raw_prefix
     # Normalize blank optional strings to NULL so cleared fields don't store ""
