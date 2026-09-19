@@ -9,6 +9,7 @@ import {
   Settings,
   CreditCard,
   GraduationCap,
+  ClipboardCheck,
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
@@ -35,6 +36,11 @@ export default function AdminSidebar({
       label: "Allocations",
       href: `/${subdomain}/admin/allocations`,
       icon: Users,
+    },
+    {
+      label: "Command Center",
+      href: `/${subdomain}/admin/results`,
+      icon: ClipboardCheck,
     },
     {
       label: "Templates",
