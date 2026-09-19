@@ -537,6 +537,60 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Failed to grant trial credits for '{subdomain}': {e}")
 
+        # Dual-ledger: initial slot capacity = student_count (free trial capacity, no payment)
+        try:
+            from services.db_manager import _connect_as_superuser, BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE
+
+            conn2 = _connect_as_superuser()
+            cur2 = conn2.cursor()
+            # Ensure slots_balance reflects initial capacity if not already set
+            cur2.execute(
+                f"""
+                UPDATE {SCHOOLS_REGISTRY_TABLE}
+                SET slots_balance = GREATEST(COALESCE(slots_balance,0), %s),
+                    student_count = GREATEST(COALESCE(student_count,0), %s),
+                    updated_at = NOW()
+                WHERE subdomain = %s AND COALESCE(slots_balance,0) = 0
+                RETURNING slots_balance;
+                """,
+                (int(student_count), int(student_count), subdomain),
+            )
+            row2 = cur2.fetchone()
+            if row2 is not None:
+                cur2.execute(
+                    f"""
+                    INSERT INTO {BILLING_LEDGER_TABLE}
+                        (subdomain, token_type, amount, transaction_type, reference_id, description)
+                    VALUES (%s, 'SLOT', %s, 'INITIAL_SLOTS', %s, %s)
+                    ON CONFLICT (reference_id) DO NOTHING;
+                    """,
+                    (subdomain, int(student_count), f"init-slot:{subdomain}", f"Initial slot capacity {student_count} for {subdomain}"),
+                )
+                cur2.execute(
+                    f"""
+                    INSERT INTO billing_ledger
+                        (subdomain, token_type, amount, transaction_type, reference_id, description)
+                    VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s)
+                    ON CONFLICT (reference_id) DO NOTHING;
+                    """,
+                    (subdomain, 0, f"noop-{subdomain}", "noop"),
+                )
+                # The above noop is to ensure table exists; remove if not needed
+                conn2.commit()
+                logger.info(f"[PROVISION] Initial slots {student_count} for '{subdomain}'")
+            else:
+                conn2.commit()
+            cur2.close()
+            conn2.close()
+        except Exception as e:
+            logger.warning(f"[PROVISION] Failed to grant initial slots for '{subdomain}': {e}")
+            try:
+                if 'conn2' in locals() and conn2:
+                    conn2.rollback()
+                    conn2.close()
+            except Exception:
+                pass
+
         return ProvisionResponse(
             success=True,
             message=f"Successfully provisioned {domain} for {school_name}",
