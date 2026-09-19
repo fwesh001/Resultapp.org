@@ -463,9 +463,18 @@ def create_academic_record(payload: schemas.StudentAcademicRecordCreate, db: Ses
     _validate_scores_against_template(template.academic_structure, payload.scores)
     total = compute_weighted_total(template.academic_structure, payload.scores)
 
+    # Normalize student prefix to lower case (vhs/005)
+    _raw_sid_ac = payload.student_id.strip()
+    if "/" in _raw_sid_ac:
+        _pfx_ac, _rest_ac = _raw_sid_ac.split("/", 1)
+        _norm_ac = _pfx_ac.lower() + "/" + _rest_ac
+    else:
+        import re as _re_ac
+        _m_ac = _re_ac.match(r"^([A-Za-z]+)(.*)$", _raw_sid_ac)
+        _norm_ac = (_m_ac.group(1).lower() + _m_ac.group(2)) if _m_ac else _raw_sid_ac.lower()
     obj = models.StudentAcademicRecord(
         tenant_id=payload.tenant_id,
-        student_id=payload.student_id.strip(),
+        student_id=_norm_ac,
         subject=payload.subject.strip(),
         term=payload.term.strip(),
         template_id=payload.template_id,
@@ -525,9 +534,18 @@ def create_behavioral_record(payload: schemas.StudentBehavioralRecordCreate, db:
 
     _validate_ratings_against_template(template.behavioral_structure, payload.ratings)
 
+    # Normalize student prefix to lower
+    _raw_sid_be = payload.student_id.strip()
+    if "/" in _raw_sid_be:
+        _pfx_be, _rest_be = _raw_sid_be.split("/", 1)
+        _norm_be = _pfx_be.lower() + "/" + _rest_be
+    else:
+        import re as _re_be
+        _m_be = _re_be.match(r"^([A-Za-z]+)(.*)$", _raw_sid_be)
+        _norm_be = (_m_be.group(1).lower() + _m_be.group(2)) if _m_be else _raw_sid_be.lower()
     obj = models.StudentBehavioralRecord(
         tenant_id=payload.tenant_id,
-        student_id=payload.student_id.strip(),
+        student_id=_norm_be,
         term=payload.term.strip(),
         template_id=payload.template_id,
         ratings=payload.ratings,
