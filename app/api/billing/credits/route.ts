@@ -116,16 +116,45 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Verify the Flutterwave transaction server-side.
+  // Dev fallback: when the client used a generated tx_ref (resultapp_*) or
+  // Flutterwave keys are placeholders, the transaction won't exist on
+  // Flutterwave's side. In non-production we mock a successful verification
+  // so local testing isn't blocked. Real production still requires a valid
+  // Flutterwave transaction.
+  const expectedAmount = calculateTieredTotal(countNum);
+  const isMockTxRef = txId.startsWith("resultapp_");
+  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "";
+  const isPlaceholderSecret = !secretKey || secretKey.includes("xxxx");
+  const allowMock = process.env.NODE_ENV !== "production" && (isMockTxRef || isPlaceholderSecret);
+
   let verification: Awaited<ReturnType<typeof verifyTransaction>>;
-  try {
-    verification = await verifyTransaction(txId);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Verification failed";
-    console.error("[billing/credits] verifyTransaction failed", msg);
-    return NextResponse.json(
-      { success: false, error: "Payment verification failed. Please contact support." },
-      { status: 402 },
-    );
+  if (allowMock) {
+    console.warn(`[billing/credits] Mock verification for ${txId} — dev mode, crediting ${countNum} credits`);
+    verification = {
+      status: "success",
+      message: "Mock verification (dev)",
+      data: {
+        id: 0,
+        tx_ref: txId,
+        flw_ref: `MOCK-${txId}`,
+        amount: expectedAmount,
+        currency: "NGN",
+        charged_amount: expectedAmount,
+        status: "successful",
+        customer: { email: "", name: "" },
+      },
+    } as Awaited<ReturnType<typeof verifyTransaction>>;
+  } else {
+    try {
+      verification = await verifyTransaction(txId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Verification failed";
+      console.error("[billing/credits] verifyTransaction failed", msg, `(txId: ${txId})`);
+      return NextResponse.json(
+        { success: false, error: "Payment verification failed. Please contact support." },
+        { status: 402 },
+      );
+    }
   }
 
   const data = verification.data;
@@ -143,7 +172,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Package price check — same tiered table as registration.
-  const expected = calculateTieredTotal(countNum);
+  const expected = expectedAmount;
   const paid = Number(data.amount ?? (data as { charged_amount?: number }).charged_amount ?? 0);
   if (paid < expected) {
     console.warn(`[billing/credits] amount mismatch paid ${paid} < expected ${expected} for ${countNum} credits`);
