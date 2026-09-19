@@ -1115,7 +1115,7 @@ def is_result_published(subdomain: str, student_id: str, term: str, academic_ses
         cur.execute(
             f"""
             SELECT 1 FROM {RESULT_PUBLICATIONS_TABLE}
-            WHERE subdomain = %s AND student_id = %s
+            WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s)
               AND term = %s AND academic_session = %s
             LIMIT 1;
             """,
@@ -1172,16 +1172,19 @@ def publish_student_results(
             cur.execute("ROLLBACK;")
             raise ValueError(f"Unknown tenant '{subdomain}'")
         balance = int(row[0] or 0)
-        # Determine which students are not yet published (free re-prints excluded).
+        # Determine which students are not yet published (free re-prints excluded) — case-insensitive for migration
         cur.execute(
             f"""
             SELECT student_id FROM {RESULT_PUBLICATIONS_TABLE}
             WHERE subdomain = %s AND term = %s AND academic_session = %s
-              AND student_id = ANY(%s);
+              AND LOWER(student_id) = ANY(SELECT LOWER(unnest(%s::text[])));
             """,
             (subdomain, term, academic_session, unique_ids),
         )
-        already = {r[0] for r in cur.fetchall()}
+        # Normalize already to lower for comparison
+        already_raw = {r[0] for r in cur.fetchall()}
+        already = {s.lower() for s in already_raw}
+        # also keep original case set for logging but use lower for logic
         to_publish = [s for s in unique_ids if s not in already]
         if len(to_publish) > balance:
             cur.execute("ROLLBACK;")
