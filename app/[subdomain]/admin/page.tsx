@@ -63,7 +63,7 @@ export default async function AdminDashboardPage({
     // Fallback to roster-derived counts is handled below via tenant metadata
   }
   // Fallback: derive slot capacity from schools row when command-center is unreachable
-  const slotCapacity = school?.slotsBalance ?? school?.student_count ?? 0;
+  const slotCapacity = school?.slotsBalance ?? school?.credits?.totalPurchased ?? 0;
   // Use live roster count when available, else fall back to schools-derived used approximation
   const displayUsed = liveStudents > 0 ? liveStudents : 0;
   const displayCapacity = slotCapacity > 0 ? slotCapacity : Math.max(displayUsed, 0);
