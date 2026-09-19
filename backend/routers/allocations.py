@@ -248,7 +248,16 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             return {"type": "bulk_subjects", "records": records, "count": len(records), "requested": len(uniq)}
 
         if typ == "student":
-            student_id = (payload.student_id or "").strip()
+            _raw_sid = (payload.student_id or "").strip()
+            # Lowercase prefix before slash (vhs/005 not VHS/005)
+            if "/" in _raw_sid:
+                _pfx, _rest = _raw_sid.split("/", 1)
+                student_id = _pfx.lower() + "/" + _rest
+            else:
+                # no slash: lower leading letters
+                import re as _re
+                _m = _re.match(r"^([A-Za-z]+)(.*)$", _raw_sid)
+                student_id = (_m.group(1).lower() + _m.group(2)) if _m else _raw_sid.lower()
             full_name = (payload.full_name or "").strip()
             class_name = (payload.class_name or "").strip()
             gender = (payload.gender or "").strip() or None
