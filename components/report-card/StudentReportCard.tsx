@@ -297,21 +297,60 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   }
 
   const showMissingStudent = !student;
+  const isNotFound = showMissingStudent && !loading && !error;
+  // Draft overlay only for real students who are unpublished; unknown students get a hard Not Found guide-rail instead.
+  const showDraftOverlay = isLocked && !isNotFound;
   const displayName = student?.full_name ?? "— Unknown Student —";
   const displayClass = student?.class_name ?? "—";
   const displayGender = student?.gender ? student.gender.charAt(0).toUpperCase() + student.gender.slice(1).toLowerCase() : "—";
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
 
+  // Not-found guide-rail: no blur, no draft CTA — hard error with Contact Admin only.
+  if (isNotFound) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-center shadow-xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
+            <AlertCircle className="h-6 w-6 text-amber-400" />
+          </div>
+          <h2 className="mt-4 text-lg font-bold text-amber-900">Student Not Found</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-amber-800">
+            No student record found for{" "}
+            <span className="font-mono font-semibold text-amber-900">{studentId}</span> in{" "}
+            <span className="font-semibold">{schoolName || tenantId}</span>. Check the admission number format (
+            <span className="font-mono">e.g. VHS/001</span>) or contact the school admin.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button
+              onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = `/${tenantId}`))}
+              variant="outline"
+              className="gap-2 rounded-full border-amber-500/20 bg-white text-amber-900 hover:bg-amber-50"
+            >
+              Go Back
+            </Button>
+            <Button
+              onClick={() => (window.location.href = `/${tenantId}`)}
+              className="gap-2 rounded-full bg-amber-600 text-white hover:bg-amber-500"
+            >
+              Contact Admin
+            </Button>
+          </div>
+          <p className="mt-4 text-xs text-amber-700/60">Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative mx-auto max-w-4xl">
-      <div className={isLocked ? "blur-[3px] select-none pointer-events-none opacity-60 print:blur-none print:opacity-100" : ""}>
+      <div className={showDraftOverlay ? "blur-[3px] select-none pointer-events-none opacity-60 print:blur-none print:opacity-100" : ""}>
         <div
           id="report-card"
           className="mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
         >
           {/* Print-only draft stamp — unpublished cards can never pass as official */}
-          {isLocked && (
+          {showDraftOverlay && (
             <div className="mb-2 hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-800 print:block">
               Draft — Pending Publication • Not an official result
             </div>
@@ -588,7 +627,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
         </div>
       </div>
 
-      {isLocked && (
+      {showDraftOverlay && (
         <div className="absolute inset-0 flex items-center justify-center p-4 print:hidden">
           <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-zinc-900 p-6 text-center shadow-2xl">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
