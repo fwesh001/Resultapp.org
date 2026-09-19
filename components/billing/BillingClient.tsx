@@ -70,9 +70,10 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
     setLoading(true);
     setError(null);
     try {
-      const [creditRes, slotRes] = await Promise.all([
+      const [creditRes, slotRes, ledgerRes] = await Promise.all([
         fetch(`/api/billing/credits?tenant_id=${encodeURIComponent(tenantId)}&limit=50`, { cache: "no-store" }),
         fetch(`/api/billing/slots?tenant_id=${encodeURIComponent(tenantId)}`, { cache: "no-store" }).catch(() => null as unknown as Response),
+        fetch(`/api/billing/ledger?tenant_id=${encodeURIComponent(tenantId)}&limit=50`, { cache: "no-store" }).catch(() => null as unknown as Response),
       ]);
       const data = await creditRes.json().catch(() => ({}));
       if (!creditRes.ok || (data as { success?: boolean }).success === false) {
@@ -80,7 +81,18 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
       }
       const d = data as { credit_balance?: number; entries?: LedgerEntry[] };
       setBalance(d.credit_balance ?? 0);
-      setEntries(Array.isArray(d.entries) ? d.entries : []);
+      // Prefer unified ledger (has token_type for both SLOT/CREDIT) if available
+      if (ledgerRes && ledgerRes.ok) {
+        const lData = await ledgerRes.json().catch(() => ({}));
+        const unified = (lData as { entries?: LedgerEntry[] }).entries;
+        if (Array.isArray(unified) && unified.length > 0) {
+          setEntries(unified);
+        } else {
+          setEntries(Array.isArray(d.entries) ? d.entries : []);
+        }
+      } else {
+        setEntries(Array.isArray(d.entries) ? d.entries : []);
+      }
       if (slotRes && slotRes.ok) {
         const sData = await slotRes.json().catch(() => ({}));
         const sb = (sData as { slots_balance?: number }).slots_balance;
@@ -88,7 +100,6 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
         const used = (sData as { slots_used?: number }).slots_used;
         if (typeof used === "number") setSlotsUsed(used);
       }
-      // Live credit price (superadmin tunable) — best-effort
       try {
         const cfg = await fetch(`/api/admin/config/credit-price`, { cache: "no-store" }).catch(() => null as unknown as Response);
         if (cfg && cfg.ok) {
