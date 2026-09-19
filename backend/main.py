@@ -182,6 +182,7 @@ class TenantMetadata(BaseModel):
     subscription_status: Optional[str] = None
     student_count: int = 0
     credit_balance: int = 0
+    id_prefix: Optional[str] = None
     new_term_begins: Optional[str] = None
     location: Optional[str] = None
     status: str = "inactive"
