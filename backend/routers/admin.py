@@ -142,6 +142,7 @@ class TenantProfileUpdate(BaseModel):
     logo_url: Optional[str] = None
     hero_bg_url: Optional[str] = None
     new_term_begins: Optional[str] = None
+    id_prefix: Optional[str] = None
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
