@@ -106,10 +106,22 @@ def _close(conn) -> None:
 
 @router.get("/summary", summary="Tenant-wide completion + balance snapshot")
 def get_summary(term: Optional[str] = None, academic_session: Optional[str] = None, tenant_id: str = ""):
-    from services.db_manager import _connect_as_superuser, get_credit_balance
+    from services.db_manager import _connect_as_superuser, get_credit_balance, get_slots_balance
 
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant(tid)
+    # Prefer persisted current_term/session when caller omits term (dashboard)
+    if not term:
+        try:
+            from services.db_manager import get_school_by_subdomain
+
+            row = get_school_by_subdomain(tid)
+            if row and row.get("current_term"):
+                term = row.get("current_term")
+                if row.get("current_session"):
+                    academic_session = row.get("current_session")
+        except Exception:
+            pass
     t, session = _resolve_term_session(term, academic_session)
 
     conn = None
@@ -121,6 +133,11 @@ def get_summary(term: Optional[str] = None, academic_session: Optional[str] = No
             (tid,),
         )
         total_students = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            "SELECT COUNT(*) FROM tenant_staff WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE;",
+            (tid,),
+        )
+        active_staff = int(cur.fetchone()[0] or 0)
         if t:
             cur.execute(
                 """
@@ -141,6 +158,8 @@ def get_summary(term: Optional[str] = None, academic_session: Optional[str] = No
             "published_count": published,
             "completion_pct": completion,
             "credit_balance": get_credit_balance(tid),
+            "slots_balance": get_slots_balance(tid),
+            "active_staff": active_staff,
         }
     finally:
         _close(conn)
