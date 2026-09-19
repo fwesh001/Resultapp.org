@@ -19,10 +19,19 @@ interface BillingCheckoutProps {
   schoolName?: string;
   customerEmail?: string;
   customerName?: string;
+  /**
+   * "subscription" (legacy quota upgrade via /api/billing/upgrade) or
+   * "credit" (Credit & Command top-up via /api/billing/credits).
+   * Defaults to "subscription" for backwards compatibility.
+   */
+  mode?: "subscription" | "credit";
+  defaultCount?: string;
 }
 
-export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName }: BillingCheckoutProps) {
-  const [studentCount, setStudentCount] = useState("150");
+export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName, mode = "subscription", defaultCount }: BillingCheckoutProps) {
+  const isCredit = mode === "credit";
+  const unitNoun = isCredit ? "credit" : "student";
+  const [studentCount, setStudentCount] = useState(defaultCount ?? "150");
   const [isPaying, setIsPaying] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +56,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
   // Validation
   function validate(): boolean {
     if (!studentCount.trim()) {
-      setError("Student count is required");
+      setError(isCredit ? "Credit amount is required" : "Student count is required");
       return false;
     }
     const n = parseInt(studentCount, 10);
@@ -56,7 +65,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
       return false;
     }
     if (n > 10000) {
-      setError("Maximum 10,000 students");
+      setError(isCredit ? "Maximum 10,000 credits" : "Maximum 10,000 students");
       return false;
     }
     if (!Number.isInteger(n)) {
@@ -110,14 +119,16 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         },
         customizations: {
           title: `ResultApp • ${schoolName || tenantId}`,
-          description: `${n} students × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Upgrade to active`,
+          description: isCredit
+            ? `${n} credits × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Credit top-up`
+            : `${n} students × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Upgrade to active`,
           logo: "https://resultapp.org/logo.png",
         },
         meta: {
           tenantId,
           studentCount: n,
           pricePerStudent,
-          source: "billing_upgrade",
+          source: isCredit ? "credit_topup" : "billing_upgrade",
         },
       },
       {
@@ -150,15 +161,17 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
             return;
           }
 
-          // Verified modal callback — now hit our upgrade proxy
+          // Verified modal callback — now hit our payment proxy
           setUpgrading(true);
           try {
-            const upgradeRes = await fetch("/api/billing/upgrade", {
+            const endpoint = isCredit ? "/api/billing/credits" : "/api/billing/upgrade";
+            const upgradeRes = await fetch(endpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 tenantId,
                 studentCount: n,
+                creditCount: n,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 transactionId: res.transaction_id || (res as any).id || res.tx_ref,
               }),
@@ -168,18 +181,21 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
               const msg =
                 (data as { error?: string })?.error ||
                 (data as { detail?: string })?.detail ||
-                `Upgrade failed (${upgradeRes.status})`;
+                (isCredit ? `Top-up failed (${upgradeRes.status})` : `Upgrade failed (${upgradeRes.status})`);
               throw new Error(msg);
             }
             setSuccess({ studentCount: n, total: amount });
-            // 5. Upon a successful upgrade response, redirect the user directly to /{tenantId}/report/STU001?term=Term%201 after a brief 1.5-second timeout
+            // 5. On success: legacy upgrade goes to the sample report;
+            // credit top-ups stay on the billing page to show the new balance.
             setTimeout(() => {
-              window.location.href = `/${tenantId}/report/STU001?term=Term%201`;
+              window.location.href = isCredit
+                ? `/${tenantId}/admin/billing`
+                : `/${tenantId}/report/STU001?term=Term%201`;
             }, 1500);
           } catch (e) {
-            const msg = e instanceof Error ? e.message : "Upgrade failed. Contact support with transaction ID.";
+            const msg = e instanceof Error ? e.message : (isCredit ? "Top-up failed. Contact support with transaction ID." : "Upgrade failed. Contact support with transaction ID.");
             setError(msg + ` Ref: ${res.tx_ref || txRef}`);
-            console.error("[billing upgrade] error", e);
+            console.error(isCredit ? "[billing credits] error" : "[billing upgrade] error", e);
           } finally {
             setIsPaying(false);
             setUpgrading(false);
@@ -205,10 +221,14 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
           <CheckCircle2 className="h-8 w-8 text-emerald-400" />
         </div>
-        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Subscription Active!</h3>
+        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">{isCredit ? "Credits Added!" : "Subscription Active!"}</h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
-          Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> students (
-          {formatNaira(success.total)}). Report cards for <span className="font-mono text-white">{tenantId}</span> are now unlocked.
+          Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> {isCredit ? "credits" : "students"} (
+          {formatNaira(success.total)}). {isCredit ? (
+            <>Your new balance will show on this page in a moment.</>
+          ) : (
+            <>Report cards for <span className="font-mono text-white">{tenantId}</span> are now unlocked.</>
+          )}
         </p>
         <div className="mt-6 w-full rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left">
           <div className="flex items-center gap-2 text-sm font-medium text-emerald-100">
@@ -243,9 +263,9 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
 
   return (
     <div className="space-y-5">
-      {/* Student count input */}
+      {/* Student / credit count input */}
       <Input
-        label="Estimated Student Count"
+        label={isCredit ? "Credit Amount" : "Estimated Student Count"}
         value={studentCount}
         onChange={(e) => handleCountChange(e.target.value)}
         placeholder="e.g. 150"
@@ -316,17 +336,17 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
           </div>
           <div className="text-right">
             <p className="text-lg font-bold tracking-tight text-white">{countNum > 0 ? formatNaira(total) : "—"}</p>
-            <p className="text-xs text-purple-300/50">One-time • Unlocks printing</p>
+            <p className="text-xs text-purple-300/50">{isCredit ? "One-time • Adds to balance" : "One-time • Unlocks printing"}</p>
           </div>
         </div>
         {countNum > 0 && (
           <div className="mt-3 rounded-xl border border-purple-500/10 bg-[#0B0514]/60 p-3 text-xs leading-5 text-purple-200/70">
             <div className="flex justify-between">
-              <span>Students</span>
+              <span>{isCredit ? "Credits" : "Students"}</span>
               <span className="font-medium text-white">{countNum}</span>
             </div>
             <div className="flex justify-between">
-              <span>Price per student</span>
+              <span>Price per {unitNoun}</span>
               <span className="text-purple-200">{formatNaira(pricePerStudent)}</span>
             </div>
             <div className="my-2 border-t border-purple-500/10" />
@@ -369,13 +389,17 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         ) : (
           <>
             <CreditCard className="h-4 w-4" />
-            {countNum > 0 ? `Pay ${formatNaira(total)} — Upgrade to Active` : "Pay with Flutterwave"}
+            {countNum > 0 ? (isCredit ? `Pay ${formatNaira(total)} — Buy ${countNum} Credits` : `Pay ${formatNaira(total)} — Upgrade to Active`) : "Pay with Flutterwave"}
           </>
         )}
       </Button>
 
       <p className="text-center text-xs leading-5 text-zinc-500">
-        On success you’ll be redirected to <span className="font-mono font-medium text-purple-300">/{tenantId}/report/STU001?term=Term%201</span> and your report cards will be unlocked.
+        {isCredit ? (
+          <>On success you’ll stay on this page with your updated credit balance and ledger entry.</>
+        ) : (
+          <>On success you’ll be redirected to <span className="font-mono font-medium text-purple-300">/{tenantId}/report/STU001?term=Term%201</span> and your report cards will be unlocked.</>
+        )}
       </p>
     </div>
   );
