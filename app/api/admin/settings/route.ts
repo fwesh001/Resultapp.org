@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
     if (record[field] !== undefined) {
       const raw = record[field];
       if (field === "id_prefix" && typeof raw === "string") {
-        payload[field] = raw.trim().toUpperCase();
+        payload[field] = raw.trim().toLowerCase();
       } else {
         payload[field] =
           typeof raw === "string" ? (raw as string).trim() : raw;
