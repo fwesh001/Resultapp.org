@@ -121,7 +121,25 @@ export async function POST(req: NextRequest) {
   // Flutterwave's side. In non-production we mock a successful verification
   // so local testing isn't blocked. Real production still requires a valid
   // Flutterwave transaction.
-  const expectedAmount = calculateTieredTotal(countNum);
+  // Credits are flat-rate (superadmin tunable via app_settings, default 200 NGN).
+  // Fetching the live price is best-effort — fallback to CREDIT_PRICE on failure.
+  let liveCreditPrice = CREDIT_PRICE;
+  try {
+    const secretTmp = getProxySecret();
+    const baseTmp = getBackendBase();
+    if (secretTmp) {
+      const priceRes = await fetch(`${baseTmp}/api/v1/admin/config/credit-price`, {
+        headers: { "X-API-SECRET-KEY": secretTmp },
+        cache: "no-store",
+      });
+      if (priceRes.ok) {
+        const priceData = await priceRes.json().catch(() => ({}));
+        const p = Number((priceData as { credit_price?: number }).credit_price);
+        if (Number.isFinite(p) && p > 0) liveCreditPrice = p;
+      }
+    }
+  } catch {}
+  const expectedAmount = calculateCreditTotal(countNum, liveCreditPrice);
   const isMockTxRef = txId.startsWith("resultapp_");
   const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "";
   const isPlaceholderSecret = !secretKey || secretKey.includes("xxxx");
