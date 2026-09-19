@@ -20,6 +20,8 @@ export interface School {
   proprietorName?: string;
   registrationNumber?: string;
   idPrefix?: string;
+  currentTerm?: string;
+  currentSession?: string;
   newTermBegins?: string;
   slotsBalance?: number;
   creditBalance?: number;
