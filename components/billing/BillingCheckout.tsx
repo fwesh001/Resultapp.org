@@ -133,14 +133,16 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
           title: `ResultApp • ${schoolName || tenantId}`,
           description: isCredit
             ? `${n} credits × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Credit top-up`
-            : `${n} students × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Upgrade to active`,
+            : isSlot
+              ? `${n} slots × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Slot purchase`
+              : `${n} students × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Upgrade to active`,
           logo: "https://resultapp.org/logo.png",
         },
         meta: {
           tenantId,
           studentCount: n,
           pricePerStudent,
-          source: isCredit ? "credit_topup" : "billing_upgrade",
+          source: isCredit ? "credit_topup" : isSlot ? "slot_purchase" : "billing_upgrade",
         },
       },
       {
