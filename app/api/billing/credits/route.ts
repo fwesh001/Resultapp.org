@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/flutterwave";
-import { calculateTieredTotal } from "@/lib/pricing";
+import { calculateTieredTotal, calculateCreditTotal, CREDIT_PRICE } from "@/lib/pricing";
 import { revalidateTag } from "next/cache";
 
 /**
