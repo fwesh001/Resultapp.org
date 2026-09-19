@@ -560,7 +560,58 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Use f-string for table (whitelisted) + %s for values
+        # For student deletes, refund the slot (capacity returned)
+        if record_type == "student":
+            cur.execute("BEGIN;")
+            # Fetch student_id for ledger description before deleting
+            cur.execute(
+                f"SELECT student_id FROM {table} WHERE id = %s AND subdomain = %s;",
+                (record_id, tid),
+            )
+            srow = cur.fetchone()
+            if srow is None:
+                cur.execute("ROLLBACK;")
+                raise HTTPException(status_code=404, detail=f"{record_type} not found")
+            sid = str(srow[0])
+            cur.execute(
+                f"DELETE FROM {table} WHERE id = %s AND subdomain = %s RETURNING id;",
+                (record_id, tid),
+            )
+            if cur.rowcount == 0:
+                cur.execute("ROLLBACK;")
+                raise HTTPException(status_code=404, detail=f"{record_type} not found")
+            # Refund slot
+            from services.db_manager import SCHOOLS_REGISTRY_TABLE, BILLING_LEDGER_TABLE
+
+            cur.execute(
+                f"""
+                UPDATE {SCHOOLS_REGISTRY_TABLE}
+                SET slots_balance = COALESCE(slots_balance, 0) + 1, updated_at = NOW()
+                WHERE subdomain = %s
+                RETURNING slots_balance;
+                """,
+                (tid,),
+            )
+            new_slots_row = cur.fetchone()
+            ref = f"slot_refund:{tid}:{sid}:{record_id}"
+            cur.execute(
+                f"""
+                INSERT INTO {BILLING_LEDGER_TABLE}
+                    (subdomain, token_type, amount, transaction_type, reference_id, description)
+                VALUES (%s, 'SLOT', 1, 'SLOT_REFUND', %s, %s)
+                ON CONFLICT (reference_id) DO NOTHING;
+                """,
+                (tid, ref, f"Slot refund for deleted student {sid}"),
+            )
+            cur.execute("COMMIT;")
+            return {
+                "success": True,
+                "deleted": record_id,
+                "type": record_type,
+                "slots_refunded": 1,
+                "slots_balance": int(new_slots_row[0] or 0) if new_slots_row else None,
+            }
+        # Non-student deletes (no slot refund)
         cur.execute(
             f"DELETE FROM {table} WHERE id = %s AND subdomain = %s RETURNING id;",
             (record_id, tid),
