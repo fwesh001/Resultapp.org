@@ -318,6 +318,10 @@ def init_schools_registry() -> None:
             WHERE credit_balance IS NULL;
         """)
         cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS id_prefix VARCHAR(20);
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS credit_ledger (
                 id               SERIAL PRIMARY KEY,
                 subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
@@ -478,7 +482,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                   credit_balance, new_term_begins, created_at, updated_at
+                    credit_balance, id_prefix, new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s;
             """,
