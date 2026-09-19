@@ -12,7 +12,13 @@ import {
   initiateFlutterwaveInlinePayment,
   generateTxRef,
 } from "@/lib/flutterwave";
-import { getPricingTier, calculateTieredTotal, getSliderPct } from "@/lib/pricing";
+import {
+  getPricingTier,
+  calculateTieredTotal,
+  calculateCreditTotal,
+  CREDIT_PRICE,
+  getSliderPct,
+} from "@/lib/pricing";
 
 interface BillingCheckoutProps {
   tenantId: string;
@@ -20,17 +26,17 @@ interface BillingCheckoutProps {
   customerEmail?: string;
   customerName?: string;
   /**
-   * "subscription" (legacy quota upgrade via /api/billing/upgrade) or
-   * "credit" (Credit & Command top-up via /api/billing/credits).
+   * "subscription" (legacy) | "credit" (flat 200 NGN) | "slot" (tiered).
    * Defaults to "subscription" for backwards compatibility.
    */
-  mode?: "subscription" | "credit";
+  mode?: "subscription" | "credit" | "slot";
   defaultCount?: string;
 }
 
 export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName, mode = "subscription", defaultCount }: BillingCheckoutProps) {
   const isCredit = mode === "credit";
-  const unitNoun = isCredit ? "credit" : "student";
+  const isSlot = mode === "slot";
+  const unitNoun = isCredit ? "credit" : isSlot ? "slot" : "student";
   const [studentCount, setStudentCount] = useState(defaultCount ?? "150");
   const [isPaying, setIsPaying] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
