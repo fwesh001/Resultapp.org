@@ -37,6 +37,7 @@ const PROFILE_FIELDS = [
   "new_term_begins",
   "logo_url",
   "hero_bg_url",
+  "id_prefix",
 ] as const;
 
 export async function PATCH(req: NextRequest) {
@@ -67,10 +68,13 @@ export async function PATCH(req: NextRequest) {
   const payload: Record<string, unknown> = {};
   for (const field of PROFILE_FIELDS) {
     if (record[field] !== undefined) {
-      payload[field] =
-        typeof record[field] === "string"
-          ? (record[field] as string).trim()
-          : record[field];
+      const raw = record[field];
+      if (field === "id_prefix" && typeof raw === "string") {
+        payload[field] = raw.trim().toUpperCase();
+      } else {
+        payload[field] =
+          typeof raw === "string" ? (raw as string).trim() : raw;
+      }
     }
   }
 
