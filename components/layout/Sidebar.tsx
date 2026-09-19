@@ -24,8 +24,9 @@ export const dashboardNavItems = [
 
 const navItems = dashboardNavItems;
 
-export function Sidebar() {
+export function Sidebar({ creditBalance }: { creditBalance?: number | null }) {
   const pathname = usePathname();
+  const hasBalance = typeof creditBalance === "number" && Number.isFinite(creditBalance);
 
   return (
     <aside className="hidden w-64 shrink-0 border-r bg-white md:flex md:flex-col">
@@ -60,10 +61,13 @@ export function Sidebar() {
       <div className="border-t p-4">
         <div className="rounded-lg bg-zinc-50 p-3">
           <p className="text-sm font-medium">Credits</p>
-          <p className="text-xs text-zinc-500">320 remaining of 1,240</p>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200">
-            <div className="h-full w-[26%] bg-black" />
-          </div>
+          {hasBalance ? (
+            <p className="text-xs text-zinc-500">
+              <span className="text-base font-bold text-black">{creditBalance!.toLocaleString()}</span> remaining
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-500">Connect a school portal to view the live credit balance.</p>
+          )}
         </div>
       </div>
     </aside>
