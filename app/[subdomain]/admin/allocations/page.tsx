@@ -28,7 +28,7 @@ export default async function AllocationsPage({
       </div>
 
       <div className="mt-6">
-        <AllocationsManager tenantId={tenantId} />
+        <AllocationsManager tenantId={tenantId} idPrefix={school?.idPrefix ?? tenantId.toUpperCase()} />
       </div>
     </div>
   );
