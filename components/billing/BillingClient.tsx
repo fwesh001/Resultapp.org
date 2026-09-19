@@ -65,10 +65,9 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
     setLoading(true);
     setError(null);
     try {
-      const [creditRes, slotRes, priceRes] = await Promise.all([
+      const [creditRes, slotRes] = await Promise.all([
         fetch(`/api/billing/credits?tenant_id=${encodeURIComponent(tenantId)}&limit=50`, { cache: "no-store" }),
         fetch(`/api/billing/slots?tenant_id=${encodeURIComponent(tenantId)}`, { cache: "no-store" }).catch(() => null as unknown as Response),
-        fetch(`/api/billing/credits?tenant_id=${encodeURIComponent(tenantId)}&limit=1`, { cache: "no-store" }).catch(() => null as unknown as Response),
       ]);
       const data = await creditRes.json().catch(() => ({}));
       if (!creditRes.ok || (data as { success?: boolean }).success === false) {
@@ -77,19 +76,15 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
       const d = data as { credit_balance?: number; entries?: LedgerEntry[] };
       setBalance(d.credit_balance ?? 0);
       setEntries(Array.isArray(d.entries) ? d.entries : []);
-      // Slots balance (best-effort, falls back to 0)
       if (slotRes && slotRes.ok) {
         const sData = await slotRes.json().catch(() => ({}));
         const sb = (sData as { slots_balance?: number }).slots_balance;
         if (typeof sb === "number") setSlotsBalance(sb);
-        // Derive used if available from roster count? Fallback: try to infer from school data later
         const used = (sData as { slots_used?: number }).slots_used;
         if (typeof used === "number") setSlotsUsed(used);
       }
-      // Try to fetch live credit price (superadmin tunable)
+      // Live credit price (superadmin tunable) — best-effort
       try {
-        const pRes = await fetch(`/api/billing/credits?tenant_id=${encodeURIComponent(tenantId)}&limit=1`, { cache: "no-store" });
-        // Price is not in this endpoint; fetch from admin config if available
         const cfg = await fetch(`/api/admin/config/credit-price`, { cache: "no-store" }).catch(() => null as unknown as Response);
         if (cfg && cfg.ok) {
           const c = await cfg.json().catch(() => ({}));
