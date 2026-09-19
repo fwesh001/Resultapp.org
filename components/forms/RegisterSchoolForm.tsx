@@ -163,6 +163,8 @@ export function RegisterSchoolForm() {
       subdomain: values.subdomain.trim().toLowerCase(),
       adminEmail: values.adminEmail.trim().toLowerCase(),
       studentCount: parseInt(values.studentCount.trim(), 10),
+      // Credit & Command: fixed 30-credit trial grant (frictionless onboarding).
+      initial_credits: 30,
     };
 
     setIsSubmitting(true);
@@ -364,7 +366,27 @@ export function RegisterSchoolForm() {
         disabled={isSubmitting}
       />
 
-      {/* Student Count */}
+      {/* Student Count — Step 2: capacity estimate + quick packages */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Quick capacity packages">
+          {[100, 250, 500, 1000].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => handleChange("studentCount", String(n))}
+              aria-pressed={values.studentCount.trim() === String(n)}
+              disabled={isSubmitting}
+              className={`inline-flex min-h-[44px] items-center rounded-full border px-4 text-xs font-medium transition disabled:opacity-50 ${
+                values.studentCount.trim() === String(n)
+                  ? "border-purple-500 bg-purple-600 text-white shadow-[0_0_16px_rgba(147,51,234,0.4)]"
+                  : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30 hover:text-white"
+              }`}
+            >
+              {n} students
+            </button>
+          ))}
+        </div>
+      </div>
       <Input
         label="Estimated Student Count"
         name="studentCount"
@@ -377,6 +399,17 @@ export function RegisterSchoolForm() {
         required
         disabled={isSubmitting}
       />
+
+      {/* Trial grant notice — 30 free credits, no payment at registration */}
+      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+        <p className="flex items-center gap-2 text-xs font-medium text-emerald-200">
+          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+          Includes 30 free trial credits at launch
+        </p>
+        <p className="mt-1 text-xs leading-5 text-emerald-100/60">
+          Enough to publish a full class. Previews and drafts are always free — you only pay when topping up to publish the rest of the school.
+        </p>
+      </div>
 
       {/* Subtle helper card */}
       <div className="rounded-xl border border-purple-500/10 bg-purple-950/10 p-3">
