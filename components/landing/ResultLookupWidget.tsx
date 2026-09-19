@@ -14,12 +14,26 @@ export default function ResultLookupWidget({
   const [studentId, setStudentId] = useState("");
   const [term, setTerm] = useState("Term 1");
 
+  function normalizePrefixLower(raw: string): string {
+    const v = raw.replace(/\s+/g, "");
+    const slashIdx = v.indexOf("/");
+    if (slashIdx !== -1) {
+      return v.slice(0, slashIdx).toLowerCase() + v.slice(slashIdx);
+    }
+    // No slash: treat whole value as prefix-like — lower first alpha run, keep numbers
+    // Simpler: lower leading letters before first digit
+    const m = v.match(/^([A-Za-z]+)(.*)$/);
+    if (m) return m[1].toLowerCase() + m[2];
+    return v.toLowerCase();
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmedId = studentId.trim();
     if (!trimmedId) return;
+    const normalized = normalizePrefixLower(trimmedId);
     router.push(
-      `/${subdomain}/report/${trimmedId}?term=${encodeURIComponent(term)}`,
+      `/${subdomain}/report/${encodeURIComponent(normalized)}?term=${encodeURIComponent(term)}`,
     );
   }
 
