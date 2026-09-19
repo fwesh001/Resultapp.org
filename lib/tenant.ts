@@ -36,6 +36,8 @@ interface TenantRegistrySchool {
   credit_balance: number | null;
   slots_balance: number | null;
   id_prefix: string | null;
+  current_term: string | null;
+  current_session: string | null;
   new_term_begins: string | null;
   location: string | null;
   status: string | null;
