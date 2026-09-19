@@ -119,9 +119,16 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
     void fetchCredits();
   }, [fetchCredits]);
 
+  const tabEntries = useMemo(() => {
+    return entries.filter((e) => {
+      const isSlot = e.transaction_type.includes("SLOT") || (e as unknown as { token_type?: string }).token_type === "SLOT";
+      return activeTab === "slots" ? isSlot : !isSlot;
+    });
+  }, [entries, activeTab]);
+
   const filtered = useMemo(
-    () => (filter === "all" ? entries : entries.filter((e) => e.transaction_type === filter)),
-    [entries, filter],
+    () => (filter === "all" ? tabEntries : tabEntries.filter((e) => e.transaction_type === filter)),
+    [tabEntries, filter],
   );
 
   const pkgTotal = useMemo(() => calculateTieredTotal(pkg), [pkg]);
