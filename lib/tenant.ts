@@ -76,6 +76,8 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     proprietorName: raw.proprietor_name ?? undefined,
     registrationNumber: raw.registration_number ?? undefined,
     idPrefix: raw.id_prefix?.trim() ? raw.id_prefix.trim().toUpperCase() : raw.subdomain.toUpperCase(),
+    currentTerm: raw.current_term?.trim() || "Term 1",
+    currentSession: raw.current_session?.trim() || undefined,
     newTermBegins: raw.new_term_begins ?? undefined,
     slotsBalance: raw.slots_balance ?? raw.student_count ?? 0,
     creditBalance: raw.credit_balance ?? 0,
