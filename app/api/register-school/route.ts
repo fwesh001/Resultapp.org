@@ -85,6 +85,9 @@ interface RegisterSchoolBody {
   admin_name?: string;
   phoneNumber?: string;
   phone_number?: string;
+  // Credit & Command: trial grant size (defaults to 30 server-side)
+  initial_credits?: number | string;
+  initialCredits?: number | string;
 }
 
 // ---------------------------------------------------------------------------
