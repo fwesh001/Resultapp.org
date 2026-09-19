@@ -566,16 +566,6 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                     """,
                     (subdomain, int(student_count), f"init-slot:{subdomain}", f"Initial slot capacity {student_count} for {subdomain}"),
                 )
-                cur2.execute(
-                    f"""
-                    INSERT INTO billing_ledger
-                        (subdomain, token_type, amount, transaction_type, reference_id, description)
-                    VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s)
-                    ON CONFLICT (reference_id) DO NOTHING;
-                    """,
-                    (subdomain, 0, f"noop-{subdomain}", "noop"),
-                )
-                # The above noop is to ensure table exists; remove if not needed
                 conn2.commit()
                 logger.info(f"[PROVISION] Initial slots {student_count} for '{subdomain}'")
             else:
