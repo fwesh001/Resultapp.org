@@ -91,7 +91,12 @@ interface StudentReportCardProps {
   tenantId: string;
   studentId: string;
   term: string;
-  isLocked?: boolean;
+  /**
+   * Credit & Command gate: true ONLY when the backend confirms a row in
+   * result_publications for (tenant, student, term, session).
+   * Everything else is a free draft preview (blurred, unprintable).
+   */
+  isPublished?: boolean;
   schoolName?: string | null;
 }
 
@@ -139,7 +144,11 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isLocked = false, schoolName }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, isPublished = false, schoolName }: StudentReportCardProps) {
+  // Draft gate: anything not confirmed in result_publications renders as a
+  // free preview (blurred, watermarked, unprintable). Re-prints cost 0
+  // because the gate is the publication row, not a subscription flag.
+  const isLocked = !isPublished;
   const [data, setData] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +168,7 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
         if (!cancelled) {
           const response = json as ReportResponse;
           setData(response);
-          announceReportReady(!!(response.student && (response.grades?.length ?? 0) > 0));
+          announceReportReady(isPublished && !!(response.student && (response.grades?.length ?? 0) > 0));
         }
       } catch (e) {
         if (!cancelled) {
@@ -265,20 +274,20 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
           </span>
         </div>
         {isLocked && (
-          <div className="w-full rounded-2xl border border-red-500/50 bg-zinc-900 p-6 text-center shadow-2xl print:hidden">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/30">
-              <Lock className="h-6 w-6 text-red-400" />
+          <div className="w-full rounded-2xl border border-amber-500/40 bg-zinc-900 p-6 text-center shadow-2xl print:hidden">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
+              <Lock className="h-6 w-6 text-amber-400" />
             </div>
-            <h3 className="mt-4 text-lg font-bold text-white">Subscription Payment Required</h3>
+            <h3 className="mt-4 text-lg font-bold text-white">Draft — Pending Publication</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Report card generation is locked. Upgrade your subscription to print and download official report sheets for {term}.
+              This preview is free. Publish this report card from the Result Command Center to unlock official printing for {term} (1 credit).
             </p>
             <Button
-              onClick={() => (window.location.href = `/${tenantId}/admin/billing`)}
-              className="mt-5 w-full gap-2 rounded-full bg-red-600 font-semibold text-white hover:bg-red-500"
+              onClick={() => (window.location.href = `/${tenantId}/admin/results`)}
+              className="mt-5 w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
               size="lg"
             >
-              <CreditCard className="h-4 w-4" /> Upgrade to Print
+              <CreditCard className="h-4 w-4" /> Open Command Center
             </Button>
             <p className="mt-3 text-xs text-zinc-500">Need help? contact@resultapp.org</p>
           </div>
@@ -301,6 +310,12 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
           id="report-card"
           className="mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
         >
+          {/* Print-only draft stamp — unpublished cards can never pass as official */}
+          {isLocked && (
+            <div className="mb-2 hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-800 print:block">
+              Draft — Pending Publication • Not an official result
+            </div>
+          )}
           {/* Official School Branding & Header — traditional */}
           <div className="mb-3 text-center">
             {schoolName ? (
@@ -575,20 +590,20 @@ export function StudentReportCard({ tenantId, studentId, term, isLocked = false,
 
       {isLocked && (
         <div className="absolute inset-0 flex items-center justify-center p-4 print:hidden">
-          <div className="w-full max-w-sm rounded-2xl border border-red-500/50 bg-zinc-900 p-6 text-center shadow-2xl">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/30">
-              <Lock className="h-6 w-6 text-red-400" />
+          <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-zinc-900 p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
+              <Lock className="h-6 w-6 text-amber-400" />
             </div>
-            <h3 className="mt-4 text-lg font-bold text-white">Subscription Payment Required</h3>
+            <h3 className="mt-4 text-lg font-bold text-white">Draft — Pending Publication</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Report card generation is locked. Upgrade your subscription to print and download official report sheets for {term}.
+              This free preview unlocks for printing once published from the Result Command Center (1 credit).
             </p>
             <Button
-              onClick={() => (window.location.href = `/${tenantId}/admin/billing`)}
-              className="mt-5 w-full gap-2 rounded-full bg-red-600 font-semibold text-white hover:bg-red-500"
+              onClick={() => (window.location.href = `/${tenantId}/admin/results`)}
+              className="mt-5 w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
               size="lg"
             >
-              <CreditCard className="h-4 w-4" /> Upgrade to Print
+              <CreditCard className="h-4 w-4" /> Open Command Center
             </Button>
             <p className="mt-3 text-xs text-zinc-500">Need help? contact@resultapp.org</p>
           </div>
