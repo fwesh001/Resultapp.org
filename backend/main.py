@@ -184,6 +184,8 @@ class TenantMetadata(BaseModel):
     credit_balance: int = 0
     slots_balance: int = 0
     id_prefix: Optional[str] = None
+    current_term: Optional[str] = None
+    current_session: Optional[str] = None
     new_term_begins: Optional[str] = None
     location: Optional[str] = None
     status: str = "inactive"
