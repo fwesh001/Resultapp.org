@@ -302,7 +302,15 @@ def post_grading_batch(
         class_ids = {r[0] for r in cur.fetchall()}
 
         for entry in payload.scores:
-            sid = (entry.student_id or "").strip()
+            _raw = (entry.student_id or "").strip()
+            # Lowercase prefix before slash (vhs/005)
+            if "/" in _raw:
+                _pfx, _rest = _raw.split("/", 1)
+                sid = _pfx.lower() + "/" + _rest
+            else:
+                import re as _re2
+                _m2 = _re2.match(r"^([A-Za-z]+)(.*)$", _raw)
+                sid = (_m2.group(1).lower() + _m2.group(2)) if _m2 else _raw.lower()
             if not sid:
                 raise HTTPException(status_code=422, detail="Every score needs a student_id")
             if sid not in class_ids:
