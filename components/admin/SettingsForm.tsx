@@ -50,7 +50,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
     ]) {
       const value = formData.get(field);
       if (typeof value === "string") {
-        if (field === "id_prefix") payload[field] = value.trim().toUpperCase();
+        if (field === "id_prefix") payload[field] = value.trim().toLowerCase();
         else if (field === "current_term" || field === "current_session") payload[field] = value.trim();
         else payload[field] = value.trim();
       }
@@ -206,17 +206,17 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           name="id_prefix"
           type="text"
           autoComplete="off"
-          defaultValue={school?.idPrefix ?? school?.slug?.toUpperCase() ?? ""}
-          placeholder="e.g. VHS"
+          defaultValue={school?.idPrefix ?? school?.slug?.toLowerCase() ?? ""}
+          placeholder="e.g. vhs"
           pattern="^[A-Za-z0-9/-]{2,20}$"
           maxLength={20}
           onChange={(e) => {
-            e.target.value = e.target.value.toUpperCase();
+            e.target.value = e.target.value.toLowerCase();
           }}
           className={inputClassName}
         />
         <p className="mt-1 text-xs text-purple-300/40">
-          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">VHS/001</span>). Auto-filled when adding students; existing IDs are never changed.
+          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">vhs/001</span>). Auto-filled when adding students; existing IDs are never changed.
         </p>
       </div>
 
