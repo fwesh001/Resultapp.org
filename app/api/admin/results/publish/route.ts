@@ -53,7 +53,15 @@ export async function POST(req: NextRequest) {
   const termStr = String(term ?? "").trim();
   const sessionStr = String(rawSession ?? rawSessionAlt ?? "").trim();
   const ids = (Array.isArray(rawIds) ? rawIds : Array.isArray(rawIdsAlt) ? rawIdsAlt : [])
-    .map((s) => String(s).trim())
+    .map((s) => {
+      const t = String(s).trim();
+      if (!t) return t;
+      const idx = t.indexOf("/");
+      if (idx > -1) return t.slice(0, idx).toLowerCase() + t.slice(idx);
+      const m = t.match(/^([A-Za-z]+)(.*)$/);
+      if (m) return m[1].toLowerCase() + m[2];
+      return t.toLowerCase();
+    })
     .filter(Boolean);
   const publishedBy = String(rawBy ?? rawByAlt ?? "").trim() || undefined;
 
