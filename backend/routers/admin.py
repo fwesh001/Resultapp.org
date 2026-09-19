@@ -234,3 +234,24 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
                 conn.close()
             except Exception:
                 pass
+
+
+@router.get("/config/credit-price", summary="Get flat credit price (superadmin)")
+def get_credit_price_config():
+    from services.db_manager import get_credit_price
+
+    return {"credit_price": get_credit_price()}
+
+
+@router.put("/config/credit-price", summary="Set flat credit price (superadmin)")
+def set_credit_price_config(payload: dict):
+    price = payload.get("credit_price") if isinstance(payload, dict) else None
+    if price is None:
+        raise HTTPException(status_code=400, detail="credit_price is required")
+    from services.db_manager import set_credit_price
+
+    try:
+        new_price = set_credit_price(int(price))
+        return {"success": True, "credit_price": new_price}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
