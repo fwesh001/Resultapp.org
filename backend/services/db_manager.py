@@ -1100,6 +1100,14 @@ def _dual_write_ledger(
 def is_result_published(subdomain: str, student_id: str, term: str, academic_session: str) -> bool:
     """Check whether a student's report card is published (unlocked) for a term."""
     subdomain = _sanitize_subdomain(subdomain)
+    _t = student_id.strip()
+    if "/" in _t:
+        _p, _r = _t.split("/", 1)
+        student_id = _p.lower() + "/" + _r
+    else:
+        import re as _re_irp
+        _m_irp = _re_irp.match(r"^([A-Za-z]+)(.*)$", _t)
+        student_id = (_m_irp.group(1).lower() + _m_irp.group(2)) if _m_irp else _t.lower()
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -1137,7 +1145,15 @@ def publish_student_results(
     concurrent publishes cannot overspend the balance.
     """
     subdomain = _sanitize_subdomain(subdomain)
-    unique_ids = sorted({str(s).strip() for s in (student_ids or []) if str(s).strip()})
+    def _norm_sid(s: str) -> str:
+        _t = str(s).strip()
+        if "/" in _t:
+            _p, _r = _t.split("/", 1)
+            return _p.lower() + "/" + _r
+        import re as _re_n
+        _m = _re_n.match(r"^([A-Za-z]+)(.*)$", _t)
+        return (_m.group(1).lower() + _m.group(2)) if _m else _t.lower()
+    unique_ids = sorted({_norm_sid(s) for s in (student_ids or []) if str(s).strip()})
     if not unique_ids:
         raise ValueError("No student_ids provided for publication")
     batch_ref = f"pub:{subdomain}:{term}:{academic_session}:{len(unique_ids)}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
