@@ -220,6 +220,41 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         </p>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="current-term" className="block text-sm font-medium text-purple-200">
+            Active Term
+          </label>
+          <select
+            id="current-term"
+            name="current_term"
+            defaultValue={school?.currentTerm ?? "Term 1"}
+            className={inputClassName}
+          >
+            <option value="Term 1">Term 1</option>
+            <option value="Term 2">Term 2</option>
+            <option value="Term 3">Term 3</option>
+          </select>
+          <p className="mt-1 text-xs text-purple-300/40">Dashboard and reports default to this term.</p>
+        </div>
+        <div>
+          <label htmlFor="current-session" className="block text-sm font-medium text-purple-200">
+            Academic Session
+          </label>
+          <input
+            id="current-session"
+            name="current_session"
+            type="text"
+            autoComplete="off"
+            defaultValue={school?.currentSession ?? ""}
+            placeholder="e.g. 2026/2027"
+            pattern="^\d{4}/\d{4}$"
+            className={inputClassName}
+          />
+          <p className="mt-1 text-xs text-purple-300/40">Leave blank to auto-derive (Sept rollover).</p>
+        </div>
+      </div>
+
       <div>
         <label
           htmlFor="new-term-begins"
