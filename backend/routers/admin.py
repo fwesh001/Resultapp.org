@@ -170,12 +170,20 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
         if len(name) > 120:
             raise HTTPException(status_code=400, detail="school_name too long (max 120 chars)")
         data["school_name"] = name
+    if "id_prefix" in data:
+        raw_prefix = (data["id_prefix"] or "").strip().upper()
+        if not raw_prefix:
+            data["id_prefix"] = None
+        elif not __import__("re").match(r"^[A-Z0-9/-]{2,20}$", raw_prefix):
+            raise HTTPException(status_code=400, detail="id_prefix must be 2-20 chars (A-Z, 0-9, /, -)")
+        else:
+            data["id_prefix"] = raw_prefix
     # Normalize blank optional strings to NULL so cleared fields don't store ""
     for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
