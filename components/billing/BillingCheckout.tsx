@@ -48,8 +48,14 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [studentCount]);
 
-  const { pricePerStudent, badge, badgeStyle } = useMemo(() => getPricingTier(countNum), [countNum]);
-  const total = useMemo(() => calculateTieredTotal(countNum), [countNum]);
+  const { pricePerStudent, badge, badgeStyle } = useMemo(
+    () => (isCredit ? { pricePerStudent: CREDIT_PRICE, badge: null as string | null, badgeStyle: "" } : getPricingTier(countNum)),
+    [countNum, isCredit],
+  );
+  const total = useMemo(
+    () => (isCredit ? calculateCreditTotal(countNum, CREDIT_PRICE) : calculateTieredTotal(countNum)),
+    [countNum, isCredit],
+  );
   const sliderPct = useMemo(() => getSliderPct(countNum), [countNum]);
   const clampedSlider = Math.max(50, Math.min(2000, countNum || 50));
 
