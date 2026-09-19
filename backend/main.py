@@ -366,7 +366,7 @@ def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      credit_balance, new_term_begins, created_at, updated_at;
+                      credit_balance, slots_balance, id_prefix, new_term_begins, created_at, updated_at;
             """,
             (int(payload.student_count), tid),
         )
