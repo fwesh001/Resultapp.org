@@ -110,6 +110,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
 
   const pkgTotal = useMemo(() => calculateTieredTotal(pkg), [pkg]);
   const pkgTier = useMemo(() => getPricingTier(pkg), [pkg]);
+  const creditTotal = useMemo(() => calculateCreditTotal(creditPkg, creditPrice), [creditPkg, creditPrice]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
