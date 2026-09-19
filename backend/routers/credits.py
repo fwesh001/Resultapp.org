@@ -322,6 +322,127 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
                 pass
 
 
+class SlotTopUpRequest(BaseModel):
+    slot_count: Optional[int] = Field(None, gt=0, le=10000)
+    student_count: Optional[int] = Field(None, gt=0, le=10000)
+    transaction_id: str = Field(..., min_length=1)
+
+
+@router.post("/slots/topup", summary="Purchase slots (capacity) — tiered pricing")
+def topup_slots_endpoint(tenant_id: str, payload: SlotTopUpRequest):
+    """Slot purchase — tiered pricing (same tiers as registration). Dual-writes billing_ledger."""
+    from services.db_manager import BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+    count = payload.slot_count if payload.slot_count is not None else payload.student_count
+    if not count or count <= 0 or count > 10000:
+        raise HTTPException(status_code=400, detail="slot_count (1-10000) is required")
+    tx_id = payload.transaction_id.strip()
+    reference_id = f"flw-slot:{tx_id}"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        cur.execute(
+            """
+            INSERT INTO billing_ledger
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id, subdomain, token_type, amount, transaction_type, reference_id, description, created_at;
+            """,
+            (tid, int(count), reference_id, f"Slot purchase: {count} slots via Flutterwave {tx_id}"),
+        )
+        row = cur.fetchone()
+        if row is None:
+            cur.execute("ROLLBACK;")
+            from services.db_manager import get_slots_balance
+
+            return {
+                "success": True,
+                "duplicate": True,
+                "subdomain": tid,
+                "slots_balance": get_slots_balance(tid),
+                "entry": {},
+            }
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = COALESCE(slots_balance, 0) + %s,
+                student_count = GREATEST(COALESCE(student_count,0), COALESCE(slots_balance,0) + %s),
+                updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (int(count), int(count), tid),
+        )
+        new_balance = int(cur.fetchone()[0] or 0)
+        cur.execute("COMMIT;")
+        _logger.info(f"[slots] Top-up {count} slots for '{tid}' via {tx_id} (balance {new_balance})")
+        return {
+            "success": True,
+            "duplicate": False,
+            "subdomain": tid,
+            "credited": int(count),
+            "slots_balance": new_balance,
+            "entry": _row_to_dict(row, cur) if row is not None else {},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn:
+                with conn.cursor() as rb:
+                    rb.execute("ROLLBACK;")
+        except Exception:
+            pass
+        _logger.exception(f"[slots] Top-up failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Slot top-up failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.get("/slots/balance", summary="Fetch remaining slot capacity")
+def get_slots_balance_endpoint(tenant_id: str):
+    from services.db_manager import get_slots_balance
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+    return {"subdomain": tid, "slots_balance": get_slots_balance(tid)}
+
+
+@router.get("/config/credit-price", summary="Fetch flat credit price (NGN)")
+def get_credit_price_endpoint(tenant_id: str):
+    from services.db_manager import get_credit_price
+
+    _validate_tenant_id(tenant_id)
+    _ensure_tenant(tenant_id)
+    return {"credit_price": get_credit_price()}
+
+
+@router.put("/config/credit-price", summary="Set flat credit price (superadmin tunable)")
+def set_credit_price_endpoint(tenant_id: str, payload: dict):
+    # Allow any tenant_id for superadmin tuning, but validate tenant exists for audit trail
+    _validate_tenant_id(tenant_id)
+    # Don't require tenant exists for global setting — allow superadmin to tune globally
+    price = payload.get("credit_price") if isinstance(payload, dict) else None
+    if price is None:
+        raise HTTPException(status_code=400, detail="credit_price is required")
+    from services.db_manager import set_credit_price
+
+    try:
+        new_price = set_credit_price(int(price))
+        return {"success": True, "credit_price": new_price}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/publish", summary="Publish report cards (1 credit each, re-prints free)")
 def publish_reports(tenant_id: str, payload: PublishRequest):
     from services.db_manager import current_academic_session, publish_student_results
