@@ -258,6 +258,41 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             if gender and gender.lower() not in ("male", "female"):
                 raise HTTPException(status_code=400, detail="gender must be Male or Female")
 
+            # --- Dual-ledger slot guard (atomic, all-or-nothing) ---
+            try:
+                cur.execute("BEGIN;")
+            except Exception:
+                pass
+            from services.db_manager import SCHOOLS_REGISTRY_TABLE, BILLING_LEDGER_TABLE
+
+            cur.execute(
+                f"SELECT slots_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+                (tid,),
+            )
+            srow = cur.fetchone()
+            if srow is None:
+                cur.execute("ROLLBACK;")
+                raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
+            slots = int(srow[0] or 0)
+            if slots < 1:
+                cur.execute("ROLLBACK;")
+                # Count used for helpful error
+                cur2 = None
+                try:
+                    from services.db_manager import _connect_as_superuser as _conn2
+
+                    cur2_conn = _conn2()
+                    cur2 = cur2_conn.cursor()
+                    cur2.execute(f"SELECT COUNT(*) FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
+                    used = int(cur2.fetchone()[0] or 0)
+                    cur2_conn.close()
+                except Exception:
+                    used = 0
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Insufficient slots. Need 1, balance is {slots} ({used} slots used). Top up slots to add more students.",
+                )
+            # Insert student
             cur.execute(
                 f"""
                 INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender)
@@ -267,11 +302,35 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 (tid, student_id, full_name, class_name, gender),
             )
             row = cur.fetchone()
-            conn.commit()
+            # Decrement slot and log
+            cur.execute(
+                f"""
+                UPDATE {SCHOOLS_REGISTRY_TABLE}
+                SET slots_balance = slots_balance - 1, updated_at = NOW()
+                WHERE subdomain = %s
+                RETURNING slots_balance;
+                """,
+                (tid,),
+            )
+            new_slots = cur.fetchone()
+            # Unified ledger (also keep dual-write idempotent)
+            ref = f"slot:{tid}:{student_id}:{int(datetime.now().timestamp())}"
+            cur.execute(
+                f"""
+                INSERT INTO {BILLING_LEDGER_TABLE}
+                    (subdomain, token_type, amount, transaction_type, reference_id, description)
+                VALUES (%s, 'SLOT', -1, 'SLOT_CONSUMPTION', %s, %s)
+                ON CONFLICT (reference_id) DO NOTHING;
+                """,
+                (tid, ref, f"Allocated slot for student {student_id}"),
+            )
+            cur.execute("COMMIT;")
             d = _row_to_dict(row, cur)
             if isinstance(d.get("created_at"), datetime):
                 d["created_at"] = d["created_at"].isoformat()
             d["id"] = str(d["id"])
+            # Include remaining slots in response for UI feedback
+            d["slots_remaining"] = int(new_slots[0] or 0) if new_slots else slots - 1
             return {"type": "student", "record": d}
 
         if typ == "staff":
