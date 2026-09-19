@@ -535,7 +535,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                    credit_balance, id_prefix, new_term_begins, created_at, updated_at
+                     credit_balance, slots_balance, id_prefix, new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s;
             """,
@@ -559,9 +559,15 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
 
 CREDIT_LEDGER_TABLE = "credit_ledger"
 RESULT_PUBLICATIONS_TABLE = "result_publications"
+BILLING_LEDGER_TABLE = "billing_ledger"
+APP_SETTINGS_TABLE = "app_settings"
 
 #: Free trial credits granted on registration (frictionless onboarding).
 TRIAL_CREDITS = 30
+TRIAL_SLOTS = 0  # slots are purchased via student_count; credits are the trial gift
+
+#: Default flat price per publishing credit (NGN) — superadmin tunable via app_settings.
+DEFAULT_CREDIT_PRICE = 200
 
 
 def current_academic_session(now: Optional[datetime] = None) -> str:
