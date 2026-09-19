@@ -97,8 +97,8 @@ def list_tenants():
             f"""
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
-                   is_verified, is_active, subscription_plan, subscription_status, student_count,
-                   credit_balance, new_term_begins, created_at, updated_at
+                    is_verified, is_active, subscription_plan, subscription_status, student_count,
+                    credit_balance, id_prefix, new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             ORDER BY created_at DESC
             """
