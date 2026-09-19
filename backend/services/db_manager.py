@@ -606,6 +606,117 @@ def get_credit_balance(subdomain: str) -> int:
             conn.close()
 
 
+def topup_slots(subdomain: str, amount: int, reference_id: str, description: Optional[str] = None) -> Dict[str, Any]:
+    """Purchase slots (capacity) — additive, idempotent on reference_id. Dual-writes billing_ledger."""
+    subdomain = _sanitize_subdomain(subdomain)
+    amount = int(amount)
+    if amount <= 0 or amount > 10000:
+        raise ValueError("Slot amount must be 1-10000")
+    if not reference_id or not reference_id.strip():
+        raise ValueError("reference_id is required for idempotency")
+    reference_id = reference_id.strip()
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        # Idempotency: if reference already exists, return without double-crediting
+        cur.execute(f"SELECT 1 FROM {BILLING_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (reference_id,))
+        if cur.fetchone() is not None:
+            cur.execute("ROLLBACK;")
+            # Return existing balance without modifying
+            existing_balance = get_slots_balance(subdomain)
+            return {"subdomain": subdomain, "credited": 0, "slots_balance": existing_balance, "duplicate": True}
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s);
+            """,
+            (subdomain, amount, reference_id, description or f"Slot purchase: {amount} slots"),
+        )
+        # Also mirror to credit_ledger for legacy readers? No — slots are not credits, keep billing_ledger only for SLOT.
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = COALESCE(slots_balance, 0) + %s,
+                student_count = GREATEST(COALESCE(student_count,0), COALESCE(slots_balance,0) + %s),
+                updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (amount, amount, subdomain),
+        )
+        row = cur.fetchone()
+        new_balance = int(row[0] or 0) if row else amount
+        cur.execute("COMMIT;")
+        logger.info(f"[DB] Slots top-up {amount} for '{subdomain}' ref {reference_id} (balance {new_balance})")
+        return {"subdomain": subdomain, "credited": amount, "slots_balance": new_balance, "duplicate": False}
+    except Exception as e:
+        try:
+            if conn:
+                with conn.cursor() as rb:
+                    rb.execute("ROLLBACK;")
+        except Exception:
+            pass
+        logger.error(f"[DB] Slots top-up failed for '{subdomain}': {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def refund_slot(subdomain: str, student_id: str, reference_id: Optional[str] = None) -> int:
+    """Refund one slot when a student is deleted (capacity returned). Idempotent."""
+    subdomain = _sanitize_subdomain(subdomain)
+    student_id = student_id.strip()
+    if not student_id:
+        raise ValueError("student_id required")
+    ref = reference_id or f"slot_refund:{subdomain}:{student_id}:{int(datetime.now(timezone.utc).timestamp())}"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        cur.execute(f"SELECT 1 FROM {BILLING_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
+        if cur.fetchone() is not None:
+            cur.execute("ROLLBACK;")
+            return get_slots_balance(subdomain)
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'SLOT', 1, 'SLOT_REFUND', %s, %s);
+            """,
+            (subdomain, ref, f"Slot refund for deleted student {student_id}"),
+        )
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = COALESCE(slots_balance, 0) + 1, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (subdomain,),
+        )
+        new_bal = int(cur.fetchone()[0] or 0)
+        cur.execute("COMMIT;")
+        logger.info(f"[DB] Slot refund 1 for '{subdomain}' student {student_id} (balance {new_bal})")
+        return new_bal
+    except Exception as e:
+        try:
+            if conn:
+                with conn.cursor() as rb:
+                    rb.execute("ROLLBACK;")
+        except Exception:
+            pass
+        logger.error(f"[DB] Slot refund failed for '{subdomain}' {student_id}: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 def get_credit_ledger(subdomain: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
     """Return ledger entries for a tenant, newest first."""
     subdomain = _sanitize_subdomain(subdomain)
