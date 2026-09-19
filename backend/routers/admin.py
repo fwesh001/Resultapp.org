@@ -172,6 +172,17 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
         if len(name) > 120:
             raise HTTPException(status_code=400, detail="school_name too long (max 120 chars)")
         data["school_name"] = name
+    # Normalize term/session enums
+    if "current_term" in data:
+        ct = (data["current_term"] or "").strip()
+        if ct and ct not in ("Term 1", "Term 2", "Term 3"):
+            raise HTTPException(status_code=400, detail="current_term must be Term 1, Term 2 or Term 3")
+        data["current_term"] = ct or None
+    if "current_session" in data:
+        cs = (data["current_session"] or "").strip()
+        if cs and not __import__("re").match(r"^\d{4}/\d{4}$", cs):
+            raise HTTPException(status_code=400, detail="current_session must be YYYY/YYYY (e.g. 2026/2027)")
+        data["current_session"] = cs or None
     if "id_prefix" in data:
         raw_prefix = (data["id_prefix"] or "").strip().upper()
         if not raw_prefix:
@@ -185,7 +196,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "current_term", "current_session")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
