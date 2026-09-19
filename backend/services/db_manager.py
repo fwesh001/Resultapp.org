@@ -322,6 +322,59 @@ def init_schools_registry() -> None:
             ADD COLUMN IF NOT EXISTS id_prefix VARCHAR(20);
         """)
         cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS slots_balance INTEGER DEFAULT 0;
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = 0
+            WHERE slots_balance IS NULL;
+        """)
+        # Backfill slots_balance from legacy student_count for zero-downtime parity
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE} s
+            SET slots_balance = COALESCE(s.student_count, 0)
+            WHERE COALESCE(s.slots_balance, 0) = 0
+              AND COALESCE(s.student_count, 0) > 0;
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS billing_ledger (
+                id               SERIAL PRIMARY KEY,
+                subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                token_type       VARCHAR(10) NOT NULL CHECK (token_type IN ('SLOT','CREDIT')),
+                amount           INTEGER NOT NULL,
+                transaction_type VARCHAR(50) NOT NULL,
+                reference_id     VARCHAR(100) UNIQUE,
+                description      TEXT,
+                created_at       TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_billing_ledger_subdomain
+            ON billing_ledger (subdomain);
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_billing_ledger_token
+            ON billing_ledger (subdomain, token_type);
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_billing_ledger_created
+            ON billing_ledger (created_at DESC);
+        """)
+        # Lightweight key-value settings for Superadmin tunables (credit_price, etc.)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key        VARCHAR(100) PRIMARY KEY,
+                value      TEXT NOT NULL,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            INSERT INTO app_settings (key, value)
+            VALUES ('credit_price', '200')
+            ON CONFLICT (key) DO NOTHING;
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS credit_ledger (
                 id               SERIAL PRIMARY KEY,
                 subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
