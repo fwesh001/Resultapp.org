@@ -1,0 +1,24 @@
+# Resultapp.org
+
+> The all-in-one result compilation platform for Nigerian schools — automated
+> grading, digital report cards, custom school portals, and pay-per-student billing.
+
+## Main pages
+
+- [Home](https://resultapp.org/): Product overview, features, and pricing calculator.
+- [Pricing](https://resultapp.org/pricing): Pay-per-student credit pricing (₦100/₦90/₦80 tiers).
+- [Register](https://resultapp.org/register): Create a school portal at `yourschool.resultapp.org`.
+- [About](https://resultapp.org/about): Mission and values.
+- [Contact](https://resultapp.org/contact): WhatsApp and email support (8am–8pm WAT).
+- [Support](https://resultapp.org/support): Bug reports and feedback.
+
+## Tenant portals
+
+Each school gets a subdomain portal (`{school}.resultapp.org`) with a public
+result checker, staff grading workspace, admin dashboard (allocations,
+templates, settings, billing), and printable student report cards.
+
+## Contact
+
+- Support: support@resultapp.org
+- WhatsApp: +234 702 506 7494 (8am–8pm WAT)
