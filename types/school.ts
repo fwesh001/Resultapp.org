@@ -21,6 +21,8 @@ export interface School {
   registrationNumber?: string;
   idPrefix?: string;
   newTermBegins?: string;
+  slotsBalance?: number;
+  creditBalance?: number;
   createdAt: string; // ISO date
   updatedAt: string;
   isVerified: boolean;
