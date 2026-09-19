@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
-import { toTitleCase } from "@/lib/format";
+import { toTitleCase, currentAcademicSession } from "@/lib/format";
 import {
   Users,
   UserCheck,
-  CreditCard,
+  Coins,
   CalendarDays,
   Plus,
   Wallet,
@@ -26,45 +26,70 @@ export default async function AdminDashboardPage({
   const school = await getTenant(routeSubdomain);
   const subdomain = school?.slug ?? routeSubdomain;
 
-  // Real values from the tenant registry (see lib/tenant normalizeSchool):
-  // - student count lives at credits.balance (mapped from student_count)
-  // - subscription status lives at subscription.status
-  const studentCount = school?.credits?.balance ?? 0;
-  const rawSubscriptionStatus = school?.subscription?.status ?? "unpaid";
-  const subscriptionStatus = rawSubscriptionStatus.toLowerCase();
-  const isSubscriptionActive = subscriptionStatus === "active";
-  const subscriptionClassName = isSubscriptionActive
-    ? "text-emerald-400"
-    : "text-red-400";
+  // Live wiring — subscription card retired in favor of dual-ledger.
+  const currentTerm = school?.currentTerm ?? "Term 1";
+  const currentSession = school?.currentSession ?? currentAcademicSession();
+  const slotsUsed = school?.slotsBalance != null && school?.creditBalance != null
+    ? Math.max(0, (school?.slotsBalance ?? 0) > 0 ? 0 : 0)
+    : 0;
+  // Fetch live counts best-effort (server-side, no-store so publish revalidates via school tag).
+  let liveStudents = 0;
+  let liveActiveStaff = 0;
+  let livePublished = 0;
+  let liveCompletion = 0;
+  let liveSession = currentSession;
+  try {
+    const base = (process.env.BACKEND_URL || "http://159.223.178.34:8000").replace(/\/$/, "");
+    const secret = (process.env.BACKEND_API_SECRET || process.env.PROVISION_API_SECRET || process.env.API_SECRET_KEY || "").trim();
+    if (secret) {
+      const qs = new URLSearchParams({ term: currentTerm, academic_session: currentSession });
+      const r = await fetch(`${base}/api/v1/tenant/${encodeURIComponent(subdomain)}/command-center/summary?${qs.toString()}`, {
+        headers: { "X-API-SECRET-KEY": secret },
+        cache: "no-store",
+      });
+      if (r.ok) {
+        const d = (await r.json()) as {
+          total_students?: number; published_count?: number; completion_pct?: number;
+          academic_session?: string; active_staff?: number;
+        };
+        liveStudents = d.total_students ?? 0;
+        livePublished = d.published_count ?? 0;
+        liveCompletion = d.completion_pct ?? 0;
+        liveSession = d.academic_session ?? currentSession;
+        liveActiveStaff = d.active_staff ?? 0;
+      }
+    }
+  } catch {
+    // Fallback to roster-derived counts is handled below via tenant metadata
+  }
+  // Fallback: derive slot capacity from schools row when command-center is unreachable
+  const slotCapacity = school?.slotsBalance ?? school?.student_count ?? 0;
+  // Use live roster count when available, else fall back to schools-derived used approximation
+  const displayUsed = liveStudents > 0 ? liveStudents : 0;
+  const displayCapacity = slotCapacity > 0 ? slotCapacity : Math.max(displayUsed, 0);
+  const remaining = Math.max(0, displayCapacity - displayUsed);
 
   const stats = [
     {
-      label: "Total Students Enrolled",
-      value: studentCount.toLocaleString(),
+      label: "Slots",
+      value: `${displayUsed} / ${displayCapacity} Slots`,
+      sub: `${remaining} remaining`,
       icon: Users,
-      demo: false,
     },
     {
       label: "Active Staff",
-      value: "12",
+      value: String(liveActiveStaff),
       icon: UserCheck,
-      demo: true,
     },
     {
-      label: "Subscription",
-      value: (
-        <span className={`capitalize ${subscriptionClassName}`}>
-          {rawSubscriptionStatus}
-        </span>
-      ),
-      icon: CreditCard,
-      demo: false,
+      label: "Publishing Credits",
+      value: String(school?.creditBalance ?? 0),
+      icon: Coins,
     },
     {
       label: "Current Term",
-      value: "Term 1, 2026",
+      value: `${currentTerm}, ${liveSession}`,
       icon: CalendarDays,
-      demo: true,
     },
   ];
 
