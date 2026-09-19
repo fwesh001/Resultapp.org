@@ -743,6 +743,216 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
             conn.close()
 
 
+def get_slots_balance(subdomain: str) -> int:
+    """Return the remaining student slot capacity for a tenant (0 if unknown)."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT slots_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+            (subdomain,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return 0
+        return int(row[0] or 0)
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch slots balance for '{subdomain}': {e}")
+        return 0
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_credit_price() -> int:
+    """Fetch the flat NGN price per publishing credit (superadmin tunable)."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {APP_SETTINGS_TABLE} WHERE key = 'credit_price' LIMIT 1;")
+        row = cur.fetchone()
+        if row is None:
+            return DEFAULT_CREDIT_PRICE
+        return int(str(row[0]).strip() or DEFAULT_CREDIT_PRICE)
+    except Exception as e:
+        logger.warning(f"[DB] Failed to fetch credit_price, using default {DEFAULT_CREDIT_PRICE}: {e}")
+        return DEFAULT_CREDIT_PRICE
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def set_credit_price(price: int) -> int:
+    """Update the flat credit price (superadmin). Returns the new price."""
+    price = int(price)
+    if price <= 0 or price > 100000:
+        raise ValueError("credit_price must be 1-100000")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {APP_SETTINGS_TABLE} (key, value, updated_at)
+            VALUES ('credit_price', %s, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+            RETURNING value;
+            """,
+            (str(price),),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return int(str(row[0]).strip() if row else price)
+    except Exception as e:
+        logger.error(f"[DB] Failed to set credit_price to {price}: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_billing_ledger(
+    subdomain: str, token_type: Optional[str] = None, limit: int = 50, offset: int = 0
+) -> List[Dict[str, Any]]:
+    """Return unified billing ledger entries, newest first. Optionally filter by SLOT/CREDIT."""
+    subdomain = _sanitize_subdomain(subdomain)
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+    ttype = (token_type or "").strip().upper() or None
+    if ttype and ttype not in ("SLOT", "CREDIT"):
+        raise ValueError("token_type must be SLOT or CREDIT")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        if ttype:
+            cur.execute(
+                f"""
+                SELECT id, subdomain, token_type, amount, transaction_type, reference_id,
+                       description, created_at
+                FROM {BILLING_LEDGER_TABLE}
+                WHERE subdomain = %s AND token_type = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s;
+                """,
+                (subdomain, ttype, limit, offset),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT id, subdomain, token_type, amount, transaction_type, reference_id,
+                       description, created_at
+                FROM {BILLING_LEDGER_TABLE}
+                WHERE subdomain = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s;
+                """,
+                (subdomain, limit, offset),
+            )
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            else:
+                d["created_at"] = str(d.get("created_at") or "")
+            out.append(d)
+        return out
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch billing ledger for '{subdomain}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def add_billing_ledger_entry(
+    subdomain: str,
+    token_type: str,
+    amount: int,
+    transaction_type: str,
+    reference_id: Optional[str] = None,
+    description: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Insert into unified billing_ledger. Duplicate reference_id → returns existing row (idempotent)."""
+    subdomain = _sanitize_subdomain(subdomain)
+    ttype = token_type.strip().upper()
+    if ttype not in ("SLOT", "CREDIT"):
+        raise ValueError("token_type must be SLOT or CREDIT")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id, subdomain, token_type, amount, transaction_type, reference_id,
+                      description, created_at;
+            """,
+            (subdomain, ttype, int(amount), transaction_type, reference_id, description),
+        )
+        row = cur.fetchone()
+        if row is None and reference_id:
+            cur.execute(
+                f"""
+                SELECT id, subdomain, token_type, amount, transaction_type, reference_id,
+                       description, created_at
+                FROM {BILLING_LEDGER_TABLE}
+                WHERE reference_id = %s;
+                """,
+                (reference_id,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        d = _row_to_dict(row, cur) if row is not None else {}
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        return d
+    except Exception as e:
+        logger.error(f"[DB] Failed to insert billing ledger for '{subdomain}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def _dual_write_ledger(
+    subdomain: str,
+    amount: int,
+    transaction_type: str,
+    reference_id: Optional[str],
+    description: Optional[str],
+    token_type: str,
+) -> None:
+    """Best-effort dual-write to billing_ledger (new) and credit_ledger (legacy) for zero-downtime parity."""
+    try:
+        # Always write unified ledger
+        add_billing_ledger_entry(subdomain, token_type, amount, transaction_type, reference_id, description)
+    except Exception as e:
+        logger.warning(f"[DB] Dual-write billing_ledger failed for '{subdomain}' {reference_id}: {e}")
+    # Legacy credit_ledger mirror for CREDIT token_type only (keeps old readers working)
+    if token_type == "CREDIT":
+        try:
+            add_credit_ledger_entry(subdomain, amount, transaction_type, reference_id, description)
+        except Exception as e:
+            # Duplicate reference_id is not an error — just idempotent replay
+            logger.warning(f"[DB] Dual-write credit_ledger failed for '{subdomain}' {reference_id}: {e}")
+
+
 def is_result_published(subdomain: str, student_id: str, term: str, academic_session: str) -> bool:
     """Check whether a student's report card is published (unlocked) for a term."""
     subdomain = _sanitize_subdomain(subdomain)
