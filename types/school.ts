@@ -19,6 +19,7 @@ export interface School {
   motto?: string;
   proprietorName?: string;
   registrationNumber?: string;
+  idPrefix?: string;
   newTermBegins?: string;
   createdAt: string; // ISO date
   updatedAt: string;
