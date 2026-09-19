@@ -1304,6 +1304,9 @@ def init_roster_registry() -> None:
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
         # Enforce NOT NULL after backfill (idempotent)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
+        # Future-proof Active Staff flag — additive, defaults TRUE, counts WHERE is_active=TRUE
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
+        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
 
         # Allocations — subject → staff → class
         cur.execute(f"""
