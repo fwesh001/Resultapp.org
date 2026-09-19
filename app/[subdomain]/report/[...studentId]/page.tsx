@@ -29,17 +29,46 @@ function getProxySecret(): string {
  * result_publications for (tenant, student, term, session). Everything else
  * renders as a free "Draft — Pending Publication" preview (blurred, no print).
  */
+function normalizeStudentId(raw: string | string[]): string {
+  let s: string;
+  if (Array.isArray(raw)) {
+    // Catch-all: join segments — handles raw slash VHS/005 (["vhs","005"]) and encoded vhs%2F005
+    s = raw.map((seg) => {
+      try {
+        return decodeURIComponent(seg);
+      } catch {
+        return seg;
+      }
+    }).join("/");
+  } else {
+    try {
+      s = decodeURIComponent(raw);
+    } catch {
+      s = raw;
+    }
+  }
+  s = s.trim();
+  const slashIdx = s.indexOf("/");
+  if (slashIdx > -1) {
+    return s.slice(0, slashIdx).toLowerCase() + s.slice(slashIdx);
+  }
+  const m = s.match(/^([A-Za-z]+)(.*)$/);
+  if (m) return m[1].toLowerCase() + m[2];
+  return s.toLowerCase();
+}
+
 export default async function ReportPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ subdomain: string; studentId: string }>;
+  params: Promise<{ subdomain: string; studentId: string | string[] }>;
   searchParams: Promise<{ term?: string }>;
 }) {
-  const { subdomain, studentId } = await params;
+  const { subdomain, studentId: rawStudentId } = await params;
   const { term } = await searchParams;
 
   const tenantId = subdomain.toLowerCase().trim();
+  const studentId = normalizeStudentId(rawStudentId);
   const effectiveTerm = (term || "Term 1").trim() || "Term 1";
   const session = currentAcademicSession();
 
