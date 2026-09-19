@@ -95,7 +95,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
     if (!validate()) return;
 
     const n = parseInt(studentCount, 10);
-    const amount = calculateTieredTotal(n);
+    const amount = isCredit ? calculateCreditTotal(n, CREDIT_PRICE) : calculateTieredTotal(n);
     if (amount <= 0) {
       setError("Invalid amount");
       return;
