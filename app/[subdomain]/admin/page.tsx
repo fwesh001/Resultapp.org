@@ -129,6 +129,7 @@ export default async function AdminDashboardPage({
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
+          const sub = (stat as { sub?: string }).sub;
           return (
             <div
               key={stat.label}
@@ -139,16 +140,9 @@ export default async function AdminDashboardPage({
                   <Icon className="h-5 w-5 text-purple-300" />
                 </span>
                 <p className="text-xs text-purple-200/60">{stat.label}</p>
-                {stat.demo && (
-                  <span
-                    title="Placeholder metric — live data coming soon"
-                    className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
-                  >
-                    Demo
-                  </span>
-                )}
               </div>
               <p className="mt-3 text-2xl font-bold">{stat.value}</p>
+              {sub && <p className="mt-1 text-xs text-purple-300/50">{sub}</p>}
             </div>
           );
         })}
