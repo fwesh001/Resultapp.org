@@ -23,7 +23,7 @@ import {
 const CREDIT_PACKAGES = [50, 100, 250, 500] as const;
 const SLOT_PACKAGES = [100, 250, 500, 1000] as const;
 
-type LedgerFilter = "all" | "PURCHASE" | "PUBLICATION_DEDUCTION" | "INITIAL_GRANT" | "REFUND" | "SLOT_PURCHASE" | "SLOT_CONSUMPTION" | "SLOT_REFUND" | "CREDIT_PURCHASE";
+type LedgerFilter = "all" | "PURCHASE" | "PUBLICATION_DEDUCTION" | "INITIAL_GRANT" | "INITIAL_SLOTS" | "REFUND" | "SLOT_PURCHASE" | "SLOT_CONSUMPTION" | "SLOT_REFUND" | "CREDIT_PURCHASE";
 
 interface LedgerEntry {
   id: number;
