@@ -34,6 +34,8 @@ const PROFILE_FIELDS = [
   "phone",
   "email",
   "address",
+  "current_term",
+  "current_session",
   "new_term_begins",
   "logo_url",
   "hero_bg_url",
