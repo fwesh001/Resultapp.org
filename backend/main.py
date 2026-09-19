@@ -181,6 +181,7 @@ class TenantMetadata(BaseModel):
     subscription_plan: Optional[str] = None
     subscription_status: Optional[str] = None
     student_count: int = 0
+    credit_balance: int = 0
     new_term_begins: Optional[str] = None
     location: Optional[str] = None
     status: str = "inactive"
@@ -362,7 +363,7 @@ def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      new_term_begins, created_at, updated_at;
+                      credit_balance, new_term_begins, created_at, updated_at;
             """,
             (int(payload.student_count), tid),
         )
@@ -706,6 +707,26 @@ try:
     logger.info("[App] Report router mounted (/api/v1/tenant/{tenant_id}/report/{student_id})")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Report router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
+# Credit & Command — token ledger + command center
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.credits import router as credits_router
+
+    app.include_router(credits_router)
+    logger.info("[App] Credits router mounted (/api/v1/tenant/{tenant_id}/credits/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Credits router not mounted: {e}")
+
+try:
+    from routers.command_center import router as command_center_router
+
+    app.include_router(command_center_router)
+    logger.info("[App] Command center router mounted (/api/v1/tenant/{tenant_id}/command-center/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Command center router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Entrypoint
