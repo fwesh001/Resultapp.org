@@ -52,9 +52,12 @@ export default function ResultLookupWidget({
         id="student-id"
         type="text"
         value={studentId}
-        onChange={(e) => setStudentId(e.target.value)}
-        placeholder="e.g. STU001"
+        onChange={(e) => setStudentId(normalizePrefixLower(e.target.value))}
+        placeholder="e.g. vhs/001"
         required
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
         className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
       />
 
