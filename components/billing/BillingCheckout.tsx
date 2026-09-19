@@ -178,7 +178,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
           // Verified modal callback — now hit our payment proxy
           setUpgrading(true);
           try {
-            const endpoint = isCredit ? "/api/billing/credits" : "/api/billing/upgrade";
+            const endpoint = isCredit ? "/api/billing/credits" : isSlot ? "/api/billing/slots" : "/api/billing/upgrade";
             const upgradeRes = await fetch(endpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -199,17 +199,17 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
               throw new Error(msg);
             }
             setSuccess({ studentCount: n, total: amount });
-            // 5. On success: legacy upgrade goes to the sample report;
-            // credit top-ups stay on the billing page to show the new balance.
+            // 5. On success: credit/slot top-ups stay on billing to show new balance; legacy upgrade goes to sample report.
             setTimeout(() => {
-              window.location.href = isCredit
+              window.location.href = isCredit || isSlot
                 ? `/${tenantId}/admin/billing`
                 : `/${tenantId}/report/STU001?term=Term%201`;
             }, 1500);
           } catch (e) {
-            const msg = e instanceof Error ? e.message : (isCredit ? "Top-up failed. Contact support with transaction ID." : "Upgrade failed. Contact support with transaction ID.");
+            const isTopup = isCredit || isSlot;
+            const msg = e instanceof Error ? e.message : (isTopup ? "Top-up failed. Contact support with transaction ID." : "Upgrade failed. Contact support with transaction ID.");
             setError(msg + ` Ref: ${res.tx_ref || txRef}`);
-            console.error(isCredit ? "[billing credits] error" : "[billing upgrade] error", e);
+            console.error(isTopup ? "[billing topup] error" : "[billing upgrade] error", e);
           } finally {
             setIsPaying(false);
             setUpgrading(false);
@@ -235,11 +235,15 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
           <CheckCircle2 className="h-8 w-8 text-emerald-400" />
         </div>
-        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">{isCredit ? "Credits Added!" : "Subscription Active!"}</h3>
+        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">
+          {isCredit ? "Credits Added!" : isSlot ? "Slots Added!" : "Subscription Active!"}
+        </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
-          Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> {isCredit ? "credits" : "students"} (
+          Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> {isCredit ? "credits" : isSlot ? "slots" : "students"} (
           {formatNaira(success.total)}). {isCredit ? (
-            <>Your new balance will show on this page in a moment.</>
+            <>Your new credit balance will show on this page in a moment.</>
+          ) : isSlot ? (
+            <>Your new slot capacity will show on this page in a moment. You can now add more students.</>
           ) : (
             <>Report cards for <span className="font-mono text-white">{tenantId}</span> are now unlocked.</>
           )}
