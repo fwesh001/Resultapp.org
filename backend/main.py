@@ -203,6 +203,7 @@ class ProvisionRequest(BaseModel):
     admin_name: Optional[str] = Field(None, min_length=3, max_length=80, examples=["Mrs. Adaeze Okafor"], description="Optional — defaults to local part of email")
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
     student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each)")
+    initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="Trial credit grant at registration (Credit & Command). Defaults to 30.")
 
     @field_validator("subdomain")
     @classmethod
