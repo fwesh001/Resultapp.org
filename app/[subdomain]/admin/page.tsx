@@ -173,33 +173,25 @@ export default async function AdminDashboardPage({
           </div>
         </div>
 
-        {/* Grading Progress */}
+        {/* Publication Progress */}
         <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-base font-semibold">
-              Grading Progress
-              <span
-                title="Placeholder metric — live data coming soon"
-                className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
-              >
-                Demo
-              </span>
-            </h2>
+            <h2 className="text-base font-semibold">Publication Progress</h2>
             <span className="text-sm font-semibold text-purple-300">
-              65% complete
+              {liveCompletion}% complete
             </span>
           </div>
           <p className="mt-1 text-sm text-purple-200/60">
-            Staff have submitted most Term 1 scores.
+            {livePublished} of {displayUsed || liveStudents} results published • {currentTerm} {liveSession}
           </p>
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/5">
             <div
               className="h-full rounded-full bg-purple-500"
-              style={{ width: "65%" }}
+              style={{ width: `${Math.min(100, liveCompletion)}%` }}
             />
           </div>
           <p className="mt-3 text-xs text-purple-200/50">
-            65 of 100 class results compiled.
+            {livePublished} of {displayUsed || liveStudents} results published.
           </p>
         </div>
       </div>
