@@ -156,6 +156,14 @@ def get_publications(
         if student_id:
             if term:
                 _validate_term(term)
+            _raw_pub = student_id.strip()
+            if "/" in _raw_pub:
+                _pfx_pub, _rest_pub = _raw_pub.split("/", 1)
+                _norm_pub = _pfx_pub.lower() + "/" + _rest_pub
+            else:
+                import re as _re_pub
+                _m_pub = _re_pub.match(r"^([A-Za-z]+)(.*)$", _raw_pub)
+                _norm_pub = (_m_pub.group(1).lower() + _m_pub.group(2)) if _m_pub else _raw_pub.lower()
             cur.execute(
                 """
                 SELECT 1 FROM result_publications
@@ -164,11 +172,11 @@ def get_publications(
                   AND academic_session = %s
                 LIMIT 1;
                 """,
-                (tid, student_id.strip(), term, term, session),
+                (tid, _norm_pub, term, term, session),
             )
             return {
                 "subdomain": tid,
-                "student_id": student_id,
+                "student_id": _norm_pub,
                 "term": term,
                 "academic_session": session,
                 "published": cur.fetchone() is not None,
