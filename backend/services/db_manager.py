@@ -1190,6 +1190,22 @@ def publish_student_results(
                         + (f" by {published_by}" if published_by else ""),
                     ),
                 )
+                # Dual-write to unified ledger
+                cur.execute(
+                    f"""
+                    INSERT INTO {BILLING_LEDGER_TABLE}
+                        (subdomain, token_type, amount, transaction_type, reference_id, description)
+                    VALUES (%s, 'CREDIT', %s, 'PUBLICATION_DEDUCTION', %s, %s)
+                    ON CONFLICT (reference_id) DO NOTHING;
+                    """,
+                    (
+                        subdomain,
+                        -published_now,
+                        f"billing:{batch_ref}",
+                        f"Published {published_now} report card(s) for {term} {academic_session}"
+                        + (f" by {published_by}" if published_by else ""),
+                    ),
+                )
         cur.execute("COMMIT;")
         logger.info(
             f"[DB] Published {published_now} card(s) for '{subdomain}' {term} "
