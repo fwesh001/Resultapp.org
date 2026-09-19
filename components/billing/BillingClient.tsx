@@ -43,8 +43,13 @@ interface BillingClientProps {
 
 const TYPE_STYLES: Record<string, string> = {
   PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  CREDIT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
   PUBLICATION_DEDUCTION: "border-red-500/20 bg-red-500/10 text-red-300",
   INITIAL_GRANT: "border-violet-500/20 bg-violet-500/10 text-violet-300",
+  INITIAL_SLOTS: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
+  SLOT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  SLOT_CONSUMPTION: "border-red-500/20 bg-red-500/10 text-red-300",
+  SLOT_REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
   REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
 };
 
