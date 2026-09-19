@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
   }
 
   const base = getBackendBase();
-  const url = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/report/${encodeURIComponent(studentId)}?term=${encodeURIComponent(term)}`;
+  // Preserve slash for backend :path param — encode segments individually so vhs/004 stays vhs/004 not vhs%2F004
+  const encodedStudentPath = studentId.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+  const url = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/report/${encodedStudentPath}?term=${encodeURIComponent(term)}`;
 
   try {
     const r = await fetch(url, {
