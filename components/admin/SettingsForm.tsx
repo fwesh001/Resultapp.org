@@ -44,10 +44,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       "new_term_begins",
       "logo_url",
       "hero_bg_url",
+      "id_prefix",
     ]) {
       const value = formData.get(field);
       if (typeof value === "string") {
-        payload[field] = value.trim();
+        payload[field] = field === "id_prefix" ? value.trim().toUpperCase() : value.trim();
       }
     }
 
@@ -187,6 +188,32 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           className={inputClassName}
         />
         <p className="mt-1 text-xs text-purple-300/40">Shown beneath the school name on the report header.</p>
+      </div>
+
+      <div>
+        <label
+          htmlFor="id-prefix"
+          className="block text-sm font-medium text-purple-200"
+        >
+          Admission ID Prefix
+        </label>
+        <input
+          id="id-prefix"
+          name="id_prefix"
+          type="text"
+          autoComplete="off"
+          defaultValue={school?.idPrefix ?? school?.slug?.toUpperCase() ?? ""}
+          placeholder="e.g. VHS"
+          pattern="^[A-Za-z0-9/-]{2,20}$"
+          maxLength={20}
+          onChange={(e) => {
+            e.target.value = e.target.value.toUpperCase();
+          }}
+          className={inputClassName}
+        />
+        <p className="mt-1 text-xs text-purple-300/40">
+          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">VHS/001</span>). Auto-filled when adding students; existing IDs are never changed.
+        </p>
       </div>
 
       <div>
