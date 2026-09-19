@@ -33,6 +33,7 @@ interface TenantRegistrySchool {
   subscription_plan: string | null;
   subscription_status: string | null;
   student_count: number;
+  credit_balance: number | null;
   new_term_begins: string | null;
   location: string | null;
   status: string | null;
@@ -89,11 +90,13 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
           } as Subscription)
         : undefined,
     credits:
-      raw.student_count > 0
+      raw.student_count > 0 || (raw.credit_balance ?? 0) > 0
         ? {
-            balance: raw.student_count,
+            // credit_balance is the spendable token balance (zero-downtime:
+            // falls back to legacy student_count until migration backfills it).
+            balance: raw.credit_balance ?? raw.student_count,
             totalPurchased: raw.student_count,
-            totalUsed: 0,
+            totalUsed: Math.max(0, raw.student_count - (raw.credit_balance ?? raw.student_count)),
           }
         : undefined,
   };
