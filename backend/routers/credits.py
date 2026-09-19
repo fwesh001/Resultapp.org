@@ -278,6 +278,16 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
             (int(count), tid),
         )
         new_balance = int(cur.fetchone()[0] or 0)
+        # Dual-write to unified billing_ledger (token_type=CREDIT) — idempotent on billing reference
+        cur.execute(
+            """
+            INSERT INTO billing_ledger
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'CREDIT', %s, 'CREDIT_PURCHASE', %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING;
+            """,
+            (tid, int(count), f"billing:{reference_id}", f"Credit top-up: {count} credits via Flutterwave {tx_id}"),
+        )
         cur.execute("COMMIT;")
         entry = _row_to_dict(row, cur)
         try:
