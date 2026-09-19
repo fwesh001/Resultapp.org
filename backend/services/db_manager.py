@@ -338,6 +338,27 @@ def init_schools_registry() -> None:
               AND COALESCE(s.student_count, 0) > 0;
         """)
         cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS current_term VARCHAR(16) DEFAULT 'Term 1';
+        """)
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS current_session VARCHAR(9);
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET current_term = 'Term 1' WHERE current_term IS NULL OR current_term = '';
+        """)
+        # Backfill current_session from current_academic_session() logic where null
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET current_session = CASE
+                WHEN EXTRACT(MONTH FROM NOW()) >= 9 THEN to_char(NOW(),'YYYY') || '/' || to_char(NOW() + INTERVAL '1 year','YYYY')
+                ELSE to_char(NOW() - INTERVAL '1 year','YYYY') || '/' || to_char(NOW(),'YYYY')
+            END
+            WHERE current_session IS NULL OR current_session = '';
+        """)
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS billing_ledger (
                 id               SERIAL PRIMARY KEY,
                 subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
