@@ -13,7 +13,8 @@ import logging
 import secrets
 import string
 import os
-from typing import Dict, Optional, Any
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any
 
 import psycopg2
 from psycopg2 import sql
@@ -306,6 +307,80 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS new_term_begins VARCHAR(32);
         """)
+        # Credit & Command: spendable token balance (zero-downtime, additive only)
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS credit_balance INTEGER DEFAULT 0;
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET credit_balance = 0
+            WHERE credit_balance IS NULL;
+        """)
+        # One-time migration: paid tenants keep working — convert their
+        # legacy student_count quota into an opening credit balance with a
+        # matching PURCHASE ledger row. Guarded by ledger absence so
+        # replays (and legitimately spent-down balances) are never re-credited.
+        cur.execute(f"""
+            INSERT INTO {CREDIT_LEDGER_TABLE}
+                (subdomain, amount, transaction_type, reference_id, description)
+            SELECT subdomain, student_count, 'PURCHASE',
+                   'backfill:' || subdomain,
+                   'Legacy quota migrated to credit balance'
+            FROM {SCHOOLS_REGISTRY_TABLE} s
+            WHERE s.subscription_status = 'active'
+              AND COALESCE(s.student_count, 0) > 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
+                  WHERE l.subdomain = s.subdomain
+              )
+            ON CONFLICT (reference_id) DO NOTHING;
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE} s
+            SET credit_balance = s.student_count
+            WHERE s.subscription_status = 'active'
+              AND COALESCE(s.credit_balance, 0) = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM {CREDIT_LEDGER_TABLE} l
+                  WHERE l.subdomain = s.subdomain
+              );
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS credit_ledger (
+                id               SERIAL PRIMARY KEY,
+                subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                amount           INTEGER NOT NULL,
+                transaction_type VARCHAR(50) NOT NULL,
+                reference_id     VARCHAR(100) UNIQUE,
+                description      TEXT,
+                created_at       TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_credit_ledger_subdomain
+            ON credit_ledger (subdomain);
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_credit_ledger_created
+            ON credit_ledger (created_at DESC);
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS result_publications (
+                id               SERIAL PRIMARY KEY,
+                subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                student_id       VARCHAR(100) NOT NULL,
+                term             VARCHAR(50) NOT NULL CHECK (term IN ('Term 1', 'Term 2', 'Term 3')),
+                academic_session VARCHAR(50) NOT NULL,
+                published_by     VARCHAR(100),
+                published_at     TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, student_id, term, academic_session)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_publications_lookup
+            ON result_publications (subdomain, student_id, term);
+        """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
             SET subscription_status = 'unpaid'
@@ -402,7 +477,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                   new_term_begins, created_at, updated_at
+                   credit_balance, new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s;
             """,
@@ -421,8 +496,328 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Allocations & Roster — per-tenant directory (Phase: Allocations)
+# Credit & Command — token ledger + publication gate (zero-downtime, additive)
 # ---------------------------------------------------------------------------
+
+CREDIT_LEDGER_TABLE = "credit_ledger"
+RESULT_PUBLICATIONS_TABLE = "result_publications"
+
+#: Free trial credits granted on registration (frictionless onboarding).
+TRIAL_CREDITS = 30
+
+
+def current_academic_session(now: Optional[datetime] = None) -> str:
+    """Derive the academic session label dynamically (YYYY/YYYY+1).
+
+    Nigerian school year starts in September: Sep–Dec belongs to the
+    session starting this year, Jan–Aug belongs to the session that
+    started last year.
+    """
+    ref = now or datetime.now(timezone.utc)
+    if ref.month >= 9:
+        return f"{ref.year}/{ref.year + 1}"
+    return f"{ref.year - 1}/{ref.year}"
+
+
+def get_credit_balance(subdomain: str) -> int:
+    """Return the spendable credit balance for a tenant (0 if unknown)."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT credit_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+            (subdomain,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return 0
+        return int(row[0] or 0)
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch credit balance for '{subdomain}': {e}")
+        return 0
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_credit_ledger(subdomain: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """Return ledger entries for a tenant, newest first."""
+    subdomain = _sanitize_subdomain(subdomain)
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, subdomain, amount, transaction_type, reference_id,
+                   description, created_at
+            FROM {CREDIT_LEDGER_TABLE}
+            WHERE subdomain = %s
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s;
+            """,
+            (subdomain, limit, offset),
+        )
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            else:
+                d["created_at"] = str(d.get("created_at") or "")
+            out.append(d)
+        return out
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch ledger for '{subdomain}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def add_credit_ledger_entry(
+    subdomain: str,
+    amount: int,
+    transaction_type: str,
+    reference_id: Optional[str] = None,
+    description: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Insert an immutable ledger entry. Duplicate reference_id → returns existing row."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {CREDIT_LEDGER_TABLE}
+                (subdomain, amount, transaction_type, reference_id, description)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id, subdomain, amount, transaction_type, reference_id,
+                      description, created_at;
+            """,
+            (subdomain, int(amount), transaction_type, reference_id, description),
+        )
+        row = cur.fetchone()
+        if row is None and reference_id:
+            # Replay with an existing reference — return the original entry.
+            cur.execute(
+                f"""
+                SELECT id, subdomain, amount, transaction_type, reference_id,
+                       description, created_at
+                FROM {CREDIT_LEDGER_TABLE}
+                WHERE reference_id = %s;
+                """,
+                (reference_id,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        d = _row_to_dict(row, cur) if row is not None else {}
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        return d
+    except Exception as e:
+        logger.error(f"[DB] Failed to insert ledger entry for '{subdomain}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[str, Any]:
+    """Grant trial credits to a newly provisioned tenant (INITIAL_GRANT).
+
+    Sets schools.credit_balance and writes the ledger row atomically.
+    Safe to call once per tenant — reference_id makes replays idempotent.
+    """
+    subdomain = _sanitize_subdomain(subdomain)
+    amount = max(0, int(amount or 0))
+    reference_id = f"init:{subdomain}"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {CREDIT_LEDGER_TABLE}
+                (subdomain, amount, transaction_type, reference_id, description)
+            VALUES (%s, %s, 'INITIAL_GRANT', %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id;
+            """,
+            (subdomain, amount, reference_id, f"Trial credit grant upon registration ({amount} credits)"),
+        )
+        inserted = cur.fetchone()
+        if inserted is not None:
+            cur.execute(
+                f"""
+                UPDATE {SCHOOLS_REGISTRY_TABLE}
+                SET credit_balance = COALESCE(credit_balance, 0) + %s,
+                    updated_at = NOW()
+                WHERE subdomain = %s;
+                """,
+                (amount, subdomain),
+            )
+        conn.commit()
+        logger.info(f"[DB] Initial grant of {amount} credits for '{subdomain}' (new={inserted is not None})")
+        return {"subdomain": subdomain, "granted": amount, "new_grant": inserted is not None}
+    except Exception as e:
+        logger.error(f"[DB] Failed to grant initial credits for '{subdomain}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def is_result_published(subdomain: str, student_id: str, term: str, academic_session: str) -> bool:
+    """Check whether a student's report card is published (unlocked) for a term."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT 1 FROM {RESULT_PUBLICATIONS_TABLE}
+            WHERE subdomain = %s AND student_id = %s
+              AND term = %s AND academic_session = %s
+            LIMIT 1;
+            """,
+            (subdomain, student_id, term, academic_session),
+        )
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.error(f"[DB] Failed to check publication for '{subdomain}/{student_id}': {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def publish_student_results(
+    subdomain: str,
+    term: str,
+    academic_session: str,
+    student_ids: List[str],
+    published_by: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Publish report cards, deducting 1 credit per newly published student.
+
+    Re-publishing an already-published (subdomain, student, term, session)
+    row costs 0 credits (ON CONFLICT DO NOTHING + deduction only for
+    newly inserted rows). Row-locks the school row (FOR UPDATE) so
+    concurrent publishes cannot overspend the balance.
+    """
+    subdomain = _sanitize_subdomain(subdomain)
+    unique_ids = sorted({str(s).strip() for s in (student_ids or []) if str(s).strip()})
+    if not unique_ids:
+        raise ValueError("No student_ids provided for publication")
+    batch_ref = f"pub:{subdomain}:{term}:{academic_session}:{len(unique_ids)}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        # Autocommit is ON for superuser connections — use explicit transaction.
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        cur.execute(
+            f"SELECT credit_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (subdomain,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            cur.execute("ROLLBACK;")
+            raise ValueError(f"Unknown tenant '{subdomain}'")
+        balance = int(row[0] or 0)
+        # Determine which students are not yet published (free re-prints excluded).
+        cur.execute(
+            f"""
+            SELECT student_id FROM {RESULT_PUBLICATIONS_TABLE}
+            WHERE subdomain = %s AND term = %s AND academic_session = %s
+              AND student_id = ANY(%s);
+            """,
+            (subdomain, term, academic_session, unique_ids),
+        )
+        already = {r[0] for r in cur.fetchall()}
+        to_publish = [s for s in unique_ids if s not in already]
+        if len(to_publish) > balance:
+            cur.execute("ROLLBACK;")
+            raise ValueError(
+                f"Insufficient credits: need {len(to_publish)}, balance is {balance}"
+            )
+        published_now = 0
+        if to_publish:
+            cur.execute(
+                f"""
+                INSERT INTO {RESULT_PUBLICATIONS_TABLE}
+                    (subdomain, student_id, term, academic_session, published_by)
+                SELECT %s, sid, %s, %s, %s
+                FROM UNNEST(%s::text[]) AS sid
+                ON CONFLICT (subdomain, student_id, term, academic_session) DO NOTHING
+                RETURNING id;
+                """,
+                (subdomain, term, academic_session, published_by, to_publish),
+            )
+            published_now = len(cur.fetchall())
+            if published_now:
+                cur.execute(
+                    f"""
+                    UPDATE {SCHOOLS_REGISTRY_TABLE}
+                    SET credit_balance = credit_balance - %s, updated_at = NOW()
+                    WHERE subdomain = %s
+                    RETURNING credit_balance;
+                    """,
+                    (published_now, subdomain),
+                )
+                balance = int(cur.fetchone()[0] or 0)
+                cur.execute(
+                    f"""
+                    INSERT INTO {CREDIT_LEDGER_TABLE}
+                        (subdomain, amount, transaction_type, reference_id, description)
+                    VALUES (%s, %s, 'PUBLICATION_DEDUCTION', %s, %s);
+                    """,
+                    (
+                        subdomain,
+                        -published_now,
+                        batch_ref,
+                        f"Published {published_now} report card(s) for {term} {academic_session}"
+                        + (f" by {published_by}" if published_by else ""),
+                    ),
+                )
+        cur.execute("COMMIT;")
+        logger.info(
+            f"[DB] Published {published_now} card(s) for '{subdomain}' {term} "
+            f"(skipped {len(already)} already published, balance {balance})"
+        )
+        return {
+            "subdomain": subdomain,
+            "term": term,
+            "academic_session": academic_session,
+            "published_now": published_now,
+            "already_published": sorted(already),
+            "new_balance": balance,
+            "reference_id": batch_ref if published_now else None,
+        }
+    except Exception:
+        try:
+            if conn:
+                with conn.cursor() as rb_cur:
+                    rb_cur.execute("ROLLBACK;")
+        except Exception:
+            pass
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 TENANT_STUDENTS_TABLE = "tenant_students"
 TENANT_STAFF_TABLE = "tenant_staff"
