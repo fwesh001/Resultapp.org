@@ -811,11 +811,13 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
     """Grant trial credits to a newly provisioned tenant (INITIAL_GRANT).
 
     Sets schools.credit_balance and writes the ledger row atomically.
+    Dual-writes to billing_ledger (token_type=CREDIT) for zero-downtime parity.
     Safe to call once per tenant — reference_id makes replays idempotent.
     """
     subdomain = _sanitize_subdomain(subdomain)
     amount = max(0, int(amount or 0))
     reference_id = f"init:{subdomain}"
+    billing_ref = f"billing:init:{subdomain}"
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -831,6 +833,16 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
             (subdomain, amount, reference_id, f"Trial credit grant upon registration ({amount} credits)"),
         )
         inserted = cur.fetchone()
+        # Dual-write to unified ledger (idempotent)
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'CREDIT', %s, 'INITIAL_GRANT', %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING;
+            """,
+            (subdomain, amount, billing_ref, f"Trial credit grant upon registration ({amount} credits)"),
+        )
         if inserted is not None:
             cur.execute(
                 f"""
