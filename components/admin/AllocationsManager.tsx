@@ -143,16 +143,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
     return grouped;
   }, [filteredAllocations]);
 
-  // Prefix for new Admission Nos — uppercased configured id_prefix (e.g. VHS) or fallback to subdomain.
+  // Prefix for new Admission Nos — lowercased configured id_prefix (e.g. vhs) or fallback to subdomain.
   const idPrefix = useMemo(() => {
     const raw = (idPrefixProp || tenantId).trim();
-    return raw ? raw.toUpperCase() : tenantId.toUpperCase();
+    return raw ? raw.toLowerCase() : tenantId.toLowerCase();
   }, [tenantId, idPrefixProp]);
 
   // Keep prefix in sync if school.idPrefix becomes available via props later — no-op for now.
 
   function nextAdmissionNo(prefix: string, existing: Student[]): string {
-    const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(\\d+)$`);
+    const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(\\d+)$`, "i");
     let max = 0;
     for (const s of existing) {
       const m = s.student_id.match(re);
@@ -161,7 +161,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
         if (Number.isFinite(n) && n > max) max = n;
       }
     }
-    // If no prefixed IDs exist yet, fall back to total count + 1 so VHS/001 appears on first create.
+    // If no prefixed IDs exist yet, fall back to total count + 1 so vhs/001 appears on first create.
     const fallback = existing.filter((s) => s.subdomain.toLowerCase() === tenantId.toLowerCase()).length;
     const nextNum = max > 0 ? max + 1 : fallback + 1;
     return `${prefix}/${String(nextNum).padStart(3, "0")}`;
@@ -723,7 +723,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               <Input
                 label="Admission No"
                 value={studentForm.student_id}
-                onChange={(e) => setStudentForm((p) => ({ ...p, student_id: e.target.value.toUpperCase() }))}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const idx = v.indexOf("/");
+                  const lowered = idx > -1 ? v.slice(0, idx).toLowerCase() + v.slice(idx) : v.toLowerCase();
+                  setStudentForm((p) => ({ ...p, student_id: lowered }));
+                }}
                 placeholder={`e.g., ${idPrefix}/001`}
                 disabled={isEditingStudent}
               />
