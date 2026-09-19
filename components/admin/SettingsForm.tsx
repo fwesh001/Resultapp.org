@@ -41,6 +41,8 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       "email",
       "phone",
       "address",
+      "current_term",
+      "current_session",
       "new_term_begins",
       "logo_url",
       "hero_bg_url",
@@ -48,7 +50,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
     ]) {
       const value = formData.get(field);
       if (typeof value === "string") {
-        payload[field] = field === "id_prefix" ? value.trim().toUpperCase() : value.trim();
+        if (field === "id_prefix") payload[field] = value.trim().toUpperCase();
+        else if (field === "current_term" || field === "current_session") payload[field] = value.trim();
+        else payload[field] = value.trim();
       }
     }
 
