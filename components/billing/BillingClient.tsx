@@ -121,96 +121,218 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Billing & Credits</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Billing — Slots & Credits</h1>
         <p className="mt-1 text-sm text-purple-200/60">
-          1 credit = 1 published report card for {schoolName}. Previews and drafts are always free.
+          <span className="font-medium text-white">Slots</span> = student capacity (one-time, tiered) •{" "}
+          <span className="font-medium text-white">Credits</span> = publishing tokens (flat {formatNaira(creditPrice)}/credit) for {schoolName}.
         </p>
       </div>
 
-      {/* Balance card */}
-      <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-purple-200/60">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading balance…
-          </div>
-        ) : error ? (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <div className="flex-1">
-              <span>{error}</span>
-              <button type="button" onClick={() => void fetchCredits()} className="ml-2 font-medium underline underline-offset-4">
-                Retry
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600/20 ring-1 ring-purple-500/20">
-                <Coins className="h-6 w-6 text-purple-300" />
-              </span>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-purple-300/60">Available credits</p>
-                <p className="text-3xl font-bold tracking-tight text-white">{(balance ?? 0).toLocaleString()}</p>
+      {/* Tab switcher */}
+      <div className="flex rounded-full border border-purple-500/15 bg-purple-900/10 p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("slots")}
+          aria-pressed={activeTab === "slots"}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
+            activeTab === "slots"
+              ? "bg-purple-600 text-white shadow"
+              : "text-purple-200/70 hover:text-white"
+          }`}
+        >
+          <Layers className="h-4 w-4" /> Slots (Capacity)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("credits")}
+          aria-pressed={activeTab === "credits"}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
+            activeTab === "credits"
+              ? "bg-purple-600 text-white shadow"
+              : "text-purple-200/70 hover:text-white"
+          }`}
+        >
+          <Coins className="h-4 w-4" /> Credits (Publishing)
+        </button>
+      </div>
+
+      {activeTab === "slots" ? (
+        <>
+          {/* Slots balance card */}
+          <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-purple-200/60">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading slots…
               </div>
-            </div>
-            {(balance ?? 0) < 20 && (
-              <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                Low balance — top up to keep publishing
-              </span>
+            ) : error ? (
+              <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <div className="flex-1">
+                  <span>{error}</span>
+                  <button type="button" onClick={() => void fetchCredits()} className="ml-2 font-medium underline underline-offset-4">
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600/20 ring-1 ring-emerald-500/20">
+                    <Layers className="h-6 w-6 text-emerald-300" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-purple-300/60">Slots remaining (capacity)</p>
+                    <p className="text-3xl font-bold tracking-tight text-white">
+                      {(slotsBalance ?? 0).toLocaleString()}
+                      {slotsUsed !== null && <span className="text-sm font-normal text-purple-300/50"> • {slotsUsed} used</span>}
+                    </p>
+                  </div>
+                </div>
+                {(slotsBalance ?? 0) < 10 && (
+                  <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                    Low slots — top up to add more students
+                  </span>
+                )}
+                <Link
+                  href={`/${tenantId}/admin/allocations`}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white"
+                >
+                  <Plus className="h-4 w-4" /> Manage Roster
+                </Link>
+              </div>
             )}
-            <Link
-              href={`/${tenantId}/admin/results`}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white"
-            >
-              <Plus className="h-4 w-4" /> Go to Command Center
-            </Link>
           </div>
-        )}
-      </div>
 
-      {/* Packages + top-up */}
-      <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
-        <h2 className="text-base font-semibold text-white">Buy credit package</h2>
-        <p className="mt-1 text-sm text-purple-200/60">
-          {formatNaira(pkgTier.pricePerStudent)} per credit
-          {pkgTier.badge ? ` • ${pkgTier.badge}` : " • Standard rate"} — credits never expire.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {PACKAGES.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setPkg(n)}
-              aria-pressed={pkg === n}
-              className={`inline-flex min-h-[44px] items-center rounded-full border px-5 text-sm font-medium transition ${
-                pkg === n
-                  ? "border-purple-500 bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]"
-                  : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-white"
-              }`}
-            >
-              {n.toLocaleString()} credits
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-sm text-purple-200/70">
-          Package total: <span className="font-semibold text-white">{formatNaira(pkgTotal)}</span>
-        </p>
-        <div className="mt-5 rounded-2xl border border-purple-500/10 bg-[#0B0514]/60 p-4 sm:p-5">
-          <BillingCheckout
-            key={pkg}
-            mode="credit"
-            defaultCount={String(pkg)}
-            tenantId={tenantId}
-            schoolName={schoolName}
-            customerEmail={customerEmail}
-            customerName={customerName}
-          />
-        </div>
-        <p className="mt-3 text-center text-xs text-purple-300/40">
-          Secured by Flutterwave • Pay with card, transfer, or USSD • Tenant: <span className="font-mono">{tenantId}</span>
-        </p>
-      </div>
+          {/* Slots packages + top-up (tiered) */}
+          <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+            <h2 className="text-base font-semibold text-white">Buy slot package</h2>
+            <p className="mt-1 text-sm text-purple-200/60">
+              {formatNaira(pkgTier.pricePerStudent)} per slot
+              {pkgTier.badge ? ` • ${pkgTier.badge}` : " • Standard rate"} — tiered: 50-499 ₦100, 500-999 ₦90, 1000+ ₦80.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {SLOT_PACKAGES.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPkg(n)}
+                  aria-pressed={pkg === n}
+                  className={`inline-flex min-h-[44px] items-center rounded-full border px-5 text-sm font-medium transition ${
+                    pkg === n
+                      ? "border-purple-500 bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]"
+                      : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-white"
+                  }`}
+                >
+                  {n.toLocaleString()} slots
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-purple-200/70">
+              Package total: <span className="font-semibold text-white">{formatNaira(pkgTotal)}</span>
+            </p>
+            <div className="mt-5 rounded-2xl border border-purple-500/10 bg-[#0B0514]/60 p-4 sm:p-5">
+              <BillingCheckout
+                key={`slot-${pkg}`}
+                mode="slot"
+                defaultCount={String(pkg)}
+                tenantId={tenantId}
+                schoolName={schoolName}
+                customerEmail={customerEmail}
+                customerName={customerName}
+              />
+            </div>
+            <p className="mt-3 text-center text-xs text-purple-300/40">
+              Secured by Flutterwave • Tiered pricing • Tenant: <span className="font-mono">{tenantId}</span>
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Credits balance card */}
+          <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-purple-200/60">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading credits…
+              </div>
+            ) : error ? (
+              <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <div className="flex-1">
+                  <span>{error}</span>
+                  <button type="button" onClick={() => void fetchCredits()} className="ml-2 font-medium underline underline-offset-4">
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600/20 ring-1 ring-purple-500/20">
+                    <Coins className="h-6 w-6 text-purple-300" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-purple-300/60">Available credits</p>
+                    <p className="text-3xl font-bold tracking-tight text-white">{(balance ?? 0).toLocaleString()}</p>
+                  </div>
+                </div>
+                {(balance ?? 0) < 20 && (
+                  <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                    Low balance — top up to keep publishing
+                  </span>
+                )}
+                <Link
+                  href={`/${tenantId}/admin/results`}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white"
+                >
+                  <Plus className="h-4 w-4" /> Go to Command Center
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Credits packages + top-up (flat 200) */}
+          <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+            <h2 className="text-base font-semibold text-white">Buy credit package</h2>
+            <p className="mt-1 text-sm text-purple-200/60">
+              {formatNaira(creditPrice)} per credit — flat rate, no tiers. Credits never expire.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {CREDIT_PACKAGES.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setCreditPkg(n)}
+                  aria-pressed={creditPkg === n}
+                  className={`inline-flex min-h-[44px] items-center rounded-full border px-5 text-sm font-medium transition ${
+                    creditPkg === n
+                      ? "border-purple-500 bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]"
+                      : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-white"
+                  }`}
+                >
+                  {n.toLocaleString()} credits
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-purple-200/70">
+              Package total: <span className="font-semibold text-white">{formatNaira(creditTotal)}</span>
+            </p>
+            <div className="mt-5 rounded-2xl border border-purple-500/10 bg-[#0B0514]/60 p-4 sm:p-5">
+              <BillingCheckout
+                key={`credit-${creditPkg}`}
+                mode="credit"
+                defaultCount={String(creditPkg)}
+                tenantId={tenantId}
+                schoolName={schoolName}
+                customerEmail={customerEmail}
+                customerName={customerName}
+              />
+            </div>
+            <p className="mt-3 text-center text-xs text-purple-300/40">
+              Secured by Flutterwave • Flat {formatNaira(creditPrice)}/credit • Tenant: <span className="font-mono">{tenantId}</span>
+            </p>
+          </div>
+        </>
+      )}
 
       {/* Ledger history */}
       <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
