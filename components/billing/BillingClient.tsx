@@ -49,12 +49,17 @@ const TYPE_STYLES: Record<string, string> = {
 };
 
 export default function BillingClient({ tenantId, schoolName, customerEmail, customerName }: BillingClientProps) {
+  const [activeTab, setActiveTab] = useState<"slots" | "credits">("slots");
   const [balance, setBalance] = useState<number | null>(null);
+  const [slotsBalance, setSlotsBalance] = useState<number | null>(null);
+  const [slotsUsed, setSlotsUsed] = useState<number | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const [pkg, setPkg] = useState<number>(250);
+  const [creditPkg, setCreditPkg] = useState<number>(100);
+  const [creditPrice, setCreditPrice] = useState<number>(CREDIT_PRICE);
 
   const fetchCredits = useCallback(async () => {
     setLoading(true);
