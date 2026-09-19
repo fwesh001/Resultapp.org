@@ -416,7 +416,15 @@ def get_report_bundle(
     db: Session = Depends(get_db),
 ):
     tid = _validate_tenant_id(tenant_id)
-    sid = (student_id or "").strip()
+    _raw_sid = (student_id or "").strip()
+    # Normalize prefix to lower case (vhs/005) — keep number as-is
+    if "/" in _raw_sid:
+        _pfx, _rest = _raw_sid.split("/", 1)
+        sid = _pfx.lower() + "/" + _rest
+    else:
+        import re as _re_sid
+        _m_sid = _re_sid.match(r"^([A-Za-z]+)(.*)$", _raw_sid)
+        sid = (_m_sid.group(1).lower() + _m_sid.group(2)) if _m_sid else _raw_sid.lower()
     if not sid:
         raise HTTPException(status_code=400, detail="student_id is required")
     term = (term or "").strip()
