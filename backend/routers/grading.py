@@ -398,6 +398,8 @@ def create_template(payload: schemas.GradingTemplateCreate, db: Session = Depend
         name=payload.name.strip(),
         academic_structure=payload.academic_structure,
         behavioral_structure=payload.behavioral_structure,
+        applies_to_classes=[c.strip() for c in (payload.applies_to_classes or []) if c.strip()],
+        is_active=payload.is_active,
     )
     db.add(obj)
     try:
@@ -416,14 +418,12 @@ def create_template(payload: schemas.GradingTemplateCreate, db: Session = Depend
     dependencies=[Depends(verify_grading_secret)],
     summary="List grading templates for a tenant",
 )
-def list_templates(tenant_id: str, db: Session = Depends(get_db)):
+def list_templates(tenant_id: str, include_inactive: bool = False, db: Session = Depends(get_db)):
     tenant_id = tenant_id.strip().lower()
-    rows = (
-        db.query(models.GradingTemplate)
-        .filter(models.GradingTemplate.tenant_id == tenant_id)
-        .order_by(models.GradingTemplate.created_at.desc())
-        .all()
-    )
+    q = db.query(models.GradingTemplate).filter(models.GradingTemplate.tenant_id == tenant_id)
+    if not include_inactive:
+        q = q.filter(models.GradingTemplate.is_active == True)  # noqa: E712
+    rows = q.order_by(models.GradingTemplate.created_at.desc()).all()
     return rows
 
 
@@ -437,6 +437,65 @@ def get_template(tenant_id: str, template_id: int, db: Session = Depends(get_db)
     if not obj or obj.tenant_id != tenant_id.strip().lower():
         raise HTTPException(status_code=404, detail="Template not found")
     return obj
+
+
+@router.put(
+    "/templates/{template_id}",
+    response_model=schemas.GradingTemplateRead,
+    dependencies=[Depends(verify_grading_secret)],
+    summary="Update a grading template (sparse)",
+)
+def update_template(template_id: int, payload: schemas.GradingTemplateUpdate, db: Session = Depends(get_db)):
+    obj = db.get(models.GradingTemplate, template_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if payload.name is not None and payload.name.strip() and payload.name.strip() != obj.name:
+        clash = (
+            db.query(models.GradingTemplate)
+            .filter(
+                models.GradingTemplate.tenant_id == obj.tenant_id,
+                models.GradingTemplate.name == payload.name.strip(),
+                models.GradingTemplate.id != obj.id,
+            )
+            .first()
+        )
+        if clash:
+            raise HTTPException(status_code=409, detail=f"Template '{payload.name.strip()}' already exists for tenant '{obj.tenant_id}'")
+        obj.name = payload.name.strip()
+    if payload.academic_structure is not None:
+        obj.academic_structure = payload.academic_structure
+    if payload.behavioral_structure is not None:
+        obj.behavioral_structure = payload.behavioral_structure
+    if payload.applies_to_classes is not None:
+        obj.applies_to_classes = [c.strip() for c in payload.applies_to_classes if c.strip()]
+    if payload.is_active is not None:
+        obj.is_active = payload.is_active
+
+    try:
+        db.commit()
+        db.refresh(obj)
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Template conflict: {e}") from e
+    logger.info(f"Template {obj.id} '{obj.name}' updated for tenant {obj.tenant_id}")
+    return obj
+
+
+@router.delete(
+    "/templates/{template_id}",
+    dependencies=[Depends(verify_grading_secret)],
+    summary="Soft-delete (disable) a grading template",
+)
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    """Soft-delete: sets is_active=FALSE so historical records keep their FK."""
+    obj = db.get(models.GradingTemplate, template_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Template not found")
+    obj.is_active = False
+    db.commit()
+    logger.info(f"Template {obj.id} '{obj.name}' disabled for tenant {obj.tenant_id}")
+    return {"success": True, "id": obj.id, "is_active": False}
 
 
 # ---------------------------------------------------------------------------
