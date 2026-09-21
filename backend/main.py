@@ -748,6 +748,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Staff auth router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Phase 2: Admin Authentication — per-tenant admin portal
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.admin_auth import router as admin_auth_router
+
+    app.include_router(admin_auth_router)
+    logger.info("[App] Admin auth router mounted (/api/v1/tenant/{tenant_id}/admin/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Admin auth router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Staff Focused Grading — per-tenant score entry
 # ---------------------------------------------------------------------------
 
