@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
   // Optional derived
   const adminNameRaw = String(body.adminName ?? body.admin_name ?? "").trim();
   const adminName = adminNameRaw || adminEmail.split("@")[0] || "";
+  const adminPassword = String(body.adminPassword ?? body.admin_password ?? "");
 
   // ---- Validation (client spec + backend 409/422 parity) ----
   const fieldErrors: Record<string, string> = {};
