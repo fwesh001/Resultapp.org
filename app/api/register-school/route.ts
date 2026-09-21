@@ -170,6 +170,14 @@ export async function POST(req: NextRequest) {
     fieldErrors.adminEmail = "Enter a valid email address";
   }
 
+  if (!adminPassword) {
+    fieldErrors.adminPassword = "Admin password is required";
+  } else if (adminPassword.length < 8) {
+    fieldErrors.adminPassword = "Password must be at least 8 characters";
+  } else if (adminPassword.length > 128) {
+    fieldErrors.adminPassword = "Password must be at most 128 characters";
+  }
+
   if (
     studentCountRaw === "" ||
     studentCountRaw === null ||
@@ -197,6 +205,7 @@ export async function POST(req: NextRequest) {
     school_name: schoolName,
     subdomain: subdomain,
     admin_email: adminEmail,
+    admin_password: adminPassword,
     student_count: studentCount,
   };
   // Include optional only if present (backend treats as optional)
