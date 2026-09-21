@@ -19,7 +19,13 @@ interface TemplateItem {
   id: number;
   tenant_id: string;
   name: string;
-  academic_structure?: { components?: Array<{ items?: unknown[] }> } | null;
+  academic_structure?: {
+    components?: Array<{
+      name?: string;
+      weight?: number | string;
+      items?: Array<{ name?: string; max_score?: number | string; max?: number | string }>;
+    }>;
+  } | null;
   behavioral_structure?: { traits?: string[]; scale?: string[]; scale_labels?: Record<string, string> } | null;
   applies_to_classes?: string[];
   is_active?: boolean;
