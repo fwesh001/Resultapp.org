@@ -2,6 +2,7 @@ import { StudentReportCard } from "@/components/report-card/StudentReportCard";
 import { ReportControlBar } from "@/components/report-card/ReportControlBar";
 import { getTenant } from "@/lib/tenant";
 import { currentAcademicSession } from "@/lib/format";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,22 @@ export default async function ReportPage({
 
   const school = await getTenant(tenantId);
 
+  // Admin preview guard: a signed-in admin for THIS tenant sees the draft
+  // overlay (staff workflow); parents/guests see the Not Published state.
+  let isAdminPreview = false;
+  try {
+    const raw = (await cookies()).get("admin_session")?.value;
+    if (raw) {
+      const session = JSON.parse(raw) as { admin?: { email?: string }; tenant_id?: string };
+      const sessionTenant = String(session?.tenant_id || "").toLowerCase().trim();
+      if (sessionTenant === tenantId && session?.admin?.email) {
+        isAdminPreview = true;
+      }
+    }
+  } catch {
+    isAdminPreview = false;
+  }
+
   // Publication check (server-side — no hydration flash, no client cost).
   let isPublished = false;
   try {
@@ -122,9 +139,12 @@ export default async function ReportPage({
         studentId={studentId}
         term={effectiveTerm}
         isPublished={isPublished}
+        isAdminPreview={isAdminPreview}
         schoolName={school?.name}
         schoolLogoUrl={school?.logoUrl}
         schoolMotto={school?.motto}
+        schoolEmail={school?.email}
+        schoolPhone={school?.phone}
       />
     </div>
   );
