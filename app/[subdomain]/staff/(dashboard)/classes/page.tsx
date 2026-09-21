@@ -245,26 +245,62 @@ export default function MyClassesPage() {
   const decodedSelectedSubject = selected ? safeDecode(selected.subject_name) : "";
 
   return (
-    <div className="flex h-full flex-col bg-[#0B0514] text-white">
+    <div className="flex h-full min-w-0 flex-col overflow-x-hidden bg-[#0B0514] text-white">
       {/* Responsive container: mobile stack, desktop split */}
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* Master List */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden md:flex-row">
+        {/* Master List — collapsible on desktop, stack on mobile */}
         <div
           className={[
-            "flex flex-col border-purple-500/20 bg-[#0B0514]",
-            // Desktop: always visible, 30% width
-            "md:flex md:w-[30%] md:min-w-[280px] md:max-w-[380px] md:border-r md:shrink-0",
+            "flex min-w-0 flex-col border-purple-500/20 bg-[#0B0514]",
+            // Desktop: collapsible rail vs 30% panel
+            classesCollapsed
+              ? "md:flex md:w-14 md:min-w-[3.5rem] md:max-w-[3.5rem] md:border-r md:shrink-0"
+              : "md:flex md:w-[30%] md:min-w-[280px] md:max-w-[380px] md:border-r md:shrink-0",
             // Mobile: full-width when no selection, hidden when selection present
             selected ? "hidden md:flex" : "flex w-full",
           ].join(" ")}
         >
-          <div className="border-b border-purple-500/10 px-4 py-4 sm:px-5">
-            <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight text-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600/20 ring-1 ring-purple-500/20">
-                <BookOpen className="h-4 w-4 text-purple-300" />
+          {classesCollapsed ? (
+            <div className="hidden flex-col items-center gap-3 px-2 py-4 md:flex">
+              <button
+                type="button"
+                onClick={toggleClassesCollapsed}
+                aria-label="Expand My Classes"
+                aria-expanded="false"
+                title="Expand My Classes"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-purple-500/20 bg-purple-900/10 text-purple-200 transition hover:bg-purple-900/20 hover:text-white"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+              <span
+                aria-label={`${allocations.length} classes assigned`}
+                className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-purple-600/20 px-1.5 text-xs font-semibold text-purple-200 ring-1 ring-purple-500/20"
+              >
+                {allocations.length}
               </span>
-              My Classes
-            </h1>
+              <BookOpen className="h-4 w-4 text-purple-300/40" />
+            </div>
+          ) : (
+            <>
+          <div className="border-b border-purple-500/10 px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-2">
+              <h1 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-white">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-600/20 ring-1 ring-purple-500/20">
+                  <BookOpen className="h-4 w-4 text-purple-300" />
+                </span>
+                <span className="truncate">My Classes</span>
+              </h1>
+              <button
+                type="button"
+                onClick={toggleClassesCollapsed}
+                aria-label="Collapse My Classes"
+                aria-expanded="true"
+                title="Collapse My Classes"
+                className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-purple-500/20 bg-purple-900/10 text-purple-200 transition hover:bg-purple-900/20 hover:text-white md:inline-flex"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </div>
             <p className="mt-1 text-xs text-purple-200/60">
               {allocations.length} class{allocations.length !== 1 ? "es" : ""} assigned
             </p>
