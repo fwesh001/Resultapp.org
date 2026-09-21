@@ -276,7 +276,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
             tenantId={tenantId}
             schoolName={schoolName}
             templateId={editing?.id ?? null}
-            classOptions={classOptions}
+            classOptions={classOptions ?? knownClasses}
             initial={
               editing
                 ? {
