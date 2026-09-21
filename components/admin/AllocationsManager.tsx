@@ -788,7 +788,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               <option value="Female">Female</option>
             </select>
           </div>
-          <div className="action-bar-sticky">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
             <Button
               onClick={() => handleCreate("student")}
               disabled={submitting}
@@ -824,7 +824,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               ))}
             </select>
           </div>
-          <div className="action-bar-sticky">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
             <Button
               onClick={() => handleCreate("staff")}
               disabled={submitting}
@@ -841,7 +841,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
       <Modal open={showSubjectModal} onOpenChange={setShowSubjectModal} title="Add Subject" description="Add a single subject to the master list" className="border-purple-500/20 bg-[#0B0514] text-white">
         <div className="space-y-3 pb-28">
           <Input label="Subject Name" value={subjectForm.subject_name} onChange={(e) => setSubjectForm((p) => ({ ...p, subject_name: e.target.value }))} placeholder="e.g., Mathematics" />
-          <div className="action-bar-sticky">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
             <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
             </Button>
@@ -925,7 +925,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
           </div>
 
           <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
-          <div className="action-bar-sticky">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
             <Button
               onClick={() => handleCreate("allocation")}
               disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
