@@ -407,18 +407,6 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           )}
           {hasLogo && <div className="mb-3 h-px w-full bg-slate-200" />}
 
-          {/* Watermark crest — faint, centered, print-visible */}
-          {hasLogo && (
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
-              <img
-                src={rawLogo}
-                alt=""
-                onError={() => setImgError(true)}
-                className="h-80 w-80 object-contain opacity-[0.06] print:opacity-[0.04]"
-              />
-            </div>
-          )}
-
           {/* Top-Center Student Name — uppercase bold, centered, allow wrap */}
           <div className="mb-3 text-center">
             <p className="font-bold uppercase tracking-wide text-slate-900 text-sm md:text-base leading-tight break-words">{displayName.toUpperCase()}</p>
