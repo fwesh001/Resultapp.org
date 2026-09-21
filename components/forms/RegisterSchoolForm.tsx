@@ -123,6 +123,17 @@ export function RegisterSchoolForm() {
       next.adminEmail = "Enter a valid email address";
     }
 
+    if (!values.adminPassword) {
+      next.adminPassword = "Admin password is required";
+    } else if (values.adminPassword.length < 8) {
+      next.adminPassword = "Password must be at least 8 characters";
+    } else if (values.adminPassword.length > 128) {
+      next.adminPassword = "Password must be at most 128 characters";
+    }
+    if (values.adminPasswordConfirm !== values.adminPassword) {
+      next.adminPasswordConfirm = "Passwords do not match";
+    }
+
     const rawCount = values.studentCount.trim();
     const count = parseInt(rawCount, 10);
     if (!rawCount) {
