@@ -104,6 +104,33 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         </p>
       )}
 
+      {/* Tabs */}
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2" role="tablist" aria-label="Settings sections">
+        {(
+          [
+            { id: "profile", label: "Public Profile" },
+            { id: "branding", label: "Report-Card Branding" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={
+              activeTab === t.id
+                ? "rounded-xl bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white"
+                : "rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+            }
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "profile" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Public Profile">
       <div>
         <label
           htmlFor="school-name"
