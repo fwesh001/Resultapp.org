@@ -12,6 +12,9 @@ import {
   ArrowLeft,
   Pencil,
   ChevronLeft,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
