@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/flutterwave";
 import { calculateTieredTotal, calculateCreditTotal, CREDIT_PRICE } from "@/lib/pricing";
 import { revalidateTag } from "next/cache";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Credit top-up API (Credit & Command model).
