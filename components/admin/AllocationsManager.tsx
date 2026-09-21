@@ -789,14 +789,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               <option value="Female">Female</option>
             </select>
           </div>
-          <Button
-            onClick={() => handleCreate("student")}
-            disabled={submitting}
-            className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
-          >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStudent ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {isEditingStudent ? "Save Changes" : "Add Student"}
-          </Button>
+          <div className="action-bar-sticky">
+            <Button
+              onClick={() => handleCreate("student")}
+              disabled={submitting}
+              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStudent ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {isEditingStudent ? "Save Changes" : "Add Student"}
+            </Button>
+          </div>
         </div>
       </Modal>
 
@@ -823,14 +825,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               ))}
             </select>
           </div>
-          <Button
-            onClick={() => handleCreate("staff")}
-            disabled={submitting}
-            className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
-          >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStaff ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {isEditingStaff ? "Save Changes" : "Add Staff"}
-          </Button>
+          <div className="action-bar-sticky">
+            <Button
+              onClick={() => handleCreate("staff")}
+              disabled={submitting}
+              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStaff ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {isEditingStaff ? "Save Changes" : "Add Staff"}
+            </Button>
+          </div>
         </div>
       </Modal>
 
@@ -838,9 +842,11 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
       <Modal open={showSubjectModal} onOpenChange={setShowSubjectModal} title="Add Subject" description="Add a single subject to the master list" className="border-purple-500/20 bg-[#0B0514] text-white">
         <div className="space-y-3">
           <Input label="Subject Name" value={subjectForm.subject_name} onChange={(e) => setSubjectForm((p) => ({ ...p, subject_name: e.target.value }))} placeholder="e.g., Mathematics" />
-          <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
-          </Button>
+          <div className="action-bar-sticky">
+            <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
+            </Button>
+          </div>
         </div>
       </Modal>
 
@@ -919,13 +925,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
             )}
           </div>
 
-          <Button
-            onClick={() => handleCreate("allocation")}
-            disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
-            className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
-          >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
-          </Button>
+          <div className="action-bar-sticky">
+            <Button
+              onClick={() => handleCreate("allocation")}
+              disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
+              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
+            </Button>
+          </div>
           <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
         </div>
       </Modal>
