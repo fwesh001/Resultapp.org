@@ -22,7 +22,12 @@ export default function StaffSidebar({ subdomain, schoolName, onNavigate }: Staf
   const base = `/${subdomain}/staff`;
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
-      <div className="border-b border-purple-500/20 px-5 py-5">
+      <Link
+        href={`/${subdomain}`}
+        onClick={onNavigate}
+        aria-label={`${toTitleCase(schoolName)} school portal`}
+        className="border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
+      >
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
             <GraduationCap className="h-5 w-5 text-purple-300" />
@@ -32,7 +37,7 @@ export default function StaffSidebar({ subdomain, schoolName, onNavigate }: Staf
             <p className="text-xs text-purple-300/60">Staff Portal</p>
           </div>
         </div>
-      </div>
+      </Link>
 
       <nav className="flex-1 space-y-1 p-4">
         {nav.map((item) => {
