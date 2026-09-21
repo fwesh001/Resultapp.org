@@ -302,6 +302,12 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         </p>
       </div>
 
+      </div>
+        </div>
+      )}
+
+      {activeTab === "branding" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
       <UploadField
         id="school-logo-url"
         label="School logo"
