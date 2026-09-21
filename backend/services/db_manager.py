@@ -323,6 +323,15 @@ def init_schools_registry() -> None:
         """)
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS staff_id_prefix VARCHAR(20) DEFAULT 'STAFF/';
+        """)
+        cur.execute(f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET staff_id_prefix = 'STAFF/'
+            WHERE staff_id_prefix IS NULL;
+        """)
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS slots_balance INTEGER DEFAULT 0;
         """)
         cur.execute(f"""
