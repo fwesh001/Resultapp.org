@@ -156,3 +156,85 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Could not reach backend" }, { status: 502 });
   }
 }
+
+// ---------------------------------------------------------------------------
+// PUT – update template (?id=)
+// ---------------------------------------------------------------------------
+export async function PUT(req: NextRequest) {
+  const secret = getSecret();
+  if (!secret) {
+    return NextResponse.json({ success: false, error: "Server misconfigured" }, { status: 500 });
+  }
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id") || "";
+  if (!id) {
+    return NextResponse.json({ success: false, error: "Missing template id" }, { status: 400 });
+  }
+  // Tenant guard: resolve tenant from body for session match
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
+  }
+  const payload = body as Record<string, unknown>;
+  const tenantId = String(payload.tenant_id ?? payload.tenantId ?? "").toLowerCase().trim();
+  if (tenantId) {
+    const guard = await requireAdminSession(tenantId);
+    if (guard) return guard;
+  }
+  const { tenant_id: _t, tenantId: _t2, ...forward } = payload;
+  try {
+    const r = await fetch(buildUrl(`/api/v1/templates/${encodeURIComponent(id)}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify(forward),
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const detail = (data as { detail?: unknown })?.detail ?? (data as { error?: unknown })?.error ?? "Update failed";
+      return NextResponse.json({ success: false, error: String(detail), raw: data }, { status: r.status });
+    }
+    return NextResponse.json(data, { status: 200 });
+  } catch (e) {
+    console.error("[templates proxy PUT] failed", e);
+    return NextResponse.json({ success: false, error: "Could not reach backend" }, { status: 502 });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE – soft-delete (disable) template (?id=&tenant_id=)
+// ---------------------------------------------------------------------------
+export async function DELETE(req: NextRequest) {
+  const secret = getSecret();
+  if (!secret) {
+    return NextResponse.json({ success: false, error: "Server misconfigured" }, { status: 500 });
+  }
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id") || "";
+  const tenantId = (searchParams.get("tenant_id") || searchParams.get("tenantId") || "").toLowerCase().trim();
+  if (!id) {
+    return NextResponse.json({ success: false, error: "Missing template id" }, { status: 400 });
+  }
+  if (tenantId) {
+    const guard = await requireAdminSession(tenantId);
+    if (guard) return guard;
+  }
+  try {
+    const r = await fetch(buildUrl(`/api/v1/templates/${encodeURIComponent(id)}`), {
+      method: "DELETE",
+      headers: { "X-API-SECRET-KEY": secret },
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const detail = (data as { detail?: unknown })?.detail ?? (data as { error?: unknown })?.error ?? "Delete failed";
+      return NextResponse.json({ success: false, error: String(detail), raw: data }, { status: r.status });
+    }
+    return NextResponse.json(data, { status: 200 });
+  } catch (e) {
+    console.error("[templates proxy DELETE] failed", e);
+    return NextResponse.json({ success: false, error: "Could not reach backend" }, { status: 502 });
+  }
+}
