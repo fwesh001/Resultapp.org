@@ -292,12 +292,14 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       name: templateName.trim(),
       academic_structure,
       behavioral_structure,
+      applies_to_classes: appliesTo,
     };
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/templates", {
-        method: "POST",
+      const url = isEditMode ? `/api/templates?id=${templateId}` : "/api/templates";
+      const res = await fetch(url, {
+        method: isEditMode ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -306,13 +308,20 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         const msg = (data as { error?: string; detail?: string })?.error || (data as { detail?: string })?.detail || `Could not save (error ${res.status})`;
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
-      setSuccess(`"${body.name}" is ready to use.`);
-      setTemplateName("");
-      setCategories(defaultCategories());
-      setTraits(DEFAULT_TRAITS);
-      setGrades(defaultGrades());
-      setActiveTab("academic");
-      setTimeout(() => setSuccess(null), 5000);
+      if (isEditMode) {
+        setSuccess(`"${body.name}" updated.`);
+        onSaved?.();
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        setSuccess(`"${body.name}" is ready to use.`);
+        setTemplateName("");
+        setCategories(defaultCategories());
+        setTraits(DEFAULT_TRAITS);
+        setGrades(defaultGrades());
+        setAppliesTo([]);
+        setActiveTab("academic");
+        setTimeout(() => setSuccess(null), 5000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the template. Please try again.");
     } finally {
