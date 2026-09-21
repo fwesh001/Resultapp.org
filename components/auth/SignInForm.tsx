@@ -104,7 +104,13 @@ export default function SignInForm({
       />
 
       {error && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div
+          className={
+            errorCode === "PASSWORD_NOT_SET"
+              ? "rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200"
+              : "flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300"
+          }
+        >
           <div className="flex gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
