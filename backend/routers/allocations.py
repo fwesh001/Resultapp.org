@@ -454,24 +454,50 @@ class BatchSubjectsPayload(BaseModel):
     rows: List[BatchSubjectRow] = Field(..., min_length=1, max_length=2000)
 
 
-def _normalize_student_id(raw: str) -> str:
-    _raw = (raw or "").strip()
-    if "/" in _raw:
-        _pfx, _rest = _raw.split("/", 1)
-        return _pfx.lower() + "/" + _rest
-    import re as _re_n
+def _next_prefixed_ids(cur, prefix: str, table: str, id_col: str, count: int) -> list[str]:
+    """Generate `count` sequential IDs (`PREFIX/001`, …) in ONE scan.
 
-    _m = _re_n.match(r"^([A-Za-z]+)(.*)$", _raw)
-    return (_m.group(1).lower() + _m.group(2)) if _m else _raw.lower()
+    Reads existing IDs with a LIKE scan, resumes from max(trailing_int)+1,
+    and skips taken numbers. O(1) round-trips regardless of batch size.
+    Matching is case-insensitive on the prefix; generated IDs preserve the
+    configured prefix casing (e.g. STAFF/001).
+    """
+    import re as _re_seq
+
+    like_pattern = f"{prefix}/%"
+    cur.execute(
+        f"SELECT {id_col} FROM {table} WHERE {id_col} ILIKE %s;",
+        (like_pattern,),
+    )
+    taken: set[int] = set()
+    prefix_lc = prefix.lower()
+    for (existing_id,) in cur.fetchall():
+        eid = str(existing_id or "")
+        m = _re_seq.match(r"^(.+)/(\d+)$", eid)
+        if m and m.group(1).lower() == prefix_lc:
+            try:
+                taken.add(int(m.group(2)))
+            except ValueError:
+                pass
+    out: list[str] = []
+    n = (max(taken) + 1) if taken else 1
+    while len(out) < count:
+        if n not in taken:
+            out.append(f"{prefix}/{n:03d}")
+            taken.add(n)
+        n += 1
+    return out
 
 
 @router.post("/students/batch", status_code=201, summary="Bulk import students (atomic slot-checked)")
 def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
-    """All-or-nothing student import.
+    """All-or-nothing student import with server-side sequential IDs.
 
-    Validates every row first (422 with per-row errors, nothing written),
-    then runs ONE transaction: SELECT slots_balance FOR UPDATE, reject with
-    402 if used + new_count > balance, else insert + decrement + ledger.
+    Client-supplied IDs are ignored entirely — every row gets the next
+    `{id_prefix}/NNN` from the tenant's configured prefix. Validates every
+    row first (422 with per-row errors, nothing written), then runs ONE
+    transaction: SELECT slots_balance FOR UPDATE, reject with 402 if
+    used + new_count > balance, else insert + decrement + ledger.
     """
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant_exists(tid)
@@ -481,17 +507,13 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         SCHOOLS_REGISTRY_TABLE,
         BILLING_LEDGER_TABLE,
         _connect_as_superuser,
-        _row_to_dict,
     )
     from datetime import datetime
-    import re as _re_seq
 
     # --- Phase 1: validate all rows (no DB writes) ---
     cleaned: list[dict] = []
     row_errors: list[dict] = []
-    seen_ids: set[str] = set()
     for idx, r in enumerate(payload.rows):
-        sid = _normalize_student_id(r.student_id or "")
         name = (r.full_name or "").strip()
         cls = (r.class_name or "").strip()
         gender = (r.gender or "").strip() or None
@@ -502,14 +524,10 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
             errs.append("class_name is required")
         if gender and gender.lower() not in ("male", "female"):
             errs.append("gender must be Male or Female")
-        if sid and sid in seen_ids:
-            errs.append(f"duplicate student_id '{sid}' within batch")
         if errs:
             row_errors.append({"row": idx + 2, "errors": errs})  # +2 = header + 1-index
             continue
-        if sid:
-            seen_ids.add(sid)
-        cleaned.append({"student_id": sid, "full_name": name, "class_name": cls, "gender": gender})
+        cleaned.append({"full_name": name, "class_name": cls, "gender": gender})
     if row_errors:
         raise HTTPException(status_code=422, detail={"message": f"{len(row_errors)} invalid row(s)", "row_errors": row_errors})
 
@@ -522,53 +540,29 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         except Exception:
             pass
 
-        # --- Phase 2: atomic slot guard ---
+        # --- Phase 2: atomic slot guard + prefix read (one locked row) ---
         cur.execute(
-            f"SELECT slots_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
-            (tid,),
+            f"SELECT slots_balance, COALESCE(id_prefix, %s) FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (tid, tid),
         )
         srow = cur.fetchone()
         if srow is None:
             cur.execute("ROLLBACK;")
             raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
         slots = int(srow[0] or 0)
+        id_prefix = (srow[1] or tid).strip().lower() or tid
 
-        cur.execute(f"SELECT student_id FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
-        existing = {str(r[0]).lower() for r in cur.fetchall()}
-        # Auto-assign IDs for blank rows: {tid}/{next:03d} skipping taken numbers
-        taken_nums: set[int] = set()
-        for eid in existing:
-            m = _re_seq.match(rf"^{re.escape(tid)}/(\d+)$", eid)
-            if m:
-                try:
-                    taken_nums.add(int(m.group(1)))
-                except ValueError:
-                    pass
-        next_num = (max(taken_nums) + 1) if taken_nums else 1
-        fresh: list[dict] = []
-        skipped = 0
-        for c in cleaned:
-            if not c["student_id"]:
-                while f"{tid}/{next_num:03d}".lower() in existing or f"{tid}/{next_num:03d}" in seen_ids:
-                    next_num += 1
-                c["student_id"] = f"{tid}/{next_num:03d}"
-                seen_ids.add(c["student_id"])
-                next_num += 1
-            if c["student_id"].lower() in existing:
-                skipped += 1
-                continue
-            existing.add(c["student_id"].lower())
-            fresh.append(c)
-
-        if not fresh:
-            cur.execute("ROLLBACK;")
-            return {
-                "type": "students_batch",
-                "inserted": 0,
-                "skipped": skipped,
-                "requested": len(payload.rows),
-                "slots_remaining": slots,
+        # --- Phase 3: assign sequential IDs (O(1) scan) ---
+        new_ids = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", len(cleaned))
+        fresh = [
+            {
+                "student_id": nid,
+                "full_name": c["full_name"],
+                "class_name": c["class_name"],
+                "gender": c["gender"],
             }
+            for c, nid in zip(cleaned, new_ids)
+        >
 
         cur.execute(f"SELECT COUNT(*) FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
         used = int(cur.fetchone()[0] or 0)
