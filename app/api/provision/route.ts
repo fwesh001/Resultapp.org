@@ -70,6 +70,9 @@ interface ProvisionBody {
   phone?: string;
   studentCount?: number | string;
   student_count?: number | string;
+  // Phase 2 — optional admin password (paid flow may not have it; NULL → setup flow)
+  adminPassword?: string;
+  admin_password?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +258,15 @@ export async function POST(req: NextRequest) {
   );
 
   // ---- Step C: Proxy to FastAPI Droplet ----
-  const fastApiPayload = {
+  // Phase 2: forward admin password when the client supplied one (paid form).
+  const adminPasswordRaw =
+    (meta.adminPassword as string) ||
+    (meta.admin_password as string) ||
+    body.adminPassword ||
+    body.admin_password ||
+    "";
+  const adminPassword = String(adminPasswordRaw);
+  const fastApiPayload: Record<string, unknown> = {
     school_name: schoolName,
     subdomain: subdomain,
     admin_email: adminEmail,
@@ -263,6 +274,9 @@ export async function POST(req: NextRequest) {
     phone_number: phoneNumber || undefined,
     student_count: studentCount,
   };
+  if (adminPassword && adminPassword.length >= 8 && adminPassword.length <= 128) {
+    fastApiPayload.admin_password = adminPassword;
+  }
 
   // Local testing mock: bypass FastAPI if PROVISION_API_URL contains localhost
   if (provisionUrl.includes("localhost") || process.env.PROVISION_API_URL?.includes("localhost")) {
