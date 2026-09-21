@@ -120,7 +120,14 @@ export default function AdminSidebar({
         })}
       </nav>
 
-      <div className="border-t border-purple-500/20 p-4">
+      <div className="space-y-1 border-t border-purple-500/20 p-4">
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+        >
+          <LogOut className="h-4 w-4" /> Sign out
+        </button>
         <Link
           href={`/${subdomain}`}
           onClick={onNavigate}
