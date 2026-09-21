@@ -420,13 +420,27 @@ export default function MyClassesPage() {
                         {bundle ? `${bundle.students.length} student${bundle.students.length !== 1 ? "s" : ""}` : "Roster"} • Term: {activeTerm}
                       </p>
                     </div>
-                    <Link
-                      href={`/${tenantId}/staff/grading/${encodeURIComponent(selected.class_name)}/${encodeURIComponent(selected.subject_name)}?term=${encodeURIComponent(activeTerm)}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit Grades
-                    </Link>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {classesCollapsed && (
+                        <button
+                          type="button"
+                          onClick={toggleClassesCollapsed}
+                          aria-label="Expand My Classes"
+                          title="Show My Classes"
+                          className="hidden items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-900/10 px-3 py-2 text-sm font-medium text-purple-200 transition hover:bg-purple-900/20 hover:text-white md:inline-flex"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                          Classes
+                        </button>
+                      )}
+                      <Link
+                        href={`/${tenantId}/staff/grading/${encodeURIComponent(selected.class_name)}/${encodeURIComponent(selected.subject_name)}?term=${encodeURIComponent(activeTerm)}`}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit Grades
+                      </Link>
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -488,11 +502,11 @@ export default function MyClassesPage() {
                   </div>
                 )}
                 {!rosterLoading && !rosterError && bundle && bundle.students.length > 0 && (
-                  <div className="overflow-hidden rounded-xl border border-purple-500/20 bg-purple-900/[0.04] backdrop-blur">
-                    {/* Scroll wrappers: horizontal + vertical — max-h-[65vh] keeps layout stable */}
-                    <div className="overflow-x-auto">
+                  <div className="min-w-0 overflow-hidden rounded-xl border border-purple-500/20 bg-purple-900/[0.04] backdrop-blur">
+                    {/* Scroll wrappers: horizontal + vertical — max-h keeps layout stable, scroll stays inside card */}
+                    <div className="max-w-full overflow-x-auto">
                       <div className="max-h-[65vh] overflow-y-auto">
-                        <table className="min-w-[720px] w-full text-left text-sm">
+                        <table className="w-max min-w-full text-left text-sm md:min-w-[720px]">
                           <thead className="sticky top-0 z-20 bg-[#0B0514] text-xs uppercase tracking-wide text-purple-300/60">
                             <tr>
                               <th className="px-3 py-3 font-medium border-b border-purple-500/10 whitespace-nowrap">
