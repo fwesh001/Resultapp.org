@@ -409,11 +409,11 @@ export default function MyClassesPage() {
               </div>
 
               {/* Header Bar */}
-              <div className="border-b border-purple-500/10 px-4 py-4 sm:px-6">
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-lg font-bold tracking-tight text-white">
+              <div className="min-w-0 border-b border-purple-500/10 px-4 py-4 sm:px-6">
+                <div className="flex min-w-0 flex-col gap-3">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-bold tracking-tight text-white">
                         {decodedSelectedClass} • {decodedSelectedSubject}
                       </h2>
                       <p className="mt-1 text-xs text-purple-200/60">
