@@ -297,7 +297,7 @@ export function RegisterSchoolForm() {
           type="button"
           onClick={() => {
             setSuccessData(null);
-            setValues({ schoolName: "", subdomain: "", adminEmail: "", studentCount: "" });
+            setValues({ schoolName: "", subdomain: "", adminEmail: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "" });
             setErrors({});
           }}
           className="mt-3 text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
@@ -380,6 +380,32 @@ export function RegisterSchoolForm() {
         error={errors.adminEmail}
         required
         autoComplete="email"
+        disabled={isSubmitting}
+      />
+
+      {/* Admin Password — Phase 2 admin portal credential */}
+      <Input
+        label="Admin Password"
+        name="adminPassword"
+        type="password"
+        placeholder="Minimum 8 characters"
+        value={values.adminPassword}
+        onChange={(e) => handleChange("adminPassword", e.target.value)}
+        error={errors.adminPassword}
+        required
+        autoComplete="new-password"
+        disabled={isSubmitting}
+      />
+      <Input
+        label="Confirm Admin Password"
+        name="adminPasswordConfirm"
+        type="password"
+        placeholder="Repeat your password"
+        value={values.adminPasswordConfirm}
+        onChange={(e) => handleChange("adminPasswordConfirm", e.target.value)}
+        error={errors.adminPasswordConfirm}
+        required
+        autoComplete="new-password"
         disabled={isSubmitting}
       />
 
