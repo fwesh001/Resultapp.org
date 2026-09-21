@@ -275,6 +275,7 @@ export function SchoolRegistrationForm() {
           schoolName: values.schoolName.trim(),
           subdomain: values.subdomain.trim(),
           adminName: values.adminName.trim(),
+          adminPassword: values.adminPassword,
           studentCount: count,
           pricePerStudent: tierPrice,
           source: "registration_form",
