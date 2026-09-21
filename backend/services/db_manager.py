@@ -345,6 +345,12 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS current_session VARCHAR(9);
         """)
+        # Phase 2: Admin Authentication — per-tenant admin credential (nullable so
+        # pre-existing schools keep working; login treats NULL as "not set up yet").
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS admin_password_hash VARCHAR(255);
+        """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
             SET current_term = 'Term 1' WHERE current_term IS NULL OR current_term = '';
@@ -486,51 +492,103 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        cur.execute(
-            f"""
-            INSERT INTO {SCHOOLS_REGISTRY_TABLE}
-                (subdomain, school_name, email, phone, address, city, state, country,
-                 logo_url, hero_bg_url, motto, proprietor_name, registration_number,
-                 is_verified, is_active, subscription_plan, subscription_status, student_count)
-            VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (subdomain) DO UPDATE SET
-                school_name = EXCLUDED.school_name,
-                email = EXCLUDED.email,
-                phone = EXCLUDED.phone,
-                address = EXCLUDED.address,
-                city = EXCLUDED.city,
-                state = EXCLUDED.state,
-                country = EXCLUDED.country,
-                logo_url = EXCLUDED.logo_url,
-                hero_bg_url = EXCLUDED.hero_bg_url,
-                motto = EXCLUDED.motto,
-                proprietor_name = EXCLUDED.proprietor_name,
-                registration_number = EXCLUDED.registration_number,
-                updated_at = NOW()
-            RETURNING *;
-            """,
-            (
-                subdomain,
-                school_name,
-                kwargs.get("email"),
-                kwargs.get("phone"),
-                kwargs.get("address"),
-                kwargs.get("city"),
-                kwargs.get("state"),
-                kwargs.get("country", "NG"),
-                kwargs.get("logo_url"),
-                kwargs.get("hero_bg_url"),
-                kwargs.get("motto"),
-                kwargs.get("proprietor_name"),
-                kwargs.get("registration_number"),
-                kwargs.get("is_verified", False),
-                kwargs.get("is_active", True),
-                kwargs.get("subscription_plan"),
-                kwargs.get("subscription_status", "unpaid"),
-                kwargs.get("student_count"),
-            ),
-        )
+        admin_password_hash = kwargs.get("admin_password_hash")
+        if admin_password_hash:
+            cur.execute(
+                f"""
+                INSERT INTO {SCHOOLS_REGISTRY_TABLE}
+                    (subdomain, school_name, email, phone, address, city, state, country,
+                     logo_url, hero_bg_url, motto, proprietor_name, registration_number,
+                     is_verified, is_active, subscription_plan, subscription_status, student_count,
+                     admin_password_hash)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                     crypt(%s, gen_salt('bf')))
+                ON CONFLICT (subdomain) DO UPDATE SET
+                    school_name = EXCLUDED.school_name,
+                    email = EXCLUDED.email,
+                    phone = EXCLUDED.phone,
+                    address = EXCLUDED.address,
+                    city = EXCLUDED.city,
+                    state = EXCLUDED.state,
+                    country = EXCLUDED.country,
+                    logo_url = EXCLUDED.logo_url,
+                    hero_bg_url = EXCLUDED.hero_bg_url,
+                    motto = EXCLUDED.motto,
+                    proprietor_name = EXCLUDED.proprietor_name,
+                    registration_number = EXCLUDED.registration_number,
+                    admin_password_hash = EXCLUDED.admin_password_hash,
+                    updated_at = NOW()
+                RETURNING *;
+                """,
+                (
+                    subdomain,
+                    school_name,
+                    kwargs.get("email"),
+                    kwargs.get("phone"),
+                    kwargs.get("address"),
+                    kwargs.get("city"),
+                    kwargs.get("state"),
+                    kwargs.get("country", "NG"),
+                    kwargs.get("logo_url"),
+                    kwargs.get("hero_bg_url"),
+                    kwargs.get("motto"),
+                    kwargs.get("proprietor_name"),
+                    kwargs.get("registration_number"),
+                    kwargs.get("is_verified", False),
+                    kwargs.get("is_active", True),
+                    kwargs.get("subscription_plan"),
+                    kwargs.get("subscription_status", "unpaid"),
+                    kwargs.get("student_count"),
+                    admin_password_hash,
+                ),
+            )
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO {SCHOOLS_REGISTRY_TABLE}
+                    (subdomain, school_name, email, phone, address, city, state, country,
+                     logo_url, hero_bg_url, motto, proprietor_name, registration_number,
+                     is_verified, is_active, subscription_plan, subscription_status, student_count)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (subdomain) DO UPDATE SET
+                    school_name = EXCLUDED.school_name,
+                    email = EXCLUDED.email,
+                    phone = EXCLUDED.phone,
+                    address = EXCLUDED.address,
+                    city = EXCLUDED.city,
+                    state = EXCLUDED.state,
+                    country = EXCLUDED.country,
+                    logo_url = EXCLUDED.logo_url,
+                    hero_bg_url = EXCLUDED.hero_bg_url,
+                    motto = EXCLUDED.motto,
+                    proprietor_name = EXCLUDED.proprietor_name,
+                    registration_number = EXCLUDED.registration_number,
+                    updated_at = NOW()
+                RETURNING *;
+                """,
+                (
+                    subdomain,
+                    school_name,
+                    kwargs.get("email"),
+                    kwargs.get("phone"),
+                    kwargs.get("address"),
+                    kwargs.get("city"),
+                    kwargs.get("state"),
+                    kwargs.get("country", "NG"),
+                    kwargs.get("logo_url"),
+                    kwargs.get("hero_bg_url"),
+                    kwargs.get("motto"),
+                    kwargs.get("proprietor_name"),
+                    kwargs.get("registration_number"),
+                    kwargs.get("is_verified", False),
+                    kwargs.get("is_active", True),
+                    kwargs.get("subscription_plan"),
+                    kwargs.get("subscription_status", "unpaid"),
+                    kwargs.get("student_count"),
+                ),
+            )
         row = cur.fetchone()
         conn.commit()
         return _row_to_dict(row, cur)
@@ -569,6 +627,76 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"[DB] Failed to fetch school '{subdomain}': {e}")
         return None
+    finally:
+        if conn:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Admin Authentication helpers (hash never leaves the DB layer)
+# ---------------------------------------------------------------------------
+
+
+def set_admin_password_hash(subdomain: str, plaintext_password: str) -> bool:
+    """Hash (pgcrypto bcrypt) and store the admin password for a tenant.
+
+    Returns True on success. Raises ValueError for bad input.
+    Used at provision time and by the one-time setup flow for
+    pre-existing schools whose hash is NULL.
+    """
+    subdomain = _sanitize_subdomain(subdomain)
+    if not plaintext_password or len(plaintext_password) < 8:
+        raise ValueError("Admin password must be at least 8 characters")
+    if len(plaintext_password) > 128:
+        raise ValueError("Admin password must be at most 128 characters")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET admin_password_hash = crypt(%s, gen_salt('bf')),
+                updated_at = NOW()
+            WHERE subdomain = %s;
+            """,
+            (plaintext_password, subdomain),
+        )
+        if cur.rowcount == 0:
+            raise ValueError(f"Unknown tenant '{subdomain}'")
+        conn.commit()
+        logger.info(f"[DB] Admin password set for '{subdomain}'")
+        return True
+    except (ValueError, RuntimeError):
+        raise
+    except Exception as e:
+        logger.error(f"[DB] Failed to set admin password for '{subdomain}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def admin_password_is_set(subdomain: str) -> bool:
+    """True if the tenant has an admin password hash (False for legacy NULL rows)."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT admin_password_hash FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+            (subdomain,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return False
+        return row[0] is not None
+    except Exception as e:
+        logger.error(f"[DB] Failed to check admin password state for '{subdomain}': {e}")
+        return False
     finally:
         if conn:
             conn.close()
