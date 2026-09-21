@@ -331,14 +331,18 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         fallbackPreview="/bento-csv-accent.avif"
         fallbackNote="Previewing default platform artwork — upload to replace it."
       />
+        </div>
+      )}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isSubmitting ? "Saving..." : "Save Changes"}
-      </button>
+      <div className="action-bar-sticky rounded-b-xl">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
     </form>
   );
 }
