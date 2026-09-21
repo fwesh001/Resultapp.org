@@ -38,7 +38,7 @@ export default function AdminSidebar({
       icon: Users,
     },
     {
-      label: "Command Center",
+      label: "Results",
       href: `/${subdomain}/admin/results`,
       icon: ClipboardCheck,
     },
@@ -68,7 +68,12 @@ export default function AdminSidebar({
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
-      <div className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5">
+      <Link
+        href={`/${subdomain}`}
+        onClick={onNavigate}
+        aria-label={`${toTitleCase(schoolName)} school portal`}
+        className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
+      >
         <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
           <GraduationCap className="h-5 w-5 text-purple-300" />
         </span>
@@ -78,7 +83,7 @@ export default function AdminSidebar({
           </p>
           <p className="text-xs text-purple-300/50">Admin Portal</p>
         </div>
-      </div>
+      </Link>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {nav.map((item) => {
