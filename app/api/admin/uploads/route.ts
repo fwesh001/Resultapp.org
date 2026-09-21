@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Tenant branding uploads require an admin session; the "shared" bucket
+  // stays public for bug-report attachments from unauthenticated pages.
+  if (subdomain !== "shared") {
+    const guard = await requireAdminSession(subdomain);
+    if (guard) return guard;
+  }
+
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json(
       { success: false, error: "No file provided" },
