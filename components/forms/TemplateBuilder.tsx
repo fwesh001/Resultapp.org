@@ -738,6 +738,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         <span className="font-semibold text-white">{templateName.trim() || "Your template"}</span>
         {" — "}
         {categories.length} scoring section{categories.length === 1 ? "" : "s"} ({totalWeight}% total) • {itemCount} assessment item{itemCount === 1 ? "" : "s"} • {traits.length} trait{traits.length === 1 ? "" : "s"} • Ratings: {grades.map((g) => g.grade || "–").join(", ") || "none yet"}
+        {appliesTo.length > 0 ? ` • Classes: ${appliesTo.join(", ")}` : " • All classes"}
       </div>
 
       {/* Errors / success */}
