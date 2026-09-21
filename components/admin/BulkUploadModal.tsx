@@ -416,7 +416,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         )}
 
         {/* Sticky footer */}
-        <div className="action-bar-sticky flex items-center justify-end gap-2 rounded-b-xl">
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex items-center justify-end gap-2 rounded-b-xl border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4">
           <Button
             type="button"
             variant="outline"
