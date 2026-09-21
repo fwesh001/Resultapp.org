@@ -69,6 +69,7 @@ export default function SignInForm({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setErrorCode((data as { code?: string })?.code ?? null);
         throw new Error((data as { error?: string })?.error || `Login failed (${res.status})`);
       }
       router.push(redirectTo ?? `/${tenantId}/staff`);
