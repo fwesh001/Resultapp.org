@@ -177,6 +177,7 @@ export function RegisterSchoolForm() {
       schoolName: values.schoolName.trim(),
       subdomain: values.subdomain.trim().toLowerCase(),
       adminEmail: values.adminEmail.trim().toLowerCase(),
+      adminPassword: values.adminPassword,
       studentCount: parseInt(values.studentCount.trim(), 10),
       // Credit & Command: fixed 30-credit trial grant (frictionless onboarding).
       initial_credits: 30,
