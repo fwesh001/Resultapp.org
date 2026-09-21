@@ -675,6 +675,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
               Powered by ResultApp.org
             </a>
           </div>
+          </div>
         </div>
       </div>
 
@@ -706,6 +707,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           @page { size: A4 portrait; margin: 5mm; }
           .print\\:hidden { display: none !important; }
           #report-card { box-shadow: none !important; border: none !important; padding: 0 !important; }
+          #report-card img { max-width: 100%; break-inside: avoid; }
           tr { break-inside: avoid; }
         }
         @media print {
