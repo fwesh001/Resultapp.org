@@ -99,12 +99,6 @@ export default async function StaffDashboardPage({
           ))}
         </div>
       )}
-
-      <div className="rounded-xl border border-purple-500/10 bg-purple-900/[0.03] p-4">
-        <p className="text-xs leading-5 text-purple-300/40">
-          Tip: Your workload is derived from <span className="font-mono text-purple-200">tenant_allocations</span> where <span className="font-mono">staff_name = {staff.full_name}</span>. Contact Admin to update assignments.
-        </p>
-      </div>
     </div>
   );
 }
