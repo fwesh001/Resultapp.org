@@ -106,7 +106,7 @@ export default async function AdminDashboardPage({
     },
     {
       label: "View Reports",
-      href: `/${subdomain}/staff`,
+      href: `/${subdomain}/admin/results`,
       icon: FileBarChart,
     },
   ];
