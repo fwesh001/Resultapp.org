@@ -272,7 +272,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
       size="lg"
       className="border-purple-500/20 bg-[#0B0514] text-white"
     >
-      <div className="space-y-4">
+      <div className="space-y-4 pb-28">
         <Button
           type="button"
           variant="outline"
