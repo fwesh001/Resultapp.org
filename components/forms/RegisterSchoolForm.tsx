@@ -211,6 +211,7 @@ export function RegisterSchoolForm() {
           if (data.fieldErrors.subdomain) mapped.subdomain = data.fieldErrors.subdomain;
           if (data.fieldErrors.schoolName) mapped.schoolName = data.fieldErrors.schoolName;
           if (data.fieldErrors.adminEmail) mapped.adminEmail = data.fieldErrors.adminEmail;
+          if (data.fieldErrors.adminPassword) mapped.adminPassword = data.fieldErrors.adminPassword;
           if (data.fieldErrors.studentCount) mapped.studentCount = data.fieldErrors.studentCount;
           if (Object.keys(mapped).length > 0) setErrors((prev) => ({ ...prev, ...mapped }));
         }
