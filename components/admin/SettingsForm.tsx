@@ -253,6 +253,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       {activeTab === "branding" && (
         <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
+      <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <label
           htmlFor="id-prefix"
@@ -275,8 +276,32 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           className={inputClassName}
         />
         <p className="mt-1 text-xs text-purple-300/40">
-          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">vhs/001</span>). Auto-filled when adding students; existing IDs are never changed.
+          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">vhs/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
         </p>
+      </div>
+
+      <div>
+        <label
+          htmlFor="staff-id-prefix"
+          className="block text-sm font-medium text-purple-200"
+        >
+          Staff ID Prefix
+        </label>
+        <input
+          id="staff-id-prefix"
+          name="staff_id_prefix"
+          type="text"
+          autoComplete="off"
+          defaultValue={school?.staffIdPrefix ?? "STAFF/"}
+          placeholder="e.g. STAFF/"
+          pattern="^[A-Za-z0-9/-]{2,20}$"
+          maxLength={20}
+          className={inputClassName}
+        />
+        <p className="mt-1 text-xs text-purple-300/40">
+          Prefix for new Staff IDs (e.g. <span className="font-mono text-purple-200">STAFF/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
+        </p>
+      </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
