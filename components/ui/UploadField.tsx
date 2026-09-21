@@ -136,7 +136,7 @@ export default function UploadField({
   onUploaded,
   onFileSelect,
 }: UploadFieldProps) {
-  const [mode, setMode] = useState<"url" | "upload">("url");
+  const [mode, setMode] = useState<"url" | "upload">("upload");
   const [value, setValue] = useState(defaultValue);
   const [previewUrl, setPreviewUrl] = useState(
     defaultValue || fallbackPreview || "",
