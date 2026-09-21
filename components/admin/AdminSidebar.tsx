@@ -26,6 +26,18 @@ export default function AdminSidebar({
   onNavigate,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch {
+      // Cookie clear is best-effort; still navigate to login.
+    }
+    onNavigate?.();
+    router.push(`/${subdomain}/admin/login`);
+    router.refresh();
+  }
 
   const nav = [
     {
