@@ -780,10 +780,14 @@ def get_report_bundle(
         # Build school payload for header / resumption
         school_address = (school_info.get("address") or "").strip() if school_info else ""
         raw_new_term = (school_info.get("new_term_begins") or "").strip() if school_info else ""
+        school_logo = (school_info.get("logo_url") or "").strip() if school_info else ""
+        school_motto = (school_info.get("motto") or "").strip() if school_info else ""
         school_payload = {
             "school_name": school_info.get("school_name") if school_info else None,
             "address": school_address or None,
             "new_term_begins": raw_new_term or None,
+            "logo_url": school_logo or None,
+            "motto": school_motto or None,
         }
 
         return {
