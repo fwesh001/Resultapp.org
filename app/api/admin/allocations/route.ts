@@ -46,6 +46,9 @@ export async function GET(req: NextRequest) {
   const tenantId = resolveTenantId(req);
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
 
+  const guardGet = await requireAdminSession(tenantId);
+  if (guardGet) return guardGet;
+
   const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster`;
   try {
     const r = await fetch(url, { headers: { "X-API-SECRET-KEY": secret }, cache: "no-store" });
