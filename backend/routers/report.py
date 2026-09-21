@@ -163,13 +163,27 @@ def _validate_tenant_id(tenant_id: str) -> str:
     return tid
 
 
-def _get_active_template(db: Session, tid: str):
-    return (
+def _get_active_template(db: Session, tid: str, class_name: Optional[str] = None):
+    """Newest active template bound to the class, else newest global template."""
+    rows = (
         db.query(models.GradingTemplate)
-        .filter(models.GradingTemplate.tenant_id == tid)
+        .filter(
+            models.GradingTemplate.tenant_id == tid,
+            models.GradingTemplate.is_active == True,  # noqa: E712
+        )
         .order_by(models.GradingTemplate.created_at.desc())
-        .first()
+        .all()
     )
+    if not rows:
+        return None
+    cls = (class_name or "").strip().lower()
+    if cls:
+        for t in rows:
+            bound = getattr(t, "applies_to_classes", None) or []
+            norm = {str(c).strip().lower() for c in bound if str(c).strip()}
+            if not norm or cls in norm:
+                return t
+    return rows[0]
 
 
 def _template_payload(template) -> Optional[Dict[str, Any]]:
@@ -438,7 +452,7 @@ def get_report_bundle(
     if school_info is None:
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
 
-    # Fetch template (may be null)
+    # Fetch template (may be null) — re-resolved with class below once known
     template = _get_active_template(db, tid)
     template_payload = _template_payload(template)
     academic_structure = getattr(template, "academic_structure", None) if template else None
@@ -477,6 +491,11 @@ def get_report_bundle(
 
         if student is not None:
             class_name = student.get("class_name")
+            # Re-resolve template with class binding once the class is known
+            template = _get_active_template(db, tid, class_name)
+            template_payload = _template_payload(template)
+            academic_structure = getattr(template, "academic_structure", None) if template else None
+            grouped_template = _build_grouped_template(academic_structure)
             # Fetch classmates for ranking
             try:
                 cur.execute(
