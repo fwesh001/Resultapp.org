@@ -333,6 +333,22 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {isEditMode && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+          <span>
+            Editing <span className="font-semibold text-white">{initial?.name ?? templateName}</span>
+          </span>
+          {onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="rounded-full border border-amber-500/30 px-3 py-1 text-xs font-medium hover:bg-amber-500/10"
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
+      )}
       {/* School badge */}
       <div className="flex items-center gap-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white">
@@ -352,6 +368,74 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         onChange={(e) => setTemplateName(e.target.value)}
         required
       />
+
+      {/* Applies to classes */}
+      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
+        <h3 className="text-sm font-semibold text-white">Applies to classes</h3>
+        <p className="mt-1 text-xs text-purple-300/50">
+          Leave empty to use this template for every class, or bind it to specific classes (e.g. JSS 1 uses one template, SSS 3 uses another).
+        </p>
+        {(classOptions ?? []).length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {(classOptions ?? []).map((c) => {
+              const selected = appliesTo.some((x) => x.toLowerCase() === c.toLowerCase());
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() =>
+                    setAppliesTo((prev) =>
+                      selected ? prev.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...prev, c],
+                    )
+                  }
+                  aria-pressed={selected}
+                  className={
+                    selected
+                      ? "rounded-full bg-purple-600 px-2.5 py-1 text-xs font-medium text-white"
+                      : "rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200 hover:bg-purple-900/30"
+                  }
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="mt-3 flex gap-2">
+          <input
+            value={classInput}
+            onChange={(e) => setClassInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addClassBinding();
+              }
+            }}
+            placeholder="Add a class, e.g. JSS 1"
+            className={`${inputClass} h-9 flex-1`}
+          />
+          <Button type="button" onClick={addClassBinding} size="sm" className="rounded-full bg-purple-600 text-white hover:bg-purple-500">
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        </div>
+        {appliesTo.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {appliesTo.map((c) => (
+              <span key={c} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
+                {c}
+                <button
+                  type="button"
+                  onClick={() => setAppliesTo((p) => p.filter((x) => x !== c))}
+                  className="ml-1 rounded-full bg-white/10 p-0.5 hover:bg-white/20"
+                  aria-label={`Remove ${c}`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2">
