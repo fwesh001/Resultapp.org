@@ -319,13 +319,23 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
 
   const showMissingStudent = !student;
   const isNotFound = showMissingStudent && !loading && !error;
-  // Draft overlay only for real students who are unpublished; unknown students get a hard Not Found guide-rail instead.
-  const showDraftOverlay = isLocked && !isNotFound;
   const displayName = student?.full_name ?? "— Unknown Student —";
   const displayClass = student?.class_name ?? "—";
   const displayGender = student?.gender ? student.gender.charAt(0).toUpperCase() + student.gender.slice(1).toLowerCase() : "—";
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
+
+  // State matrix (evaluated in order):
+  // 1. No student -> Not Found. 2. Unpublished + no grades -> Term Not
+  // Available. 3. Unpublished + grades + parent -> Result Not Published.
+  // 4. Unpublished + grades + admin -> normal card + draft overlay.
+  // 5. Published -> normal card (even with empty grades: official Absent).
+  const hasGrades = grades.length > 0;
+  const isEmptyTerm = !isNotFound && !isPublished && !hasGrades;
+  const isWithheld = !isNotFound && !isPublished && hasGrades && !isAdminPreview;
+  // Draft overlay only for admin previews (or legacy no-grade drafts for admins);
+  // parents never see blurred cards — they get full-page states instead.
+  const showDraftOverlay = isLocked && !isNotFound && !isEmptyTerm && !isWithheld;
 
   // Not-found guide-rail: no blur, no draft CTA — hard error with Contact Admin only.
   if (isNotFound) {
