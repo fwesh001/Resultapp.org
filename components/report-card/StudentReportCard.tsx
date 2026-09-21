@@ -337,39 +337,71 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // parents never see blurred cards — they get full-page states instead.
   const showDraftOverlay = isLocked && !isNotFound && !isEmptyTerm && !isWithheld;
 
-  // Not-found guide-rail: no blur, no draft CTA — hard error with Contact Admin only.
+  // Not-found guide-rail: hard error with portal actions only (no history back —
+  // direct links from email/WhatsApp have no browser history).
   if (isNotFound) {
     return (
-      <div className="mx-auto max-w-4xl">
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-center shadow-xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
-            <AlertCircle className="h-6 w-6 text-amber-400" />
-          </div>
-          <h2 className="mt-4 text-lg font-bold text-amber-900">Student Not Found</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-amber-800">
+      <ReportErrorState
+        title="Student Not Found"
+        description={
+          <>
             No student record found for{" "}
             <span className="font-mono font-semibold text-amber-900">{studentId}</span> in{" "}
             <span className="font-semibold">{schoolName || tenantId}</span>. Check the admission number format (
             <span className="font-mono">e.g. VHS/001</span>) or contact the school admin.
-          </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button
-              onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = `/${tenantId}`))}
-              variant="outline"
-              className="gap-2 rounded-full border-amber-500/20 bg-white text-amber-900 hover:bg-amber-50"
-            >
-              Go Back
-            </Button>
-            <Button
-              onClick={() => (window.location.href = `/${tenantId}`)}
-              className="gap-2 rounded-full bg-amber-600 text-white hover:bg-amber-500"
-            >
-              Contact Admin
-            </Button>
-          </div>
-          <p className="mt-4 text-xs text-amber-700/60">Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</p>
-        </div>
-      </div>
+          </>
+        }
+        icon="not-found"
+        actions={[
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+          { label: "Contact Admin", href: `/${tenantId}` },
+        ]}
+        footnote={
+          <>Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</>
+        }
+      />
+    );
+  }
+
+  // Future/empty term: student exists but nothing recorded for this term.
+  if (isEmptyTerm) {
+    return (
+      <ReportErrorState
+        title="Term Not Available"
+        description={
+          <>
+            Results for <span className="font-semibold">{term}</span> are not yet available for{" "}
+            <span className="font-semibold">{displayName}</span>.
+          </>
+        }
+        icon="term"
+        actions={[{ label: "Back to Portal", href: `/${tenantId}`, variant: "outline" }]}
+      />
+    );
+  }
+
+  // Withheld from parents: grades exist but nothing published (admins keep overlay).
+  if (isWithheld) {
+    return (
+      <ReportErrorState
+        title="Result Not Published"
+        description={
+          <>
+            This result has not been published yet. If you believe this is an error, or to resolve
+            pending clearances, please contact the school administration.
+            {(schoolEmail || schoolPhone) && (
+              <>
+                <br />
+                {schoolEmail && <span className="font-medium">{schoolEmail}</span>}
+                {schoolEmail && schoolPhone && " • "}
+                {schoolPhone && <span className="font-medium">{schoolPhone}</span>}
+              </>
+            )}
+          </>
+        }
+        icon="unpublished"
+        actions={[{ label: "Contact Admin", href: `/${tenantId}` }]}
+      />
     );
   }
 
