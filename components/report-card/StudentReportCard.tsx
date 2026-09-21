@@ -98,9 +98,17 @@ interface StudentReportCardProps {
    * Everything else is a free draft preview (blurred, unprintable).
    */
   isPublished?: boolean;
+  /**
+   * True when the viewer holds a valid admin_session for THIS tenant
+   * (resolved server-side in the report page). Admins keep the draft
+   * overlay workflow; parents get the Not Published full-page state.
+   */
+  isAdminPreview?: boolean;
   schoolName?: string | null;
   schoolLogoUrl?: string | null;
   schoolMotto?: string | null;
+  schoolEmail?: string | null;
+  schoolPhone?: string | null;
 }
 
 function gradeFromTotal(total: number): string {
@@ -147,7 +155,7 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isPublished = false, schoolName, schoolLogoUrl, schoolMotto }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, isPublished = false, isAdminPreview = false, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone }: StudentReportCardProps) {
   // Draft gate: anything not confirmed in result_publications renders as a
   // free preview (blurred, watermarked, unprintable). Re-prints cost 0
   // because the gate is the publication row, not a subscription flag.
