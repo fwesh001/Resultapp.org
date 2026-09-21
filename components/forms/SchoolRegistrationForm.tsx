@@ -310,6 +310,7 @@ export function SchoolRegistrationForm() {
                 subdomain: values.subdomain.trim(),
                 adminEmail: values.adminEmail.trim(),
                 adminName: values.adminName.trim(),
+                adminPassword: values.adminPassword,
                 phoneNumber: values.phone.trim(),
                 studentCount: count,
               }),
