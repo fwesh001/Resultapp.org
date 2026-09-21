@@ -20,6 +20,9 @@ export interface SignInFormProps {
   signingInLabel?: string;
   footerHint?: string;
   requiredErrorMessage?: string;
+  /** When the backend reports PASSWORD_NOT_SET, show a setup link to this href. */
+  setupHref?: string;
+  setupLinkLabel?: string;
 }
 
 /**
