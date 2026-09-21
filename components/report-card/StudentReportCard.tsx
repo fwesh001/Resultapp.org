@@ -359,8 +359,20 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
       <div className={showDraftOverlay ? "blur-[3px] select-none pointer-events-none opacity-60 print:blur-none print:opacity-100" : ""}>
         <div
           id="report-card"
-          className="mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
+          className="relative mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
         >
+          {/* Watermark crest — faint, centered, print-visible, behind content */}
+          {hasLogo && (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+              <img
+                src={rawLogo}
+                alt=""
+                onError={() => setImgError(true)}
+                className="h-80 w-80 object-contain opacity-[0.06] print:opacity-[0.04]"
+              />
+            </div>
+          )}
+          <div className="relative z-10">
           {/* Print-only draft stamp — unpublished cards can never pass as official */}
           {showDraftOverlay && (
             <div className="mb-2 hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-800 print:block">
