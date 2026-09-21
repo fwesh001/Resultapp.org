@@ -40,12 +40,24 @@ class GradingTemplateCreate(BaseModel):
         default=None,
         examples=[{"traits": ["Punctuality", "Neatness"], "scale": ["A", "B", "C", "D", "E"]}],
     )
+    # Class binding: empty list = applies to all classes.
+    applies_to_classes: list[str] = Field(default_factory=list)
+    is_active: bool = Field(default=True)
 
 
 class GradingTemplateRead(GradingTemplateCreate):
     id: int
     created_at: datetime
+    updated_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class GradingTemplateUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    academic_structure: Optional[dict[str, Any]] = None
+    behavioral_structure: Optional[dict[str, Any]] = None
+    applies_to_classes: Optional[list[str]] = None
+    is_active: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
