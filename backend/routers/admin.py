@@ -143,6 +143,7 @@ class TenantProfileUpdate(BaseModel):
     hero_bg_url: Optional[str] = None
     new_term_begins: Optional[str] = None
     id_prefix: Optional[str] = None
+    staff_id_prefix: Optional[str] = None
     current_term: Optional[str] = None
     current_session: Optional[str] = None
 
@@ -191,12 +192,21 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             raise HTTPException(status_code=400, detail="id_prefix must be 2-20 chars (a-z, 0-9, /, -)")
         else:
             data["id_prefix"] = raw_prefix
+    if "staff_id_prefix" in data:
+        # Uppercase preserved (e.g. STAFF/) — mirrors student prefix format rules.
+        raw_sprefix = (data["staff_id_prefix"] or "").strip()
+        if not raw_sprefix:
+            data["staff_id_prefix"] = None
+        elif not __import__("re").match(r"^[A-Za-z0-9/-]{2,20}$", raw_sprefix):
+            raise HTTPException(status_code=400, detail="staff_id_prefix must be 2-20 chars (A-Z, 0-9, /, -)")
+        else:
+            data["staff_id_prefix"] = raw_sprefix
     # Normalize blank optional strings to NULL so cleared fields don't store ""
     for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "current_term", "current_session")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
