@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search } from "lucide-react";
+import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { BulkUploadModal, type BulkEntity } from "@/components/admin/BulkUploadModal";
 
 // Types mirrors backend tables
 type Student = { id: string; subdomain: string; student_id: string; full_name: string; class_name: string; gender: string | null; created_at: string };
@@ -50,6 +51,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showAllocModal, setShowAllocModal] = useState(false);
+  const [bulkEntity, setBulkEntity] = useState<BulkEntity | null>(null);
 
   // forms
   const [studentForm, setStudentForm] = useState({ student_id: "", full_name: "", class_name: "", gender: "" });
@@ -451,9 +453,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Registered Students ({filteredStudents.length}/{students.length})</h3>
-                <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
-                  <Plus className="h-4 w-4" /> Add Student
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => setBulkEntity("students")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                    <Upload className="h-4 w-4" /> Bulk Upload
+                  </Button>
+                  <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                    <Plus className="h-4 w-4" /> Add Student
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
@@ -512,9 +519,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Staff Members ({filteredStaff.length}/{staff.length})</h3>
-                <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
-                  <Plus className="h-4 w-4" /> Add Staff
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => setBulkEntity("staff")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                    <Upload className="h-4 w-4" /> Bulk Upload
+                  </Button>
+                  <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                    <Plus className="h-4 w-4" /> Add Staff
+                  </Button>
+                </div>
               </div>
               <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
                 <table className="w-full text-sm">
@@ -583,6 +595,9 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     Quick Add Standard Subjects
+                  </Button>
+                  <Button onClick={() => setBulkEntity("subjects")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                    <Upload className="h-4 w-4" /> Bulk Upload
                   </Button>
                   <Button onClick={() => setShowSubjectModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                     <Plus className="h-4 w-4" /> Add Subject
