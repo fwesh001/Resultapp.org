@@ -63,7 +63,25 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
 
   useEffect(() => {
     void fetchTemplates();
-  }, [fetchTemplates]);
+    // Best-effort class suggestions for the applies-to picker
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json().catch(() => ({}))) as {
+          students?: Array<{ class_name?: string }>;
+        };
+        const names = Array.from(
+          new Set((data.students ?? []).map((s) => String(s.class_name ?? "").trim()).filter(Boolean)),
+        ).sort();
+        setKnownClasses(names);
+      } catch {
+        // suggestions are optional
+      }
+    })();
+  }, [fetchTemplates, tenantId]);
 
   async function handleToggleActive(t: TemplateItem) {
     setActingId(t.id);
