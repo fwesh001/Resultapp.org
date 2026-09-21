@@ -2,22 +2,27 @@ import SignInForm from "@/components/auth/SignInForm";
 import { getTenant } from "@/lib/tenant";
 import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
-import { GraduationCap, ShieldCheck, ArrowLeft } from "lucide-react";
+import { GraduationCap, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Admin portal sign-in — reuses the shared SignInForm template.
- * Backend wiring (`/api/admin/login`) is a follow-up; UI matches staff login.
+ * Admin portal sign-in (public — no AdminShell sidebar).
+ * Legacy schools with NULL `admin_password_hash` get a friendly setup
+ * banner (via ?setup=required or the PASSWORD_NOT_SET error state) linking
+ * to the one-time password setup page instead of a bare 401.
  */
 export default async function AdminLoginPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ subdomain: string }>;
+  searchParams?: Promise<{ setup?: string }>;
 }) {
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
   const school = await getTenant(subdomain);
+  const showSetupBanner = (await searchParams)?.setup === "required";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
@@ -45,6 +50,16 @@ export default async function AdminLoginPage({
             Sign in to manage <span className="font-medium text-white">{school?.name ? toTitleCase(school.name) : subdomain}</span>.
           </p>
 
+          {showSetupBanner && (
+            <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+              <KeyRound className="h-4 w-4 shrink-0" />
+              <span>
+                Please set up your admin password using the reset link below — no password
+                is registered for this school yet.
+              </span>
+            </div>
+          )}
+
           <div className="mt-6">
             <SignInForm
               tenantId={subdomain}
@@ -53,6 +68,8 @@ export default async function AdminLoginPage({
               identifierLabel="Admin ID or Email"
               identifierPlaceholder="e.g., admin@school.edu"
               footerHint="Admin sign-in: Admin ID or Email + Password"
+              setupHref={`/${subdomain}/admin/setup`}
+              setupLinkLabel="Set up your admin password"
             />
           </div>
 
