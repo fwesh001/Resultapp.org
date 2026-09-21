@@ -420,6 +420,374 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
 
 
 # ---------------------------------------------------------------------------
+# BATCH — bulk ingestion from parsed spreadsheets (JSON rows)
+# ---------------------------------------------------------------------------
+
+class BatchStudentRow(BaseModel):
+    student_id: Opt[str] = None
+    full_name: Opt[str] = None
+    class_name: Opt[str] = None
+    gender: Opt[str] = None
+
+
+class BatchStaffRow(BaseModel):
+    staff_id: Opt[str] = None
+    full_name: Opt[str] = None
+    email: Opt[str] = None
+    phone: Opt[str] = None
+    role: Opt[str] = None
+
+
+class BatchSubjectRow(BaseModel):
+    subject_name: Opt[str] = None
+
+
+class BatchStudentsPayload(BaseModel):
+    rows: List[BatchStudentRow] = Field(..., min_length=1, max_length=2000)
+
+
+class BatchStaffPayload(BaseModel):
+    rows: List[BatchStaffRow] = Field(..., min_length=1, max_length=2000)
+
+
+class BatchSubjectsPayload(BaseModel):
+    rows: List[BatchSubjectRow] = Field(..., min_length=1, max_length=2000)
+
+
+def _normalize_student_id(raw: str) -> str:
+    _raw = (raw or "").strip()
+    if "/" in _raw:
+        _pfx, _rest = _raw.split("/", 1)
+        return _pfx.lower() + "/" + _rest
+    import re as _re_n
+
+    _m = _re_n.match(r"^([A-Za-z]+)(.*)$", _raw)
+    return (_m.group(1).lower() + _m.group(2)) if _m else _raw.lower()
+
+
+@router.post("/students/batch", status_code=201, summary="Bulk import students (atomic slot-checked)")
+def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
+    """All-or-nothing student import.
+
+    Validates every row first (422 with per-row errors, nothing written),
+    then runs ONE transaction: SELECT slots_balance FOR UPDATE, reject with
+    402 if used + new_count > balance, else insert + decrement + ledger.
+    """
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        BILLING_LEDGER_TABLE,
+        _connect_as_superuser,
+        _row_to_dict,
+    )
+    from datetime import datetime
+    import re as _re_seq
+
+    # --- Phase 1: validate all rows (no DB writes) ---
+    cleaned: list[dict] = []
+    row_errors: list[dict] = []
+    seen_ids: set[str] = set()
+    for idx, r in enumerate(payload.rows):
+        sid = _normalize_student_id(r.student_id or "")
+        name = (r.full_name or "").strip()
+        cls = (r.class_name or "").strip()
+        gender = (r.gender or "").strip() or None
+        errs: list[str] = []
+        if not name:
+            errs.append("full_name is required")
+        if not cls:
+            errs.append("class_name is required")
+        if gender and gender.lower() not in ("male", "female"):
+            errs.append("gender must be Male or Female")
+        if sid and sid in seen_ids:
+            errs.append(f"duplicate student_id '{sid}' within batch")
+        if errs:
+            row_errors.append({"row": idx + 2, "errors": errs})  # +2 = header + 1-index
+            continue
+        if sid:
+            seen_ids.add(sid)
+        cleaned.append({"student_id": sid, "full_name": name, "class_name": cls, "gender": gender})
+    if row_errors:
+        raise HTTPException(status_code=422, detail={"message": f"{len(row_errors)} invalid row(s)", "row_errors": row_errors})
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        try:
+            cur.execute("BEGIN;")
+        except Exception:
+            pass
+
+        # --- Phase 2: atomic slot guard ---
+        cur.execute(
+            f"SELECT slots_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (tid,),
+        )
+        srow = cur.fetchone()
+        if srow is None:
+            cur.execute("ROLLBACK;")
+            raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
+        slots = int(srow[0] or 0)
+
+        cur.execute(f"SELECT student_id FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
+        existing = {str(r[0]).lower() for r in cur.fetchall()}
+        # Auto-assign IDs for blank rows: {tid}/{next:03d} skipping taken numbers
+        taken_nums: set[int] = set()
+        for eid in existing:
+            m = _re_seq.match(rf"^{re.escape(tid)}/(\d+)$", eid)
+            if m:
+                try:
+                    taken_nums.add(int(m.group(1)))
+                except ValueError:
+                    pass
+        next_num = (max(taken_nums) + 1) if taken_nums else 1
+        fresh: list[dict] = []
+        skipped = 0
+        for c in cleaned:
+            if not c["student_id"]:
+                while f"{tid}/{next_num:03d}".lower() in existing or f"{tid}/{next_num:03d}" in seen_ids:
+                    next_num += 1
+                c["student_id"] = f"{tid}/{next_num:03d}"
+                seen_ids.add(c["student_id"])
+                next_num += 1
+            if c["student_id"].lower() in existing:
+                skipped += 1
+                continue
+            existing.add(c["student_id"].lower())
+            fresh.append(c)
+
+        if not fresh:
+            cur.execute("ROLLBACK;")
+            return {
+                "type": "students_batch",
+                "inserted": 0,
+                "skipped": skipped,
+                "requested": len(payload.rows),
+                "slots_remaining": slots,
+            }
+
+        cur.execute(f"SELECT COUNT(*) FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
+        used = int(cur.fetchone()[0] or 0)
+        need = len(fresh)
+        if used + need > slots:
+            cur.execute("ROLLBACK;")
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    f"Insufficient slots. Need {need} for this batch, "
+                    f"balance is {slots} ({used} slots used). "
+                    f"Top up slots or reduce the batch — nothing was imported."
+                ),
+            )
+
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s)"] * len(fresh))
+        flat: list = []
+        for c in fresh:
+            flat.extend([tid, c["student_id"], c["full_name"], c["class_name"], c["gender"]])
+        cur.execute(
+            f"""
+            INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender)
+            VALUES {placeholders}
+            ON CONFLICT (subdomain, student_id) DO NOTHING
+            RETURNING id;
+            """,
+            tuple(flat),
+        )
+        inserted = len(cur.fetchall())
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = slots_balance - %s, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (inserted, tid),
+        )
+        bal_row = cur.fetchone()
+        ref = f"slot_batch:{tid}:{int(datetime.now().timestamp())}:{inserted}"
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description)
+            VALUES (%s, 'SLOT', %s, 'SLOT_CONSUMPTION', %s, %s)
+            ON CONFLICT (reference_id) DO NOTHING;
+            """,
+            (tid, -inserted, ref, f"Bulk import: {inserted} student slot(s)"),
+        )
+        cur.execute("COMMIT;")
+        return {
+            "type": "students_batch",
+            "inserted": inserted,
+            "skipped": skipped + (need - inserted),
+            "requested": len(payload.rows),
+            "slots_remaining": int(bal_row[0] or 0) if bal_row else slots - inserted,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        msg = str(e)
+        if "duplicate key" in msg.lower() or "unique" in msg.lower():
+            raise HTTPException(status_code=409, detail=msg)
+        logger.exception(f"[roster] students batch failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk student import failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/staff/batch", status_code=201, summary="Bulk import staff")
+def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+
+    from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser
+
+    allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
+    cleaned: list[dict] = []
+    row_errors: list[dict] = []
+    seen: set[str] = set()
+    for idx, r in enumerate(payload.rows):
+        sid = (r.staff_id or "").strip()
+        name = (r.full_name or "").strip()
+        role = (r.role or "").strip()
+        errs: list[str] = []
+        if not sid:
+            errs.append("staff_id is required")
+        if not name:
+            errs.append("full_name is required")
+        if role not in allowed_roles:
+            errs.append(f"role must be one of {', '.join(sorted(allowed_roles))}")
+        if sid and sid.lower() in seen:
+            errs.append(f"duplicate staff_id '{sid}' within batch")
+        if errs:
+            row_errors.append({"row": idx + 2, "errors": errs})
+            continue
+        seen.add(sid.lower())
+        cleaned.append({
+            "staff_id": sid,
+            "full_name": name,
+            "email": (r.email or "").strip() or None,
+            "phone": (r.phone or "").strip() or None,
+            "role": role,
+        })
+    if row_errors:
+        raise HTTPException(status_code=422, detail={"message": f"{len(row_errors)} invalid row(s)", "row_errors": row_errors})
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))"] * len(cleaned))
+        flat: list = []
+        for c in cleaned:
+            flat.extend([tid, c["staff_id"], c["full_name"], c["email"], c["phone"], c["role"]])
+        cur.execute(
+            f"""
+            INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
+            VALUES {placeholders}
+            ON CONFLICT (subdomain, staff_id) DO NOTHING
+            RETURNING id;
+            """,
+            tuple(flat),
+        )
+        inserted = len(cur.fetchall())
+        conn.commit()
+        return {
+            "type": "staff_batch",
+            "inserted": inserted,
+            "skipped": len(cleaned) - inserted,
+            "requested": len(payload.rows),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[roster] staff batch failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk staff import failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/subjects/batch", status_code=201, summary="Bulk import subjects")
+def batch_create_subjects(tenant_id: str, payload: BatchSubjectsPayload):
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+
+    from services.db_manager import TENANT_SUBJECTS_TABLE, _connect_as_superuser
+
+    seen: dict[str, str] = {}
+    for r in payload.rows:
+        n = (r.subject_name or "").strip()
+        if n and n.lower() not in seen:
+            seen[n.lower()] = n
+    uniq = list(seen.values())
+    if not uniq:
+        raise HTTPException(status_code=422, detail="No valid subject_name rows")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        placeholders = ", ".join(["(%s, %s)"] * len(uniq))
+        flat: list[str] = []
+        for n in uniq:
+            flat.extend([tid, n])
+        cur.execute(
+            f"""
+            INSERT INTO {TENANT_SUBJECTS_TABLE} (subdomain, subject_name)
+            VALUES {placeholders}
+            ON CONFLICT (subdomain, subject_name) DO NOTHING
+            RETURNING id;
+            """,
+            tuple(flat),
+        )
+        inserted = len(cur.fetchall())
+        conn.commit()
+        return {
+            "type": "subjects_batch",
+            "inserted": inserted,
+            "skipped": len(uniq) - inserted,
+            "requested": len(payload.rows),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[roster] subjects batch failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk subject import failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # PATCH — update student/staff (partial, ID immutable)
 # ---------------------------------------------------------------------------
 
