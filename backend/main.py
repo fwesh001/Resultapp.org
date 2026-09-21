@@ -184,6 +184,7 @@ class TenantMetadata(BaseModel):
     credit_balance: int = 0
     slots_balance: int = 0
     id_prefix: Optional[str] = None
+    staff_id_prefix: Optional[str] = None
     current_term: Optional[str] = None
     current_session: Optional[str] = None
     new_term_begins: Optional[str] = None
@@ -369,7 +370,7 @@ def upgrade_tenant(tenant_id: str, payload: TenantUpgradeRequest):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      credit_balance, slots_balance, id_prefix, new_term_begins, created_at, updated_at;
+                      credit_balance, slots_balance, id_prefix, staff_id_prefix, new_term_begins, created_at, updated_at;
             """,
             (int(payload.student_count), tid),
         )
