@@ -507,18 +507,12 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
             </div>
           </div>
 
-          {showMissingStudent && (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              No student record found for admission number <span className="font-mono font-semibold">{studentId}</span> in <span className="font-semibold">{tenantId}</span>. Please check the admission number or contact the school admin.
-            </div>
-          )}
-
           {/* Tightened Academic Records Table */}
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wide text-slate-800">Academic Records</h2>
             {grades.length === 0 ? (
               <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                No academic records found for <span className="font-mono font-semibold">{studentId}</span> in {term}. {student ? "Scores have not been entered yet." : ""}
+                No academic records found for <span className="font-mono font-semibold">{studentId}</span> in {term}. This published record carries no scores (e.g. absent).
               </p>
             ) : (
               <div className="mt-2 overflow-x-auto">
