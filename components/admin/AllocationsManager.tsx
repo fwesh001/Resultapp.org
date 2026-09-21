@@ -268,8 +268,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
     let payload: Record<string, unknown> = { tenant_id: tenantId, type };
 
     if (type === "student") {
-      if (!studentForm.student_id.trim() || !studentForm.full_name.trim() || !studentForm.class_name.trim()) {
-        setError("Admission No, Full Name and Class are required");
+      if (!studentForm.full_name.trim() || !studentForm.class_name.trim()) {
+        setError("Full Name and Class are required");
         setSubmitting(false);
         return;
       }
@@ -764,8 +764,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
           </div>
           {!isEditingStudent && (
             <p className="text-xs text-purple-300/40">
-              Prefix <span className="font-mono text-purple-200">{idPrefix}</span> from Settings → auto-filled as{" "}
-              <span className="font-mono text-purple-200">{nextAdmissionNo(idPrefix, students)}</span>. Change it in Admin → Settings.
+              Leave blank to auto-assign the next Admission No (<span className="font-mono text-purple-200">{idPrefix}/…</span> from Settings). Existing IDs are never changed.
             </p>
           )}
           <Input label="Full Name" value={studentForm.full_name} onChange={(e) => setStudentForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Ada Okoro" />
