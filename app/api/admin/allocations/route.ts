@@ -75,6 +75,9 @@ export async function POST(req: NextRequest) {
   const tenantId = resolveTenantId(req, body);
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenant_id (subdomain)" }, { status: 400 });
 
+  const guardPost = await requireAdminSession(tenantId);
+  if (guardPost) return guardPost;
+
   // ensure body has subdomain-compatible field? FastAPI expects tenant_id in path, not body
   const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster`;
   try {
@@ -122,6 +125,9 @@ export async function PATCH(req: NextRequest) {
   const rType = type || String((body.type as string) || "").trim();
   const rId = id || String((body.id as string) || "").trim();
   if (!rType || !rId) return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
+
+  const guardPatch = await requireAdminSession(tenantId);
+  if (guardPatch) return guardPatch;
 
   // Forward only updatable fields (strip tenant_id/type/id)
   const { tenant_id, tenantId: _tid, type: _t, id: _id, ...payload } = body as Record<string, unknown>;
