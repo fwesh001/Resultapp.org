@@ -40,16 +40,20 @@ export default function SignInForm({
   signingInLabel = "Signing in…",
   footerHint = "Dual-login: Staff ID or Email + PIN",
   requiredErrorMessage = "Staff ID or Email and PIN are required",
+  setupHref,
+  setupLinkLabel = "Set up your admin password",
 }: SignInFormProps) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorCode(null);
 
     if (!identifier.trim() || !password.trim()) {
       setError(requiredErrorMessage);
