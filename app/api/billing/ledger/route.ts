@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 function getProxySecret(): string {
   return (
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
 
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
+  const guard = await requireAdminSession(tenantId);
+  if (guard) return guard;
   if (tokenType && !["SLOT", "CREDIT"].includes(tokenType)) {
     return NextResponse.json({ success: false, error: "token_type must be SLOT or CREDIT" }, { status: 400 });
   }
