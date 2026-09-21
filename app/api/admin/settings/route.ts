@@ -41,6 +41,7 @@ const PROFILE_FIELDS = [
   "logo_url",
   "hero_bg_url",
   "id_prefix",
+  "staff_id_prefix",
 ] as const;
 
 export async function PATCH(req: NextRequest) {
@@ -77,6 +78,9 @@ export async function PATCH(req: NextRequest) {
       const raw = record[field];
       if (field === "id_prefix" && typeof raw === "string") {
         payload[field] = raw.trim().toLowerCase();
+      } else if (field === "staff_id_prefix" && typeof raw === "string") {
+        // Uppercase preserved (e.g. STAFF/) — backend validates format.
+        payload[field] = raw.trim();
       } else {
         payload[field] =
           typeof raw === "string" ? (raw as string).trim() : raw;
