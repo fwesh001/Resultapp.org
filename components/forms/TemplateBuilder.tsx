@@ -138,18 +138,28 @@ const inputClass =
 // Component
 // ---------------------------------------------------------------------------
 
-export function TemplateBuilder({ tenantId, schoolName }: TemplateBuilderProps) {
+export function TemplateBuilder({ tenantId, schoolName, templateId, initial, classOptions, onSaved, onCancelEdit }: TemplateBuilderProps) {
+  const isEditMode = templateId != null;
   const [activeTab, setActiveTab] = useState<"academic" | "traits">("academic");
-  const [templateName, setTemplateName] = useState("");
-  const [categories, setCategories] = useState<Category[]>(defaultCategories);
-  const [traits, setTraits] = useState<string[]>(DEFAULT_TRAITS);
-  const [grades, setGrades] = useState<Grade[]>(defaultGrades);
+  const [templateName, setTemplateName] = useState(initial?.name ?? "");
+  const [categories, setCategories] = useState<Category[]>(() => categoriesFromInitial(initial?.academic_structure) ?? defaultCategories);
+  const [traits, setTraits] = useState<string[]>(() => traitsFromInitial(initial?.behavioral_structure) ?? DEFAULT_TRAITS);
+  const [grades, setGrades] = useState<Grade[]>(() => gradesFromInitial(initial?.behavioral_structure) ?? defaultGrades);
+  const [appliesTo, setAppliesTo] = useState<string[]>(() => [...(initial?.applies_to_classes ?? [])]);
+  const [classInput, setClassInput] = useState("");
   const [traitInput, setTraitInput] = useState("");
   const [gradeInput, setGradeInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  function addClassBinding() {
+    const v = classInput.trim();
+    if (!v || appliesTo.some((c) => c.toLowerCase() === v.toLowerCase())) return;
+    setAppliesTo((prev) => [...prev, v]);
+    setClassInput("");
+  }
 
   // derived — academic weights
   const totalWeight = useMemo(
