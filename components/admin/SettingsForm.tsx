@@ -222,6 +222,35 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <p className="mt-1 text-xs text-purple-300/40">Shown beneath the school name on the report header.</p>
       </div>
 
+      <UploadField
+        id="school-logo-url"
+        label="School logo"
+        name="logo_url"
+        defaultValue={school?.logoUrl ?? ""}
+        extraFields={{ subdomain: school?.slug ?? "", kind: "logo" }}
+        helper="Shown in the navbar and landing hero."
+        preview="image"
+        previewVariant="square"
+      />
+
+      <UploadField
+        id="school-hero-bg-url"
+        label="Hero background image"
+        name="hero_bg_url"
+        defaultValue={school?.heroBgUrl ?? ""}
+        extraFields={{ subdomain: school?.slug ?? "", kind: "hero" }}
+        helper="Displayed behind the landing hero."
+        preview="image"
+        previewVariant="wide"
+        fallbackPreview="/bento-csv-accent.avif"
+        fallbackNote="Previewing default platform artwork — upload to replace it."
+      />
+
+      </div>
+      )}
+
+      {activeTab === "branding" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
       <div>
         <label
           htmlFor="id-prefix"
