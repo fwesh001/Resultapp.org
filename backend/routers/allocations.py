@@ -262,8 +262,8 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             class_name = (payload.class_name or "").strip()
             gender = (payload.gender or "").strip() or None
 
-            if not student_id or not full_name or not class_name:
-                raise HTTPException(status_code=400, detail="student requires student_id, full_name, class_name")
+            if not full_name or not class_name:
+                raise HTTPException(status_code=400, detail="student requires full_name, class_name (student_id auto-assigned when blank)")
             if gender and gender.lower() not in ("male", "female"):
                 raise HTTPException(status_code=400, detail="gender must be Male or Female")
 
@@ -275,14 +275,18 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             from services.db_manager import SCHOOLS_REGISTRY_TABLE, BILLING_LEDGER_TABLE
 
             cur.execute(
-                f"SELECT slots_balance FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
-                (tid,),
+                f"SELECT slots_balance, COALESCE(id_prefix, %s) FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+                (tid, tid),
             )
             srow = cur.fetchone()
             if srow is None:
                 cur.execute("ROLLBACK;")
                 raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
             slots = int(srow[0] or 0)
+            id_prefix = (srow[1] or tid).strip().lower() or tid
+            # Blank ID → next sequential from the school's configured prefix
+            if not student_id:
+                student_id = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", 1)[0]
             if slots < 1:
                 cur.execute("ROLLBACK;")
                 # Count used for helpful error
@@ -616,9 +620,10 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         return {
             "type": "students_batch",
             "inserted": inserted,
-            "skipped": skipped + (need - inserted),
+            "skipped": need - inserted,
             "requested": len(payload.rows),
             "slots_remaining": int(bal_row[0] or 0) if bal_row else slots - inserted,
+            "id_prefix": id_prefix,
         }
     except HTTPException:
         raise
@@ -641,36 +646,35 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
                 pass
 
 
-@router.post("/staff/batch", status_code=201, summary="Bulk import staff")
+@router.post("/staff/batch", status_code=201, summary="Bulk import staff (server-assigned IDs)")
 def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
+    """Bulk staff import with server-side sequential IDs.
+
+    Client-supplied staff_ids are ignored entirely — every row gets the next
+    `{staff_id_prefix}/NNN` from the tenant's configured prefix (default
+    STAFF/). Runs in one transaction with a schools-row lock so concurrent
+    batches cannot mint duplicate IDs.
+    """
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant_exists(tid)
 
-    from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser
+    from services.db_manager import TENANT_STAFF_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
 
     allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
     cleaned: list[dict] = []
     row_errors: list[dict] = []
-    seen: set[str] = set()
     for idx, r in enumerate(payload.rows):
-        sid = (r.staff_id or "").strip()
         name = (r.full_name or "").strip()
         role = (r.role or "").strip()
         errs: list[str] = []
-        if not sid:
-            errs.append("staff_id is required")
         if not name:
             errs.append("full_name is required")
         if role not in allowed_roles:
             errs.append(f"role must be one of {', '.join(sorted(allowed_roles))}")
-        if sid and sid.lower() in seen:
-            errs.append(f"duplicate staff_id '{sid}' within batch")
         if errs:
             row_errors.append({"row": idx + 2, "errors": errs})
             continue
-        seen.add(sid.lower())
         cleaned.append({
-            "staff_id": sid,
             "full_name": name,
             "email": (r.email or "").strip() or None,
             "phone": (r.phone or "").strip() or None,
@@ -683,10 +687,27 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+        try:
+            cur.execute("BEGIN;")
+        except Exception:
+            pass
+
+        # Lock the schools row (symmetry with students path) + read prefix
+        cur.execute(
+            f"SELECT COALESCE(staff_id_prefix, 'STAFF/') FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (tid,),
+        )
+        srow = cur.fetchone()
+        if srow is None:
+            cur.execute("ROLLBACK;")
+            raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
+        staff_prefix = (srow[0] or "STAFF/").strip() or "STAFF/"
+
+        new_ids = _next_prefixed_ids(cur, staff_prefix, TENANT_STAFF_TABLE, "staff_id", len(cleaned))
         placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))"] * len(cleaned))
         flat: list = []
-        for c in cleaned:
-            flat.extend([tid, c["staff_id"], c["full_name"], c["email"], c["phone"], c["role"]])
+        for c, nid in zip(cleaned, new_ids):
+            flat.extend([tid, nid, c["full_name"], c["email"], c["phone"], c["role"]])
         cur.execute(
             f"""
             INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
@@ -697,12 +718,13 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
             tuple(flat),
         )
         inserted = len(cur.fetchall())
-        conn.commit()
+        cur.execute("COMMIT;")
         return {
             "type": "staff_batch",
             "inserted": inserted,
             "skipped": len(cleaned) - inserted,
             "requested": len(payload.rows),
+            "staff_id_prefix": staff_prefix,
         }
     except HTTPException:
         raise
