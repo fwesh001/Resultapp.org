@@ -52,6 +52,8 @@ export async function GET(req: NextRequest) {
   if (!tenantId) {
     return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
   }
+  const guard = await requireAdminSession(tenantId);
+  if (guard) return guard;
   const secret = getProxySecret();
   if (!secret) {
     return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
