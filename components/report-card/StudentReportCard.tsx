@@ -367,18 +367,57 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
               Draft — Pending Publication • Not an official result
             </div>
           )}
-          {/* Official School Branding & Header — traditional */}
-          <div className="mb-3 text-center">
-            {schoolName ? (
-              <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{schoolName}</h1>
-            ) : (
-              <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{tenantId.toUpperCase()}</h1>
-            )}
-            {schoolAddress ? (
-              <p className="mt-1 text-[11px] font-medium tracking-wide text-slate-600">{schoolAddress}</p>
-            ) : null}
-            <div className="mx-auto mt-2 h-px w-20 bg-slate-200" />
-          </div>
+          {/* Official School Branding & Header — crest-left when a logo exists,
+              centered text-stack fallback (empty/dead URL collapses gracefully) */}
+          {hasLogo ? (
+            <div className="mb-3 flex items-center gap-3">
+              <img
+                src={rawLogo}
+                alt={`${schoolName || tenantId} logo`}
+                onError={() => setImgError(true)}
+                className="h-14 w-14 shrink-0 rounded-full bg-white object-cover ring-1 ring-slate-200"
+              />
+              <div className="min-w-0 flex-1">
+                <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">
+                  {schoolName || tenantId.toUpperCase()}
+                </h1>
+                {schoolAddress ? (
+                  <p className="mt-0.5 text-[11px] font-medium tracking-wide text-slate-600">{schoolAddress}</p>
+                ) : null}
+                {schoolMottoText ? (
+                  <p className="mt-0.5 text-[11px] italic text-slate-500">&ldquo;{schoolMottoText}&rdquo;</p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3 text-center">
+              {schoolName ? (
+                <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{schoolName}</h1>
+              ) : (
+                <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">{tenantId.toUpperCase()}</h1>
+              )}
+              {schoolAddress ? (
+                <p className="mt-1 text-[11px] font-medium tracking-wide text-slate-600">{schoolAddress}</p>
+              ) : null}
+              {schoolMottoText ? (
+                <p className="mt-1 text-[11px] italic text-slate-500">&ldquo;{schoolMottoText}&rdquo;</p>
+              ) : null}
+              <div className="mx-auto mt-2 h-px w-20 bg-slate-200" />
+            </div>
+          )}
+          {hasLogo && <div className="mb-3 h-px w-full bg-slate-200" />}
+
+          {/* Watermark crest — faint, centered, print-visible */}
+          {hasLogo && (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+              <img
+                src={rawLogo}
+                alt=""
+                onError={() => setImgError(true)}
+                className="h-80 w-80 object-contain opacity-[0.06] print:opacity-[0.04]"
+              />
+            </div>
+          )}
 
           {/* Top-Center Student Name — uppercase bold, centered, allow wrap */}
           <div className="mb-3 text-center">
