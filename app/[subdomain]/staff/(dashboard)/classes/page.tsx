@@ -113,6 +113,29 @@ export default function MyClassesPage() {
   const [selected, setSelected] = useState<Allocation | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTerm, setActiveTerm] = useState<string>("Term 1");
+  // Desktop-only: collapsible "My Classes" column to reclaim gradebook width.
+  const [classesCollapsed, setClassesCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("staff-classes-collapsed");
+      if (saved === "1") setClassesCollapsed(true);
+    } catch {
+      // ignore — collapse preference is best-effort
+    }
+  }, []);
+
+  function toggleClassesCollapsed() {
+    setClassesCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem("staff-classes-collapsed", next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [rosterLoading, setRosterLoading] = useState(false);
