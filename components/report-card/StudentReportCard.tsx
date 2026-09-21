@@ -368,7 +368,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                 src={rawLogo}
                 alt=""
                 onError={() => setImgError(true)}
-                className="h-80 w-80 object-contain opacity-[0.06] print:opacity-[0.04]"
+                className="m-auto h-[500px] w-[500px] max-w-[90%] object-contain object-center opacity-[0.06] print:opacity-[0.04]"
               />
             </div>
           )}
@@ -379,17 +379,19 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
               Draft — Pending Publication • Not an official result
             </div>
           )}
-          {/* Official School Branding & Header — crest-left when a logo exists,
-              centered text-stack fallback (empty/dead URL collapses gracefully) */}
+          {/* Official School Branding & Header — text perfectly centered,
+              logo anchored far-left (empty/dead URL collapses gracefully) */}
           {hasLogo ? (
-            <div className="mb-3 flex items-center gap-3">
-              <img
-                src={rawLogo}
-                alt={`${schoolName || tenantId} logo`}
-                onError={() => setImgError(true)}
-                className="h-14 w-14 shrink-0 rounded-full bg-white object-cover ring-1 ring-slate-200"
-              />
-              <div className="min-w-0 flex-1">
+            <div className="relative mb-3 flex items-center justify-center">
+              <div className="absolute left-0 top-1/2 -translate-y-1/2">
+                <img
+                  src={rawLogo}
+                  alt={`${schoolName || tenantId} logo`}
+                  onError={() => setImgError(true)}
+                  className="h-14 w-14 shrink-0 rounded-full bg-white object-cover ring-1 ring-slate-200"
+                />
+              </div>
+              <div className="min-w-0 px-16 text-center">
                 <h1 className="font-serif text-xl font-extrabold uppercase tracking-widest text-slate-900 md:text-2xl">
                   {schoolName || tenantId.toUpperCase()}
                 </h1>
