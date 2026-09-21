@@ -27,6 +27,21 @@ type Grade = { id: string; grade: string; label: string };
 interface TemplateBuilderProps {
   tenantId: string; // uneditable, injected by server page app/[subdomain]/admin/templates
   schoolName?: string; // friendly display name for copy
+  /** Edit mode: id of the template being edited (PUT instead of POST). */
+  templateId?: number | null;
+  /** Initial values for edit mode (parent remounts via key on change). */
+  initial?: {
+    name?: string;
+    academic_structure?: { components?: Array<{ name?: string; weight?: number | string; items?: Array<{ name?: string; max_score?: number | string; max?: number | string }> }> } | null;
+    behavioral_structure?: { traits?: string[]; scale?: string[]; scale_labels?: Record<string, string> } | null;
+    applies_to_classes?: string[];
+  } | null;
+  /** Known class names for the applies-to suggestions (optional; free-text always allowed). */
+  classOptions?: string[];
+  /** Called after a successful save in edit mode (parent refreshes list). */
+  onSaved?: () => void;
+  /** Called when the user cancels edit mode. */
+  onCancelEdit?: () => void;
 }
 
 function uid() {
