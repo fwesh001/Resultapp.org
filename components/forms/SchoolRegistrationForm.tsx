@@ -154,6 +154,17 @@ export function SchoolRegistrationForm() {
       nextErrors.adminEmail = "Enter a valid email address";
     }
 
+    if (!values.adminPassword) {
+      nextErrors.adminPassword = "Admin password is required";
+    } else if (values.adminPassword.length < 8) {
+      nextErrors.adminPassword = "Password must be at least 8 characters";
+    } else if (values.adminPassword.length > 128) {
+      nextErrors.adminPassword = "Password must be at most 128 characters";
+    }
+    if (values.adminPasswordConfirm !== values.adminPassword) {
+      nextErrors.adminPasswordConfirm = "Passwords do not match";
+    }
+
     if (!values.phone.trim()) {
       nextErrors.phone = "Phone number is required";
     } else if (!isValidPhone(values.phone.trim())) {
