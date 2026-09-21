@@ -16,6 +16,7 @@ interface SettingsFormProps {
  */
 export default function SettingsForm({ school }: SettingsFormProps) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"profile" | "branding">("profile");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
