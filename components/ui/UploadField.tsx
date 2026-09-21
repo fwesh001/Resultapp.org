@@ -281,7 +281,7 @@ export default function UploadField({
 
       {behavior === "upload" && allowUrl && (
         <div className="mt-2 flex gap-2">
-          {(["url", "upload"] as const).map((m) => (
+          {(["upload", "url"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -293,7 +293,7 @@ export default function UploadField({
                   : "inline-flex min-h-[44px] items-center rounded-full border border-purple-500/15 px-4 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
               }
             >
-              {m === "url" ? "File URL" : "Upload file"}
+              {m === "url" ? "Paste image URL instead" : "Upload file"}
             </button>
           ))}
         </div>
