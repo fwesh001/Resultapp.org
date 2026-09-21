@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/flutterwave";
 import { calculateTieredTotal } from "@/lib/pricing";
 import { revalidateTag } from "next/cache";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Slot top-up API (Dual-Ledger: capacity).
@@ -37,6 +38,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tenantId = (searchParams.get("tenant_id") || "").toLowerCase().trim();
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
+  const guardGet = await requireAdminSession(tenantId);
+  if (guardGet) return guardGet;
   const secret = getProxySecret();
   if (!secret) return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   const base = getBackendBase();
@@ -87,6 +90,8 @@ export async function POST(req: NextRequest) {
   const txId = String(transactionId ?? transaction_id ?? "").trim();
 
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
+  const guardPost = await requireAdminSession(tenantId);
+  if (guardPost) return guardPost;
   if (countRaw === undefined || countRaw === null || String(countRaw).trim() === "")
     return NextResponse.json({ success: false, error: "Missing slotCount" }, { status: 400 });
   if (!txId) return NextResponse.json({ success: false, error: "Missing transactionId" }, { status: 400 });
