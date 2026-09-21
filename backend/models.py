@@ -8,7 +8,7 @@ Phase 2 models — Dynamic Grading Engine (PostgreSQL JSONB)
 """
 
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, Index, func, JSON
+from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, Index, func, JSON, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,8 +54,16 @@ class GradingTemplate(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     academic_structure: Mapped[dict] = mapped_column(JSONB_COMPAT, nullable=False)
     behavioral_structure: Mapped[dict | None] = mapped_column(JSONB_COMPAT, nullable=True)
+    # Class binding: list of class names this template applies to.
+    # Empty list = applies to all classes (backward compatible).
+    applies_to_classes: Mapped[list] = mapped_column(JSONB_COMPAT, nullable=False, server_default="[]")
+    # Soft-delete: staff only ever see is_active=TRUE templates.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true", default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     # One template → many records
