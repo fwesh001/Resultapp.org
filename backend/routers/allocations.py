@@ -566,7 +566,7 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
                 "gender": c["gender"],
             }
             for c, nid in zip(cleaned, new_ids)
-        >
+        ]
 
         cur.execute(f"SELECT COUNT(*) FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;", (tid,))
         used = int(cur.fetchone()[0] or 0)
