@@ -23,6 +23,8 @@ interface FormValues {
   schoolName: string;
   subdomain: string;
   adminEmail: string;
+  adminPassword: string;
+  adminPasswordConfirm: string;
   studentCount: string; // keep string for controlled input
 }
 
