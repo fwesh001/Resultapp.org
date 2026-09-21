@@ -142,9 +142,9 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
   const isEditMode = templateId != null;
   const [activeTab, setActiveTab] = useState<"academic" | "traits">("academic");
   const [templateName, setTemplateName] = useState(initial?.name ?? "");
-  const [categories, setCategories] = useState<Category[]>(() => categoriesFromInitial(initial?.academic_structure) ?? defaultCategories);
+  const [categories, setCategories] = useState<Category[]>(() => categoriesFromInitial(initial?.academic_structure) ?? defaultCategories());
   const [traits, setTraits] = useState<string[]>(() => traitsFromInitial(initial?.behavioral_structure) ?? DEFAULT_TRAITS);
-  const [grades, setGrades] = useState<Grade[]>(() => gradesFromInitial(initial?.behavioral_structure) ?? defaultGrades);
+  const [grades, setGrades] = useState<Grade[]>(() => gradesFromInitial(initial?.behavioral_structure) ?? defaultGrades());
   const [appliesTo, setAppliesTo] = useState<string[]>(() => [...(initial?.applies_to_classes ?? [])]);
   const [classInput, setClassInput] = useState("");
   const [traitInput, setTraitInput] = useState("");
