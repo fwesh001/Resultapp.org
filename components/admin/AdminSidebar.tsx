@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -10,6 +10,7 @@ import {
   CreditCard,
   GraduationCap,
   ClipboardCheck,
+  LogOut,
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
