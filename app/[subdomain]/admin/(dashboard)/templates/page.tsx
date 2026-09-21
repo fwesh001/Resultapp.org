@@ -1,4 +1,4 @@
-import { TemplateBuilder } from "@/components/forms/TemplateBuilder";
+import { TemplatesManager } from "@/components/admin/TemplatesManager";
 import { getTenant } from "@/lib/tenant";
 import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
@@ -27,11 +27,11 @@ export default async function AdminTemplatesPage({
           ← Back to {school ? toTitleCase(school.name) : "school portal"}
         </Link>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">
-          Report Card Template
+          Report Card Templates
         </h1>
         <p className="mt-1 text-sm text-purple-200/60">
           Configure how scores and traits appear on your school&apos;s report
-          card.
+          card. Bind templates to classes or leave them global.
         </p>
         {!school && (
           <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
@@ -42,16 +42,10 @@ export default async function AdminTemplatesPage({
         )}
       </div>
 
-      <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6">
-        <TemplateBuilder
-          tenantId={tenantId}
-          schoolName={school ? toTitleCase(school.name) : undefined}
-        />
-      </div>
-
-      <p className="mt-4 text-center text-xs text-purple-300/40">
-        Saved templates appear automatically when staff enter scores.
-      </p>
+      <TemplatesManager
+        tenantId={tenantId}
+        schoolName={school ? toTitleCase(school.name) : undefined}
+      />
     </div>
   );
 }
