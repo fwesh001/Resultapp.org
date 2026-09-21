@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Result publication proxy (state-changing).
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest) {
   if (!termStr) return NextResponse.json({ success: false, error: "Missing term" }, { status: 400 });
   if (ids.length === 0) return NextResponse.json({ success: false, error: "No student_ids provided" }, { status: 400 });
   if (ids.length > 3000) return NextResponse.json({ success: false, error: "Too many student_ids (max 3000)" }, { status: 400 });
+
+  const guard = await requireAdminSession(tenantId);
+  if (guard) return guard;
 
   const secret = getProxySecret();
   if (!secret) {
