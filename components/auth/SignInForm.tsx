@@ -104,9 +104,19 @@ export default function SignInForm({
       />
 
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {errorCode === "PASSWORD_NOT_SET" && setupHref && (
+            <a
+              href={setupHref}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
+            >
+              {setupLinkLabel} →
+            </a>
+          )}
         </div>
       )}
 
