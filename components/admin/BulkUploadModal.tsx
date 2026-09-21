@@ -41,36 +41,36 @@ const ENTITY_META: Record<
   students: {
     title: "Bulk Upload Students",
     batchType: "students_batch",
-    headers: ["admission_no", "full_name", "class_name", "gender"],
+    headers: ["full_name", "class_name", "gender"],
     required: ["full_name", "class_name"],
     examples: [
-      ["vhs/001", "Adaeze Okafor", "JSS 1", "Female"],
-      ["", "Tunde Bakare", "JSS 1", "Male"],
+      ["Adaeze Okafor", "JSS 1", "Female"],
+      ["Tunde Bakare", "JSS 1", "Male"],
     ],
     guide: [
       ["Column", "Required?", "Notes"],
-      ["admission_no", "Optional", "Leave blank to auto-assign (e.g. vhs/001). Must be unique."],
       ["full_name", "Yes", "Student's full name."],
       ["class_name", "Yes", "Must match an existing class or a new one you intend to create."],
       ["gender", "Optional", "Male or Female only."],
+      ["Admission No", "Auto", "Auto-assigned as {prefix}/001, {prefix}/002 … using your Admission ID Prefix. No column needed."],
     ],
   },
   staff: {
     title: "Bulk Upload Staff",
     batchType: "staff_batch",
-    headers: ["staff_id", "full_name", "email", "phone", "role"],
-    required: ["staff_id", "full_name", "role"],
+    headers: ["full_name", "email", "phone", "role"],
+    required: ["full_name", "role"],
     examples: [
-      ["STF001", "Mrs. Adaeze Okafor", "ada@school.edu", "+2348012345678", "Teacher"],
-      ["STF002", "Mr. John Doe", "", "", "Form Master"],
+      ["Mrs. Adaeze Okafor", "ada@school.edu", "+2348012345678", "Teacher"],
+      ["Mr. John Doe", "", "", "Form Master"],
     ],
     guide: [
       ["Column", "Required?", "Notes"],
-      ["staff_id", "Yes", "Unique staff ID."],
       ["full_name", "Yes", "Staff full name."],
       ["email", "Optional", "Used for login."],
       ["phone", "Optional", "Contact phone."],
       ["role", "Yes", "One of: Teacher, Form Master, Vice Principal, Principal, Admin."],
+      ["Staff ID", "Auto", "Auto-assigned as STAFF/001, STAFF/002 … using your Staff ID Prefix. No column needed."],
     ],
   },
   subjects: {
@@ -179,15 +179,16 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
           if (h) data[h] = String(cells[ci] ?? "").trim();
         });
         const errors = validateRow(data);
-        // In-file duplicate detection
+        // In-file duplicate detection on natural keys (IDs are auto-assigned
+        // server-side, so same-name rows warn but still import distinctly).
         const key =
           entity === "students"
-            ? (data.admission_no || "").toLowerCase()
+            ? `${(data.full_name || "").toLowerCase()}|${(data.class_name || "").toLowerCase()}`
             : entity === "staff"
-              ? (data.staff_id || "").toLowerCase()
+              ? (data.full_name || "").toLowerCase()
               : (data.subject_name || "").toLowerCase();
-        if (key) {
-          if (seenKeys.has(`${entity}:${key}`)) errors.push("duplicate within file");
+        if (key.replace(/\|/g, "")) {
+          if (seenKeys.has(`${entity}:${key}`)) errors.push("possible duplicate row in file (both will import)");
           else seenKeys.add(`${entity}:${key}`);
         }
         parsed.push({ index: i + 1, data, errors });
@@ -200,9 +201,11 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
   }
 
   function toPayloadRow(r: ParsedRow): Record<string, string> {
+    // IDs are intentionally blank — the backend assigns every row sequentially
+    // from the tenant's configured prefixes (no collisions possible).
     if (entity === "students") {
       return {
-        student_id: r.data.admission_no || "",
+        student_id: "",
         full_name: r.data.full_name || "",
         class_name: r.data.class_name || "",
         gender: r.data.gender || "",
@@ -210,7 +213,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
     }
     if (entity === "staff") {
       return {
-        staff_id: r.data.staff_id || "",
+        staff_id: "",
         full_name: r.data.full_name || "",
         email: r.data.email || "",
         phone: r.data.phone || "",
@@ -279,6 +282,11 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         >
           <Download className="h-3.5 w-3.5" /> Download Template (.xlsx)
         </Button>
+        {(entity === "students" || entity === "staff") && (
+          <p className="-mt-2 text-xs text-purple-300/50">
+            IDs are auto-assigned on import ({entity === "students" ? "Admission ID Prefix" : "Staff ID Prefix"} from Settings) — just provide names{entity === "students" ? ", classes" : ""} and roles.
+          </p>
+        )}
 
         {/* Dropzone */}
         <div
