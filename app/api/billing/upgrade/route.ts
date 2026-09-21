@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/flutterwave";
 import { calculateTieredTotal } from "@/lib/pricing";
 import { revalidateTag } from "next/cache";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Phase 3 – Billing Upgrade Proxy
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
   const txId = String(transactionId ?? transaction_id ?? "").trim();
 
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
+  const guard = await requireAdminSession(tenantId);
+  if (guard) return guard;
   if (countRaw === undefined || countRaw === null || String(countRaw).trim() === "")
     return NextResponse.json({ success: false, error: "Missing studentCount" }, { status: 400 });
   if (!txId) return NextResponse.json({ success: false, error: "Missing transactionId" }, { status: 400 });
