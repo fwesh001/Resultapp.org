@@ -100,6 +100,37 @@ function defaultGrades(): Grade[] {
   return DEFAULT_GRADES.map((g) => ({ ...g, id: uid() }));
 }
 
+function categoriesFromInitial(structure: NonNullable<TemplateBuilderProps["initial"]>["academic_structure"]): Category[] | null {
+  const comps = structure?.components;
+  if (!Array.isArray(comps) || comps.length === 0) return null;
+  return comps.map((c) => ({
+    id: uid(),
+    name: String(c?.name ?? ""),
+    weight: String(c?.weight ?? ""),
+    items: (Array.isArray(c?.items) ? c.items : []).map((it) => ({
+      id: uid(),
+      name: String(it?.name ?? ""),
+      max_score: String(it?.max_score ?? it?.max ?? ""),
+    })),
+  }));
+}
+
+function traitsFromInitial(structure: NonNullable<TemplateBuilderProps["initial"]>["behavioral_structure"]): string[] | null {
+  const t = structure?.traits;
+  if (!Array.isArray(t)) return null;
+  return t.map((x) => String(x)).filter(Boolean);
+}
+
+function gradesFromInitial(structure: NonNullable<TemplateBuilderProps["initial"]>["behavioral_structure"]): Grade[] | null {
+  const scale = structure?.scale;
+  if (!Array.isArray(scale) || scale.length === 0) return null;
+  const labels = structure?.scale_labels ?? {};
+  return scale.map((g) => {
+    const letter = String(g).toUpperCase();
+    return { id: uid(), grade: letter, label: String(labels[letter] ?? "") };
+  });
+}
+
 const inputClass =
   "flex h-9 w-full rounded-lg border border-purple-800/30 bg-purple-950/20 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500";
 
