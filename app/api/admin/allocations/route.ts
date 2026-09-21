@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Allocations & Roster proxy — single unified proxy per decision 5
