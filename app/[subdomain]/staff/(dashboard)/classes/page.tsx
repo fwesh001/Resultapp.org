@@ -367,14 +367,16 @@ export default function MyClassesPage() {
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
 
         {/* Gradebook & Roster */}
         <div
           className={[
-            "flex min-h-0 flex-1 flex-col bg-[#0B0514]",
-            // Desktop: always visible, 70% width
-            "md:flex md:w-[70%]",
+            "flex min-h-0 min-w-0 flex-1 flex-col bg-[#0B0514]",
+            // Desktop: always visible — 70% when panel open, fluid when collapsed
+            classesCollapsed ? "md:flex md:w-auto" : "md:flex md:w-[70%] md:min-w-0",
             // Mobile: hidden when no selection, full-width when selected
             selected ? "flex w-full" : "hidden md:flex",
           ].join(" ")}
