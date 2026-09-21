@@ -123,6 +123,8 @@ export default async function ReportPage({
         term={effectiveTerm}
         isPublished={isPublished}
         schoolName={school?.name}
+        schoolLogoUrl={school?.logoUrl}
+        schoolMotto={school?.motto}
       />
     </div>
   );
