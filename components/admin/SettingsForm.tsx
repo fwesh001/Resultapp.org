@@ -303,7 +303,6 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       </div>
 
       </div>
-        </div>
       )}
 
       {activeTab === "branding" && (
