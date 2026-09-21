@@ -97,14 +97,32 @@ def _serialize_rows(cursor, rows):
     return out
 
 
-def _get_active_template(db: Session, tid: str):
-    """Most recently created template for the tenant (or None)."""
-    return (
+def _get_active_template(db: Session, tid: str, class_name: Optional[str] = None):
+    """Newest active template bound to the class, else newest global template.
+
+    Binding lives in `applies_to_classes` (empty = all classes). Inactive
+    (soft-deleted) templates are never returned. Filtering is done in Python
+    so JSON-vs-JSONB dialect differences never matter (template counts are tiny).
+    """
+    rows = (
         db.query(models.GradingTemplate)
-        .filter(models.GradingTemplate.tenant_id == tid)
+        .filter(
+            models.GradingTemplate.tenant_id == tid,
+            models.GradingTemplate.is_active == True,  # noqa: E712
+        )
         .order_by(models.GradingTemplate.created_at.desc())
-        .first()
+        .all()
     )
+    if not rows:
+        return None
+    cls = (class_name or "").strip().lower()
+    if cls:
+        for t in rows:
+            bound = getattr(t, "applies_to_classes", None) or []
+            norm = {str(c).strip().lower() for c in bound if str(c).strip()}
+            if not norm or cls in norm:
+                return t
+    return rows[0]
 
 
 def _template_payload(template) -> Dict[str, Any]:
@@ -183,7 +201,7 @@ def get_grading_bundle(
     if not class_name or not subject_name:
         raise HTTPException(status_code=400, detail="class_name and subject_name are required")
 
-    template = _get_active_template(db, tid)
+    template = _get_active_template(db, tid, class_name)
     if template is None:
         raise HTTPException(status_code=404, detail=f"No grading template found for tenant '{tid}' — ask an admin to create one")
 
@@ -269,7 +287,7 @@ def post_grading_batch(
     if not subject_name or not class_name or not assessment_key:
         raise HTTPException(status_code=400, detail="subject_name, class_name and assessment_key are required")
 
-    template = _get_active_template(db, tid)
+    template = _get_active_template(db, tid, class_name)
     if template is None:
         raise HTTPException(status_code=404, detail=f"No grading template found for tenant '{tid}'")
     academic_structure = getattr(template, "academic_structure", None) or {}
