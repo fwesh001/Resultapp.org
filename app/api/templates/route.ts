@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Phase 2 – Template Proxy
@@ -136,7 +137,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
   }
   tenantId = tenantId.toLowerCase().trim();
-  const url = buildUrl(`/api/v1/templates/${encodeURIComponent(tenantId)}`);
+  const includeInactive = searchParams.get("include_inactive") === "true";
+  const url = buildUrl(
+    `/api/v1/templates/${encodeURIComponent(tenantId)}${includeInactive ? "?include_inactive=true" : ""}`
+  );
   try {
     const r = await fetch(url, {
       headers: { "X-API-SECRET-KEY": secret },
