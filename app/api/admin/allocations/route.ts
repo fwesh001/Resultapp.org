@@ -163,6 +163,9 @@ export async function DELETE(req: NextRequest) {
 
   if (!tenantId || !type || !id) return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
 
+  const guardDelete = await requireAdminSession(tenantId);
+  if (guardDelete) return guardDelete;
+
   const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
   try {
     const r = await fetch(url, { method: "DELETE", headers: { "X-API-SECRET-KEY": secret }, cache: "no-store" });
