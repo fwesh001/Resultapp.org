@@ -84,7 +84,7 @@ interface ReportResponse {
   student_id: string;
   attendance?: { present: number | null; outOf: number | null };
   termMeta?: { termEnding: string | null; newTermBegins: string | null };
-  school?: { school_name?: string | null; address?: string | null; new_term_begins?: string | null } | null;
+  school?: { school_name?: string | null; address?: string | null; new_term_begins?: string | null; logo_url?: string | null; motto?: string | null } | null;
 }
 
 interface StudentReportCardProps {
@@ -98,6 +98,8 @@ interface StudentReportCardProps {
    */
   isPublished?: boolean;
   schoolName?: string | null;
+  schoolLogoUrl?: string | null;
+  schoolMotto?: string | null;
 }
 
 function gradeFromTotal(total: number): string {
@@ -144,7 +146,7 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isPublished = false, schoolName }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, isPublished = false, schoolName, schoolLogoUrl, schoolMotto }: StudentReportCardProps) {
   // Draft gate: anything not confirmed in result_publications renders as a
   // free preview (blurred, watermarked, unprintable). Re-prints cost 0
   // because the gate is the publication row, not a subscription flag.
@@ -152,6 +154,12 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const [data, setData] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Broken/dead logo URLs collapse to the text-only header (no broken icon).
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [tenantId, studentId]);
 
   useEffect(() => {
     let cancelled = false;
