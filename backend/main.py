@@ -205,6 +205,7 @@ class ProvisionRequest(BaseModel):
     subdomain: str = Field(..., min_length=3, max_length=30, examples=["vhs"], description="Desired slug, e.g. vhs -> vhs.resultapp.org")
     admin_email: EmailStr = Field(..., examples=["admin@victoryhigh.edu.ng"])
     admin_name: Optional[str] = Field(None, min_length=3, max_length=80, examples=["Mrs. Adaeze Okafor"], description="Optional — defaults to local part of email")
+    admin_password: Optional[str] = Field(None, min_length=8, max_length=128, description="Phase 2 — admin portal password chosen at registration (stored as pgcrypto bcrypt hash)")
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
     student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each)")
     initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="Trial credit grant at registration (Credit & Command). Defaults to 30.")
@@ -524,6 +525,9 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 email=admin_email,
                 phone=phone,
                 student_count=student_count,
+                admin_password_hash=str(payload.admin_password).strip()
+                if payload.admin_password and str(payload.admin_password).strip()
+                else None,
             )
             logger.info(f"[PROVISION] School registered in registry for '{subdomain}'")
         except Exception as e:
