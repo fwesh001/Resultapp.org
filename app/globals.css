@@ -24,3 +24,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Sticky action bar — keeps Save buttons visible at the bottom of long
+   forms and scrolling modals (Settings, Template Builder, Allocate). */
+.action-bar-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: rgb(11 5 20 / 0.95);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgb(168 85 247 / 0.15);
+  padding: 1rem;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  margin-bottom: -1rem;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+@media print {
+  .action-bar-sticky {
+    display: none;
+  }
+}
