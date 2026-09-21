@@ -67,6 +67,8 @@ export function RegisterSchoolForm() {
     schoolName: "",
     subdomain: "",
     adminEmail: "",
+    adminPassword: "",
+    adminPasswordConfirm: "",
     studentCount: "",
   });
 
