@@ -79,6 +79,23 @@ def init_grading_tables() -> None:
         import models  # noqa: F401  pylint: disable=unused-import
 
         Base.metadata.create_all(bind=engine)
+        # Additive live-DB guards for columns added after first deploy
+        # (create_all does not ALTER existing tables).
+        from sqlalchemy import text as _text
+
+        with engine.begin() as _conn:
+            _conn.execute(_text(
+                "ALTER TABLE grading_templates "
+                "ADD COLUMN IF NOT EXISTS applies_to_classes JSONB NOT NULL DEFAULT '[]'"
+            ))
+            _conn.execute(_text(
+                "ALTER TABLE grading_templates "
+                "ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"
+            ))
+            _conn.execute(_text(
+                "ALTER TABLE grading_templates "
+                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+            ))
         logger.info("[DB] Grading tables ensured (grading_templates, student_academic_records, student_behavioral_records)")
     except Exception as e:
         logger.error(f"[DB] Failed to init grading tables: {e}")
