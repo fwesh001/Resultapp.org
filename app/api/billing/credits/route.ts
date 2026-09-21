@@ -109,6 +109,8 @@ export async function POST(req: NextRequest) {
   const txId = String(transactionId ?? transaction_id ?? "").trim();
 
   if (!tenantId) return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
+  const guardPost = await requireAdminSession(tenantId);
+  if (guardPost) return guardPost;
   if (countRaw === undefined || countRaw === null || String(countRaw).trim() === "")
     return NextResponse.json({ success: false, error: "Missing creditCount" }, { status: 400 });
   if (!txId) return NextResponse.json({ success: false, error: "Missing transactionId" }, { status: 400 });
