@@ -929,6 +929,18 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
           <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
         </div>
       </Modal>
+
+      {bulkEntity && (
+        <BulkUploadModal
+          open={bulkEntity !== null}
+          onOpenChange={(v) => {
+            if (!v) setBulkEntity(null);
+          }}
+          entity={bulkEntity}
+          tenantId={tenantId}
+          onImported={() => void fetchAll()}
+        />
+      )}
     </div>
   );
 }
