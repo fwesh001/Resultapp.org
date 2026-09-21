@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * Settings Proxy — PATCH /api/admin/settings
@@ -66,6 +67,9 @@ export async function PATCH(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  const guard = await requireAdminSession(subdomain);
+  if (guard) return guard;
 
   const payload: Record<string, unknown> = {};
   for (const field of PROFILE_FIELDS) {
