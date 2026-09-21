@@ -9,7 +9,6 @@ import {
   BookOpen,
   Users,
   Search,
-  ArrowLeft,
   Pencil,
   ChevronLeft,
   ChevronRight,
