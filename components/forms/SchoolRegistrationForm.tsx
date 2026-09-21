@@ -85,6 +85,8 @@ export function SchoolRegistrationForm() {
     subdomain: "",
     adminName: "",
     adminEmail: "",
+    adminPassword: "",
+    adminPasswordConfirm: "",
     phone: "",
     studentCount: "",
   });
