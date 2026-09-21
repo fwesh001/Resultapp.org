@@ -542,6 +542,30 @@ export function SchoolRegistrationForm() {
         autoComplete="email"
       />
 
+      {/* Admin Password — Phase 2 admin portal credential */}
+      <Input
+        label="Admin Password"
+        name="adminPassword"
+        type="password"
+        placeholder="Minimum 8 characters"
+        value={values.adminPassword}
+        onChange={(e) => handleChange("adminPassword", e.target.value)}
+        error={errors.adminPassword}
+        required
+        autoComplete="new-password"
+      />
+      <Input
+        label="Confirm Admin Password"
+        name="adminPasswordConfirm"
+        type="password"
+        placeholder="Repeat your password"
+        value={values.adminPasswordConfirm}
+        onChange={(e) => handleChange("adminPasswordConfirm", e.target.value)}
+        error={errors.adminPasswordConfirm}
+        required
+        autoComplete="new-password"
+      />
+
       {/* Phone */}
       <Input
         label="Phone Number"
