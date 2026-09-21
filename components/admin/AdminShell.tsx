@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { toTitleCase } from "@/lib/format";
@@ -80,12 +81,18 @@ export default function AdminShell({
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-            <GraduationCap className="h-4 w-4 text-purple-300" />
-          </span>
-          <span className="truncate text-sm font-semibold tracking-tight">
-            {toTitleCase(schoolName)}
-          </span>
+          <Link
+            href={`/${subdomain}`}
+            aria-label={`${toTitleCase(schoolName)} school portal`}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition hover:opacity-90"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
+              <GraduationCap className="h-4 w-4 text-purple-300" />
+            </span>
+            <span className="truncate text-sm font-semibold tracking-tight">
+              {toTitleCase(schoolName)}
+            </span>
+          </Link>
         </div>
 
         <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
