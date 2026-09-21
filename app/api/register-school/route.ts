@@ -83,6 +83,9 @@ interface RegisterSchoolBody {
   // Optional for forward-compat (if Phase 3 merges)
   adminName?: string;
   admin_name?: string;
+  // Phase 2 — admin portal password chosen at registration
+  adminPassword?: string;
+  admin_password?: string;
   phoneNumber?: string;
   phone_number?: string;
   // Credit & Command: trial grant size (defaults to 30 server-side)
