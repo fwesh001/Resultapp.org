@@ -20,6 +20,7 @@ export interface School {
   proprietorName?: string;
   registrationNumber?: string;
   idPrefix?: string;
+  staffIdPrefix?: string;
   currentTerm?: string;
   currentSession?: string;
   newTermBegins?: string;
