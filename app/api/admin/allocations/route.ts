@@ -78,13 +78,24 @@ export async function POST(req: NextRequest) {
   const guardPost = await requireAdminSession(tenantId);
   if (guardPost) return guardPost;
 
+  // Batch ingestion (BulkUploadModal): { type: students_batch|staff_batch|subjects_batch, rows }
+  // forwards { rows } to the dedicated FastAPI batch endpoints.
+  const batchKind = String(body.type ?? "");
+  const batchPath: Record<string, string> = {
+    students_batch: "students/batch",
+    staff_batch: "staff/batch",
+    subjects_batch: "subjects/batch",
+  };
+  const batchSuffix = batchPath[batchKind];
+  const forwardBody = batchSuffix ? { rows: body.rows } : body;
+
   // ensure body has subdomain-compatible field? FastAPI expects tenant_id in path, not body
-  const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster`;
+  const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster${batchSuffix ? `/${batchSuffix}` : ""}`;
   try {
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
-      body: JSON.stringify(body),
+      body: JSON.stringify(forwardBody),
       cache: "no-store",
     });
     const text = await r.text();
@@ -92,7 +103,9 @@ export async function POST(req: NextRequest) {
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
     if (!r.ok) {
       const detail = (data as { detail?: unknown })?.detail ?? (data as { error?: unknown })?.error ?? text;
-      const msg = Array.isArray(detail) ? (detail as Array<{msg?:string}>).map(d=>d.msg||JSON.stringify(d)).join("; ") : String(detail);
+      const msg = typeof detail === "object" && detail !== null
+        ? JSON.stringify(detail)
+        : Array.isArray(detail) ? (detail as Array<{msg?:string}>).map(d=>d.msg||JSON.stringify(d)).join("; ") : String(detail);
       return NextResponse.json({ success: false, error: msg, raw: data }, { status: r.status });
     }
     return NextResponse.json(data, { status: r.status });
