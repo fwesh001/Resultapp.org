@@ -754,25 +754,27 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         </div>
       )}
 
-      <Button
-        type="submit"
-        disabled={submitting || !weightOk}
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
-        size="lg"
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Saving template…
-          </>
-        ) : (
-          <>
-            <Save className="h-4 w-4" /> Save Template
-          </>
-        )}
-      </Button>
-      <p className="text-center text-xs text-purple-300/40">
-        This template will be saved for {schoolName || tenantId} and used on every report card.
-      </p>
+      <div className="action-bar-sticky rounded-b-2xl">
+        <Button
+          type="submit"
+          disabled={submitting || !weightOk}
+          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+          size="lg"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> {isEditMode ? "Saving changes…" : "Saving template…"}
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" /> {isEditMode ? "Save Changes" : "Save Template"}
+            </>
+          )}
+        </Button>
+        <p className="mt-2 text-center text-xs text-purple-300/40">
+          This template will be saved for {schoolName || tenantId} and used on every report card.
+        </p>
+      </div>
     </form>
   );
 }
