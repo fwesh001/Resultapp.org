@@ -587,17 +587,29 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             )
             row2 = cur2.fetchone()
             if row2 is not None:
+                # Paid flows redeem under provision:{tx} (MRR-counted SLOT_PURCHASE);
+                # free/trial flows keep the legacy init-slot row (₦0, excluded).
+                paid_ngn = max(0, int(payload.amount_ngn or 0)) if payload.amount_ngn else 0
+                if provision_ref and paid_ngn > 0:
+                    slot_ref = provision_ref
+                    slot_txn = "SLOT_PURCHASE"
+                    slot_desc = f"Paid provision: {student_count} slots for {subdomain} (₦{paid_ngn})"
+                else:
+                    slot_ref = f"init-slot:{subdomain}"
+                    slot_txn = "INITIAL_SLOTS"
+                    slot_desc = f"Initial slot capacity {student_count} for {subdomain}"
+                    paid_ngn = 0
                 cur2.execute(
                     f"""
                     INSERT INTO {BILLING_LEDGER_TABLE}
-                        (subdomain, token_type, amount, transaction_type, reference_id, description)
-                    VALUES (%s, 'SLOT', %s, 'INITIAL_SLOTS', %s, %s)
+                        (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+                    VALUES (%s, 'SLOT', %s, %s, %s, %s, %s)
                     ON CONFLICT (reference_id) DO NOTHING;
                     """,
-                    (subdomain, int(student_count), f"init-slot:{subdomain}", f"Initial slot capacity {student_count} for {subdomain}"),
+                    (subdomain, int(student_count), slot_txn, slot_ref, slot_desc, paid_ngn),
                 )
                 conn2.commit()
-                logger.info(f"[PROVISION] Initial slots {student_count} for '{subdomain}'")
+                logger.info(f"[PROVISION] Initial slots {student_count} for '{subdomain}' ({slot_txn})")
             else:
                 conn2.commit()
             cur2.close()
