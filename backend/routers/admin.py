@@ -55,6 +55,9 @@ def _tenant_metadata_model():
 
 class TenantsListResponse(BaseModel):
     tenants: list
+    total: int = 0
+    page: int = 1
+    limit: int = 20
     # Using generic list to avoid circular import at module load; response will be TenantMetadata[]
     # FastAPI will serialize via _normalize helper below
 
