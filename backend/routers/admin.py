@@ -347,6 +347,7 @@ def set_credit_price_config(payload: dict):
 class TenantStatusUpdate(BaseModel):
     is_active: Optional[bool] = None
     subscription_status: Optional[str] = None
+    reason: Optional[str] = None
 
 
 @router.patch("/tenants/{subdomain}/status", summary="Suspend / reactivate a tenant (superadmin)")
@@ -371,6 +372,7 @@ def set_tenant_status(subdomain: str, payload: TenantStatusUpdate):
             updates["is_active"] = True
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update (is_active, subscription_status)")
+    reason = (payload.reason or "").strip() or None
     conn = None
     try:
         conn = _connect_as_superuser()
