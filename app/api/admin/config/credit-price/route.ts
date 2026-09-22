@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSuperadmin } from "@/lib/superadminAuth";
 
 function getProxySecret(): string {
   return (
@@ -37,6 +38,10 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  // Mutating the global price is superadmin-only (GET stays open for tenant billing).
+  const guard = await requireSuperadmin();
+  if (guard) return guard;
+
   const secret = getProxySecret();
   if (!secret) return NextResponse.json({ error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   let body: unknown;
