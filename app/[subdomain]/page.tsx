@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
+import { hasAdminSession } from "@/lib/adminAuth";
 import { toTitleCase } from "@/lib/format";
 import ResultLookupWidget from "@/components/landing/ResultLookupWidget";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
+import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 import {
   ShieldCheck,
   GraduationCap,
@@ -46,6 +48,13 @@ export default async function TenantPage({
         </footer>
       </main>
     );
+  }
+
+  // Suspended tenants: public portal blocked, but a signed-in tenant admin
+  // still gets the billing escape hatch to self-serve restoration.
+  if (school.isActive === false) {
+    const showBilling = await hasAdminSession(subdomain);
+    return <SuspendedPortal schoolName={school.name} subdomain={subdomain} showBillingLink={showBilling} />;
   }
 
   // Default hero artwork until the school uploads its own background.
