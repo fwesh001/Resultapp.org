@@ -215,8 +215,6 @@ export async function POST(req: NextRequest) {
     admin_password: adminPassword,
     student_count: studentCount,
   };
-  // Include optional only if present (backend treats as optional)
-  if (adminName) fastApiPayload.admin_name = adminName;
   // Credit & Command: trial grant size (backend defaults to 30)
   const initialCreditsRaw = body.initial_credits ?? body.initialCredits;
   if (initialCreditsRaw !== undefined && initialCreditsRaw !== null && String(initialCreditsRaw).trim() !== "") {
