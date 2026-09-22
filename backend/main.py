@@ -305,6 +305,13 @@ async def tenant_lookup(subdomain: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No school found for subdomain '{subdomain}'",
         )
+    # Ghost-bug guard: soft-deleted schools look never-provisioned publicly.
+    # (Superadmin detail endpoint reads the registry directly and bypasses this.)
+    if school.get("deleted_at") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No school found for subdomain '{subdomain}'",
+        )
 
     # --- Computed convenience fields ---
     city = school.get("city") or None
@@ -317,6 +324,8 @@ async def tenant_lookup(subdomain: str):
     for ts_field in ("created_at", "updated_at"):
         value = school.get(ts_field)
         school[ts_field] = value.isoformat() if isinstance(value, datetime) else str(value)
+    # deleted_at never leaves the public lookup (already 404'd above if set)
+    school.pop("deleted_at", None)
 
     return TenantResponse(school=TenantMetadata(**school))
 
