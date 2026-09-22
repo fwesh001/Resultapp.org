@@ -82,14 +82,39 @@ def _normalize_school_row(row: dict):
 
 
 @router.get("/tenants", summary="List all tenants ordered by created_at DESC (Super Admin)")
-def list_tenants():
+def list_tenants(
+    page: int = 1,
+    limit: int = 20,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+):
     """
-    Raw psycopg2 SELECT * FROM schools ORDER BY created_at DESC.
-    Returns list[ TenantMetadata ] serialized like tenant_lookup.
-    Protected by verify_api_secret (secret-proxied via Next.js).
+    Paginated tenant directory. `search` matches subdomain/school_name/email
+    (ILIKE). `status`: active | unpaid | suspended | all (default all).
+    Returns {tenants, total, page, limit}.
     """
     from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
     from main import TenantMetadata
+
+    page = max(1, int(page or 1))
+    limit = max(1, min(int(limit or 20), 100))
+    offset = (page - 1) * limit
+    q = (search or "").strip()
+    status_f = (status or "all").strip().lower()
+
+    where: list[str] = []
+    params: list = []
+    if q:
+        where.append("(subdomain ILIKE %s OR school_name ILIKE %s OR email ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
+    if status_f == "active":
+        where.append("subscription_status = 'active' AND is_active = TRUE")
+    elif status_f == "unpaid":
+        where.append("(subscription_status IS NULL OR subscription_status = '' OR subscription_status = 'unpaid')")
+    elif status_f == "suspended":
+        where.append("is_active = FALSE")
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     conn = None
     try:
@@ -98,13 +123,23 @@ def list_tenants():
         # Explicit columns (avoid SELECT * fragility) — same order as get_school_by_subdomain
         cur.execute(
             f"""
+            SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} {where_sql};
+            """,
+            tuple(params),
+        )
+        total = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                     is_verified, is_active, subscription_plan, subscription_status, student_count,
                     credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
+            {where_sql}
             ORDER BY created_at DESC
-            """
+            LIMIT %s OFFSET %s;
+            """,
+            tuple(params) + (limit, offset),
         )
         rows = cur.fetchall()
         tenants = []
@@ -113,7 +148,7 @@ def list_tenants():
             d = _normalize_school_row(d)
             # Validate via Pydantic (ensures shape parity)
             tenants.append(TenantMetadata(**d).model_dump())
-        return {"tenants": tenants}
+        return {"tenants": tenants, "total": total, "page": page, "limit": limit}
     except Exception as e:
         _logger.exception(f"[admin] list_tenants failed: {e}")
         from fastapi import HTTPException as _HTTPException
