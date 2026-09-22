@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyTransaction } from "@/lib/flutterwave";
+import { calculateTieredTotal } from "@/lib/pricing";
 
 /**
  * Phase 1 – Tenant Onboarding Proxy
@@ -91,6 +93,11 @@ interface RegisterSchoolBody {
   // Credit & Command: trial grant size (defaults to 30 server-side)
   initial_credits?: number | string;
   initialCredits?: number | string;
+  // Pay-first: verified Flutterwave payment (required except localhost mock)
+  transaction_id?: number | string;
+  transactionId?: number | string;
+  tx_ref?: string;
+  txRef?: string;
 }
 
 // ---------------------------------------------------------------------------
