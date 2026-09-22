@@ -85,12 +85,16 @@ def _normalize_school_row(row: dict):
     # new_term_begins is VARCHAR date string, keep as is or empty
     if "new_term_begins" in row and row["new_term_begins"] is not None:
         row["new_term_begins"] = str(row["new_term_begins"]).strip()
-    for ts_field in ("created_at", "updated_at"):
+    for ts_field in ("created_at", "updated_at", "deleted_at"):
+        if ts_field not in row:
+            continue
         value = row.get(ts_field)
-        if isinstance(value, datetime):
+        if value is None:
+            row[ts_field] = None
+        elif isinstance(value, datetime):
             row[ts_field] = value.isoformat()
         else:
-            row[ts_field] = str(value or "")
+            row[ts_field] = str(value)
     return row
 
 
