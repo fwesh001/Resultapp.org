@@ -469,6 +469,17 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         logger.warning(f"[PROVISION] Rejected — site for '{subdomain}' already exists")
         raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned (site exists)")
 
+    # Anti-replay: a verified transaction_id redeems exactly one school.
+    # Checked BEFORE any DB/site work so replays cost zero resources.
+    tx_id = (payload.transaction_id or "").strip() if payload.transaction_id else ""
+    provision_ref = f"provision:{tx_id}" if tx_id else None
+    if provision_ref:
+        from services.db_manager import transaction_reference_used
+
+        if transaction_reference_used(provision_ref):
+            logger.warning(f"[PROVISION] Rejected — transaction '{tx_id}' already redeemed")
+            raise HTTPException(status_code=400, detail="Transaction reference already used")
+
     # Track provisioning artefacts for rollback
     db_info: Optional[Dict[str, str]] = None
     site_info: Optional[Dict[str, str]] = None
