@@ -94,6 +94,7 @@ export function RegisterSchoolForm() {
   const [txRef, setTxRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [paidConflict, setPaidConflict] = useState<{ transactionId: string } | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const provisionFired = useRef(false);
   const [successData, setSuccessData] = useState<{
     deployedUrl: string;
@@ -337,6 +338,7 @@ export function RegisterSchoolForm() {
   }
 
   // Step 3: fire the provision request exactly once (StrictMode-safe ref guard).
+  // retryNonce re-arms the effect for manual retries with the same tx.
   useEffect(() => {
     if (currentStep !== 3 || !transactionId || provisionFired.current || successData) return;
     provisionFired.current = true;
@@ -423,15 +425,13 @@ export function RegisterSchoolForm() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, transactionId]);
+  }, [currentStep, transactionId, retryNonce]);
 
   function retryProvision() {
     provisionFired.current = false;
     setGlobalError(null);
     setPaidConflict(null);
-    // Re-trigger the effect by toggling a no-op: reset ref then re-run manually
-    setCurrentStep(3);
-    provisionFired.current = false;
+    setRetryNonce((n) => n + 1);
   }
 
   function resetWizard() {
