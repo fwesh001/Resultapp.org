@@ -62,11 +62,13 @@ class TenantsListResponse(BaseModel):
     # FastAPI will serialize via _normalize helper below
 
 
+# NOTE (ghost-bug bypass): this detail endpoint reads the registry directly and
+# intentionally does NOT filter deleted_at — the public tenant_lookup 404s
+# deleted schools, but superadmin CRM must still open them to restore.
 @router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")
 def get_tenant_detail(subdomain: str):
     from services.db_manager import get_school_by_subdomain
     from main import TenantMetadata
-
     tid = (subdomain or "").lower().strip()
     school = get_school_by_subdomain(tid)
     if school is None:
@@ -385,7 +387,10 @@ def set_tenant_status(subdomain: str, payload: TenantStatusUpdate):
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
         conn.commit()
-        log_admin_action("tenant.status", tid, updates)
+        details = dict(updates)
+        if reason:
+            details["reason"] = reason
+        log_admin_action("tenant.status", tid, details)
         _logger.info(f"[admin] Tenant {tid} status -> {updates}")
         return {"success": True, "subdomain": tid, "updates": updates}
     except HTTPException:
