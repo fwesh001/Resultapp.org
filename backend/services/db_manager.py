@@ -731,6 +731,94 @@ def admin_password_is_set(subdomain: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Phase: Superadmin Command Center — audit trail + NGN revenue tracking
+# ---------------------------------------------------------------------------
+
+AUDIT_LOGS_TABLE = "audit_logs"
+
+
+def log_admin_action(action: str, subdomain: Optional[str] = None, details: Optional[Dict[str, Any]] = None, actor: str = "superadmin") -> None:
+    """Append-only audit record for manual superadmin operations. Best-effort (never raises)."""
+    import json as _json
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {AUDIT_LOGS_TABLE} (actor, action, subdomain, details)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (actor, action, subdomain, _json.dumps(details or {})),
+        )
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"[DB] audit log failed ({action}/{subdomain}): {e}")
+        try:
+            if conn:
+                conn.rollback()
+        except Exception:
+            pass
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """Newest-first audit entries, optionally scoped to a tenant."""
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        if subdomain:
+            cur.execute(
+                f"""
+                SELECT id, actor, action, subdomain, details, created_at
+                FROM {AUDIT_LOGS_TABLE}
+                WHERE subdomain = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s;
+                """,
+                (_sanitize_subdomain(subdomain), limit, offset),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT id, actor, action, subdomain, details, created_at
+                FROM {AUDIT_LOGS_TABLE}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s;
+                """,
+                (limit, offset),
+            )
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            else:
+                d["created_at"] = str(d.get("created_at") or "")
+            out.append(d)
+        return out
+    except Exception as e:
+        logger.error(f"[DB] Failed to fetch audit logs: {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # Credit & Command — token ledger + publication gate (zero-downtime, additive)
 # ---------------------------------------------------------------------------
 
