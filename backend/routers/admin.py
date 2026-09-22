@@ -115,7 +115,11 @@ def list_tenants(
     q = (search or "").strip()
     status_f = (status or "all").strip().lower()
 
-    where: list[str] = ["deleted_at IS NULL"]
+    if status_f == "deleted":
+        # Superadmin recycle view: ONLY deleted rows.
+        where = ["deleted_at IS NOT NULL"]
+    else:
+        where = ["deleted_at IS NULL"]
     params: list = []
     if q:
         where.append("(subdomain ILIKE %s OR school_name ILIKE %s OR email ILIKE %s)")
@@ -127,13 +131,6 @@ def list_tenants(
         where.append("(subscription_status IS NULL OR subscription_status = '' OR subscription_status = 'unpaid')")
     elif status_f == "suspended":
         where.append("is_active = FALSE")
-    elif status_f == "deleted":
-        # Superadmin recycle view: ONLY deleted rows (drop the alive filter).
-        where = ["deleted_at IS NOT NULL"]
-        if q:
-            where.append("(subdomain ILIKE %s OR school_name ILIKE %s OR email ILIKE %s)")
-            like = f"%{q}%"
-            params.extend([like, like, like])
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     conn = None
