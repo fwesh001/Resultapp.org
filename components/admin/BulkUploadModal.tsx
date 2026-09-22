@@ -417,7 +417,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
 
         {/* Sticky footer */}
         <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl flex items-center justify-end gap-2">
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
