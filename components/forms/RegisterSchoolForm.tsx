@@ -218,17 +218,20 @@ export function RegisterSchoolForm() {
     if (globalError) setGlobalError(null);
   }
 
+  // Step 1 submit: local validation + availability ONLY. Never touches
+  // the provision API — payment happens in Step 2.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setGlobalError(null);
 
     if (!validate()) return;
 
-    // Sniped since the last keystroke: re-verify live before any payment/provision.
+    // Sniped since the last keystroke: re-verify live before advancing to payment.
     if (subdomainTaken) {
       setErrors((prev) => ({ ...prev, subdomain: "This subdomain was just taken — please choose another." }));
       return;
     }
+    setIsSubmitting(true);
     try {
       const res = await fetch(`/api/tenant/${encodeURIComponent(values.subdomain.trim())}`, { cache: "no-store" });
       const data = (await res.json().catch(() => ({}))) as { available?: boolean };
@@ -239,7 +242,104 @@ export function RegisterSchoolForm() {
       }
     } catch {
       // Fail open — backend 409 remains the backstop.
+    } finally {
+      setIsSubmitting(false);
     }
+
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Live order total for Step 2 summary (tiered slots).
+  const orderCount = useMemo(() => {
+    const n = parseInt(values.studentCount.trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [values.studentCount]);
+  const orderTier = useMemo(() => getPricingTier(orderCount), [orderCount]);
+  const orderTotal = useMemo(() => calculateTieredTotal(orderCount), [orderCount]);
+
+  function startFlutterwaveCheckout() {
+    setGlobalError(null);
+    const publicKey = getFlutterwavePublicKey();
+    const ref = generateTxRef(values.subdomain.trim() || "school");
+    const customerEmail = values.adminEmail.trim();
+    const customerName = customerEmail.split("@")[0] || values.schoolName.trim();
+
+    const openModal = () => {
+      initiateFlutterwaveInlinePayment(
+        {
+          publicKey: publicKey || "FLWPUBK_TEST-dummy-key-for-demo-do-not-use-in-prod",
+          txRef: ref,
+          amount: orderTotal,
+          currency: "NGN",
+          customer: { email: customerEmail, name: customerName },
+          customizations: {
+            title: `ResultApp • ${values.schoolName.trim()}`,
+            description: `${orderCount} slots × ${formatNaira(orderTier.pricePerStudent)} = ${formatNaira(orderTotal)}`,
+            logo: "https://resultapp.org/logo.png",
+          },
+          meta: {
+            schoolName: values.schoolName.trim(),
+            subdomain: values.subdomain.trim(),
+            adminEmail: customerEmail,
+            adminPassword: values.adminPassword,
+            studentCount: orderCount,
+            source: "registration_wizard",
+          },
+        },
+        {
+          onSuccess: (res) => {
+            const ok =
+              res.status === "successful" ||
+              res.status === "completed" ||
+              res.status === "success" ||
+              !!res.transaction_id;
+            if (!ok || !res.transaction_id) {
+              setGlobalError("Payment was not successful. Please try again — nothing was created.");
+              return;
+            }
+            setTransactionId(String(res.transaction_id));
+            setTxRef(res.tx_ref || ref);
+            setPaidConflict(null);
+            setCurrentStep(3);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          },
+          onClose: () => {
+            setGlobalError("Payment was cancelled — no charge made, nothing was created. You can retry anytime.");
+          },
+          onError: () => {
+            setGlobalError("Payment checkout failed to start. Check your connection and retry.");
+          },
+        },
+      );
+    };
+
+    if (!publicKey) {
+      console.warn("NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY not set — using dummy key");
+    }
+    setIsSubmitting(true);
+    loadFlutterwaveScript()
+      .then(openModal)
+      .catch((err) => {
+        console.error(err);
+        setGlobalError("Could not load Flutterwave checkout. Check your connection and try again.");
+      })
+      .finally(() => setIsSubmitting(false));
+  }
+
+  function useDevMockPayment() {
+    setGlobalError(null);
+    setPaidConflict(null);
+    setTransactionId("DEV_MOCK_TX");
+    setTxRef(generateTxRef(values.subdomain.trim() || "school"));
+    setCurrentStep(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Step 3: fire the provision request exactly once (StrictMode-safe ref guard).
+  useEffect(() => {
+    if (currentStep !== 3 || !transactionId || provisionFired.current || successData) return;
+    provisionFired.current = true;
 
     const payload = {
       schoolName: values.schoolName.trim(),
@@ -247,71 +347,103 @@ export function RegisterSchoolForm() {
       adminEmail: values.adminEmail.trim().toLowerCase(),
       adminPassword: values.adminPassword,
       studentCount: parseInt(values.studentCount.trim(), 10),
-      // Credit & Command: fixed 30-credit trial grant (frictionless onboarding).
       initial_credits: 30,
+      transaction_id: transactionId,
+      tx_ref: txRef,
     };
 
-    setIsSubmitting(true);
+    setProvisioning(true);
+    setGlobalError(null);
 
-    try {
-      const res = await fetch("/api/register-school", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    void (async () => {
+      try {
+        const res = await fetch("/api/register-school", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      const data = (await res.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        fieldErrors?: Record<string, string>;
-        deployed_url?: string;
-        deployedUrl?: string;
-        domain?: string;
-        subdomain?: string;
-        school_name?: string;
-        details?: string;
-      };
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          error?: string;
+          code?: string;
+          transaction_id?: string;
+          fieldErrors?: Record<string, string>;
+          deployed_url?: string;
+          deployedUrl?: string;
+          domain?: string;
+          subdomain?: string;
+          school_name?: string;
+          details?: string;
+        };
 
-      if (!res.ok || !data.success) {
-        // Map fieldErrors from API (e.g., 409 subdomain)
-        if (data.fieldErrors) {
-          const mapped: FormErrors = {};
-          if (data.fieldErrors.subdomain) mapped.subdomain = data.fieldErrors.subdomain;
-          if (data.fieldErrors.schoolName) mapped.schoolName = data.fieldErrors.schoolName;
-          if (data.fieldErrors.adminEmail) mapped.adminEmail = data.fieldErrors.adminEmail;
-          if (data.fieldErrors.adminPassword) mapped.adminPassword = data.fieldErrors.adminPassword;
-          if (data.fieldErrors.studentCount) mapped.studentCount = data.fieldErrors.studentCount;
-          if (Object.keys(mapped).length > 0) setErrors((prev) => ({ ...prev, ...mapped }));
+        if (!res.ok || !data.success) {
+          if (data.fieldErrors) {
+            const mapped: FormErrors = {};
+            if (data.fieldErrors.subdomain) mapped.subdomain = data.fieldErrors.subdomain;
+            if (data.fieldErrors.schoolName) mapped.schoolName = data.fieldErrors.schoolName;
+            if (data.fieldErrors.adminEmail) mapped.adminEmail = data.fieldErrors.adminEmail;
+            if (data.fieldErrors.adminPassword) mapped.adminPassword = data.fieldErrors.adminPassword;
+            if (data.fieldErrors.studentCount) mapped.studentCount = data.fieldErrors.studentCount;
+            if (Object.keys(mapped).length > 0) setErrors((prev) => ({ ...prev, ...mapped }));
+          }
+
+          // Paid-but-sniped: no auto-retry (same tx would 400) — support ticket.
+          if (data.code === "PAID_SUBDOMAIN_TAKEN") {
+            setPaidConflict({ transactionId: String(data.transaction_id || transactionId) });
+            setGlobalError(null);
+            return;
+          }
+
+          if (res.status === 409) {
+            throw new Error(data.error || "Subdomain already exists — please choose another.");
+          }
+
+          throw new Error(
+            data.error || data.details || `Provisioning failed (${res.status}). Please try again or contact support@resultapp.org.`
+          );
         }
 
-        // Graceful backend error mapping
-        if (res.status === 409) {
-          throw new Error(data.error || "Subdomain already exists — please choose another.");
-        }
+        const deployedUrl =
+          data.deployed_url || data.deployedUrl || `https://${payload.subdomain}.${baseDomain}`;
+        const domain = data.domain || `${payload.subdomain}.${baseDomain}`;
 
-        throw new Error(
-          data.error || data.details || `Provisioning failed (${res.status}). Please try again or contact support@resultapp.org.`
-        );
+        setSuccessData({
+          deployedUrl,
+          domain,
+          subdomain: data.subdomain || payload.subdomain,
+          schoolName: data.school_name || payload.schoolName,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+        setGlobalError(message);
+        console.error("[RegisterSchoolForm] provision error:", err);
+      } finally {
+        setProvisioning(false);
       }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, transactionId]);
 
-      // Success
-      const deployedUrl =
-        data.deployed_url || data.deployedUrl || `https://${payload.subdomain}.${baseDomain}`;
-      const domain = data.domain || `${payload.subdomain}.${baseDomain}`;
+  function retryProvision() {
+    provisionFired.current = false;
+    setGlobalError(null);
+    setPaidConflict(null);
+    // Re-trigger the effect by toggling a no-op: reset ref then re-run manually
+    setCurrentStep(3);
+    provisionFired.current = false;
+  }
 
-      setSuccessData({
-        deployedUrl,
-        domain,
-        subdomain: data.subdomain || payload.subdomain,
-        schoolName: data.school_name || payload.schoolName,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setGlobalError(message);
-      console.error("[RegisterSchoolForm] submit error:", err);
-    } finally {
-      setIsSubmitting(false);
-    }
+  function resetWizard() {
+    provisionFired.current = false;
+    setSuccessData(null);
+    setTransactionId(null);
+    setTxRef(null);
+    setPaidConflict(null);
+    setProvisioning(false);
+    setValues({ schoolName: "", subdomain: "", adminEmail: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "" });
+    setErrors({});
+    setCurrentStep(1);
   }
 
   // -------------------------------------------------------------------------
