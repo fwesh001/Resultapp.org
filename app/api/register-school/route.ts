@@ -383,6 +383,21 @@ export async function POST(req: NextRequest) {
     console.error(`[register-school] Backend ${provisionRes.status}:`, detailStr);
 
     if (provisionRes.status === 409) {
+      // Paid-but-sniped: payment succeeded but the subdomain was taken first.
+      // No auto-retry (same tx would 400) — support ticket with tx reference.
+      if (txId) {
+        console.error(`[register-school] PAID-BUT-SNIPED tx=${txId} subdomain=${subdomain} paid=${verifiedPaid}`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Payment received but "${subdomain}" was just taken by another school. Contact support@resultapp.org with reference ${txId} for a manual setup or refund — do not pay again.`,
+            code: "PAID_SUBDOMAIN_TAKEN",
+            transaction_id: txId,
+            details: detailStr,
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         {
           success: false,
