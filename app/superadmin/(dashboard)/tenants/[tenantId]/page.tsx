@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle, Loader2, CheckCircle2, Coins, Layers, Power, KeyRound } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
-import { formatNaira } from "@/lib/pricing";
 
 interface School {
   subdomain: string;
@@ -294,9 +293,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
             )}
           </div>
 
-          <p className="mt-4 text-center text-xs text-purple-300/30">
-            MRR impact: none — grants and resets are non-revenue actions • {formatNaira(0)} placeholder
-          </p>
+
         </>
       )}
     </div>
