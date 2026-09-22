@@ -65,8 +65,7 @@ class TenantsListResponse(BaseModel):
 # NOTE (ghost-bug bypass): this detail endpoint reads the registry directly and
 # intentionally does NOT filter deleted_at — the public tenant_lookup 404s
 # deleted schools, but superadmin CRM must still open them to restore.
-@router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")
-def get_tenant_detail(subdomain: str):
+@router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")def get_tenant_detail(subdomain: str):
     from services.db_manager import get_school_by_subdomain
     from main import TenantMetadata
     tid = (subdomain or "").lower().strip()
