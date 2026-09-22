@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
     phone_number: phoneNumber || undefined,
     student_count: studentCount,
     transaction_id: transactionId,
-    amount_ngn: paid,
+    amount_ngn: paidAmount,
   };
   if (adminPassword && adminPassword.length >= 8 && adminPassword.length <= 128) {
     fastApiPayload.admin_password = adminPassword;
