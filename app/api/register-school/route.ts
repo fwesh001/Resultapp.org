@@ -227,6 +227,73 @@ export async function POST(req: NextRequest) {
   }
   // phone not in Phase 1; omit
 
+  // ---- Pay-first verification (no payment → no provisioning) ----
+  // Localhost mock path below skips this (dev only).
+  const txIdRaw = body.transaction_id ?? body.transactionId ?? "";
+  const txId = String(txIdRaw).trim();
+  const backendBaseForTx = rawUrl.replace(/\/api\/v1\/provision\/?$/, "").replace(/\/$/, "");
+  const isMockTarget = rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1");
+  let verifiedPaid = 0;
+  if (!isMockTarget) {
+    if (!txId) {
+      return NextResponse.json(
+        { success: false, error: "Payment required: missing transaction_id. Complete Flutterwave checkout first." },
+        { status: 402 }
+      );
+    }
+    // 1. Verify with Flutterwave
+    let verification: Awaited<ReturnType<typeof verifyTransaction>>;
+    try {
+      verification = await verifyTransaction(txId);
+    } catch (err) {
+      console.error("[register-school] verifyTransaction failed", err);
+      return NextResponse.json(
+        { success: false, error: "Payment verification failed. Please contact support." },
+        { status: 402 }
+      );
+    }
+    const vData = verification.data;
+    if (!vData) {
+      return NextResponse.json({ success: false, error: "Invalid verification response" }, { status: 502 });
+    }
+    const flwStatus = String(vData.status || "").toLowerCase();
+    const ok = verification.status === "success" || flwStatus === "successful" || flwStatus === "completed";
+    if (!ok) {
+      return NextResponse.json(
+        { success: false, error: `Payment not successful (status: ${vData.status})` },
+        { status: 402 }
+      );
+    }
+    // 2. Amount must cover tiered slots
+    const expectedAmount = calculateTieredTotal(studentCount);
+    const paid = Number((vData as { amount?: unknown }).amount ?? (vData as { charged_amount?: unknown }).charged_amount ?? 0);
+    if (!Number.isFinite(paid) || paid < expectedAmount) {
+      return NextResponse.json(
+        { success: false, error: `Paid amount (₦${paid}) does not match expected price (₦${expectedAmount}) for ${studentCount} students.` },
+        { status: 402 }
+      );
+    }
+    verifiedPaid = paid;
+    // 3. Anti-replay pre-check (authoritative check also runs in provision_school)
+    try {
+      const existsRes = await fetch(
+        `${backendBaseForTx}/api/v1/admin/transactions/exists?reference_id=${encodeURIComponent(`provision:${txId}`)}`,
+        { headers: { "X-API-SECRET-KEY": secret }, cache: "no-store" },
+      );
+      const existsData = await existsRes.json().catch(() => ({}));
+      if (existsRes.ok && (existsData as { used?: boolean }).used === true) {
+        return NextResponse.json(
+          { success: false, error: "Transaction reference already used" },
+          { status: 400 }
+        );
+      }
+    } catch (e) {
+      console.warn("[register-school] tx-reuse pre-check unreachable, continuing to authoritative backend check", e);
+    }
+    fastApiPayload.transaction_id = txId;
+    fastApiPayload.amount_ngn = verifiedPaid;
+  }
+
   // ---- Forward to FastAPI ----
   const targetUrl = buildTargetUrl(rawUrl);
 
