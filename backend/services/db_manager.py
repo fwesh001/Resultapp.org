@@ -416,6 +416,16 @@ def init_schools_registry() -> None:
             CREATE INDEX IF NOT EXISTS ix_billing_ledger_created
             ON billing_ledger (created_at DESC);
         """)
+        # Command Center: immutable NGN revenue per purchase (0 = free/legacy).
+        cur.execute(f"""
+            ALTER TABLE {BILLING_LEDGER_TABLE}
+            ADD COLUMN IF NOT EXISTS amount_ngn INTEGER DEFAULT 0;
+        """)
+        cur.execute(f"""
+            UPDATE {BILLING_LEDGER_TABLE}
+            SET amount_ngn = 0
+            WHERE amount_ngn IS NULL;
+        """)
         # Lightweight key-value settings for Superadmin tunables (credit_price, etc.)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS app_settings (
@@ -871,10 +881,11 @@ def get_credit_balance(subdomain: str) -> int:
             conn.close()
 
 
-def topup_slots(subdomain: str, amount: int, reference_id: str, description: Optional[str] = None) -> Dict[str, Any]:
+def topup_slots(subdomain: str, amount: int, reference_id: str, description: Optional[str] = None, amount_ngn: int = 0) -> Dict[str, Any]:
     """Purchase slots (capacity) — additive, idempotent on reference_id. Dual-writes billing_ledger."""
     subdomain = _sanitize_subdomain(subdomain)
     amount = int(amount)
+    amount_ngn = max(0, int(amount_ngn or 0))
     if amount <= 0 or amount > 10000:
         raise ValueError("Slot amount must be 1-10000")
     if not reference_id or not reference_id.strip():
@@ -895,10 +906,10 @@ def topup_slots(subdomain: str, amount: int, reference_id: str, description: Opt
         cur.execute(
             f"""
             INSERT INTO {BILLING_LEDGER_TABLE}
-                (subdomain, token_type, amount, transaction_type, reference_id, description)
-            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s);
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s, %s);
             """,
-            (subdomain, amount, reference_id, description or f"Slot purchase: {amount} slots"),
+            (subdomain, amount, reference_id, description or f"Slot purchase: {amount} slots", amount_ngn),
         )
         # Also mirror to credit_ledger for legacy readers? No — slots are not credits, keep billing_ledger only for SLOT.
         cur.execute(
@@ -1270,12 +1281,14 @@ def add_billing_ledger_entry(
     transaction_type: str,
     reference_id: Optional[str] = None,
     description: Optional[str] = None,
+    amount_ngn: int = 0,
 ) -> Dict[str, Any]:
     """Insert into unified billing_ledger. Duplicate reference_id → returns existing row (idempotent)."""
     subdomain = _sanitize_subdomain(subdomain)
     ttype = token_type.strip().upper()
     if ttype not in ("SLOT", "CREDIT"):
         raise ValueError("token_type must be SLOT or CREDIT")
+    amount_ngn = max(0, int(amount_ngn or 0))
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -1283,13 +1296,13 @@ def add_billing_ledger_entry(
         cur.execute(
             f"""
             INSERT INTO {BILLING_LEDGER_TABLE}
-                (subdomain, token_type, amount, transaction_type, reference_id, description)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (reference_id) DO NOTHING
             RETURNING id, subdomain, token_type, amount, transaction_type, reference_id,
                       description, created_at;
             """,
-            (subdomain, ttype, int(amount), transaction_type, reference_id, description),
+            (subdomain, ttype, int(amount), transaction_type, reference_id, description, amount_ngn),
         )
         row = cur.fetchone()
         if row is None and reference_id:
@@ -1325,11 +1338,12 @@ def _dual_write_ledger(
     reference_id: Optional[str],
     description: Optional[str],
     token_type: str,
+    amount_ngn: int = 0,
 ) -> None:
     """Best-effort dual-write to billing_ledger (new) and credit_ledger (legacy) for zero-downtime parity."""
     try:
         # Always write unified ledger
-        add_billing_ledger_entry(subdomain, token_type, amount, transaction_type, reference_id, description)
+        add_billing_ledger_entry(subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
     except Exception as e:
         logger.warning(f"[DB] Dual-write billing_ledger failed for '{subdomain}' {reference_id}: {e}")
     # Legacy credit_ledger mirror for CREDIT token_type only (keeps old readers working)
