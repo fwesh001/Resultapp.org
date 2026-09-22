@@ -512,8 +512,206 @@ export function RegisterSchoolForm() {
   // -------------------------------------------------------------------------
   // Form UI
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Form UI
+  // -------------------------------------------------------------------------
+  const steps = [
+    { n: 1, label: "School details" },
+    { n: 2, label: "Checkout" },
+    { n: 3, label: "Portal ready" },
+  ] as const;
+
+  function renderStepIndicator() {
+    return (
+      <div className="mx-auto mb-8 flex items-center justify-center gap-2 text-sm" aria-label="Registration steps">
+        {steps.map((s, i) => {
+          const done = currentStep > s.n;
+          const active = currentStep === s.n;
+          return (
+            <span key={s.n} className="flex items-center gap-2">
+              {i > 0 && <span className="h-px w-6 bg-purple-500/20 sm:w-8" />}
+              <span
+                className={
+                  active
+                    ? "flex h-7 w-7 items-center justify-center rounded-full bg-purple-600 text-white shadow-[0_0_14px_rgba(147,51,234,0.45)] ring-1 ring-purple-500/30"
+                    : done
+                      ? "flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white"
+                      : "flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/20 bg-purple-950/30 text-purple-300"
+                }
+              >
+                {done ? <CheckCircle2 className="h-4 w-4" /> : s.n}
+              </span>
+              <span className={active ? "font-medium text-white" : done ? "text-emerald-300/80" : "text-purple-300/60"}>
+                {s.label}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 3 — provisioning / paid-conflict (before the step-1 form)
+  // -------------------------------------------------------------------------
+  if (currentStep === 3 && !successData) {
+    return (
+      <div>
+        {renderStepIndicator()}
+        {paidConflict ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/20">
+              <AlertCircle className="h-8 w-8 text-amber-400" />
+            </div>
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Subdomain just taken</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+              Your payment went through, but <span className="font-mono font-medium text-white">{values.subdomain.trim()}.resultapp.org</span> was
+              registered by someone else first. Do not pay again — contact{" "}
+              <span className="font-medium text-white">support@resultapp.org</span> with reference{" "}
+              <span className="font-mono font-medium text-white">{paidConflict.transactionId}</span> for
+              a manual setup or refund.
+            </p>
+            <button
+              type="button"
+              onClick={() => setCurrentStep(1)}
+              className="mt-6 w-full rounded-full bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500"
+            >
+              Choose a different subdomain
+            </button>
+          </div>
+        ) : provisioning ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-purple-400" />
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Creating your portal…</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+              Payment confirmed. Provisioning your database, site, and admin account — this may take a minute.
+              Please keep this tab open.
+            </p>
+          </div>
+        ) : globalError ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/20">
+              <AlertCircle className="h-8 w-8 text-red-400" />
+            </div>
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Provisioning failed</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">{globalError}</p>
+            <p className="mt-2 max-w-md text-xs leading-5 text-purple-300/50">
+              Your payment is safe — retrying reuses transaction {transactionId} and never double-provisions.
+            </p>
+            <div className="mt-6 flex w-full flex-col gap-2">
+              <Button
+                className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
+                size="lg"
+                onClick={retryProvision}
+              >
+                <Loader2 className="h-4 w-4" /> Retry provisioning
+              </Button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+              >
+                Back to checkout
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 2 — checkout summary
+  // -------------------------------------------------------------------------
+  if (currentStep === 2) {
+    const isLocalhost =
+      typeof window !== "undefined" &&
+      (window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1"));
+    return (
+      <div>
+        {renderStepIndicator()}
+        <h3 className="text-lg font-bold tracking-tight text-white">Order summary</h3>
+        <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-sm">
+          <div className="flex justify-between py-1">
+            <span className="text-purple-200/60">School</span>
+            <span className="font-medium text-white">{values.schoolName.trim() || "—"}</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-purple-200/60">Subdomain</span>
+            <span className="font-mono font-medium text-white">{previewDomain}</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-purple-200/60">Admin</span>
+            <span className="font-medium text-white">{values.adminEmail.trim() || "—"}</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-purple-200/60">Student slots</span>
+            <span className="font-medium text-white">
+              {orderCount} × {formatNaira(orderTier.pricePerStudent)}
+              {orderTier.badge ? <span className="ml-2 text-xs text-emerald-300">{orderTier.badge}</span> : null}
+            </span>
+          </div>
+          <div className="my-2 border-t border-purple-500/10" />
+          <div className="flex justify-between py-1 text-base font-bold text-white">
+            <span>Total due</span>
+            <span>{formatNaira(orderTotal)}</span>
+          </div>
+          <p className="mt-1 text-xs text-purple-300/50">Includes 30 free publishing credits at launch.</p>
+        </div>
+
+        {globalError && (
+          <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span>{globalError}</span>
+          </div>
+        )}
+
+        <Button
+          className="mt-4 w-full gap-2 rounded-full bg-red-600 font-semibold text-white shadow-[0_0_28px_rgba(239,68,68,0.35)] hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isSubmitting || orderCount <= 0}
+          size="lg"
+          onClick={startFlutterwaveCheckout}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Opening secure checkout…
+            </>
+          ) : (
+            <>Pay {formatNaira(orderTotal)} with Flutterwave</>
+          )}
+        </Button>
+
+        {isLocalhost && (
+          <Button
+            variant="outline"
+            className="mt-2 w-full gap-2 rounded-full"
+            disabled={isSubmitting || orderCount <= 0}
+            onClick={useDevMockPayment}
+          >
+            Dev Mock Payment (localhost only)
+          </Button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setGlobalError(null);
+            setCurrentStep(1);
+          }}
+          className="mt-3 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+        >
+          ← Back to school details
+        </button>
+        <p className="mt-3 text-center text-xs leading-5 text-purple-300/40">
+          No database or portal is created until payment succeeds.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
+      {renderStepIndicator()}
       {/* School Name */}
       <Input
         label="School Name"
