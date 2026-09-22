@@ -65,6 +65,17 @@ class TenantsListResponse(BaseModel):
 # NOTE (ghost-bug bypass): this detail endpoint reads the registry directly and
 # intentionally does NOT filter deleted_at — the public tenant_lookup 404s
 # deleted schools, but superadmin CRM must still open them to restore.
+@router.get("/transactions/exists", summary="Check whether a ledger reference was redeemed (superadmin)")
+def transaction_exists(reference_id: Optional[str] = None):
+    """Fast pre-check for Next.js proxies: has this reference_id been used?"""
+    from services.db_manager import transaction_reference_used
+
+    ref = (reference_id or "").strip()
+    if not ref:
+        raise HTTPException(status_code=400, detail="reference_id is required")
+    return {"reference_id": ref, "used": transaction_reference_used(ref)}
+
+
 @router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")def get_tenant_detail(subdomain: str):
     from services.db_manager import get_school_by_subdomain
     from main import TenantMetadata
