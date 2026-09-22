@@ -208,6 +208,8 @@ class ProvisionRequest(BaseModel):
     admin_email: EmailStr = Field(..., examples=["admin@victoryhigh.edu.ng"])
     admin_name: Optional[str] = Field(None, min_length=3, max_length=80, examples=["Mrs. Adaeze Okafor"], description="Optional — defaults to local part of email")
     admin_password: Optional[str] = Field(None, min_length=8, max_length=128, description="Phase 2 — admin portal password chosen at registration (stored as pgcrypto bcrypt hash)")
+    transaction_id: Optional[str] = Field(None, min_length=1, max_length=100, description="Verified Flutterwave transaction_id (anti-replay: rejected if already redeemed)")
+    amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably on the provision ledger row)")
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
     student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each)")
     initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="Trial credit grant at registration (Credit & Command). Defaults to 30.")
