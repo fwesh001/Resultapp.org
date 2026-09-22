@@ -76,6 +76,23 @@ export default async function ReportPage({
 
   const school = await getTenant(tenantId);
 
+  // Suspended tenants: report cards blocked for everyone except a signed-in
+  // tenant admin (who keeps the billing hatch via the portal link below).
+  if (school && school.isActive === false) {
+    let showBilling = false;
+    try {
+      const rawAdmin = (await cookies()).get("admin_session")?.value;
+      if (rawAdmin) {
+        const s = JSON.parse(rawAdmin) as { admin?: { email?: string }; tenant_id?: string };
+        showBilling =
+          String(s?.tenant_id || "").toLowerCase().trim() === tenantId && !!s?.admin?.email;
+      }
+    } catch {
+      showBilling = false;
+    }
+    return <SuspendedPortal schoolName={school.name} subdomain={tenantId} showBillingLink={showBilling} />;
+  }
+
   // Admin preview guard: a signed-in admin for THIS tenant sees the draft
   // overlay (staff workflow); parents/guests see the Not Published state.
   let isAdminPreview = false;
