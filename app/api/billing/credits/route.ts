@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
     backendRes = await fetch(`${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/credits/topup`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
-      body: JSON.stringify({ credit_count: countNum, transaction_id: txId }),
+      body: JSON.stringify({ credit_count: countNum, transaction_id: txId, amount_ngn: paid }),
       cache: "no-store",
     });
   } catch (e) {
