@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
   // Credits are flat-rate (superadmin tunable via app_settings, default 200 NGN).
   // Fetching the live price is best-effort — fallback to CREDIT_PRICE on failure.
   let liveCreditPrice = CREDIT_PRICE;
+  let priceSource: "live" | "fallback" = "fallback";
   try {
     const secretTmp = getProxySecret();
     const baseTmp = getBackendBase();
@@ -140,10 +141,18 @@ export async function POST(req: NextRequest) {
       if (priceRes.ok) {
         const priceData = await priceRes.json().catch(() => ({}));
         const p = Number((priceData as { credit_price?: number }).credit_price);
-        if (Number.isFinite(p) && p > 0) liveCreditPrice = p;
+        if (Number.isFinite(p) && p > 0) {
+          liveCreditPrice = p;
+          priceSource = "live";
+        }
       }
     }
   } catch {}
+  if (priceSource === "fallback") {
+    console.warn(
+      `[billing/credits] live credit-price fetch failed for ${tenantId} — falling back to default ₦${CREDIT_PRICE}. Check backend /config/credit-price.`
+    );
+  }
   const expectedAmount = calculateCreditTotal(countNum, liveCreditPrice);
   const isMockTxRef = txId.startsWith("resultapp_");
   const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "";
@@ -198,9 +207,15 @@ export async function POST(req: NextRequest) {
   const expected = expectedAmount;
   const paid = Number(data.amount ?? (data as { charged_amount?: number }).charged_amount ?? 0);
   if (paid < expected) {
-    console.warn(`[billing/credits] amount mismatch paid ${paid} < expected ${expected} for ${countNum} credits`);
+    console.warn(`[billing/credits] amount mismatch paid ${paid} < expected ${expected} for ${countNum} credits (unitPrice ${liveCreditPrice}, source ${priceSource})`);
     return NextResponse.json(
-      { success: false, error: `Paid amount ₦${paid} is less than expected ₦${expected} for ${countNum} credits.` },
+      {
+        success: false,
+        error: `Paid amount ₦${paid} is less than expected ₦${expected} for ${countNum} credits. The credit price may have changed — please retry checkout.`,
+        expected,
+        paid,
+        unitPrice: liveCreditPrice,
+      },
       { status: 402 },
     );
   }
