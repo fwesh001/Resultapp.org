@@ -76,7 +76,8 @@ def transaction_exists(reference_id: Optional[str] = None):
     return {"reference_id": ref, "used": transaction_reference_used(ref)}
 
 
-@router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")def get_tenant_detail(subdomain: str):
+@router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")
+def get_tenant_detail(subdomain: str):
     from services.db_manager import get_school_by_subdomain
     from main import TenantMetadata
     tid = (subdomain or "").lower().strip()
