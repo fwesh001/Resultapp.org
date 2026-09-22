@@ -789,7 +789,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
             </select>
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("student")}
               disabled={submitting}
@@ -826,7 +826,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
             </select>
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("staff")}
               disabled={submitting}
@@ -844,7 +844,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
         <div className="space-y-3">
           <Input label="Subject Name" value={subjectForm.subject_name} onChange={(e) => setSubjectForm((p) => ({ ...p, subject_name: e.target.value }))} placeholder="e.g., Mathematics" />
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
             <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
             </Button>
@@ -929,7 +929,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
 
           <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("allocation")}
               disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
