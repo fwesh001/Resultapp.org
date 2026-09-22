@@ -49,9 +49,20 @@ export default async function AdminDashboardLayout({
   const school = await getTenant(subdomain);
   const schoolName = school?.name || subdomain;
   const slug = school?.slug || subdomain;
+  // Billing escape hatch: suspended tenants keep FULL admin access so the
+  // admin can self-serve top-ups at /admin/billing — with a banner nudge.
+  const suspended = school != null && school.isActive === false;
 
   return (
     <AdminShell subdomain={slug} schoolName={schoolName}>
+      {suspended && (
+        <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm text-amber-200">
+          Portal suspended — public, staff, and report access is paused.{" "}
+          <a href={`/${slug}/admin/billing`} className="font-semibold underline underline-offset-4 hover:text-white">
+            Top up to restore access →
+          </a>
+        </div>
+      )}
       {children}
     </AdminShell>
   );
