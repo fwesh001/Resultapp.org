@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant";
 import StaffShell from "@/components/staff/StaffShell";
+import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,11 @@ export default async function StaffDashboardLayout({
   const school = await getTenant(subdomain);
   const schoolName = school?.name || subdomain;
   const slug = school?.slug || subdomain;
+
+  // Suspended tenants: staff portal blocked (no billing hatch — staff can't pay).
+  if (school && school.isActive === false) {
+    return <SuspendedPortal schoolName={schoolName} subdomain={slug} />;
+  }
 
   return (
     <StaffShell subdomain={slug} schoolName={schoolName}>
