@@ -309,28 +309,30 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         disabled={isPaying || upgrading}
       />
 
-      {/* Slider 50-2000 */}
+      {/* Slider — bounds depend on mode */}
       <div className="rounded-2xl border border-purple-500/10 bg-purple-950/15 p-4 backdrop-blur">
         <div className="flex items-center justify-between text-xs font-medium text-purple-300">
-          <span>50</span>
+          <span>{sliderMin.toLocaleString()}</span>
           <span className="rounded-full border border-purple-500/15 bg-purple-500/5 px-2 py-0.5 text-[11px] text-purple-200/60">
-            Slider 50–2000 • step 10 • 1–49 via text
+            {isCredit
+              ? `Slider 1–10,000 • step 1 • flat ${formatNaira(price)}/credit`
+              : "Slider 50–2000 • step 10 • 1–49 via text"}
           </span>
-          <span>2,000</span>
+          <span>{sliderMax.toLocaleString()}</span>
         </div>
         <div className="relative mt-3">
           <input
             type="range"
-            min={50}
-            max={2000}
-            step={10}
+            min={sliderMin}
+            max={sliderMax}
+            step={sliderStep}
             value={clampedSlider}
             onChange={(e) => handleCountChange(e.target.value)}
             className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
             style={{
               background: `linear-gradient(to right, rgb(147 51 234) 0%, rgb(168 85 247) ${sliderPct}%, rgba(88,28,135,0.35) ${sliderPct}%, rgba(88,28,135,0.35) 100%)`,
             }}
-            aria-label="Student count slider"
+            aria-label={isCredit ? "Credit amount slider" : "Student count slider"}
             disabled={isPaying || upgrading}
           />
           <div
@@ -338,17 +340,23 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
             style={{ left: `calc(${sliderPct}% - 5px)` }}
           />
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-          <span className={`rounded-full border px-2.5 py-1 ${countNum < 500 ? "border-purple-500 bg-purple-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
-            50–499 → ₦100
-          </span>
-          <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
-            500–999 → ₦90
-          </span>
-          <span className={`rounded-full border px-2.5 py-1 ${countNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
-            1000+ → ₦80
-          </span>
-        </div>
+        {!isCredit ? (
+          <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+            <span className={`rounded-full border px-2.5 py-1 ${countNum < 500 ? "border-purple-500 bg-purple-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+              50–499 → ₦100
+            </span>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+              500–999 → ₦90
+            </span>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+              1000+ → ₦80
+            </span>
+          </div>
+        ) : (
+          <p className="mt-3 text-[11px] text-purple-200/60">
+            Flat {formatNaira(price)} per credit — no tiers.
+          </p>
+        )}
         <style>{`input[type="range"]::-webkit-slider-thumb{appearance:none;height:26px;width:26px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} input[type="range"]::-moz-range-thumb{height:26px;width:26px;border-radius:9999px;background:white;border:3px solid rgb(147 51 234);box-shadow:0 0 14px rgba(147,51,234,0.5)} @media (pointer:coarse){input[type="range"]::-webkit-slider-thumb{height:30px;width:30px} input[type="range"]::-moz-range-thumb{height:30px;width:30px}}`}</style>
       </div>
 
