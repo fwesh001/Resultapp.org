@@ -14,6 +14,17 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import {
+  getFlutterwavePublicKey,
+  loadFlutterwaveScript,
+  initiateFlutterwaveInlinePayment,
+  generateTxRef,
+} from "@/lib/flutterwave";
+import {
+  getPricingTier,
+  calculateTieredTotal,
+  formatNaira,
+} from "@/lib/pricing";
 
 // ---------------------------------------------------------------------------
 // Phase 1 – RegisterSchoolForm (4 fields, direct provision, no Flutterwave)
@@ -77,6 +88,13 @@ export function RegisterSchoolForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
   const [subdomainTaken, setSubdomainTaken] = useState(false);
+  // Pay-first 3-step wizard: 1 = details, 2 = checkout, 3 = provisioning.
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [txRef, setTxRef] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [paidConflict, setPaidConflict] = useState<{ transactionId: string } | null>(null);
+  const provisionFired = useRef(false);
   const [successData, setSuccessData] = useState<{
     deployedUrl: string;
     domain: string;
