@@ -732,7 +732,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
         description={isEditingStudent ? "Update Full Name, Class, Gender — Admission No is locked" : "Admission No, Full Name, Class — Gender optional"}
         className="border-purple-500/20 bg-[#0B0514] text-white"
       >
-        <div className="space-y-3 pb-28">
+        <div className="space-y-3">
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <Input
@@ -788,7 +788,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               <option value="Female">Female</option>
             </select>
           </div>
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
+          <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
             <Button
               onClick={() => handleCreate("student")}
               disabled={submitting}
@@ -809,7 +810,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
         description={isEditingStaff ? "Update Full Name, Email, Phone, Role — Staff ID is locked" : "Staff ID, Full Name, Email, Role"}
         className="border-purple-500/20 bg-[#0B0514] text-white"
       >
-        <div className="space-y-3 pb-28">
+        <div className="space-y-3">
           <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" disabled={isEditingStaff} />
           <Input label="Full Name" value={staffForm.full_name} onChange={(e) => setStaffForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Mr. Okoro" />
           <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
@@ -824,7 +825,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
               ))}
             </select>
           </div>
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
+          <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
             <Button
               onClick={() => handleCreate("staff")}
               disabled={submitting}
@@ -839,9 +841,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
 
       {/* Add Subject Modal */}
       <Modal open={showSubjectModal} onOpenChange={setShowSubjectModal} title="Add Subject" description="Add a single subject to the master list" className="border-purple-500/20 bg-[#0B0514] text-white">
-        <div className="space-y-3 pb-28">
+        <div className="space-y-3">
           <Input label="Subject Name" value={subjectForm.subject_name} onChange={(e) => setSubjectForm((p) => ({ ...p, subject_name: e.target.value }))} placeholder="e.g., Mathematics" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
+          <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
             <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
             </Button>
@@ -851,7 +854,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
 
       {/* Assign Subject Modal — 3 dropdowns */}
       <Modal open={showAllocModal} onOpenChange={setShowAllocModal} title="Assign Subject" description="Select Class, Subject and Staff to create allocation" className="border-purple-500/20 bg-[#0B0514] text-white">
-        <div className="space-y-3 pb-28">
+        <div className="space-y-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Class</label>
             {availableClasses.length === 0 ? (
@@ -925,7 +928,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
           </div>
 
           <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4 rounded-b-xl">
+          <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl">
             <Button
               onClick={() => handleCreate("allocation")}
               disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
