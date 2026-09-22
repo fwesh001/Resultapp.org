@@ -493,6 +493,102 @@ def grant_tenant_tokens(subdomain: str, payload: TenantGrantRequest):
                 pass
 
 
+class TenantDeleteRequest(BaseModel):
+    reason: str = ""
+
+
+@router.delete("/tenants/{subdomain}", summary="Soft-delete a tenant (superadmin)")
+def soft_delete_tenant(subdomain: str, payload: TenantDeleteRequest):
+    """Sets deleted_at = NOW(). Row + ledger history preserved. Audited with reason."""
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, log_admin_action
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="A reason (min 3 chars) is required to delete a school")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT deleted_at FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+            (tid,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        if row[0] is not None:
+            raise HTTPException(status_code=409, detail=f"Tenant '{tid}' is already deleted")
+        cur.execute(
+            f"UPDATE {SCHOOLS_REGISTRY_TABLE} SET deleted_at = NOW(), updated_at = NOW() WHERE subdomain = %s;",
+            (tid,),
+        )
+        conn.commit()
+        log_admin_action("tenant.delete", tid, {"reason": reason})
+        _logger.info(f"[admin] Tenant '{tid}' soft-deleted (reason: {reason})")
+        return {"success": True, "subdomain": tid}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] delete failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/tenants/{subdomain}/restore", summary="Restore a soft-deleted tenant (superadmin)")
+def restore_tenant(subdomain: str):
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, log_admin_action
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHOOLS_REGISTRY_TABLE} SET deleted_at = NULL, updated_at = NOW() WHERE subdomain = %s AND deleted_at IS NOT NULL RETURNING subdomain;",
+            (tid,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No deleted school found for tenant '{tid}'")
+        conn.commit()
+        log_admin_action("tenant.restore", tid, {})
+        _logger.info(f"[admin] Tenant '{tid}' restored")
+        return {"success": True, "subdomain": tid}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] restore failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Restore failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.post("/tenants/{subdomain}/reset-password", summary="One-time admin password reset (superadmin)")
 def reset_tenant_password(subdomain: str):
     """Generates a temp password, hashes it in, returns plaintext ONCE. Audited (hash only)."""
