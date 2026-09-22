@@ -223,8 +223,7 @@ def rollback_database(db_name: str, db_user: str) -> None:
         if conn:
             conn.close()
 
-def database_exists(subdomain: str) -> bool:
-    """Check if a school DB already exists (for idempotency checks)."""
+def database_exists(subdomain: str) -> bool:    """Check if a school DB already exists (for idempotency checks)."""
     ids = _db_identifiers(subdomain)
     conn = None
     try:
