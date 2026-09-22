@@ -223,6 +223,32 @@ def rollback_database(db_name: str, db_user: str) -> None:
         if conn:
             conn.close()
 
+def transaction_reference_used(reference_id: str) -> bool:
+    """True if a ledger reference_id was already redeemed (anti double-spend).
+
+    Checks both billing_ledger and credit_ledger. Used by provision_school to
+    reject replayed Flutterwave transaction_ids before any resources are built.
+    """
+    ref = (reference_id or "").strip()
+    if not ref:
+        return False
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM {BILLING_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
+        if cur.fetchone() is not None:
+            return True
+        cur.execute(f"SELECT 1 FROM {CREDIT_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.error(f"[DB] transaction_reference_used check failed for '{ref}': {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
 def database_exists(subdomain: str) -> bool:    """Check if a school DB already exists (for idempotency checks)."""
     ids = _db_identifiers(subdomain)
     conn = None
