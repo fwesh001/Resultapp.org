@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireSuperadmin } from "@/lib/superadminAuth";
 
 /**
  * Super Admin proxy — real-time tenants list.
@@ -25,13 +26,24 @@ function getBackendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const guard = await requireSuperadmin();
+  if (guard) return guard;
+
   const secret = getSecret();
   if (!secret) {
     return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
-  const url = `${getBackendBase()}/api/v1/admin/tenants`;
+  // Forward pagination/search/filter params to FastAPI (page/limit/search/status).
+  const incoming = req.nextUrl.searchParams;
+  const qs = new URLSearchParams();
+  for (const k of ["page", "limit", "search", "status"]) {
+    const v = incoming.get(k);
+    if (v !== null && v !== "") qs.set(k, v);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const url = `${getBackendBase()}/api/v1/admin/tenants${suffix}`;
   try {
     const r = await fetch(url, {
       headers: { "X-API-SECRET-KEY": secret },
