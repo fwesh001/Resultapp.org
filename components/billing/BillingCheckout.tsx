@@ -26,16 +26,23 @@ interface BillingCheckoutProps {
   customerEmail?: string;
   customerName?: string;
   /**
-   * "subscription" (legacy) | "credit" (flat 200 NGN) | "slot" (tiered).
+   * "subscription" (legacy) | "credit" (flat live rate) | "slot" (tiered).
    * Defaults to "subscription" for backwards compatibility.
    */
   mode?: "subscription" | "credit" | "slot";
   defaultCount?: string;
+  /**
+   * Live per-unit price for credit mode (fetched by the parent from
+   * /api/admin/config/credit-price). Falls back to CREDIT_PRICE.
+   */
+  unitPrice?: number;
 }
 
-export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName, mode = "subscription", defaultCount }: BillingCheckoutProps) {
+export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName, mode = "subscription", defaultCount, unitPrice }: BillingCheckoutProps) {
   const isCredit = mode === "credit";
   const isSlot = mode === "slot";
+  // Single source of truth for credit pricing — parent-supplied live price.
+  const price = unitPrice ?? CREDIT_PRICE;
   const unitNoun = isCredit ? "credit" : isSlot ? "slot" : "student";
   const [studentCount, setStudentCount] = useState(defaultCount ?? "150");
   const [isPaying, setIsPaying] = useState(false);
@@ -49,15 +56,25 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
   }, [studentCount]);
 
   const { pricePerStudent, badge, badgeStyle } = useMemo(
-    () => (isCredit ? { pricePerStudent: CREDIT_PRICE, badge: null as string | null, badgeStyle: "" } : getPricingTier(countNum)),
-    [countNum, isCredit],
+    () => (isCredit ? { pricePerStudent: price, badge: null as string | null, badgeStyle: "" } : getPricingTier(countNum)),
+    [countNum, isCredit, price],
   );
   const total = useMemo(
-    () => (isCredit ? calculateCreditTotal(countNum, CREDIT_PRICE) : calculateTieredTotal(countNum)),
-    [countNum, isCredit],
+    () => (isCredit ? calculateCreditTotal(countNum, price) : calculateTieredTotal(countNum)),
+    [countNum, isCredit, price],
   );
-  const sliderPct = useMemo(() => getSliderPct(countNum), [countNum]);
-  const clampedSlider = Math.max(50, Math.min(2000, countNum || 50));
+  // Slider bounds are mode-specific: credits 1–10,000, slots 50–2,000.
+  const sliderMin = isCredit ? 1 : 50;
+  const sliderMax = isCredit ? 10000 : 2000;
+  const sliderStep = isCredit ? 1 : 10;
+  const sliderPct = useMemo(() => {
+    if (isCredit) {
+      const pct = ((countNum - sliderMin) / (sliderMax - sliderMin)) * 100;
+      return Math.max(0, Math.min(100, pct));
+    }
+    return getSliderPct(countNum);
+  }, [countNum, isCredit, sliderMin, sliderMax]);
+  const clampedSlider = Math.max(sliderMin, Math.min(sliderMax, countNum || sliderMin));
 
   function handleCountChange(v: string) {
     const cleaned = v.replace(/[^0-9]/g, "");
@@ -95,7 +112,7 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
     if (!validate()) return;
 
     const n = parseInt(studentCount, 10);
-    const amount = isCredit ? calculateCreditTotal(n, CREDIT_PRICE) : calculateTieredTotal(n);
+    const amount = isCredit ? calculateCreditTotal(n, price) : calculateTieredTotal(n);
     if (amount <= 0) {
       setError("Invalid amount");
       return;
