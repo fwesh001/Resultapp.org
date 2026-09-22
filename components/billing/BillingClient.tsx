@@ -313,7 +313,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
             )}
           </div>
 
-          {/* Credits packages + top-up (flat 200) */}
+            {/* Credits packages + top-up (flat live rate) */}
           <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
             <h2 className="text-base font-semibold text-white">Buy credit package</h2>
             <p className="mt-1 text-sm text-purple-200/60">
@@ -348,6 +348,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                 schoolName={schoolName}
                 customerEmail={customerEmail}
                 customerName={customerName}
+                unitPrice={creditPrice}
               />
             </div>
             <p className="mt-3 text-center text-xs text-purple-300/40">
