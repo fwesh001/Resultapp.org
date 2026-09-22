@@ -62,6 +62,19 @@ class TenantsListResponse(BaseModel):
     # FastAPI will serialize via _normalize helper below
 
 
+@router.get("/tenants/{subdomain}", summary="Single tenant detail (superadmin)")
+def get_tenant_detail(subdomain: str):
+    from services.db_manager import get_school_by_subdomain
+    from main import TenantMetadata
+
+    tid = (subdomain or "").lower().strip()
+    school = get_school_by_subdomain(tid)
+    if school is None:
+        raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+    school = _normalize_school_row(school)
+    return {"school": TenantMetadata(**school).model_dump()}
+
+
 def _normalize_school_row(row: dict):
     """Mirror tenant_lookup normalization (main.py:292)."""
     city = row.get("city") or None
@@ -309,10 +322,380 @@ def set_credit_price_config(payload: dict):
     price = payload.get("credit_price") if isinstance(payload, dict) else None
     if price is None:
         raise HTTPException(status_code=400, detail="credit_price is required")
-    from services.db_manager import set_credit_price
+    from services.db_manager import set_credit_price, log_admin_action
 
     try:
         new_price = set_credit_price(int(price))
+        log_admin_action("credit_price.set", None, {"credit_price": new_price})
         return {"success": True, "credit_price": new_price}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Command Center CRM — status, grants, password reset, ledger, stats, audit
+# ---------------------------------------------------------------------------
+
+class TenantStatusUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    subscription_status: Optional[str] = None
+
+
+@router.patch("/tenants/{subdomain}/status", summary="Suspend / reactivate a tenant (superadmin)")
+def set_tenant_status(subdomain: str, payload: TenantStatusUpdate):
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict, log_admin_action
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS, TenantMetadata
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    updates: dict = {}
+    if payload.is_active is not None:
+        updates["is_active"] = bool(payload.is_active)
+    if payload.subscription_status is not None:
+        s = payload.subscription_status.strip().lower()
+        if s not in ("active", "unpaid", "suspended"):
+            raise HTTPException(status_code=400, detail="subscription_status must be active, unpaid or suspended")
+        updates["subscription_status"] = s
+        if s == "suspended":
+            updates["is_active"] = False
+        if s == "active":
+            updates["is_active"] = True
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update (is_active, subscription_status)")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        set_clause = ", ".join(f"{c} = %s" for c in updates)
+        cur.execute(
+            f"UPDATE {SCHOOLS_REGISTRY_TABLE} SET {set_clause}, updated_at = NOW() WHERE subdomain = %s RETURNING subdomain;",
+            tuple(updates.values()) + (tid,),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        conn.commit()
+        log_admin_action("tenant.status", tid, updates)
+        _logger.info(f"[admin] Tenant {tid} status -> {updates}")
+        return {"success": True, "subdomain": tid, "updates": updates}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] status update failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Status update failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+class TenantGrantRequest(BaseModel):
+    token_type: str = "CREDIT"
+    amount: int = 0
+
+
+@router.post("/tenants/{subdomain}/grant", summary="Grant free credits/slots (superadmin)")
+def grant_tenant_tokens(subdomain: str, payload: TenantGrantRequest):
+    """Free manual grant — amount_ngn stays 0 (excluded from MRR). Audited."""
+    from services.db_manager import (
+        SCHOOLS_REGISTRY_TABLE,
+        BILLING_LEDGER_TABLE,
+        _connect_as_superuser,
+        log_admin_action,
+    )
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    ttype = (payload.token_type or "").strip().upper()
+    amount = int(payload.amount or 0)
+    if ttype not in ("CREDIT", "SLOT"):
+        raise HTTPException(status_code=400, detail="token_type must be CREDIT or SLOT")
+    if amount <= 0 or amount > 10000:
+        raise HTTPException(status_code=400, detail="amount must be 1-10000")
+    import time as _time
+
+    ref = f"grant:{tid}:{ttype}:{amount}:{int(_time.time())}"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        balance_col = "credit_balance" if ttype == "CREDIT" else "slots_balance"
+        txn = "GRANT_CREDITS" if ttype == "CREDIT" else "GRANT_SLOTS"
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, %s, %s, %s, %s, %s, 0)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id;
+            """,
+            (tid, ttype, amount, txn, ref, f"Superadmin grant: {amount} {ttype.lower()}"),
+        )
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET {balance_col} = COALESCE({balance_col}, 0) + %s, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING {balance_col};
+            """,
+            (amount, tid),
+        )
+        row = cur.fetchone()
+        if row is None:
+            cur.execute("ROLLBACK;")
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        cur.execute("COMMIT;")
+        new_balance = int(row[0] or 0)
+        log_admin_action("tenant.grant", tid, {"token_type": ttype, "amount": amount, "new_balance": new_balance})
+        _logger.info(f"[admin] Granted {amount} {ttype} to '{tid}' (balance {new_balance})")
+        return {"success": True, "subdomain": tid, "token_type": ttype, "granted": amount, "new_balance": new_balance}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn:
+                with conn.cursor() as rb:
+                    rb.execute("ROLLBACK;")
+        except Exception:
+            pass
+        _logger.exception(f"[admin] grant failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Grant failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/tenants/{subdomain}/reset-password", summary="One-time admin password reset (superadmin)")
+def reset_tenant_password(subdomain: str):
+    """Generates a temp password, hashes it in, returns plaintext ONCE. Audited (hash only)."""
+    from services.db_manager import set_admin_password_hash, log_admin_action
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+    import secrets as _secrets
+    import string as _string
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    alphabet = _string.ascii_letters + _string.digits
+    while True:
+        temp = "".join(_secrets.choice(alphabet) for _ in range(12))
+        if any(c.islower() for c in temp) and any(c.isupper() for c in temp) and any(c.isdigit() for c in temp):
+            break
+    try:
+        set_admin_password_hash(tid, temp)
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "Unknown tenant" in str(e) else 400, detail=str(e))
+    log_admin_action("tenant.password_reset", tid, {})
+    _logger.info(f"[admin] Password reset for '{tid}'")
+    return {"success": True, "subdomain": tid, "temp_password": temp}
+
+
+@router.get("/ledger", summary="Global platform ledger (superadmin)")
+def global_ledger(
+    token_type: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    subdomain: Optional[str] = None,
+):
+    """Cross-tenant billing_ledger with school names. Newest first."""
+    from services.db_manager import BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
+
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+    ttype = (token_type or "").strip().upper() or None
+    if ttype and ttype not in ("SLOT", "CREDIT"):
+        raise HTTPException(status_code=400, detail="token_type must be SLOT or CREDIT")
+    where = []
+    params: list = []
+    if ttype:
+        where.append("l.token_type = %s")
+        params.append(ttype)
+    if subdomain and subdomain.strip():
+        where.append("l.subdomain = %s")
+        params.append(subdomain.strip().lower())
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {BILLING_LEDGER_TABLE} l {where_sql};", tuple(params))
+        total = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT l.id, l.subdomain, s.school_name, l.token_type, l.amount,
+                   l.transaction_type, l.reference_id, l.description,
+                   COALESCE(l.amount_ngn, 0) AS amount_ngn, l.created_at
+            FROM {BILLING_LEDGER_TABLE} l
+            LEFT JOIN {SCHOOLS_REGISTRY_TABLE} s ON s.subdomain = l.subdomain
+            {where_sql}
+            ORDER BY l.created_at DESC
+            LIMIT %s OFFSET %s;
+            """,
+            tuple(params) + (limit, offset),
+        )
+        rows = cur.fetchall()
+        entries = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            d["created_at"] = d["created_at"].isoformat() if hasattr(d.get("created_at"), "isoformat") else str(d.get("created_at") or "")
+            entries.append(d)
+        return {"entries": entries, "total": total, "limit": limit, "offset": offset}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception(f"[admin] global ledger failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Ledger query failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.get("/ledger/export", summary="Stream full ledger as CSV (superadmin)")
+def export_ledger_csv(token_type: Optional[str] = None, subdomain: Optional[str] = None):
+    """Streams the (filtered) ledger as CSV using stdlib csv — no pagination bottleneck."""
+    import csv as _csv
+    import io as _io
+    from fastapi.responses import StreamingResponse
+    from services.db_manager import BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
+
+    ttype = (token_type or "").strip().upper() or None
+    if ttype and ttype not in ("SLOT", "CREDIT"):
+        raise HTTPException(status_code=400, detail="token_type must be SLOT or CREDIT")
+    where = []
+    params: list = []
+    if ttype:
+        where.append("l.token_type = %s")
+        params.append(ttype)
+    if subdomain and subdomain.strip():
+        where.append("l.subdomain = %s")
+        params.append(subdomain.strip().lower())
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    def row_iter():
+        buf = _io.StringIO()
+        writer = _csv.writer(buf)
+        writer.writerow(["date", "subdomain", "school_name", "token_type", "amount", "amount_ngn", "transaction_type", "reference_id", "description"])
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+        conn = None
+        try:
+            conn = _connect_as_superuser()
+            cur = conn.cursor(name="ledger_export_cursor")
+            cur.execute(
+                f"""
+                SELECT l.created_at, l.subdomain, s.school_name, l.token_type, l.amount,
+                       COALESCE(l.amount_ngn, 0), l.transaction_type, l.reference_id, l.description
+                FROM {BILLING_LEDGER_TABLE} l
+                LEFT JOIN {SCHOOLS_REGISTRY_TABLE} s ON s.subdomain = l.subdomain
+                {where_sql}
+                ORDER BY l.created_at DESC;
+                """,
+                tuple(params),
+            )
+            while True:
+                batch = cur.fetchmany(1000)
+                if not batch:
+                    break
+                for r in batch:
+                    writer.writerow([
+                        r[0].isoformat() if hasattr(r[0], "isoformat") else str(r[0] or ""),
+                        r[1] or "", r[2] or "", r[3] or "", r[4] or 0,
+                        r[5] or 0, r[6] or "", r[7] or "", (r[8] or "").replace("\r", " ").replace("\n", " "),
+                    ])
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate(0)
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        row_iter(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=resultapp-ledger.csv"},
+    )
+
+
+@router.get("/audit-logs", summary="Superadmin audit trail (superadmin)")
+def get_audit_trail(subdomain: Optional[str] = None, limit: int = 50, offset: int = 0):
+    from services.db_manager import get_audit_logs
+
+    return {"entries": get_audit_logs(subdomain, limit, offset)}
+
+
+@router.get("/stats", summary="Platform KPIs: MRR + consumption (superadmin)")
+def platform_stats():
+    """MRR from immutable amount_ngn PURCHASE rows (this vs last month);
+    total credits consumed globally (negative CREDIT amounts)."""
+    from services.db_manager import BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT COALESCE(SUM(amount_ngn), 0) FROM {BILLING_LEDGER_TABLE}
+            WHERE transaction_type IN ('CREDIT_PURCHASE', 'SLOT_PURCHASE')
+              AND date_trunc('month', created_at) = date_trunc('month', NOW());
+            """
+        )
+        mrr_this = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT COALESCE(SUM(amount_ngn), 0) FROM {BILLING_LEDGER_TABLE}
+            WHERE transaction_type IN ('CREDIT_PURCHASE', 'SLOT_PURCHASE')
+              AND date_trunc('month', created_at) = date_trunc('month', NOW() - INTERVAL '1 month');
+            """
+        )
+        mrr_last = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT COALESCE(SUM(ABS(amount)), 0) FROM {BILLING_LEDGER_TABLE}
+            WHERE token_type = 'CREDIT' AND amount < 0;
+            """
+        )
+        credits_consumed = int(cur.fetchone()[0] or 0)
+        cur.execute(f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE};")
+        schools = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} WHERE subscription_status = 'active' AND is_active = TRUE;"
+        )
+        active_schools = int(cur.fetchone()[0] or 0)
+        return {
+            "mrr_this_month_ngn": mrr_this,
+            "mrr_last_month_ngn": mrr_last,
+            "mrr_delta_ngn": mrr_this - mrr_last,
+            "total_credits_consumed": credits_consumed,
+            "total_schools": schools,
+            "active_schools": active_schools,
+        }
+    except Exception as e:
+        _logger.exception(f"[admin] stats failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Stats failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
