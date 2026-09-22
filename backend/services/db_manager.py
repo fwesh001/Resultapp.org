@@ -249,7 +249,8 @@ def transaction_reference_used(reference_id: str) -> bool:
             conn.close()
 
 
-def database_exists(subdomain: str) -> bool:    """Check if a school DB already exists (for idempotency checks)."""
+def database_exists(subdomain: str) -> bool:
+    """Check if a school DB already exists (for idempotency checks)."""
     ids = _db_identifiers(subdomain)
     conn = None
     try:
