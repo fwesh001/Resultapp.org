@@ -3,6 +3,7 @@ import { ReportControlBar } from "@/components/report-card/ReportControlBar";
 import { getTenant } from "@/lib/tenant";
 import { currentAcademicSession } from "@/lib/format";
 import { cookies } from "next/headers";
+import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
 
@@ -92,8 +93,7 @@ export default async function ReportPage({
   }
 
   // Publication check (server-side — no hydration flash, no client cost).
-  let isPublished = false;
-  try {
+  let isPublished = false;  try {
     const secret = getProxySecret();
     if (secret) {
       const qs = new URLSearchParams({
