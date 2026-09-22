@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Globe,
-  Building2,
   Users,
   Sparkles,
   ExternalLink,
@@ -842,14 +841,14 @@ export function RegisterSchoolForm() {
         disabled={isSubmitting}
       />
 
-      {/* Trial grant notice — 30 free credits, no payment at registration */}
+      {/* Trial grant notice — 30 free credits included with every paid portal */}
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
         <p className="flex items-center gap-2 text-xs font-medium text-emerald-200">
           <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
           Includes 30 free trial credits at launch
         </p>
         <p className="mt-1 text-xs leading-5 text-emerald-100/60">
-          Enough to publish a full class. Previews and drafts are always free — you only pay when topping up to publish the rest of the school.
+          Enough to publish a full class. You pay once for student slots now — top up publishing credits anytime from your portal.
         </p>
       </div>
 
@@ -879,7 +878,7 @@ export function RegisterSchoolForm() {
         </div>
       )}
 
-      {/* Submit */}
+      {/* Submit — Step 1 only validates; payment happens in Step 2 */}
       <Button
         type="submit"
         className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -889,12 +888,11 @@ export function RegisterSchoolForm() {
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Provisioning your school... This may take a minute
+            Checking availability…
           </>
         ) : (
           <>
-            <Building2 className="h-4 w-4" />
-            Create School Portal
+            Continue to Payment
           </>
         )}
       </Button>
@@ -902,7 +900,7 @@ export function RegisterSchoolForm() {
       {/* Loading helper text */}
       {isSubmitting && (
         <p className="text-center text-xs text-purple-300/50">
-          Please keep this tab open — we&apos;re contacting the provisioning engine at {baseDomain}…
+          Verifying your subdomain is still available…
         </p>
       )}
 
