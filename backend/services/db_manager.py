@@ -330,6 +330,25 @@ def init_schools_registry() -> None:
             SET staff_id_prefix = 'STAFF/'
             WHERE staff_id_prefix IS NULL;
         """)
+        # Phase: Superadmin Command Center — immutable audit trail for manual ops
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id               SERIAL PRIMARY KEY,
+                actor            VARCHAR(60) NOT NULL DEFAULT 'superadmin',
+                action           VARCHAR(60) NOT NULL,
+                subdomain        VARCHAR(60),
+                details          JSONB,
+                created_at       TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_audit_logs_subdomain
+            ON audit_logs (subdomain, created_at DESC);
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_audit_logs_created
+            ON audit_logs (created_at DESC);
+        """)
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS slots_balance INTEGER DEFAULT 0;
