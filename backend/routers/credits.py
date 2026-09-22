@@ -66,6 +66,7 @@ class TopUpRequest(BaseModel):
     credit_count: Optional[int] = Field(None, gt=0, le=10000)
     student_count: Optional[int] = Field(None, gt=0, le=10000)
     transaction_id: str = Field(..., min_length=1)
+    amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably for revenue)")
 
 
 class PublishRequest(BaseModel):
@@ -235,6 +236,7 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
         raise HTTPException(status_code=400, detail="credit_count (1-10000) is required")
     tx_id = payload.transaction_id.strip()
     reference_id = f"flw:{tx_id}"
+    amount_ngn = max(0, int(payload.amount_ngn or 0))
 
     conn = None
     try:
@@ -290,11 +292,11 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
         cur.execute(
             """
             INSERT INTO billing_ledger
-                (subdomain, token_type, amount, transaction_type, reference_id, description)
-            VALUES (%s, 'CREDIT', %s, 'CREDIT_PURCHASE', %s, %s)
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, 'CREDIT', %s, 'CREDIT_PURCHASE', %s, %s, %s)
             ON CONFLICT (reference_id) DO NOTHING;
             """,
-            (tid, int(count), f"billing:{reference_id}", f"Credit top-up: {count} credits via Flutterwave {tx_id}"),
+            (tid, int(count), f"billing:{reference_id}", f"Credit top-up: {count} credits via Flutterwave {tx_id}", amount_ngn),
         )
         cur.execute("COMMIT;")
         entry = _row_to_dict(row, cur)
@@ -334,6 +336,7 @@ class SlotTopUpRequest(BaseModel):
     slot_count: Optional[int] = Field(None, gt=0, le=10000)
     student_count: Optional[int] = Field(None, gt=0, le=10000)
     transaction_id: str = Field(..., min_length=1)
+    amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably for revenue)")
 
 
 @router.post("/slots/topup", summary="Purchase slots (capacity) — tiered pricing")
@@ -348,6 +351,7 @@ def topup_slots_endpoint(tenant_id: str, payload: SlotTopUpRequest):
         raise HTTPException(status_code=400, detail="slot_count (1-10000) is required")
     tx_id = payload.transaction_id.strip()
     reference_id = f"flw-slot:{tx_id}"
+    amount_ngn = max(0, int(payload.amount_ngn or 0))
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -356,12 +360,12 @@ def topup_slots_endpoint(tenant_id: str, payload: SlotTopUpRequest):
         cur.execute(
             """
             INSERT INTO billing_ledger
-                (subdomain, token_type, amount, transaction_type, reference_id, description)
-            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s)
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s, %s)
             ON CONFLICT (reference_id) DO NOTHING
             RETURNING id, subdomain, token_type, amount, transaction_type, reference_id, description, created_at;
             """,
-            (tid, int(count), reference_id, f"Slot purchase: {count} slots via Flutterwave {tx_id}"),
+            (tid, int(count), reference_id, f"Slot purchase: {count} slots via Flutterwave {tx_id}", amount_ngn),
         )
         row = cur.fetchone()
         if row is None:
