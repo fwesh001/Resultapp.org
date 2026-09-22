@@ -167,6 +167,25 @@ export async function POST(req: NextRequest) {
     // Not fatal — we use verified tx_ref, but could enforce strict
   }
 
+  // Anti-replay pre-check: reject already-redeemed transactions before the
+  // 30s provision forward (authoritative check also runs in provision_school).
+  try {
+    const backendBase = provisionUrl.replace(/\/api\/v1\/provision\/?$/, "").replace(/\/$/, "");
+    const existsRes = await fetch(
+      `${backendBase}/api/v1/admin/transactions/exists?reference_id=${encodeURIComponent(`provision:${transactionId}`)}`,
+      { headers: { "X-API-SECRET-KEY": provisionSecret }, cache: "no-store" },
+    );
+    const existsData = await existsRes.json().catch(() => ({}));
+    if (existsRes.ok && (existsData as { used?: boolean }).used === true) {
+      return NextResponse.json(
+        { success: false, error: "Transaction reference already used" },
+        { status: 400 }
+      );
+    }
+  } catch (e) {
+    console.warn("[provision] tx-reuse pre-check unreachable, continuing to authoritative backend check", e);
+  }
+
   // ---- Step B: Extract school metadata (prefer verified meta, fallback to body) ----
   const meta = (data.meta as Record<string, unknown> | undefined) || {};
 
