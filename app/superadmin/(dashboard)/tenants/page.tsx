@@ -312,6 +312,19 @@ export default function TenantsDirectoryPage() {
           </button>
         </div>
       </div>
+
+      <SuspendTenantModal
+        tenant={suspendTarget}
+        busy={acting === "suspend"}
+        onClose={() => setSuspendTarget(null)}
+        onConfirm={(reason) => void handleSuspendConfirm(reason)}
+      />
+      <DeleteTenantModal
+        tenant={deleteTarget}
+        busy={acting === "delete"}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => void handleDeleteConfirm(reason)}
+      />
     </div>
   );
 }
