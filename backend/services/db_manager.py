@@ -379,6 +379,12 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS admin_password_hash VARCHAR(255);
         """)
+        # Tenant lifecycle: soft-delete (NULL = alive). Public lookups treat
+        # deleted rows as never-provisioned; superadmin detail bypasses this.
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
+        """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
             SET current_term = 'Term 1' WHERE current_term IS NULL OR current_term = '';
