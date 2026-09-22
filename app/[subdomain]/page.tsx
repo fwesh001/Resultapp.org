@@ -11,7 +11,6 @@ import {
   GraduationCap,
   Users,
   Settings,
-  CreditCard,
 } from "lucide-react";
 
 /**
@@ -140,7 +139,7 @@ export default async function TenantPage({
           Quick access for staff and administrators.
         </p>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
           <Link
             href={`/${subdomain}/staff`}
             className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
@@ -160,19 +159,6 @@ export default async function TenantPage({
             <h3 className="mt-3 text-lg font-semibold">Admin Templates</h3>
             <p className="mt-1 text-sm text-purple-200/70">
               Manage report templates and branding.
-            </p>
-          </Link>
-
-          <Link
-            href={`/${subdomain}/admin/billing`}
-            className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
-          >
-            <CreditCard className="h-8 w-8 text-purple-300" />
-            <h3 className="mt-3 text-lg font-semibold">
-              Billing &amp; Subscription
-            </h3>
-            <p className="mt-1 text-sm text-purple-200/70">
-              Top up credits and manage your plan.
             </p>
           </Link>
         </div>
