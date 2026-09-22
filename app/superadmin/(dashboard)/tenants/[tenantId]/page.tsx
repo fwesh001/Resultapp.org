@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, Loader2, CheckCircle2, Coins, Layers, Power, KeyRound } from "lucide-react";
+import { ArrowLeft, AlertCircle, Loader2, CheckCircle2, Coins, Layers, Power, KeyRound, Trash2 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import { SuspendTenantModal, DeleteTenantModal } from "@/components/superadmin/TenantLifecycleModals";
 
 interface School {
   subdomain: string;
@@ -11,6 +12,7 @@ interface School {
   email?: string | null;
   phone?: string | null;
   is_active?: boolean;
+  deleted_at?: string | null;
   subscription_status?: string | null;
   credit_balance?: number | null;
   slots_balance?: number | null;
@@ -38,6 +40,8 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   const [grantType, setGrantType] = useState<"CREDIT" | "SLOT">("CREDIT");
   const [grantAmount, setGrantAmount] = useState("50");
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [showSuspend, setShowSuspend] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     void params.then((p) => setTenantId(p.tenantId.toLowerCase().trim()));
@@ -104,21 +108,48 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
     }
   }
 
-  async function handleToggleStatus() {
+  async function handleToggleStatus(reason: string) {
     if (!school) return;
     const suspending = school.is_active !== false;
-    if (!window.confirm(`${suspending ? "Suspend" : "Reactivate"} ${school.school_name}?`)) return;
     const data = await runAction("status", () =>
       fetch(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          suspending ? { is_active: false, subscription_status: "suspended" } : { is_active: true, subscription_status: "active" },
+          suspending
+            ? { is_active: false, subscription_status: "suspended", reason }
+            : { is_active: true, subscription_status: "active", reason },
         ),
       }),
     );
     if (data) {
+      setShowSuspend(false);
       setNotice(suspending ? "Tenant suspended." : "Tenant reactivated.");
+      await load();
+    }
+  }
+
+  async function handleDeleteConfirm(reason: string) {
+    const data = await runAction("delete", () =>
+      fetch(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      }),
+    );
+    if (data) {
+      setShowDelete(false);
+      setNotice("School deleted (soft-delete — ledger preserved).");
+      await load();
+    }
+  }
+
+  async function handleRestore() {
+    const data = await runAction("restore", () =>
+      fetch(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/restore`, { method: "POST" }),
+    );
+    if (data) {
+      setNotice("School restored.");
       await load();
     }
   }
@@ -167,6 +198,21 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
 
       {school && (
         <>
+          {school.deleted_at && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+              <p className="text-sm text-red-200">
+                This school was soft-deleted{` — portals return 404, ledger history preserved.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleRestore()}
+                disabled={acting === "restore"}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {acting === "restore" ? "Restoring…" : "Restore School"}
+              </button>
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-white">{toTitleCase(school.school_name)}</h1>
@@ -178,12 +224,14 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
             </div>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                school.is_active === false
-                  ? "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                school.deleted_at
+                  ? "border-red-500/30 bg-red-500/15 text-red-200"
+                  : school.is_active === false
+                    ? "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
+                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
               }`}
             >
-              {school.is_active === false ? "Suspended" : (school.subscription_status || "Unpaid")}
+              {school.deleted_at ? "Deleted" : school.is_active === false ? "Suspended" : (school.subscription_status || "Unpaid")}
             </span>
           </div>
 
@@ -254,11 +302,11 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleToggleStatus()}
+                  onClick={() => setShowSuspend(true)}
                   disabled={acting === "status"}
                   className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
                 >
-                  {acting === "status" ? "Working…" : school.is_active === false ? "Reactivate tenant" : "Suspend tenant"}
+                  {school.is_active === false ? "Reactivate tenant" : "Suspend tenant"}
                 </button>
                 <button
                   type="button"
@@ -268,6 +316,16 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                 >
                   <KeyRound className="h-3.5 w-3.5" /> Reset admin password
                 </button>
+                {!school.deleted_at && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDelete(true)}
+                    disabled={acting === "delete"}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete school
+                  </button>
+                )}
               </div>
               {tempPassword && (
                 <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 font-mono text-sm text-emerald-200">
@@ -296,6 +354,27 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
 
         </>
       )}
+
+      <SuspendTenantModal
+        tenant={
+          school && showSuspend
+            ? { subdomain: school.subdomain, school_name: school.school_name, suspended: school.is_active === false }
+            : null
+        }
+        busy={acting === "status"}
+        onClose={() => setShowSuspend(false)}
+        onConfirm={(reason) => void handleToggleStatus(reason)}
+      />
+      <DeleteTenantModal
+        tenant={
+          school && showDelete
+            ? { subdomain: school.subdomain, school_name: school.school_name, suspended: school.is_active === false }
+            : null
+        }
+        busy={acting === "delete"}
+        onClose={() => setShowDelete(false)}
+        onConfirm={(reason) => void handleDeleteConfirm(reason)}
+      />
     </div>
   );
 }
