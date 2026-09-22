@@ -272,7 +272,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
       size="lg"
       className="border-purple-500/20 bg-[#0B0514] text-white"
     >
-      <div className="space-y-4 pb-28">
+      <div className="space-y-4">
         <Button
           type="button"
           variant="outline"
@@ -416,7 +416,8 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         )}
 
         {/* Sticky footer */}
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex items-center justify-end gap-2 rounded-b-xl border-t border-white/10 bg-[#0B0514] px-6 pb-5 pt-4">
+        <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 bg-[#0B0514] px-6 pt-4 pb-6 border-t border-white/10 rounded-b-xl flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
