@@ -185,6 +185,7 @@ class TenantMetadata(BaseModel):
     slots_balance: int = 0
     id_prefix: Optional[str] = None
     staff_id_prefix: Optional[str] = None
+    deleted_at: Optional[str] = None
     current_term: Optional[str] = None
     current_session: Optional[str] = None
     new_term_begins: Optional[str] = None
