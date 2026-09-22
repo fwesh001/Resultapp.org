@@ -81,6 +81,76 @@ export default function TenantsDirectoryPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  async function callLifecycle(url: string, init: RequestInit, kind: string): Promise<Record<string, unknown> | null> {
+    setActing(kind);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(url, init);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
+      return data as Record<string, unknown>;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Action failed");
+      return null;
+    } finally {
+      setActing(null);
+    }
+  }
+
+  async function handleSuspendConfirm(reason: string) {
+    if (!suspendTarget) return;
+    const suspending = !suspendTarget.suspended;
+    const data = await callLifecycle(
+      `/api/superadmin/tenants/${encodeURIComponent(suspendTarget.subdomain)}/status`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          suspending
+            ? { is_active: false, subscription_status: "suspended", reason }
+            : { is_active: true, subscription_status: "active", reason },
+        ),
+      },
+      "suspend",
+    );
+    if (data) {
+      setSuspendTarget(null);
+      setNotice(suspending ? "Tenant suspended." : "Tenant reactivated.");
+      await load();
+    }
+  }
+
+  async function handleDeleteConfirm(reason: string) {
+    if (!deleteTarget) return;
+    const data = await callLifecycle(
+      `/api/superadmin/tenants/${encodeURIComponent(deleteTarget.subdomain)}/delete`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      },
+      "delete",
+    );
+    if (data) {
+      setDeleteTarget(null);
+      setNotice("School deleted (soft-delete — ledger preserved).");
+      await load();
+    }
+  }
+
+  async function handleRestore(t: TenantMenuTarget) {
+    const data = await callLifecycle(
+      `/api/superadmin/tenants/${encodeURIComponent(t.subdomain)}/restore`,
+      { method: "POST" },
+      "restore",
+    );
+    if (data) {
+      setNotice("School restored.");
+      await load();
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center gap-3">
@@ -134,6 +204,12 @@ export default function TenantsDirectoryPage() {
           <span>{error}</span>
         </div>
       )}
+      {notice && (
+        <div className="mt-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] backdrop-blur">
         <div className="overflow-x-auto">
@@ -179,7 +255,9 @@ export default function TenantsDirectoryPage() {
                               ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
                               : label === "Suspended"
                                 ? "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                                : "border-red-500/20 bg-red-500/10 text-red-300"
+                                : label === "Deleted"
+                                  ? "border-red-500/30 bg-red-500/15 text-red-200"
+                                  : "border-red-500/20 bg-red-500/10 text-red-300"
                           }`}
                         >
                           {label}
@@ -189,15 +267,18 @@ export default function TenantsDirectoryPage() {
                       <td className="px-4 py-3 text-xs text-purple-300/50">
                         {t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        <a
-                          href={`https://${t.subdomain}.resultapp.org`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-purple-300 hover:text-white"
-                        >
-                          Visit <ExternalLink className="h-3 w-3" />
-                        </a>
+                      <td className="px-4 py-3 text-right">
+                        <TenantRowMenu
+                          tenant={{
+                            subdomain: t.subdomain,
+                            school_name: t.school_name,
+                            suspended: t.is_active === false,
+                            deleted: !!t.deleted_at,
+                          }}
+                          onSuspend={(target) => setSuspendTarget(target)}
+                          onDelete={(target) => setDeleteTarget(target)}
+                          onRestore={(target) => void handleRestore(target)}
+                        />
                       </td>
                     </tr>
                   );
