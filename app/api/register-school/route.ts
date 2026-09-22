@@ -215,6 +215,8 @@ export async function POST(req: NextRequest) {
     admin_password: adminPassword,
     student_count: studentCount,
   };
+  // Include optional only if present (backend treats as optional)
+  if (adminName) fastApiPayload.admin_name = adminName;
   // Credit & Command: trial grant size (backend defaults to 30)
   const initialCreditsRaw = body.initial_credits ?? body.initialCredits;
   if (initialCreditsRaw !== undefined && initialCreditsRaw !== null && String(initialCreditsRaw).trim() !== "") {
@@ -230,8 +232,7 @@ export async function POST(req: NextRequest) {
 
   // Local mock: if target contains localhost, return mock success (dev without droplet)
   // Remove this block when always hitting live droplet; kept for local dev safety.
-  const isLocalMock = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
-  if (isLocalMock) {
+  const isLocalMock = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");  if (isLocalMock) {
     console.log(`[register-school] MOCK forward for ${subdomain} -> ${targetUrl} (localhost detected)`);
     // Simulate small delay then success
     await new Promise((r) => setTimeout(r, 600));
