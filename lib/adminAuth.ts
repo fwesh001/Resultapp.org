@@ -58,3 +58,22 @@ export async function requireAdminSession(tenantId: string): Promise<NextRespons
 
   return null;
 }
+
+/**
+ * Tenant lifecycle — billing escape hatch check for server components.
+ * Returns true when the viewer holds a valid `admin_session` for `subdomain`
+ * (used to show the billing bypass link on the Suspended portal).
+ */
+export async function hasAdminSession(subdomain: string): Promise<boolean> {
+  const normalized = (subdomain || "").toLowerCase().trim();
+  if (!normalized) return false;
+  try {
+    const raw = (await cookies()).get("admin_session")?.value;
+    if (!raw) return false;
+    const session = JSON.parse(raw) as AdminSession;
+    const tenant = String(session?.tenant_id || "").toLowerCase().trim();
+    return tenant === normalized && !!session?.admin?.email;
+  } catch {
+    return false;
+  }
+}
