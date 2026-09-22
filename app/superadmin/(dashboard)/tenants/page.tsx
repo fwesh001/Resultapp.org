@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, Search, AlertCircle, Loader2, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { Building2, Search, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import { TenantRowMenu, type TenantMenuTarget } from "@/components/superadmin/TenantRowMenu";
+import { SuspendTenantModal, DeleteTenantModal } from "@/components/superadmin/TenantLifecycleModals";
 
 interface Tenant {
   id: string;
@@ -11,15 +13,17 @@ interface Tenant {
   school_name: string;
   subscription_status: string | null;
   is_active?: boolean;
+  deleted_at?: string | null;
   student_count: number;
   created_at: string;
   email?: string | null;
 }
 
 const LIMIT = 20;
-const STATUSES = ["all", "active", "unpaid", "suspended"] as const;
+const STATUSES = ["all", "active", "unpaid", "suspended", "deleted"] as const;
 
 function statusLabel(t: Tenant): string {
+  if (t.deleted_at) return "Deleted";
   if (t.is_active === false) return "Suspended";
   const s = (t.subscription_status || "").toLowerCase();
   if (s === "active") return "Active";
@@ -36,6 +40,10 @@ export default function TenantsDirectoryPage() {
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [acting, setActing] = useState<string | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<TenantMenuTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TenantMenuTarget | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
