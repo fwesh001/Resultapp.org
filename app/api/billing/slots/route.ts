@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
-        body: JSON.stringify({ slot_count: countNum, transaction_id: txId }),
+        body: JSON.stringify({ slot_count: countNum, transaction_id: txId, amount_ngn: paid }),
         cache: "no-store",
       });
       backendRes = r;
