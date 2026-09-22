@@ -436,6 +436,7 @@ export function RegisterSchoolForm() {
 
   function resetWizard() {
     provisionFired.current = false;
+    setRetryNonce(0);
     setSuccessData(null);
     setTransactionId(null);
     setTxRef(null);
@@ -495,11 +496,7 @@ export function RegisterSchoolForm() {
 
         <button
           type="button"
-          onClick={() => {
-            setSuccessData(null);
-            setValues({ schoolName: "", subdomain: "", adminEmail: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "" });
-            setErrors({});
-          }}
+          onClick={resetWizard}
           className="mt-3 text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
         >
           Register another school
