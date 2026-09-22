@@ -105,24 +105,6 @@ export default function RegisterPage() {
 
         <div className="relative flex flex-1 items-start justify-center px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
           <div className="w-full max-w-[560px]">
-            {/* Step indicator — purple rings */}
-            <div className="mx-auto mb-8 flex items-center justify-center gap-2 text-sm">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-600 text-white shadow-[0_0_14px_rgba(147,51,234,0.45)] ring-1 ring-purple-500/30">
-                1
-              </span>
-              <span className="font-medium text-white">School details</span>
-              <span className="h-px w-6 bg-purple-500/20 sm:w-8" />
-              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/20 bg-purple-950/30 text-purple-300">
-                2
-              </span>
-              <span className="text-purple-300/60">Setup</span>
-              <span className="h-px w-6 bg-purple-500/20 sm:w-8" />
-              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/15 bg-purple-950/20 text-purple-400/60">
-                3
-              </span>
-              <span className="text-purple-300/40">Portal ready</span>
-            </div>
-
             {/* heading (desktop right also shows, mobile banner already) */}
             <div className="mb-6 hidden lg:block">
               <h1 className="text-2xl font-bold tracking-tight text-white">Create your school portal</h1>
@@ -132,7 +114,7 @@ export default function RegisterPage() {
             </div>
 
 
-            {/* form card — dark — Phase 1: direct provision (no payment) */}
+            {/* form card — dark — pay-first 3-step wizard (details → checkout → provision) */}
             <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6 md:p-7">
               <div className="mb-6">
                 <h2 className="text-base font-semibold tracking-tight text-white">School registration</h2>
