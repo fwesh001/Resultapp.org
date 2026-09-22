@@ -787,10 +787,10 @@ def platform_stats():
             """
         )
         credits_consumed = int(cur.fetchone()[0] or 0)
-        cur.execute(f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE};")
+        cur.execute(f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} WHERE deleted_at IS NULL;")
         schools = int(cur.fetchone()[0] or 0)
         cur.execute(
-            f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} WHERE subscription_status = 'active' AND is_active = TRUE;"
+            f"SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} WHERE subscription_status = 'active' AND is_active = TRUE AND deleted_at IS NULL;"
         )
         active_schools = int(cur.fetchone()[0] or 0)
         return {
