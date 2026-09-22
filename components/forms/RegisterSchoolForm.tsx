@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -75,6 +75,8 @@ export function RegisterSchoolForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkingSubdomain, setCheckingSubdomain] = useState(false);
+  const [subdomainTaken, setSubdomainTaken] = useState(false);
   const [successData, setSuccessData] = useState<{
     deployedUrl: string;
     domain: string;
@@ -92,6 +94,37 @@ export function RegisterSchoolForm() {
   }, [values.subdomain, baseDomain]);
 
   const isPreviewCustom = values.subdomain.trim().length > 0;
+
+  // Pre-payment sniping guard: live availability check (debounced). If the
+  // subdomain gets taken while the user fills the form, block submit/payment
+  // before any money moves.
+  const checkSeq = useRef(0);
+  useEffect(() => {
+    const slug = values.subdomain.trim();
+    setSubdomainTaken(false);
+    if (slug.length < 3 || !SUBDOMAIN_RE.test(slug) || RESERVED_SLUGS.has(slug)) {
+      setCheckingSubdomain(false);
+      return;
+    }
+    const id = ++checkSeq.current;
+    setCheckingSubdomain(true);
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/tenant/${encodeURIComponent(slug)}`, { cache: "no-store" });
+          const data = (await res.json().catch(() => ({}))) as { available?: boolean };
+          if (checkSeq.current !== id) return;
+          // 200 + available:false = taken; 404/available:true = free.
+          setSubdomainTaken(res.ok && (data as { available?: boolean }).available === false);
+        } catch {
+          // Fail open on network errors — backend 409 remains the backstop.
+        } finally {
+          if (checkSeq.current === id) setCheckingSubdomain(false);
+        }
+      })();
+    }, 500);
+    return () => clearTimeout(t);
+  }, [values.subdomain]);
 
   // -------------------------------------------------------------------------
   // Validation
@@ -172,6 +205,23 @@ export function RegisterSchoolForm() {
     setGlobalError(null);
 
     if (!validate()) return;
+
+    // Sniped since the last keystroke: re-verify live before any payment/provision.
+    if (subdomainTaken) {
+      setErrors((prev) => ({ ...prev, subdomain: "This subdomain was just taken — please choose another." }));
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tenant/${encodeURIComponent(values.subdomain.trim())}`, { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as { available?: boolean };
+      if (res.ok && data.available === false) {
+        setSubdomainTaken(true);
+        setErrors((prev) => ({ ...prev, subdomain: "This subdomain was just taken — please choose another." }));
+        return;
+      }
+    } catch {
+      // Fail open — backend 409 remains the backstop.
+    }
 
     const payload = {
       schoolName: values.schoolName.trim(),
@@ -365,6 +415,10 @@ export function RegisterSchoolForm() {
             >
               {previewDomain}
             </span>
+            {checkingSubdomain && <span className="text-purple-300/40">• checking…</span>}
+            {!checkingSubdomain && subdomainTaken && (
+              <span className="font-medium text-amber-300">• just taken — pick another</span>
+            )}
           </p>
         )}
       </div>
