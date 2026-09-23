@@ -49,6 +49,13 @@ export const NOTIFICATION_CATEGORIES: Record<string, NotificationCategoryStyle> 
     dotClasses: "bg-red-400",
     icon: ShieldAlert,
   },
+  ACTION: {
+    badgeClasses: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    iconClasses: "text-emerald-300",
+    avatarClasses: "bg-emerald-500/15 border-emerald-500/30",
+    dotClasses: "bg-emerald-400",
+    icon: Megaphone,
+  },
 };
 
 export const FALLBACK_CATEGORY_STYLE: NotificationCategoryStyle = {
