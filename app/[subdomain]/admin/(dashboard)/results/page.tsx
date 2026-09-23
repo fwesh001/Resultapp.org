@@ -21,6 +21,7 @@ export default async function ResultsPage({
     <CommandCenterClient
       tenantId={tenantId}
       schoolName={school ? toTitleCase(school.name) : tenantId}
+      initialTerm={school?.currentTerm?.trim() || "Term 1"}
     />
   );
 }
