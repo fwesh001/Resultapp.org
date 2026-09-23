@@ -319,6 +319,161 @@ def mark_read(tenant_id: str, notification_id: int, payload: MarkReadRequest):
                 pass
 
 
+# ---------------------------------------------------------------------------
+# In-app staff nudge (replaces external WhatsApp nudges)
+# ---------------------------------------------------------------------------
+
+#: Cooldown window — repeat nudges for the same (staff, subject, class, term)
+#: within this window return {duplicate: True} instead of dispatching.
+NUDGE_COOLDOWN_HOURS = 24
+
+staff_router = APIRouter(
+    prefix="/api/v1/tenant/{tenant_id}/staff",
+    tags=["notifications"],
+    dependencies=[Depends(_verify_secret)],
+)
+
+
+class StaffNudgeRequest(BaseModel):
+    # Staff identifier — at least one required (id | staff_id | email | name).
+    staff_id: Optional[str] = Field(default=None)
+    staff_name: Optional[str] = Field(default=None)
+    staff_email: Optional[str] = Field(default=None)
+    subject_name: str = Field(..., min_length=1, max_length=120)
+    class_name: str = Field(..., min_length=1, max_length=60)
+    term: Optional[str] = Field(default=None, max_length=64)
+
+
+@staff_router.post("/nudge", summary="Nudge a staffer about pending grades (admin)")
+def nudge_staff(tenant_id: str, payload: StaffNudgeRequest):
+    """Dispatch STAFF_GRADING_REMINDER to one staffer with a grading-hub CTA.
+
+    Auth: shared secret (FastAPI) + tenant admin_session enforced by the
+    Next.js proxy (app/api/admin/nudge). 24h per-(staff, subject, class, term)
+    cooldown: repeats return {duplicate: True} without writing.
+    """
+    from urllib.parse import quote as _quote
+
+    from services.db_manager import (
+        NOTIFICATION_READS_TABLE,
+        NOTIFICATIONS_TABLE,
+        TENANT_STAFF_TABLE,
+        VALID_TERMS,
+        _connect_as_superuser,
+        get_school_by_subdomain,
+    )
+    from services.notifications import dispatch_event
+
+    tid = _validate_tenant_id(tenant_id)
+    school = get_school_by_subdomain(tid)
+    if school is None:
+        raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+
+    subject = (payload.subject_name or "").strip()
+    class_name = (payload.class_name or "").strip()
+    if not subject or not class_name:
+        raise HTTPException(status_code=400, detail="subject_name and class_name are required")
+    term = (payload.term or "").strip() or None
+    if term is not None and term not in VALID_TERMS:
+        raise HTTPException(status_code=400, detail=f"Invalid term '{term}'")
+
+    identifier = (
+        (payload.staff_id or "").strip()
+        or (payload.staff_email or "").strip()
+        or (payload.staff_name or "").strip()
+    )
+    if not identifier:
+        raise HTTPException(status_code=400, detail="staff_id, staff_email or staff_name is required")
+
+    # CTA deep link into the Smart Staff Hub (auto-opens the grading modal).
+    cta = (
+        f"/{tid}/staff/grading?action=grade"
+        f"&subject={_quote(subject)}&class={_quote(class_name)}"
+    )
+    if term:
+        cta += f"&term={_quote(term)}"
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        # Resolve staffer → canonical id + display name (active rows only).
+        cur.execute(
+            f"""
+            SELECT id::text, full_name FROM {TENANT_STAFF_TABLE}
+            WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE
+              AND (id::text = %s OR staff_id = %s OR email = %s OR full_name = %s)
+            ORDER BY CASE
+                WHEN id::text = %s THEN 0
+                WHEN staff_id = %s THEN 1
+                WHEN email = %s THEN 2
+                ELSE 3
+            END
+            LIMIT 1;
+            """,
+            (tid, identifier, identifier, identifier, identifier,
+             identifier, identifier, identifier),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Staff user not found")
+        canonical, staff_name = str(row[0]), str(row[1] or identifier)
+
+        # 24h cooldown: same staffer + exact CTA (subject/class/term) + still unread.
+        cur.execute(
+            f"""
+            SELECT n.id FROM {NOTIFICATIONS_TABLE} n
+            JOIN {NOTIFICATION_READS_TABLE} r ON r.notification_id = n.id
+            WHERE n.tenant_id = %s AND n.event_type = 'STAFF_GRADING_REMINDER'
+              AND r.tenant_id = %s AND r.user_id = %s AND r.user_type = 'staff'
+              AND r.is_read = FALSE
+              AND n.cta_link = %s
+              AND n.created_at > NOW() - (%s || ' hours')::INTERVAL
+            LIMIT 1;
+            """,
+            (tid, tid, canonical, cta, str(NUDGE_COOLDOWN_HOURS)),
+        )
+        existing = cur.fetchone()
+        if existing is not None:
+            return {
+                "success": True,
+                "duplicate": True,
+                "notification_id": int(existing[0]),
+                "subdomain": tid,
+                "detail": f"Reminder already sent within {NUDGE_COOLDOWN_HOURS}h",
+            }
+
+        result = dispatch_event(
+            "STAFF_GRADING_REMINDER",
+            tid,
+            {
+                "subject_name": subject,
+                "class_name": class_name,
+                "term": term or "",
+                "staff_name": staff_name,
+                "school_name": school.get("school_name") or tid,
+                "subdomain": tid,
+            },
+            cta_link=cta,
+            target_user_id=canonical,
+            target_user_type="staff",
+        )
+        return {"success": True, "duplicate": False, "subdomain": tid, **result}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _logger.exception(f"[notifications] nudge failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Nudge failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.post("/read-all", summary="Mark all inbox notifications as read")
 def mark_all_read(tenant_id: str, payload: MarkReadRequest):
     from services.db_manager import (
