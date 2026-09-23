@@ -283,9 +283,14 @@ export default function FocusedGradingPage() {
       }
     }
     if (hasUnsaved) {
-      const ok = window.confirm("You have unsaved scores. Close anyway?");
-      if (!ok) return;
+      setShowDiscardConfirm(true);
+      return;
     }
+    discardFocused();
+  }
+
+  function discardFocused() {
+    setShowDiscardConfirm(false);
     setFocused(null);
     setDrafts({});
     setFieldErrors({});
