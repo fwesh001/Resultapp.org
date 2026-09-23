@@ -17,7 +17,7 @@ export function StudentUploadForm() {
     // TODO: wire to lib/api-client.ts -> apiClient.upload("/students/import", formData)
     await new Promise((r) => setTimeout(r, 1000));
     setLoading(false);
-    alert("Demo: students would be uploaded via FastAPI backend");
+    toast.info("Demo mode", { description: "Students would be uploaded via FastAPI backend." });
   }
 
   return (
