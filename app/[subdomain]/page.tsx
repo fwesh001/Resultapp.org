@@ -152,7 +152,7 @@ export default async function TenantPage({
           </Link>
 
           <Link
-            href={`/${subdomain}/admin/templates`}
+            href={`/${subdomain}/admin`}
             className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
           >
             <Settings className="h-8 w-8 text-purple-300" />
