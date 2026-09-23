@@ -116,6 +116,10 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
 /**
  * Fetch and normalize school metadata for a tenant subdomain.
  * Returns `null` if the backend is unreachable or the school is unknown.
+ *
+ * Uses `cache: "no-store"` so term/session changes in Admin Settings
+ * propagate instantly across staff, report, and admin surfaces.
+ * The `school-{subdomain}` tag + settings-route revalidation stay as backup.
  */
 export async function getTenant(
   subdomain: string,
@@ -123,7 +127,7 @@ export async function getTenant(
   try {
     const res = await fetch(
       `${getBackendUrl()}/api/v1/tenant/${subdomain}`,
-      { next: { tags: [`school-${subdomain}`] } },
+      { cache: "no-store", next: { tags: [`school-${subdomain}`] } },
     );
     if (!res.ok) return null;
     const data = (await res.json()) as TenantLookupResponse;
