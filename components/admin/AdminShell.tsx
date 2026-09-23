@@ -72,7 +72,7 @@ export default function AdminShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top nav bar */}
-        <div className="flex items-center gap-3 border-b border-purple-500/20 bg-[#0B0514]/90 px-4 py-3 backdrop-blur-md md:hidden">
+        <div className="relative z-40 flex items-center gap-3 border-b border-purple-500/20 bg-[#0B0514]/90 px-4 py-3 backdrop-blur-md md:hidden">
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
@@ -98,7 +98,7 @@ export default function AdminShell({
         </div>
 
         {/* Desktop top header */}
-        <div className="hidden items-center justify-end border-b border-purple-500/20 bg-[#0B0514]/90 px-6 py-3 backdrop-blur-md md:flex">
+        <div className="relative z-40 hidden items-center justify-end border-b border-purple-500/20 bg-[#0B0514]/90 px-6 py-3 backdrop-blur-md md:flex">
           <NotificationBell tenantId={subdomain} portal="admin" />
         </div>
 
