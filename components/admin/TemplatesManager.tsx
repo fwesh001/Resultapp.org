@@ -113,7 +113,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
   }
 
   async function handleDelete(t: TemplateItem) {
-    if (!window.confirm(`Disable template "${t.name}"? Staff will stop seeing it. History is preserved.`)) return;
+    setPendingDelete(null);
     setActingId(t.id);
     setNotice(null);
     setError(null);
@@ -259,7 +259,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
                       {active && (
                         <button
                           type="button"
-                          onClick={() => void handleDelete(t)}
+                          onClick={() => setPendingDelete(t)}
                           disabled={actingId === t.id}
                           aria-label={`Disable ${t.name}`}
                           className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15 disabled:opacity-40"
