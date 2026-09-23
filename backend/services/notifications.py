@@ -63,10 +63,19 @@ def render_template(template: str, context: Dict[str, Any]) -> str:
 # Recipient collection (raw psycopg2 cursor, caller owns the transaction)
 # ---------------------------------------------------------------------------
 
-def _collect_recipients(cur, tenant_id: Optional[str]) -> List[Tuple[str, str, str]]:
+VALID_TARGET_ROLES = ("all", "admin_only")
+
+
+def _collect_recipients(
+    cur,
+    tenant_id: Optional[str],
+    target_role: str = "all",
+) -> List[Tuple[str, str, str]]:
     """Return [(tenant_subdomain, user_id, user_type)] for dispatch.
 
     tenant_id=None → platform-wide broadcast (all non-deleted schools).
+    target_role='admin_only' → Tenant Admin emails ONLY (schools table);
+    the tenant_staff query is skipped entirely.
     """
     from services.db_manager import (
         SCHOOLS_REGISTRY_TABLE,
@@ -74,9 +83,13 @@ def _collect_recipients(cur, tenant_id: Optional[str]) -> List[Tuple[str, str, s
         _sanitize_subdomain,
     )
 
+    role = (target_role or "all").strip().lower()
+    if role not in VALID_TARGET_ROLES:
+        raise ValueError(f"target_role must be one of {list(VALID_TARGET_ROLES)}")
+
     recipients: List[Tuple[str, str, str]] = []
     if tenant_id is None:
-        # Broadcast: every admin email + every active staff, platform-wide.
+        # Broadcast: every admin email (+ every active staff unless admin_only).
         cur.execute(
             f"""
             SELECT subdomain, email FROM {SCHOOLS_REGISTRY_TABLE}
@@ -85,6 +98,8 @@ def _collect_recipients(cur, tenant_id: Optional[str]) -> List[Tuple[str, str, s
         )
         for subdomain, email in cur.fetchall():
             recipients.append((subdomain, str(email).strip().lower(), "admin"))
+        if role == "admin_only":
+            return recipients
         cur.execute(
             f"""
             SELECT subdomain, id::text FROM {TENANT_STAFF_TABLE} s
@@ -109,6 +124,8 @@ def _collect_recipients(cur, tenant_id: Optional[str]) -> List[Tuple[str, str, s
         raise ValueError(f"Unknown tenant '{tid}'")
     if row[0]:
         recipients.append((tid, str(row[0]).strip().lower(), "admin"))
+    if role == "admin_only":
+        return recipients
     cur.execute(
         f"""
         SELECT id::text FROM {TENANT_STAFF_TABLE}
