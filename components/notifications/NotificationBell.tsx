@@ -228,7 +228,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
                               <span className={`h-2 w-2 shrink-0 rounded-full ${style.dotClasses}`} aria-label="Unread" />
                             )}
                           </span>
-                          <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-400">{n.message}</span>
+                          <span className="mt-0.5 line-clamp-3 block text-xs text-zinc-400">{n.message}</span>
                           <span className="mt-1.5 flex items-center gap-2">
                             <span className={`inline-block rounded-full border px-2 py-px text-[11px] ${style.badgeClasses}`}>
                               {n.category || "SYSTEM"}
