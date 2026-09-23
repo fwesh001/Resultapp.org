@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { TemplateBuilder } from "@/components/forms/TemplateBuilder";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface TemplateItem {
   id: number;
@@ -48,6 +49,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
   const [knownClasses, setKnownClasses] = useState<string[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<TemplateItem | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
