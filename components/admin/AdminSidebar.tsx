@@ -62,6 +62,11 @@ export default function AdminSidebar({
       icon: BookOpen,
     },
     {
+      label: "Notifications",
+      href: `/${subdomain}/admin/notifications`,
+      icon: Bell,
+    },
+    {
       label: "Settings",
       href: `/${subdomain}/admin/settings`,
       icon: Settings,
