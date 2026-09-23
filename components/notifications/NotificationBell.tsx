@@ -243,6 +243,18 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
               </ul>
             )}
           </div>
+
+          {portal && (
+            <div className="sticky bottom-0 border-t border-purple-500/20 bg-[#140A24]/95 backdrop-blur">
+              <Link
+                href={`/${tid}/${portal}/notifications`}
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-purple-300 transition hover:bg-white/5 hover:text-white"
+              >
+                View all notifications <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
