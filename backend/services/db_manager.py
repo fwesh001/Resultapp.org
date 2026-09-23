@@ -1853,7 +1853,7 @@ NOTIFICATION_TEMPLATES_TABLE = "notification_templates"
 NOTIFICATIONS_TABLE = "notifications"
 NOTIFICATION_READS_TABLE = "notification_reads"
 
-VALID_NOTIFICATION_CATEGORIES = ("BILLING", "SYSTEM", "ONBOARDING", "SECURITY")
+VALID_NOTIFICATION_CATEGORIES = ("BILLING", "SYSTEM", "ONBOARDING", "SECURITY", "ACTION")
 
 #: System trigger defaults. `{{var}}` placeholders are rendered by
 #: services/notifications.dispatch_event in Phase 2 (missing keys → "").
@@ -1904,7 +1904,7 @@ def init_notification_tables() -> None:
             CREATE TABLE IF NOT EXISTS {NOTIFICATION_TEMPLATES_TABLE} (
                 event_type     VARCHAR(60) PRIMARY KEY,
                 category       VARCHAR(20) NOT NULL DEFAULT 'SYSTEM'
-                    CHECK (category IN ('BILLING', 'SYSTEM', 'ONBOARDING', 'SECURITY')),
+                    CHECK (category IN ('BILLING', 'SYSTEM', 'ONBOARDING', 'SECURITY', 'ACTION')),
                 title_template TEXT NOT NULL,
                 body_template  TEXT NOT NULL,
                 default_color  VARCHAR(7) NOT NULL DEFAULT '#6366F1',
@@ -1912,6 +1912,33 @@ def init_notification_tables() -> None:
                 created_at     TIMESTAMPTZ DEFAULT NOW(),
                 updated_at     TIMESTAMPTZ DEFAULT NOW()
             );
+        """)
+        # Migration: widen the templates category CHECK to include 'ACTION'.
+        # The original inline CHECK is auto-named notification_templates_category_check
+        # by Postgres ({table}_{column}_check). Named replacement keeps the intent
+        # explicit and the migration re-runnable. Existing rows always satisfy the
+        # superset, so no backfill is needed. Fresh deployments get 'ACTION' from
+        # the CREATE TABLE above; this block upgrades pre-existing deployments.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'notification_templates_category_check'
+                ) THEN
+                    ALTER TABLE notification_templates
+                    DROP CONSTRAINT notification_templates_category_check;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'notification_templates_category_action_check'
+                ) THEN
+                    ALTER TABLE notification_templates
+                    ADD CONSTRAINT notification_templates_category_action_check
+                    CHECK (category IN ('BILLING', 'SYSTEM', 'ONBOARDING', 'SECURITY', 'ACTION'));
+                END IF;
+            END
+            $$;
         """)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {NOTIFICATIONS_TABLE} (
