@@ -899,6 +899,8 @@ class NotificationBroadcastRequest(BaseModel):
     cta_link: Optional[str] = None
     # Empty/omitted = platform-wide broadcast (tenant_id=NULL fan-out).
     tenant_id: Optional[str] = None
+    # 'all' (default) = Admins + Staff; 'admin_only' = Tenant Admins only.
+    target_role: Optional[str] = "all"
 
 
 @router.post("/notifications/broadcast", summary="Author + dispatch a manual broadcast (superadmin)")
@@ -921,6 +923,7 @@ def broadcast_notification(payload: NotificationBroadcastRequest):
             message=payload.message,
             tenant_id=tid,
             cta_link=(payload.cta_link or "").strip() or None,
+            target_role=payload.target_role or "all",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -931,6 +934,7 @@ def broadcast_notification(payload: NotificationBroadcastRequest):
         "notification.broadcast",
         tid,
         {"category": result.get("category"), "title": (payload.title or "")[:120],
+         "target_role": result.get("target_role", "all"),
          "recipients": result.get("recipient_count", 0)},
     )
     return {"success": True, **result}
