@@ -353,6 +353,10 @@ export default function NotificationInbox({ tenantId, basePath }: NotificationIn
                 return (
                   <li
                     key={n.id}
+                    ref={(el) => {
+                      if (el) itemRefs.current.set(n.id, el);
+                      else itemRefs.current.delete(n.id);
+                    }}
                     className={`overflow-hidden rounded-xl border bg-white/[0.02] transition ${
                       isOpen ? "border-purple-500/40" : "border-purple-500/20 hover:border-purple-500/30"
                     } ${n.is_read ? "" : "border-l-2 border-l-purple-500"}`}
