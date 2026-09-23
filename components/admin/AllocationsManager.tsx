@@ -504,7 +504,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
                                 <Pencil className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleDelete("student", s.id)}
+                                onClick={() => setPendingDelete({ type: "student", id: s.id })}
                                 className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -571,7 +571,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
                                 <Pencil className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleDelete("staff", m.id)}
+                                onClick={() => setPendingDelete({ type: "staff", id: m.id })}
                                 className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -634,7 +634,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
                           <td className="px-4 py-3 text-xs text-purple-300/50">{new Date(s.created_at).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => handleDelete("subject", s.id)}
+                              onClick={() => setPendingDelete({ type: "subject", id: s.id })}
                               className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -703,7 +703,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
                               <td className="px-4 py-3">{a.staff_name}</td>
                               <td className="px-4 py-3 text-right">
                                 <button
-                                  onClick={() => handleDelete("allocation", a.id)}
+                                  onClick={() => setPendingDelete({ type: "allocation", id: a.id })}
                                   className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
                                 >
                                   <Trash2 className="h-4 w-4" />
