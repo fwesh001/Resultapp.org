@@ -325,6 +325,20 @@ export default function NotificationsPage() {
         </section>
       )}
 
+      <ConfirmDialog
+        open={showBroadcastConfirm}
+        onOpenChange={(o) => { if (!o) setShowBroadcastConfirm(false); }}
+        title="Dispatch broadcast?"
+        message={
+          bRole === "admin_only"
+            ? "Send this broadcast to EVERY Tenant Admin on the platform?"
+            : "Send this broadcast to EVERY school admin and staff on the platform?"
+        }
+        confirmLabel="Dispatch"
+        loading={sending}
+        onConfirm={() => void runBroadcast()}
+      />
+
       {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Edit ${editing.event_type}`}>
