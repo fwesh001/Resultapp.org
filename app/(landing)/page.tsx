@@ -12,6 +12,17 @@ import {
   Zap,
 } from "lucide-react";
 import { PricingCalculator } from "@/components/ui/PricingCalculator";
+import FaqSection, { faqs } from "@/components/landing/FaqSection";
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.question,
+    acceptedAnswer: { "@type": "Answer", text: f.answer },
+  })),
+};
 
 export default function HomePage() {
   return (
