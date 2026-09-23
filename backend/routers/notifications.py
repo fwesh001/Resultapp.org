@@ -173,6 +173,13 @@ def list_inbox(
         params: list = [tid, canonical]
         if unread_only:
             where_read += " AND r.is_read = FALSE"
+        search = (q or "").strip()
+        if search:
+            # Escape LIKE wildcards so the query is a literal case-insensitive match.
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_read += " AND (n.title ILIKE %s ESCAPE '\\' OR n.message ILIKE %s ESCAPE '\\')"
+            like = f"%{escaped}%"
+            params.extend([like, like])
         cur.execute(
             f"""
             SELECT n.id, n.category, n.title, n.message, n.cta_link,
