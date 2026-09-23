@@ -305,6 +305,27 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
         except Exception:
             entry["created_at"] = str(entry.get("created_at") or "")
         _logger.info(f"[credits] Top-up {count} credits for '{tid}' via {tx_id} (balance {new_balance})")
+        # Notification Engine: top-up confirmation (best-effort — never blocks topup)
+        try:
+            from services.notifications import dispatch_event as _dispatch_topup
+
+            _ctx: dict = {
+                "subdomain": tid,
+                "amount": int(count),
+                "reference_id": tx_id,
+                "balance": new_balance,
+            }
+            try:
+                from services.db_manager import get_school_by_subdomain as _get_school
+
+                _school = _get_school(tid)
+                if _school and _school.get("school_name"):
+                    _ctx["school_name"] = _school["school_name"]
+            except Exception:
+                pass
+            _dispatch_topup("TOPUP_SUCCESS", tid, _ctx)
+        except Exception as _ne:
+            _logger.warning(f"[credits] Top-up notification failed for '{tid}': {_ne}")
         return {
             "success": True,
             "duplicate": False,
@@ -483,6 +504,13 @@ def publish_reports(tenant_id: str, payload: PublishRequest):
             student_ids=payload.student_ids,
             published_by=(payload.published_by or "").strip() or None,
         )
+        # Notification Engine: low/zero-credit alerts (best-effort — never blocks publish)
+        try:
+            from services.notifications import fire_credit_threshold_alerts as _fire_alerts
+
+            _fire_alerts(tid, int(result.get("new_balance", 0)))
+        except Exception as _ne:
+            _logger.warning(f"[credits] Threshold notification failed for '{tid}': {_ne}")
         return {"success": True, **result}
     except ValueError as e:
         msg = str(e)
