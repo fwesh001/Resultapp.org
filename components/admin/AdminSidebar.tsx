@@ -10,6 +10,7 @@ import {
   CreditCard,
   GraduationCap,
   ClipboardCheck,
+  Bell,
   LogOut,
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
