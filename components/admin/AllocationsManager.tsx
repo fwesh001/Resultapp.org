@@ -6,6 +6,7 @@ import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { BulkUploadModal, type BulkEntity } from "@/components/admin/BulkUploadModal";
 
 // Types mirrors backend tables
@@ -60,6 +61,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
   const [allocForm, setAllocForm] = useState({ class_name: "", subject_name: "", staff_name: "" });
 
   const [submitting, setSubmitting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ type: "student" | "staff" | "allocation" | "subject"; id: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Computed available classes from registered students (unique, sorted)
   const availableClasses = useMemo(() => {
@@ -349,7 +352,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
   }
 
   async function handleDelete(type: "student" | "staff" | "allocation" | "subject", id: string) {
-    if (!confirm(`Delete this ${type}?`)) return;
+    setPendingDelete(null);
+    setDeleting(true);
     try {
       const res = await fetch(`/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}&type=${type}&id=${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -360,6 +364,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
       await fetchAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   }
 
