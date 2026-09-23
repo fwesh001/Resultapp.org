@@ -796,6 +796,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Admin auth router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Multi-user superadmin — platform admins (tenant-isolated auth domain)
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.platform_auth import router as platform_auth_router
+
+    app.include_router(platform_auth_router)
+    logger.info("[App] Platform auth router mounted (/api/v1/platform/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Platform auth router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Staff Focused Grading — per-tenant score entry
 # ---------------------------------------------------------------------------
 
