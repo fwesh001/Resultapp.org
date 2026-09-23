@@ -35,7 +35,7 @@ function isSafeLink(link: string): boolean {
 }
 
 /** Tenant inbox bell — badge + hand-rolled dropdown (no menu library). */
-export default function NotificationBell({ tenantId }: NotificationBellProps) {
+export default function NotificationBell({ tenantId, portal }: NotificationBellProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<InboxNotification[]>([]);
