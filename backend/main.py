@@ -577,6 +577,20 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Failed to grant trial credits for '{subdomain}': {e}")
 
+        # Notification Engine: onboarding welcome (best-effort — never blocks provision)
+        try:
+            from services.db_manager import TRIAL_CREDITS as _TRIAL_DEFAULT
+            from services.notifications import dispatch_event as _dispatch_onboarding
+
+            _grant_ctx = int(payload.initial_credits) if payload.initial_credits is not None else _TRIAL_DEFAULT
+            _dispatch_onboarding(
+                "ONBOARDING_WELCOME",
+                subdomain,
+                {"school_name": school_name, "subdomain": subdomain, "credits": _grant_ctx},
+            )
+        except Exception as e:
+            logger.warning(f"[PROVISION] Onboarding notification failed for '{subdomain}': {e}")
+
         # Dual-ledger: initial slot capacity = student_count (free trial capacity, no payment)
         try:
             from services.db_manager import _connect_as_superuser, BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE
@@ -860,6 +874,18 @@ try:
     logger.info("[App] Command center router mounted (/api/v1/tenant/{tenant_id}/command-center/*)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Command center router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
+# Notification Inbox — template-driven inbox (Phase 2)
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.notifications import router as notifications_router
+
+    app.include_router(notifications_router)
+    logger.info("[App] Notifications router mounted (/api/v1/tenant/{tenant_id}/notifications)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Notifications router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Entrypoint
