@@ -329,12 +329,13 @@ def dispatch_manual(
         cur.execute("COMMIT;")
         logger.info(
             f"[notifications] Manual '{cat}' #{notification_id} "
-            f"to {'broadcast' if tid is None else tid} ({len(unique)} recipients)"
+            f"to {'broadcast' if tid is None else tid} ({len(unique)} recipients, role={role})"
         )
         return {
             "notification_id": notification_id,
             "tenant_id": tid,
             "category": cat,
+            "target_role": role,
             "recipient_count": len(unique),
         }
     except Exception:
