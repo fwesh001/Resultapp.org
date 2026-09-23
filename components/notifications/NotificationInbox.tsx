@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
   CheckCheck,
@@ -52,7 +52,11 @@ function isSafeLink(link: string): boolean {
 export default function NotificationInbox({ tenantId, basePath }: NotificationInboxProps) {
   void basePath;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tid = (tenantId || "").toLowerCase().trim();
+  // Deep-link target (?open=<id>) + per-item refs for scroll-into-view
+  const itemRefs = useRef(new Map<number, HTMLLIElement>());
+  const deepLinked = useRef<number | null>(null);
 
   const [items, setItems] = useState<InboxNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
