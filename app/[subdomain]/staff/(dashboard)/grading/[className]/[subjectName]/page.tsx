@@ -15,6 +15,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
