@@ -1,4 +1,4 @@
-import { AlertCircle, Bell, Info, Rocket, ShieldAlert, type LucideIcon } from "lucide-react";
+import { AlertCircle, Bell, Info, Megaphone, Rocket, ShieldAlert, type LucideIcon } from "lucide-react";
 
 /**
  * Modular category → UI mapping for the Notification Engine.
