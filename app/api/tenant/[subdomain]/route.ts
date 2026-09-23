@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
  * Public subdomain availability check (no auth — mirrors the public
  * tenant_lookup). 200 {available:false} = taken, 404 {available:true} = free.
  * Used pre-payment so users never pay for a sniped subdomain.
+ *
+ * Also exposes the tenant's global currentTerm/currentSession so client
+ * portals (staff sheets, result lookup) can default to the admin's term
+ * while still allowing manual override (default-plus-override).
  */
 
 function getBackendBase(): string {
@@ -34,7 +38,19 @@ export async function GET(
     if (!r.ok) {
       return NextResponse.json({ success: false, available: false, error: "Availability check failed" }, { status: 502 });
     }
-    return NextResponse.json({ success: true, available: false, subdomain }, { status: 200 });
+    const data = (await r.json().catch(() => ({}))) as {
+      school?: { current_term?: string | null; current_session?: string | null };
+    };
+    return NextResponse.json(
+      {
+        success: true,
+        available: false,
+        subdomain,
+        currentTerm: data.school?.current_term?.trim() || "Term 1",
+        currentSession: data.school?.current_session?.trim() || null,
+      },
+      { status: 200 }
+    );
   } catch (e) {
     console.error("[tenant availability] fetch failed", e);
     return NextResponse.json({ success: false, available: false, error: "Could not reach registry" }, { status: 502 });
