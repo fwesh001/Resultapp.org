@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
@@ -149,6 +150,7 @@ export default function SmartStaffHubPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [saving, setSaving] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const assessments = useMemo(() => parseAssessments(template), [template]);
 
