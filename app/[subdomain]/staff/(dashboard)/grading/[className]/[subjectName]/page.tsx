@@ -672,6 +672,16 @@ export default function FocusedGradingPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={showDiscardConfirm}
+        onOpenChange={(o) => { if (!o) setShowDiscardConfirm(false); }}
+        title="Discard unsaved scores?"
+        message="You have unsaved scores. Close anyway?"
+        variant="default"
+        confirmLabel="Discard"
+        onConfirm={discardFocused}
+      />
     </div>
   );
 }
