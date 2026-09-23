@@ -1832,6 +1832,189 @@ def init_roster_registry() -> None:
             conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Template-Driven Notification Engine — Phase 1 (central platform tables)
+# ---------------------------------------------------------------------------
+# Design:
+# - Central tables live in the superuser DB alongside `schools` (NOT per-school
+#   isolated DBs), mirroring billing_ledger / audit_logs.
+# - `notifications.tenant_id` is NULL for platform-wide broadcasts; tenant-scoped
+#   dispatches store the subdomain.
+# - Global Broadcast Fan-out (Phase 2 contract): when dispatch_event fires with
+#   tenant_id=None, it MUST fan out one `notification_reads` row per recipient
+#   (schools admin email + every active tenant_staff row platform-wide), with
+#   `notification_reads.tenant_id` set to that user's OWN subdomain so frontend
+#   inbox queries stay scoped (`WHERE tenant_id = %s AND user_id = %s`) and fast.
+# - `notification_reads.user_id` is TEXT: staff UUID/id::text/staff_id or
+#   lowercase admin email (see routers/staff_auth.py + admin_auth.py).
+# ---------------------------------------------------------------------------
+
+NOTIFICATION_TEMPLATES_TABLE = "notification_templates"
+NOTIFICATIONS_TABLE = "notifications"
+NOTIFICATION_READS_TABLE = "notification_reads"
+
+VALID_NOTIFICATION_CATEGORIES = ("BILLING", "SYSTEM", "ONBOARDING", "SECURITY")
+
+#: System trigger defaults. `{{var}}` placeholders are rendered by
+#: services/notifications.dispatch_event in Phase 2 (missing keys → "").
+DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
+    {
+        "event_type": "ONBOARDING_WELCOME",
+        "category": "ONBOARDING",
+        "title_template": "Welcome, {{school_name}}!",
+        "body_template": "Your portal {{subdomain}}.resultapp.org is live with {{credits}} trial credits.",
+        "default_color": "#8B5CF6",
+    },
+    {
+        "event_type": "LOW_CREDITS",
+        "category": "BILLING",
+        "title_template": "Low credits: {{credits}} left",
+        "body_template": "{{school_name}} has {{credits}} credits left. Top up to keep publishing report cards.",
+        "default_color": "#F59E0B",
+    },
+    {
+        "event_type": "ZERO_CREDITS",
+        "category": "BILLING",
+        "title_template": "Out of credits",
+        "body_template": "{{school_name}} ({{subdomain}}) is at 0 credits. Publishing is paused until you top up.",
+        "default_color": "#F59E0B",
+    },
+    {
+        "event_type": "TOPUP_SUCCESS",
+        "category": "BILLING",
+        "title_template": "Top-up confirmed",
+        "body_template": "{{amount}} credits added via {{reference_id}}. New balance: {{balance}}.",
+        "default_color": "#F59E0B",
+    },
+]
+
+
+def init_notification_tables() -> None:
+    """Create notification engine tables if they do not exist (idempotent).
+
+    Safe to call on every startup. Additive only — never drops or alters
+    existing columns. Mirrors init_schools_registry / init_roster_registry.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {NOTIFICATION_TEMPLATES_TABLE} (
+                event_type     VARCHAR(60) PRIMARY KEY,
+                category       VARCHAR(20) NOT NULL DEFAULT 'SYSTEM'
+                    CHECK (category IN ('BILLING', 'SYSTEM', 'ONBOARDING', 'SECURITY')),
+                title_template TEXT NOT NULL,
+                body_template  TEXT NOT NULL,
+                default_color  VARCHAR(7) NOT NULL DEFAULT '#6366F1',
+                is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at     TIMESTAMPTZ DEFAULT NOW(),
+                updated_at     TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {NOTIFICATIONS_TABLE} (
+                id         SERIAL PRIMARY KEY,
+                tenant_id  VARCHAR(60)
+                    REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                category   VARCHAR(20) NOT NULL DEFAULT 'SYSTEM',
+                title      TEXT NOT NULL,
+                message    TEXT NOT NULL,
+                cta_link   TEXT,
+                event_type VARCHAR(60),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {NOTIFICATION_READS_TABLE} (
+                notification_id INT NOT NULL
+                    REFERENCES {NOTIFICATIONS_TABLE}(id) ON DELETE CASCADE,
+                tenant_id       VARCHAR(60) NOT NULL,
+                user_id         TEXT NOT NULL,
+                user_type       VARCHAR(10) NOT NULL DEFAULT 'staff'
+                    CHECK (user_type IN ('staff', 'admin')),
+                is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+                read_at         TIMESTAMPTZ,
+                PRIMARY KEY (notification_id, tenant_id, user_id)
+            );
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_notifications_tenant_created
+            ON {NOTIFICATIONS_TABLE} (tenant_id, created_at DESC);
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_notifications_created
+            ON {NOTIFICATIONS_TABLE} (created_at DESC);
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_notification_reads_inbox
+            ON {NOTIFICATION_READS_TABLE} (tenant_id, user_id, is_read, notification_id DESC);
+        """)
+        conn.commit()
+        logger.info(
+            f"[DB] Notification tables ready "
+            f"({NOTIFICATION_TEMPLATES_TABLE}, {NOTIFICATIONS_TABLE}, {NOTIFICATION_READS_TABLE})"
+        )
+    except Exception as e:
+        logger.error(f"[DB] Failed to initialize notification tables: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+    finally:
+        if conn:
+            conn.close()
+
+
+def seed_default_notification_templates() -> Dict[str, Any]:
+    """Insert Phase 1 default templates (idempotent).
+
+    Uses ON CONFLICT (event_type) DO NOTHING so superadmin edits are never
+    overwritten on re-seed / restart. Returns {inserted, skipped}.
+    """
+    conn = None
+    inserted = 0
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        for tpl in DEFAULT_NOTIFICATION_TEMPLATES:
+            cur.execute(
+                f"""
+                INSERT INTO {NOTIFICATION_TEMPLATES_TABLE}
+                    (event_type, category, title_template, body_template, default_color)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (event_type) DO NOTHING
+                RETURNING event_type;
+                """,
+                (
+                    tpl["event_type"],
+                    tpl["category"],
+                    tpl["title_template"],
+                    tpl["body_template"],
+                    tpl["default_color"],
+                ),
+            )
+            if cur.fetchone() is not None:
+                inserted += 1
+        conn.commit()
+        total = len(DEFAULT_NOTIFICATION_TEMPLATES)
+        logger.info(f"[DB] Notification templates seeded ({inserted} new, {total - inserted} existing)")
+        return {"inserted": inserted, "skipped": total - inserted, "total": total}
+    except Exception as e:
+        logger.error(f"[DB] Failed to seed notification templates: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 def _row_to_dict(row, cursor) -> Dict[str, Any]:
     """Convert a psycopg2 cursor row to a dict using cursor column names."""
     if row is None:
