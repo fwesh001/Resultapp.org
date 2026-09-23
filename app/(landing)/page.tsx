@@ -383,7 +383,7 @@ export default function HomePage() {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
         />
-        <div className="relative bg-[#0B0514]">
+        <div className="relative">
           <FaqSection />
         </div>
       </div>
