@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
 
@@ -64,6 +65,7 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
   const [missingLoading, setMissingLoading] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [nudging, setNudging] = useState<string | null>(null);
+  const [pendingPublish, setPendingPublish] = useState<{ ids: string[]; message: string } | null>(null);
 
   /** In-app nudge: dispatches STAFF_GRADING_REMINDER with a grading-hub deep link. */
   async function nudgeStaff(className: string, s: MissingSubject) {
@@ -194,11 +196,26 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
         });
         return;
       }
-      const ok = window.confirm(
-        `Publish ${uniqueIds.length} report card(s) for ${term}${session ? ` (${session})` : ""}? ` +
-        `This deducts ${uniqueIds.length} credit(s). Re-prints are free.`,
-      );
-      if (!ok) return;
+      setPendingPublish({
+        ids: uniqueIds,
+        message:
+          `Publish ${uniqueIds.length} report card(s) for ${term}${session ? ` (${session})` : ""}? ` +
+          `This deducts ${uniqueIds.length} credit(s). Re-prints are free.`,
+      });
+      return;
+    } catch (e) {
+      toast.error("Publication failed", { description: e instanceof Error ? e.message : "Try again" });
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function runPublish() {
+    if (!pendingPublish || publishing) return;
+    const { ids: uniqueIds } = pendingPublish;
+    setPendingPublish(null);
+    setPublishing(true);
+    try {
       const res = await fetch("/api/admin/results/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
