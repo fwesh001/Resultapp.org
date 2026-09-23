@@ -1886,6 +1886,13 @@ DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
         "body_template": "{{amount}} credits added via {{reference_id}}. New balance: {{balance}}.",
         "default_color": "#F59E0B",
     },
+    {
+        "event_type": "STAFF_GRADING_REMINDER",
+        "category": "ACTION",
+        "title_template": "Grades due: {{subject_name}} ({{class_name}})",
+        "body_template": "Reminder: Grades for {{subject_name}} are due. Please finalize your entries.",
+        "default_color": "#10B981",
+    },
 ]
 
 
