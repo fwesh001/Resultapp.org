@@ -11,6 +11,9 @@ export interface ConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   message?: string;
+  /** Footnote under the message. Defaults to "This action cannot be undone."
+   *  for danger variant; hidden for other variants unless provided. */
+  note?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "danger" | "default";
@@ -27,6 +30,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   message,
+  note,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   variant = "danger",
@@ -34,6 +38,7 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const danger = variant === "danger";
+  const footnote = note ?? (danger ? "This action cannot be undone." : undefined);
 
   return (
     <Modal
