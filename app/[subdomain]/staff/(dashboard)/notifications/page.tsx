@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getTenant } from "@/lib/tenant";
 import NotificationInbox from "@/components/notifications/NotificationInbox";
 
@@ -13,5 +14,9 @@ export default async function StaffNotificationsPage({
   const school = await getTenant(routeSubdomain);
   const subdomain = school?.slug ?? routeSubdomain.toLowerCase().trim();
 
-  return <NotificationInbox tenantId={subdomain} basePath={`/${subdomain}/staff`} />;
+  return (
+    <Suspense fallback={<p className="p-8 text-sm text-zinc-400">Loading notifications…</p>}>
+      <NotificationInbox tenantId={subdomain} basePath={`/${subdomain}/staff`} />
+    </Suspense>
+  );
 }
