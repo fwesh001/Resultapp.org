@@ -116,6 +116,7 @@ export default function FocusedGradingPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [saving, setSaving] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Behavioural per-student entry state
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
