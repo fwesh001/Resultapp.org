@@ -1,10 +1,12 @@
 """
 Notification Inbox — per-user tenant inbox APIs (Phase 2).
 
-Prefix: /api/v1/tenant/{tenant_id}/notifications
+Prefix: /api/v1/tenant/{tenant_id}/notifications (+ staff_router for nudges)
 Auth:   shared X-API-SECRET-KEY (same trust boundary as credits router).
         User scoping is enforced by the Next.js proxy via session cookies;
         this router trusts the proxy + validates tenant/user identifiers.
+        The nudge endpoint additionally requires the Next.js proxy to hold
+        a tenant admin_session (see app/api/admin/nudge/route.ts).
 
 Identity:
 - staff user_id canonical form = tenant_staff.id::text (UUID). The `user_id`
@@ -17,6 +19,7 @@ Endpoints:
 - GET  /unread-count                               lightweight bell poll
 - POST /{notification_id}/read                     mark one as read
 - POST /read-all                                   mark all as read
+- POST /api/v1/tenant/{tenant_id}/staff/nudge      admin → staff grading reminder
 """
 
 import logging
