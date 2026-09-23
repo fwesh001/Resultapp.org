@@ -142,11 +142,41 @@ def _collect_recipients(
 # Core dispatch
 # ---------------------------------------------------------------------------
 
+def resolve_staff_user_id(cur, tenant_id: str, identifier: str) -> str:
+    """Resolve any staff identifier to canonical tenant_staff.id::text.
+
+    Accepts id | staff_id | email within the tenant. Raises ValueError
+    when no active staff row matches (service-level equivalent of the
+    inbox router's _resolve_user_id, without HTTP semantics).
+    """
+    from services.db_manager import TENANT_STAFF_TABLE, _sanitize_subdomain
+
+    tid = _sanitize_subdomain(tenant_id)
+    ident = (identifier or "").strip()
+    if not ident:
+        raise ValueError("target staff identifier is required")
+    cur.execute(
+        f"""
+        SELECT id::text FROM {TENANT_STAFF_TABLE}
+        WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE
+          AND (id::text = %s OR staff_id = %s OR email = %s)
+        LIMIT 1;
+        """,
+        (tid, ident, ident, ident),
+    )
+    row = cur.fetchone()
+    if row is None:
+        raise ValueError(f"Unknown staff user '{ident}' in tenant '{tid}'")
+    return str(row[0])
+
+
 def dispatch_event(
     event_type: str,
     tenant_id: Optional[str],
     context: Optional[Dict[str, Any]] = None,
     cta_link: Optional[str] = None,
+    target_user_id: Optional[str] = None,
+    target_user_type: str = "staff",
 ) -> Dict[str, Any]:
     """Compile a template and fan out inbox rows. Returns summary dict.
 
@@ -155,6 +185,11 @@ def dispatch_event(
     - tenant_id: subdomain string, or None for platform broadcast.
     - context: placeholder values for {{var}} rendering.
     - cta_link: optional deep link stored on the notifications row.
+    - target_user_id: optional single-user targeting (e.g. STAFF_GRADING_REMINDER).
+      When provided, the fan-out query is bypassed and exactly one
+      notification_reads row is written for that user. Staff identifiers
+      (id | staff_id | email) resolve to the canonical id; use
+      target_user_type='admin' with the admin email for admin targeting.
 
     Raises ValueError for unknown tenant / bad input; other DB errors
     propagate so callers can log them (callers must treat as best-effort).
