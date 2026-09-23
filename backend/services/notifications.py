@@ -244,6 +244,54 @@ def dispatch_event(
         )
         notification_id = int(cur.fetchone()[0])
 
+        # Single-user targeting: bypass fan-out, write exactly one inbox row.
+        if target_user_id is not None and str(target_user_id).strip():
+            tut = (target_user_type or "staff").strip().lower()
+            if tut not in ("staff", "admin"):
+                cur.execute("ROLLBACK;")
+                raise ValueError("target_user_type must be staff or admin")
+            if tid is None:
+                cur.execute("ROLLBACK;")
+                raise ValueError("target_user_id requires a tenant_id (no broadcast targeting)")
+            canonical = (
+                resolve_staff_user_id(cur, tid, str(target_user_id))
+                if tut == "staff"
+                else str(target_user_id).strip().lower()
+            )
+            if tut == "admin":
+                from services.db_manager import SCHOOLS_REGISTRY_TABLE
+
+                cur.execute(
+                    f"SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s AND LOWER(email) = %s;",
+                    (tid, canonical),
+                )
+                if cur.fetchone() is None:
+                    cur.execute("ROLLBACK;")
+                    raise ValueError(f"Unknown admin '{canonical}' in tenant '{tid}'")
+            cur.execute(
+                f"""
+                INSERT INTO {NOTIFICATION_READS_TABLE}
+                    (notification_id, tenant_id, user_id, user_type)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (notification_id, tenant_id, user_id) DO NOTHING;
+                """,
+                (notification_id, tid, canonical, tut),
+            )
+            cur.execute("COMMIT;")
+            logger.info(
+                f"[notifications] Dispatched '{event_type}' #{notification_id} "
+                f"to {tid}/{canonical} (targeted)"
+            )
+            return {
+                "notification_id": notification_id,
+                "event_type": event_type,
+                "tenant_id": tid,
+                "title": title,
+                "recipient_count": 1,
+                "targeted": True,
+                "skipped": False,
+            }
+
         recipients = _collect_recipients(cur, tid)
         # De-duplicate (same user reachable twice) while preserving order.
         seen = set()
