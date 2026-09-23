@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBackendBase, getSecret, requireTenantIdentity, upstreamError } from "@/app/api/notifications/_lib";
 
 /**
- * GET /api/notifications/inbox?tenant_id=vhs[&unread_only=true&limit=50&offset=0]
+ * GET /api/notifications/inbox?tenant_id=vhs[&unread_only=true&q=credit&limit=50&offset=0]
  * Identity: admin_session OR staff_session (tenant-scoped). Forwards the
  * resolved user_id/user_type to FastAPI so the inbox stays per-user.
  */
