@@ -9,13 +9,16 @@ export async function POST(req: NextRequest) {
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  // Audience targeting: 'all' (Admins + Staff) is the default; 'admin_only' restricts
+  // fan-out to Tenant Admin emails. Normalized here so old clients keep working.
+  const role = String(body.target_role || "all").trim().toLowerCase();
 
   try {
     const r = await fetch(`${getBackendBase()}/api/v1/admin/notifications/broadcast`, {
       method: "POST",
       headers: { "X-API-SECRET-KEY": secret as string, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, target_role: role }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
