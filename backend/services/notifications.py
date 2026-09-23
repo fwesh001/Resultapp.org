@@ -323,6 +323,7 @@ def dispatch_event(
             "tenant_id": tid,
             "title": title,
             "recipient_count": len(unique),
+            "targeted": False,
             "skipped": False,
         }
     except Exception:
