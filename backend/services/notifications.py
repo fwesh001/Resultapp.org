@@ -290,6 +290,9 @@ def dispatch_manual(
     tid: Optional[str] = None
     if tenant_id is not None and str(tenant_id).strip():
         tid = _sanitize_subdomain(str(tenant_id))
+    role = (target_role or "all").strip().lower()
+    if role not in VALID_TARGET_ROLES:
+        raise ValueError(f"target_role must be one of {list(VALID_TARGET_ROLES)}")
 
     conn = None
     try:
@@ -306,7 +309,7 @@ def dispatch_manual(
             (tid, cat, title, message, (cta_link or "").strip() or None),
         )
         notification_id = int(cur.fetchone()[0])
-        recipients = _collect_recipients(cur, tid)
+        recipients = _collect_recipients(cur, tid, role)
         seen = set()
         unique: List[Tuple[str, str, str]] = []
         for r in recipients:
