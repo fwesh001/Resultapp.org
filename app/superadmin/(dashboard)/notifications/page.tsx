@@ -285,6 +285,19 @@ export default function NotificationsPage() {
                 />
               )}
             </fieldset>
+            <fieldset>
+              <legend className="mb-1 text-sm font-medium text-zinc-200">Audience Role</legend>
+              <div className="flex flex-wrap gap-4 text-sm text-zinc-300">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="audience-role" checked={bRole === "all"} onChange={() => setBRole("all")} className="accent-purple-500" />
+                  All Users (Admin + Staff)
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="audience-role" checked={bRole === "admin_only"} onChange={() => setBRole("admin_only")} className="accent-purple-500" />
+                  Tenant Admins Only
+                </label>
+              </div>
+            </fieldset>
             {sendError && (
               <p className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                 <AlertCircle className="h-4 w-4 shrink-0" /> {sendError}
