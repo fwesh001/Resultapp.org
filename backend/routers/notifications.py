@@ -147,6 +147,7 @@ def list_inbox(
     unread_only: bool = False,
     limit: int = 50,
     offset: int = 0,
+    q: Optional[str] = None,
 ):
     from services.db_manager import (
         NOTIFICATION_READS_TABLE,
