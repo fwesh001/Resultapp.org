@@ -130,6 +130,10 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
       setOpen(false);
       if (link.startsWith("/")) router.push(link);
       else window.open(link, "_blank", "noopener,noreferrer");
+    } else if (portal) {
+      // No CTA — deep-link into the dedicated inbox with this item expanded.
+      setOpen(false);
+      router.push(`/${tid}/${portal}/notifications?open=${n.id}`);
     }
   }
 
