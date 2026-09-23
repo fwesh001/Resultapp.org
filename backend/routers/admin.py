@@ -765,6 +765,177 @@ def get_audit_trail(subdomain: Optional[str] = None, limit: int = 50, offset: in
     return {"entries": get_audit_logs(subdomain, limit, offset)}
 
 
+@router.get("/notification-templates", summary="List notification templates (superadmin)")
+def list_notification_templates():
+    """All system templates ordered by event_type (superadmin editable)."""
+    from services.db_manager import NOTIFICATION_TEMPLATES_TABLE, _connect_as_superuser, _row_to_dict
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT event_type, category, title_template, body_template,
+                   default_color, is_active, created_at, updated_at
+            FROM {NOTIFICATION_TEMPLATES_TABLE}
+            ORDER BY event_type ASC;
+            """
+        )
+        rows = cur.fetchall()
+        templates = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            for ts in ("created_at", "updated_at"):
+                d[ts] = d[ts].isoformat() if hasattr(d.get(ts), "isoformat") else str(d.get(ts) or "")
+            templates.append(d)
+        return {"templates": templates, "total": len(templates)}
+    except Exception as e:
+        _logger.exception(f"[admin] list templates failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Templates query failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+class NotificationTemplateUpdate(BaseModel):
+    title_template: Optional[str] = None
+    body_template: Optional[str] = None
+    category: Optional[str] = None
+    default_color: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.put("/notification-templates/{event_type}", summary="Update a notification template (superadmin)")
+def update_notification_template(event_type: str, payload: NotificationTemplateUpdate):
+    """Edit text/category/color of an automated trigger. Audited."""
+    import re as _re
+    from services.db_manager import (
+        NOTIFICATION_TEMPLATES_TABLE,
+        VALID_NOTIFICATION_CATEGORIES,
+        _connect_as_superuser,
+        _row_to_dict,
+        log_admin_action,
+    )
+
+    event = (event_type or "").strip().upper()
+    if not event:
+        raise HTTPException(status_code=400, detail="event_type is required")
+    data = payload.model_dump(exclude_none=True)
+    if "category" in data:
+        cat = (data["category"] or "").strip().upper()
+        if cat not in VALID_NOTIFICATION_CATEGORIES:
+            raise HTTPException(status_code=400, detail=f"category must be one of {list(VALID_NOTIFICATION_CATEGORIES)}")
+        data["category"] = cat
+    if "default_color" in data:
+        color = (data["default_color"] or "").strip()
+        if not _re.match(r"^#[0-9A-Fa-f]{6}$", color):
+            raise HTTPException(status_code=400, detail="default_color must be hex like #F59E0B")
+        data["default_color"] = color
+    for key in ("title_template", "body_template"):
+        if key in data:
+            val = (data[key] or "").strip()
+            if not val:
+                raise HTTPException(status_code=400, detail=f"{key} cannot be empty")
+            if len(val) > 2000:
+                raise HTTPException(status_code=400, detail=f"{key} too long (max 2000 chars)")
+            data[key] = val
+    allowed = ("title_template", "body_template", "category", "default_color", "is_active")
+    updates = {k: data[k] for k in allowed if k in data}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No template fields provided")
+    if "is_active" in updates:
+        updates["is_active"] = bool(updates["is_active"])
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        set_clause = ", ".join(f"{c} = %s" for c in updates)
+        cur.execute(
+            f"""
+            UPDATE {NOTIFICATION_TEMPLATES_TABLE}
+            SET {set_clause}, updated_at = NOW()
+            WHERE event_type = %s
+            RETURNING event_type, category, title_template, body_template,
+                      default_color, is_active, created_at, updated_at;
+            """,
+            tuple(updates.values()) + (event,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Unknown template '{event}'")
+        conn.commit()
+        d = _row_to_dict(row, cur)
+        for ts in ("created_at", "updated_at"):
+            d[ts] = d[ts].isoformat() if hasattr(d.get(ts), "isoformat") else str(d.get(ts) or "")
+        log_admin_action("notification.template_update", None, {"event_type": event, **{k: str(v)[:120] for k, v in updates.items()}})
+        return {"success": True, "template": d}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] template update failed for {event}: {e}")
+        raise HTTPException(status_code=500, detail=f"Template update failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+class NotificationBroadcastRequest(BaseModel):
+    category: Optional[str] = "SYSTEM"
+    title: str = ""
+    message: str = ""
+    cta_link: Optional[str] = None
+    # Empty/omitted = platform-wide broadcast (tenant_id=NULL fan-out).
+    tenant_id: Optional[str] = None
+
+
+@router.post("/notifications/broadcast", summary="Author + dispatch a manual broadcast (superadmin)")
+def broadcast_notification(payload: NotificationBroadcastRequest):
+    """Manual superadmin message: platform-wide or tenant-specific. Audited."""
+    from services.db_manager import _sanitize_subdomain, log_admin_action
+    from services.notifications import dispatch_manual
+
+    tid: Optional[str] = None
+    raw_tenant = (payload.tenant_id or "").strip().lower()
+    if raw_tenant:
+        try:
+            tid = _sanitize_subdomain(raw_tenant)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    try:
+        result = dispatch_manual(
+            category=payload.category or "SYSTEM",
+            title=payload.title,
+            message=payload.message,
+            tenant_id=tid,
+            cta_link=(payload.cta_link or "").strip() or None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _logger.exception(f"[admin] broadcast failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Broadcast failed: {e}")
+    log_admin_action(
+        "notification.broadcast",
+        tid,
+        {"category": result.get("category"), "title": (payload.title or "")[:120],
+         "recipients": result.get("recipient_count", 0)},
+    )
+    return {"success": True, **result}
+
+
 @router.get("/stats", summary="Platform KPIs: MRR + consumption (superadmin)")
 def platform_stats():
     """MRR from immutable amount_ngn PURCHASE rows (this vs last month);
