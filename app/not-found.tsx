@@ -1,11 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Home, Undo2 } from "lucide-react";
+
+/**
+ * First path segments that are global routes — never tenant subdomains.
+ * Combines middleware bypass paths, global pages, and backend RESERVED_SUBDOMAINS.
+ */
+const RESERVED_SEGMENTS = new Set([
+  "superadmin",
+  "api",
+  "_next",
+  "login",
+  "register",
+  "dashboard",
+  "pricing",
+  "support",
+  "contact",
+  "www",
+  "admin",
+  "app",
+  "resultapp",
+  "mail",
+  "help",
+  "billing",
+  "ops",
+  "status",
+]);
 
 export default function NotFound() {
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Tenant-aware 404: first path segment is the subdomain unless reserved.
+  // No live tenant lookup — keeps this page instant and offline-safe.
+  const segment = (pathname.split("/")[1] || "").toLowerCase();
+  const subdomain = segment && !RESERVED_SEGMENTS.has(segment) ? segment : null;
+  const homeHref = subdomain ? `/${subdomain}` : "/";
+  // Layout protection: subdomains run to 30 chars — clamp the giant
+  // watermark to 4 chars so it can never force horizontal scrolling.
+  const watermark = subdomain ? subdomain.slice(0, 4).toUpperCase() : "404";
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0B0514] p-4 text-purple-50">
