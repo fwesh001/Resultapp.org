@@ -12,7 +12,8 @@ import {
   Zap,
 } from "lucide-react";
 import { PricingCalculator } from "@/components/ui/PricingCalculator";
-import FaqSection, { faqs } from "@/components/landing/FaqSection";
+import FaqSection from "@/components/landing/FaqSection";
+import { faqs } from "@/lib/faq";
 
 const faqJsonLd = {
   "@context": "https://schema.org",
