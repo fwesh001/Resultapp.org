@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useState } from "react";
 import { Loader2, AlertCircle, ArrowRight, Globe } from "lucide-react";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
 const SUBDOMAIN_RE = /^[a-z0-9-]{3,30}$/;
@@ -91,8 +90,7 @@ export default function WorkspaceLocatorForm() {
         </div>
       )}
 
-      {/* Hidden input keeps password managers / a11y happy without a real credential field */}
-      <Input label="" name="workspace" value="" onChange={() => {}} className="hidden" aria-hidden="true" tabIndex={-1} />
+      {/* No credential fields by design — this form only locates the workspace. */}
 
       <Button
         type="submit"
