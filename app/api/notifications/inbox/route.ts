@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
     offset: searchParams.get("offset") || "0",
   });
   if (searchParams.get("unread_only") === "true") qs.set("unread_only", "true");
+  const q = (searchParams.get("q") || "").trim().slice(0, 100);
+  if (q) qs.set("q", q);
 
   try {
     const r = await fetch(
