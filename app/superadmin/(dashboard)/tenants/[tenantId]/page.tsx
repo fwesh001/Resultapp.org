@@ -377,6 +377,15 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
         onClose={() => setShowDelete(false)}
         onConfirm={(reason) => void handleDeleteConfirm(reason)}
       />
+      <ConfirmDialog
+        open={showResetPassword}
+        onOpenChange={(o) => { if (!o) setShowResetPassword(false); }}
+        title="Reset admin password?"
+        message="Generate a one-time temp password? The current password stops working immediately."
+        confirmLabel="Generate"
+        loading={acting === "reset"}
+        onConfirm={() => void handleResetPassword()}
+      />
     </div>
   );
 }
