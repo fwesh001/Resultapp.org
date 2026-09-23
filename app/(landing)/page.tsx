@@ -376,6 +376,15 @@ export default function HomePage() {
             and enterprise plans.
           </p>
         </section>
+
+        {/* FAQ — above the footer */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
+        <div className="relative bg-[#0B0514]">
+          <FaqSection />
+        </div>
       </div>
     </div>
   );
