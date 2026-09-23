@@ -99,27 +99,30 @@ def _validate_user_type(user_type: Optional[str]) -> str:
 def _resolve_user_id(cur, tid: str, user_id: str, user_type: str) -> str:
     """Resolve any staff identifier to canonical tenant_staff.id::text.
 
-    Admin identifiers normalize to LOWER(email). Raises 404 for unknown staff.
+    Delegates to the shared service resolver so read paths (inbox,
+    mark-read, unread-count) agree with write paths (nudge/targeted
+    dispatch) on row identity. Admin identifiers normalize to
+    LOWER(email). Unknown → 404; ambiguous → 409 with retry hint.
     """
-    from services.db_manager import TENANT_STAFF_TABLE
+    from services.notifications import (
+        StaffAmbiguousError,
+        StaffNotFoundError,
+        resolve_staff_user_id,
+    )
 
     identifier = (user_id or "").strip()
     if not identifier:
         raise HTTPException(status_code=400, detail="user_id is required")
     if user_type == "admin":
         return identifier.lower()
-    cur.execute(
-        f"""
-        SELECT id::text FROM {TENANT_STAFF_TABLE}
-        WHERE subdomain = %s AND (id::text = %s OR staff_id = %s OR email = %s)
-        LIMIT 1;
-        """,
-        (tid, identifier, identifier, identifier),
-    )
-    row = cur.fetchone()
-    if row is None:
+    try:
+        # Read path keeps legacy scope: inactive rows still resolve (their
+        # sessions predate deactivation); name matching stays enabled.
+        return resolve_staff_user_id(cur, tid, identifier, include_inactive=True)
+    except StaffAmbiguousError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except StaffNotFoundError:
         raise HTTPException(status_code=404, detail="Staff user not found")
-    return str(row[0])
 
 
 def _iso(value) -> str:
@@ -397,27 +400,26 @@ def nudge_staff(tenant_id: str, payload: StaffNudgeRequest):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Resolve staffer → canonical id + display name (active rows only).
-        cur.execute(
-            f"""
-            SELECT id::text, full_name FROM {TENANT_STAFF_TABLE}
-            WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE
-              AND (id::text = %s OR staff_id = %s OR email = %s OR full_name = %s)
-            ORDER BY CASE
-                WHEN id::text = %s THEN 0
-                WHEN staff_id = %s THEN 1
-                WHEN email = %s THEN 2
-                ELSE 3
-            END
-            LIMIT 1;
-            """,
-            (tid, identifier, identifier, identifier, identifier,
-             identifier, identifier, identifier),
+        # Resolve staffer → canonical id::text via the shared resolver
+        # (same semantics as the inbox read path; active-only here).
+        from services.notifications import (
+            StaffAmbiguousError as _Ambiguous,
+            StaffNotFoundError as _NotFound,
+            resolve_staff_user_id as _resolve,
         )
-        row = cur.fetchone()
-        if row is None:
+
+        try:
+            canonical = _resolve(cur, tid, identifier)
+        except _Ambiguous as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        except _NotFound:
             raise HTTPException(status_code=404, detail="Staff user not found")
-        canonical, staff_name = str(row[0]), str(row[1] or identifier)
+        cur.execute(
+            f"SELECT full_name FROM {TENANT_STAFF_TABLE} WHERE subdomain = %s AND id::text = %s;",
+            (tid, canonical),
+        )
+        name_row = cur.fetchone()
+        staff_name = str((name_row[0] if name_row else None) or identifier)
 
         # 24h cooldown: same staffer + exact CTA (subject/class/term) + still unread.
         cur.execute(
