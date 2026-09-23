@@ -5,10 +5,10 @@ import Link from "next/link";
 import {
   AlertCircle,
   ArrowLeft,
+  Bell,
   CheckCircle2,
   Coins,
   Loader2,
-  Megaphone,
   Send,
   Users,
 } from "lucide-react";
@@ -48,13 +48,6 @@ interface CommandCenterClientProps {
   initialTerm?: string;
 }
 
-function buildNudgeLink(staffName: string, className: string, term: string, subject: string, pending: number): string {
-  const message =
-    `Hello ${staffName}, this is a reminder from ResultApp: grades for ${subject} (${className}, ${term}) ` +
-    `are still pending for ${pending} student(s). Please enter them so results can be published on time. Thank you!`;
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
-}
-
 export default function CommandCenterClient({ tenantId, schoolName, initialTerm = "Term 1" }: CommandCenterClientProps) {
   const [term, setTerm] = useState(initialTerm);
   const [loading, setLoading] = useState(true);
@@ -70,6 +63,45 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
   const [missing, setMissing] = useState<Record<string, MissingData>>({});
   const [missingLoading, setMissingLoading] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [nudging, setNudging] = useState<string | null>(null);
+
+  /** In-app nudge: dispatches STAFF_GRADING_REMINDER with a grading-hub deep link. */
+  async function nudgeStaff(className: string, s: MissingSubject) {
+    const key = `${className}::${s.subject_name}`;
+    if (nudging) return;
+    setNudging(key);
+    try {
+      const res = await fetch("/api/admin/nudge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          staff_name: s.staff_name,
+          staff_email: s.staff_email ?? null,
+          subject_name: s.subject_name,
+          class_name: className,
+          term,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || `Nudge failed (${res.status})`);
+      }
+      if ((data as { duplicate?: boolean }).duplicate) {
+        toast.success("Reminder already sent", {
+          description: `${s.staff_name} was already nudged about ${s.subject_name} in the last 24 hours.`,
+        });
+      } else {
+        toast.success(`Nudged ${s.staff_name.split(" ")[0] || "staff"}`, {
+          description: `In-app reminder sent for ${s.subject_name} (${s.pending_count} pending).`,
+        });
+      }
+    } catch (e) {
+      toast.error("Could not send nudge", { description: e instanceof Error ? e.message : "Try again" });
+    } finally {
+      setNudging(null);
+    }
+  }
 
   const fetchSummary = useCallback(async (t: string) => {
     setLoading(true);
@@ -390,14 +422,17 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
                                         <span className="font-medium text-white">{s.subject_name}</span>
                                         <span className="text-purple-300/60"> • {s.staff_name} • {s.pending_count} pending</span>
                                       </div>
-                                      <a
-                                        href={buildNudgeLink(s.staff_name, c.class_name, term, s.subject_name, s.pending_count)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 hover:text-emerald-200"
+                                      <button
+                                        type="button"
+                                        onClick={() => void nudgeStaff(c.class_name, s)}
+                                        disabled={nudging === `${c.class_name}::${s.subject_name}`}
+                                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 hover:text-emerald-200 disabled:opacity-50"
                                       >
-                                        <Megaphone className="h-3.5 w-3.5" /> Nudge {s.staff_name.split(" ")[0] || "staff"}
-                                      </a>
+                                        <Bell className="h-3.5 w-3.5" />
+                                        {nudging === `${c.class_name}::${s.subject_name}`
+                                          ? "Sending…"
+                                          : `Nudge ${s.staff_name.split(" ")[0] || "staff"}`}
+                                      </button>
                                     </div>
                                   ))}
                                   <p className="text-xs text-purple-300/50">
@@ -418,7 +453,7 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
 
           <p className="text-xs leading-5 text-purple-300/40">
             Publication deducts 1 credit per newly published report card. Drafts, previews, and re-prints are free.
-            Nudges open WhatsApp with a pre-filled message — no messages are sent automatically.
+            Nudges land in the staffer&apos;s in-app inbox and deep-link straight into grading.
           </p>
         </>
       )}
