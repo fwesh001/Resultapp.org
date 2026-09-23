@@ -474,6 +474,17 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
           </p>
         </>
       )}
+
+      <ConfirmDialog
+        open={pendingPublish !== null}
+        onOpenChange={(o) => { if (!o) setPendingPublish(null); }}
+        title="Publish report cards?"
+        message={pendingPublish?.message}
+        variant="default"
+        confirmLabel="Publish"
+        loading={publishing}
+        onConfirm={() => void runPublish()}
+      />
     </div>
   );
 }
