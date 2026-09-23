@@ -311,6 +311,16 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
       <p className="text-center text-xs text-purple-300/40">
         Saved templates appear automatically when staff enter scores.
       </p>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        title={`Disable template "${pendingDelete?.name ?? ""}"?`}
+        message="Staff will stop seeing it. History is preserved."
+        confirmLabel="Disable"
+        loading={pendingDelete !== null && actingId === pendingDelete.id}
+        onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete); }}
+      />
     </div>
   );
 }
