@@ -60,6 +60,7 @@ export default async function StaffDashboardPage({
   ]);
 
   const allocations = dashboard?.allocations || [];
+  const initialTerm = school?.currentTerm?.trim() || "Term 1";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -90,7 +91,7 @@ export default async function StaffDashboardPage({
               <h3 className="mt-1 text-base font-semibold text-white">{a.subject_name}</h3>
               <p className="mt-1 text-xs text-purple-200/50">Assigned as {a.staff_name}</p>
               <Link
-                href={`/${subdomain}/staff/grading/${encodeURIComponent(a.class_name)}/${encodeURIComponent(a.subject_name)}?term=${encodeURIComponent("Term 1")}`}
+                href={`/${subdomain}/staff/grading/${encodeURIComponent(a.class_name)}/${encodeURIComponent(a.subject_name)}?term=${encodeURIComponent(initialTerm)}`}
                 className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-purple-600 py-2 text-sm font-medium text-white transition hover:bg-purple-500"
               >
                 <FileText className="h-4 w-4" /> Open Grading Sheet
