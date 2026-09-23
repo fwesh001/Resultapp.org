@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -123,7 +124,17 @@ export default function SmartStaffHubPage() {
   const [template, setTemplate] = useState<GradingTemplate | null>(null);
   const [hubLoading, setHubLoading] = useState(true);
   const [hubError, setHubError] = useState<string | null>(null);
+  // Default-plus-override: global admin term until the user picks otherwise.
   const [term, setTerm] = useState<string>("Term 1");
+  const [termTouched, setTermTouched] = useState(false);
+  const globalTerm = useGlobalTerm(tenantId);
+
+  useEffect(() => {
+    if (!termTouched && globalTerm && term !== globalTerm.term) {
+      setTerm(globalTerm.term);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [globalTerm, termTouched]);
 
   // Modal state — one assessment at a time
   const [activeClass, setActiveClass] = useState<string | null>(null);
@@ -394,7 +405,10 @@ export default function SmartStaffHubPage() {
               Term
               <select
                 value={term}
-                onChange={(e) => setTerm(e.target.value)}
+                onChange={(e) => {
+                  setTermTouched(true);
+                  setTerm(e.target.value);
+                }}
                 className="rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
               >
                 {TERMS.map((t) => (
