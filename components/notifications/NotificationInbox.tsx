@@ -374,7 +374,7 @@ export default function NotificationInbox({ tenantId, basePath }: NotificationIn
                         </button>
                       </div>
                     )}
-                  </ul>
+                  </li>
                 );
               })}
             </ul>
