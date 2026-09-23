@@ -181,6 +181,35 @@ export default function SmartStaffHubPage() {
     void fetchHub();
   }, [fetchHub]);
 
+  // Nudge CTA deep-link: ?action=grade&subject=X[&class=Y][&term=Z] auto-opens
+  // the grading modal for the matching allocation (first assessment).
+  // Silent no-op for missing/invalid params or unmatched allocations.
+  useEffect(() => {
+    if (deepLinkHandled.current || hubLoading) return;
+    if ((searchParams.get("action") || "").trim().toLowerCase() !== "grade") return;
+    const subjectQ = (searchParams.get("subject") || "").trim().toLowerCase();
+    if (!subjectQ || allocations.length === 0 || assessments.length === 0) return;
+    const classQ = (searchParams.get("class") || "").trim().toLowerCase();
+    const match =
+      (classQ
+        ? allocations.find(
+            (a) =>
+              safeDecode(a.subject_name).toLowerCase() === subjectQ &&
+              safeDecode(a.class_name).toLowerCase() === classQ,
+          )
+        : undefined) ??
+      allocations.find((a) => safeDecode(a.subject_name).toLowerCase() === subjectQ);
+    if (!match) return;
+    deepLinkHandled.current = true;
+    const termQ = (searchParams.get("term") || "").trim();
+    if ((TERMS as readonly string[]).includes(termQ)) {
+      setTerm(termQ);
+      setTermTouched(true);
+    }
+    openAssessment(match.class_name, match.subject_name, assessments[0]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [hubLoading, allocations, assessments, searchParams]);
+
   const fetchBundleForActive = useCallback(async () => {
     if (!activeClass || !activeSubject || !activeAssessment) return;
     setBundleLoading(true);
