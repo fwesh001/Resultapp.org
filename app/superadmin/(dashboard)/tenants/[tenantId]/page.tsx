@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, AlertCircle, Loader2, CheckCircle2, Coins, Layers, Power, KeyRound, Trash2 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 import { SuspendTenantModal, DeleteTenantModal } from "@/components/superadmin/TenantLifecycleModals";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface School {
   subdomain: string;
@@ -42,6 +43,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [showSuspend, setShowSuspend] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
     void params.then((p) => setTenantId(p.tenantId.toLowerCase().trim()));
