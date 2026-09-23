@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -404,7 +405,10 @@ export default function FocusedGradingPage() {
             Term
             <select
               value={term}
-              onChange={(e) => setTerm(e.target.value)}
+              onChange={(e) => {
+                setTermTouched(true);
+                setTerm(e.target.value);
+              }}
               className="rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
             >
               {TERMS.map((t) => (
