@@ -342,9 +342,14 @@ export default function SmartStaffHubPage() {
       }
     }
     if (hasUnsaved) {
-      const ok = window.confirm("You have unsaved scores. Close anyway?");
-      if (!ok) return;
+      setShowDiscardConfirm(true);
+      return;
     }
+    discardAndClose();
+  }
+
+  function discardAndClose() {
+    setShowDiscardConfirm(false);
     setActiveAssessment(null);
     setActiveClass(null);
     setActiveSubject(null);
