@@ -125,6 +125,36 @@ export default function NotificationInbox({ tenantId, basePath }: NotificationIn
     return items.filter((n) => (n.category || "SYSTEM").toUpperCase() === activeCategory);
   }, [items, activeCategory]);
 
+  // Deep-link (?open=<id>): expand + mark read + scroll into view once loaded.
+  // Guarded: runs once per open value, no-ops when the id isn't on a loaded page.
+  useEffect(() => {
+    const raw = (searchParams?.get("open") || "").trim();
+    const target = Number(raw);
+    if (!raw || !Number.isInteger(target) || target <= 0) return;
+    if (loading || deepLinked.current === target) return;
+    const found = items.find((n) => n.id === target);
+    if (!found) return;
+    deepLinked.current = target;
+    setExpanded((cur) => new Set(cur).add(target));
+    if (!found.is_read) {
+      setItems((cur) => cur.map((x) => (x.id === target ? { ...x, is_read: true } : x)));
+      setUnreadCount((u) => Math.max(0, u - 1));
+      void fetch("/api/notifications/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tid, notification_id: target }),
+      }).catch(() => {
+        // Best-effort: leave the optimistic read state on failure.
+      });
+    }
+    // Wait a tick for the accordion to render expanded, then scroll.
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        itemRefs.current.get(target)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 50);
+    });
+  }, [items, loading, searchParams, tid]);
+
   async function markOne(n: InboxNotification) {
     // Toggle accordion
     setExpanded((cur) => {
