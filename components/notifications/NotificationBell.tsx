@@ -176,7 +176,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
         <div
           role="menu"
           aria-label="Recent notifications"
-          className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-purple-500/20 bg-[#140A24] shadow-2xl sm:w-96"
+          className="absolute right-0 z-[100] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-purple-500/20 bg-[#140A24] shadow-2xl sm:w-96"
         >
           <div className="flex items-center justify-between border-b border-purple-500/20 px-4 py-3">
             <p className="text-sm font-semibold text-white">Notifications</p>
@@ -228,7 +228,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
                               <span className={`h-2 w-2 shrink-0 rounded-full ${style.dotClasses}`} aria-label="Unread" />
                             )}
                           </span>
-                          <span className="mt-0.5 line-clamp-3 block text-xs text-zinc-400">{n.message}</span>
+                          <span className="mt-0.5 line-clamp-3 break-words text-xs text-zinc-400">{n.message}</span>
                           <span className="mt-1.5 flex items-center gap-2">
                             <span className={`inline-block rounded-full border px-2 py-px text-[11px] ${style.badgeClasses}`}>
                               {n.category || "SYSTEM"}
