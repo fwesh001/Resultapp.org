@@ -112,6 +112,16 @@ export default function MyClassesPage() {
   const [selected, setSelected] = useState<Allocation | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTerm, setActiveTerm] = useState<string>("Term 1");
+  // Default-plus-override: global admin term until the user picks otherwise.
+  const [termTouched, setTermTouched] = useState(false);
+  const globalTerm = useGlobalTerm(tenantId);
+
+  useEffect(() => {
+    if (!termTouched && globalTerm && activeTerm !== globalTerm.term) {
+      setActiveTerm(globalTerm.term);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [globalTerm, termTouched]);
   // Desktop-only: collapsible "My Classes" column to reclaim gradebook width.
   const [classesCollapsed, setClassesCollapsed] = useState(false);
 
