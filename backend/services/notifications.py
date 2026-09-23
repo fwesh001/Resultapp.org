@@ -142,32 +142,110 @@ def _collect_recipients(
 # Core dispatch
 # ---------------------------------------------------------------------------
 
-def resolve_staff_user_id(cur, tenant_id: str, identifier: str) -> str:
+class StaffNotFoundError(ValueError):
+    """No staff row matches the identifier (maps to HTTP 404)."""
+
+
+class StaffAmbiguousError(ValueError):
+    """Multiple active staff rows match (maps to HTTP 409).
+
+    Carries a frontend-ready message naming the colliding rows and
+    directing the caller to retry with staff_id or email.
+    """
+
+
+def resolve_staff_user_id(
+    cur,
+    tenant_id: str,
+    identifier: str,
+    *,
+    include_inactive: bool = False,
+    allow_name_match: bool = True,
+) -> str:
     """Resolve any staff identifier to canonical tenant_staff.id::text.
 
-    Accepts id | staff_id | email within the tenant. Raises ValueError
-    when no active staff row matches (service-level equivalent of the
-    inbox router's _resolve_user_id, without HTTP semantics).
+    Single shared implementation for write paths (nudge/targeted dispatch)
+    and read paths (inbox, mark-read, unread-count) so both sides always
+    agree on row identity. Accepts id | staff_id | email (case-insensitive)
+    | full_name (case-insensitive, trimmed).
+
+    Match priority: exact id → exact staff_id → email → name. Active
+    priority: when a name/email match yields several rows but only one is
+    active, that row resolves silently. Raises StaffNotFoundError when
+    nothing matches, StaffAmbiguousError (with a logger.warning for
+    collision visibility) when several ACTIVE rows match.
     """
     from services.db_manager import TENANT_STAFF_TABLE, _sanitize_subdomain
 
     tid = _sanitize_subdomain(tenant_id)
     ident = (identifier or "").strip()
     if not ident:
-        raise ValueError("target staff identifier is required")
-    cur.execute(
-        f"""
-        SELECT id::text FROM {TENANT_STAFF_TABLE}
-        WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE
-          AND (id::text = %s OR staff_id = %s OR email = %s)
-        LIMIT 1;
-        """,
-        (tid, ident, ident, ident),
+        raise StaffNotFoundError("target staff identifier is required")
+    active_filter = "" if include_inactive else "AND COALESCE(is_active, TRUE) = TRUE"
+
+    def _one(query: str, params: tuple) -> Optional[str]:
+        cur.execute(query, params)
+        row = cur.fetchone()
+        return str(row[0]) if row else None
+
+    # 1-2. Exact id / staff_id (both unique per tenant) — return immediately.
+    found = _one(
+        f"SELECT id::text FROM {TENANT_STAFF_TABLE} "
+        f"WHERE subdomain = %s {active_filter} AND id::text = %s LIMIT 1;",
+        (tid, ident),
     )
-    row = cur.fetchone()
-    if row is None:
-        raise ValueError(f"Unknown staff user '{ident}' in tenant '{tid}'")
-    return str(row[0])
+    if found:
+        return found
+    found = _one(
+        f"SELECT id::text FROM {TENANT_STAFF_TABLE} "
+        f"WHERE subdomain = %s {active_filter} AND staff_id = %s LIMIT 1;",
+        (tid, ident),
+    )
+    if found:
+        return found
+
+    # 3. Email, case-insensitive.
+    cur.execute(
+        f"SELECT id::text, staff_id, full_name FROM {TENANT_STAFF_TABLE} "
+        f"WHERE subdomain = %s {active_filter} AND LOWER(email) = LOWER(%s);",
+        (tid, ident),
+    )
+    email_rows = cur.fetchall()
+    if len(email_rows) == 1:
+        return str(email_rows[0][0])
+    if len(email_rows) > 1:
+        return _raise_ambiguous(tid, ident, email_rows, "email")
+
+    # 4. Full name, case-insensitive + trimmed.
+    if allow_name_match:
+        cur.execute(
+            f"SELECT id::text, staff_id, full_name FROM {TENANT_STAFF_TABLE} "
+            f"WHERE subdomain = %s {active_filter} AND LOWER(TRIM(full_name)) = LOWER(TRIM(%s));",
+            (tid, ident),
+        )
+        name_rows = cur.fetchall()
+        if len(name_rows) == 1:
+            logger.info(f"[notifications] Name-match resolved '{ident}' in '{tid}' (single row)")
+            return str(name_rows[0][0])
+        if len(name_rows) > 1:
+            return _raise_ambiguous(tid, ident, name_rows, "name")
+
+    raise StaffNotFoundError(f"Unknown staff user '{ident}' in tenant '{tid}'")
+
+
+def _raise_ambiguous(tid: str, identifier: str, rows: list, kind: str) -> str:
+    """Log + raise a frontend-ready 409 for colliding staff identities."""
+    candidates = ", ".join(
+        f"{(r[2] or '?').strip()} ({(r[1] or 'no staff_id').strip()})" for r in rows
+    )
+    logger.warning(
+        f"[notifications] Ambiguous staff {kind} match '{identifier}' in '{tid}': "
+        f"{len(rows)} active rows ({candidates})"
+    )
+    raise StaffAmbiguousError(
+        f"Multiple staff match '{identifier}': {candidates}. "
+        f"Retry with a unique staff_id or email."
+    )
 
 
 def dispatch_event(
