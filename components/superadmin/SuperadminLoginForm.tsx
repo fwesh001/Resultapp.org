@@ -7,9 +7,10 @@ import { Loader2, AlertCircle, Lock } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
-/** Platform-owner sign-in — verifies SUPERADMIN_PASSWORD via the login proxy. */
+/** Platform sign-in — per-user email+password, or legacy env password when email is blank. */
 export default function SuperadminLoginForm() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,10 +24,14 @@ export default function SuperadminLoginForm() {
     }
     setLoading(true);
     try {
+      // Email present → per-user platform login; blank → legacy env fallback.
+      const body = email.trim()
+        ? { email: email.trim().toLowerCase(), password }
+        : { password };
       const res = await fetch("/api/superadmin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -44,7 +49,16 @@ export default function SuperadminLoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
-        label="Superadmin Password"
+        label="Email (optional — per-user sign in)"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@resultapp.org"
+        autoComplete="username"
+        disabled={loading}
+      />
+      <Input
+        label={email.trim() ? "Password" : "Superadmin Password"}
         type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
