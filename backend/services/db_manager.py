@@ -807,9 +807,19 @@ def admin_password_is_set(subdomain: str) -> bool:
 # ---------------------------------------------------------------------------
 
 AUDIT_LOGS_TABLE = "audit_logs"
+PLATFORM_ADMINS_TABLE = "platform_admins"
+
+VALID_PLATFORM_ROLES = ("owner", "admin", "support")
 
 
-def log_admin_action(action: str, subdomain: Optional[str] = None, details: Optional[Dict[str, Any]] = None, actor: str = "superadmin") -> None:
+def log_admin_action(
+    action: str,
+    subdomain: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+    actor: str = "superadmin",
+    actor_id: Optional[str] = None,
+    actor_type: str = "superadmin",
+) -> None:
     """Append-only audit record for manual superadmin operations. Best-effort (never raises)."""
     import json as _json
 
@@ -819,10 +829,10 @@ def log_admin_action(action: str, subdomain: Optional[str] = None, details: Opti
         cur = conn.cursor()
         cur.execute(
             f"""
-            INSERT INTO {AUDIT_LOGS_TABLE} (actor, action, subdomain, details)
-            VALUES (%s, %s, %s, %s);
+            INSERT INTO {AUDIT_LOGS_TABLE} (actor, action, subdomain, details, actor_id, actor_type)
+            VALUES (%s, %s, %s, %s, %s, %s);
             """,
-            (actor, action, subdomain, _json.dumps(details or {})),
+            (actor, action, subdomain, _json.dumps(details or {}), actor_id, actor_type or "superadmin"),
         )
         conn.commit()
     except Exception as e:
@@ -851,7 +861,7 @@ def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int
         if subdomain:
             cur.execute(
                 f"""
-                SELECT id, actor, action, subdomain, details, created_at
+                SELECT id, actor, actor_id, actor_type, action, subdomain, details, created_at
                 FROM {AUDIT_LOGS_TABLE}
                 WHERE subdomain = %s
                 ORDER BY created_at DESC
@@ -862,7 +872,7 @@ def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int
         else:
             cur.execute(
                 f"""
-                SELECT id, actor, action, subdomain, details, created_at
+                SELECT id, actor, actor_id, actor_type, action, subdomain, details, created_at
                 FROM {AUDIT_LOGS_TABLE}
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s;
@@ -888,6 +898,119 @@ def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int
                 conn.close()
             except Exception:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# Multi-user superadmin — platform_admins (pgcrypto bcrypt, like tenant auth)
+# ---------------------------------------------------------------------------
+
+
+def create_platform_admin(email: str, plaintext_password: str, role: str = "admin") -> Dict[str, Any]:
+    """Insert a platform admin (used by the CLI seeder). Raises on bad input."""
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        raise ValueError("Valid email is required")
+    if not plaintext_password or len(plaintext_password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(plaintext_password) > 128:
+        raise ValueError("Password must be at most 128 characters")
+    role = (role or "admin").strip().lower()
+    if role not in VALID_PLATFORM_ROLES:
+        raise ValueError(f"role must be one of {', '.join(VALID_PLATFORM_ROLES)}")
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {PLATFORM_ADMINS_TABLE} (email, password_hash, role)
+            VALUES (%s, crypt(%s, gen_salt('bf')), %s)
+            ON CONFLICT (email) DO NOTHING
+            RETURNING id, email, role, is_active, created_at;
+            """,
+            (email, plaintext_password, role),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(f"Platform admin '{email}' already exists")
+        conn.commit()
+        d = _row_to_dict(row, cur)
+        d["id"] = str(d["id"])
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        logger.info(f"[DB] Platform admin created '{email}' ({role})")
+        return d
+    except (ValueError, RuntimeError):
+        raise
+    except Exception as e:
+        logger.error(f"[DB] Failed to create platform admin '{email}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def verify_platform_admin(email: str, plaintext_password: str) -> Optional[Dict[str, Any]]:
+    """Verify email + password. Returns {id, email, role} or None."""
+    email = (email or "").strip().lower()
+    if not email or not plaintext_password:
+        return None
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, email, role
+            FROM {PLATFORM_ADMINS_TABLE}
+            WHERE LOWER(email) = LOWER(%s)
+              AND is_active = TRUE
+              AND password_hash = crypt(%s, password_hash)
+            LIMIT 1;
+            """,
+            (email, plaintext_password),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        d = _row_to_dict(row, cur)
+        d["id"] = str(d["id"])
+        return d
+    except Exception as e:
+        logger.error(f"[DB] Platform admin verify failed for '{email}': {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def set_platform_admin_active(email: str, is_active: bool) -> bool:
+    """Enable/disable a platform admin. Returns True if a row was updated."""
+    email = (email or "").strip().lower()
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {PLATFORM_ADMINS_TABLE}
+            SET is_active = %s
+            WHERE LOWER(email) = LOWER(%s);
+            """,
+            (bool(is_active), email),
+        )
+        conn.commit()
+        return (cur.rowcount or 0) > 0
+    except Exception as e:
+        logger.error(f"[DB] set_platform_admin_active failed for '{email}': {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------
