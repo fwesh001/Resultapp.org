@@ -157,7 +157,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   }
 
   async function handleResetPassword() {
-    if (!window.confirm("Generate a one-time temp password? The current password stops working immediately.")) return;
+    setShowResetPassword(false);
     setTempPassword(null);
     const data = await runAction("reset", () =>
       fetch(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/reset-password`, { method: "POST" }),
@@ -312,7 +312,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleResetPassword()}
+                  onClick={() => setShowResetPassword(true)}
                   disabled={acting === "reset"}
                   className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-50"
                 >
