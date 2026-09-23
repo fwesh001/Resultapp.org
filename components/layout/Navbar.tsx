@@ -45,7 +45,7 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Link href="/register" className="hidden md:inline-flex">
+          <Link href="/login" className="hidden md:inline-flex">
             <Button
               variant="ghost"
               size="sm"
