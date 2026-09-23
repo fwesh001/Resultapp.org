@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, GraduationCap, Users, LogOut } from "lucide-react";
+import { LayoutDashboard, GraduationCap, Users, Bell, LogOut } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffSidebarProps {
@@ -15,6 +15,7 @@ const nav: Array<{ label: string; href: string | ((sub: string) => string); icon
   { label: "Dashboard", href: "", icon: LayoutDashboard },
   { label: "My Classes", href: "/classes", icon: Users },
   { label: "My Grading", href: "/grading", icon: GraduationCap },
+  { label: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 export default function StaffSidebar({ subdomain, schoolName, onNavigate }: StaffSidebarProps) {
