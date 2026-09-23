@@ -61,9 +61,11 @@ export function ConfirmDialog({
             className={cn("h-5 w-5", danger ? "text-red-400" : "text-purple-300")}
           />
         </span>
-        <p className="text-sm text-zinc-500">
-          This action cannot be undone.
-        </p>
+        {footnote && (
+          <p className="text-sm text-zinc-500">
+            {footnote}
+          </p>
+        )}
       </div>
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button
