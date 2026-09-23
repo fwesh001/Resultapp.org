@@ -261,11 +261,14 @@ def dispatch_manual(
     message: str,
     tenant_id: Optional[str] = None,
     cta_link: Optional[str] = None,
+    target_role: str = "all",
 ) -> Dict[str, Any]:
     """Author a custom message (Phase 3 broadcast) with the same fan-out.
 
     tenant_id=None → platform-wide broadcast. No template involved
     (event_type stored as NULL). Raises ValueError on bad input.
+    target_role='admin_only' → Tenant Admin emails only (schools table);
+    'all' (default) → Admins + all active Staff.
     """
     from services.db_manager import (
         NOTIFICATIONS_TABLE,
