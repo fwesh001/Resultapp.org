@@ -343,7 +343,7 @@ export default function NotificationInbox({ tenantId, basePath }: NotificationIn
                           )}
                         </span>
                         <span
-                          className={`mt-1 block text-sm text-zinc-300 transition-all ${
+                          className={`mt-1 text-sm text-zinc-300 break-words transition-all ${
                             isOpen ? "" : "line-clamp-3"
                           }`}
                         >
