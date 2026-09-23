@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import StaffSidebar from "@/components/staff/StaffSidebar";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffShellProps {
