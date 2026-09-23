@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, Loader2 } from "lucide-react";
+import { ArrowRight, Bell, CheckCheck, Loader2 } from "lucide-react";
 import { getCategoryStyle, type InboxNotification } from "@/lib/notifications";
 
 interface NotificationBellProps {
   tenantId: string;
+  /** Active portal context — drives the "View all" footer link. */
+  portal?: "admin" | "staff";
 }
 
 const POLL_MS = 30000;
