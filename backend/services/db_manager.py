@@ -375,6 +375,36 @@ def init_schools_registry() -> None:
             CREATE INDEX IF NOT EXISTS ix_audit_logs_created
             ON audit_logs (created_at DESC);
         """)
+        # Multi-user superadmin: actor attribution (nullable for legacy rows).
+        cur.execute("""
+            ALTER TABLE audit_logs
+            ADD COLUMN IF NOT EXISTS actor_id UUID;
+        """)
+        cur.execute("""
+            ALTER TABLE audit_logs
+            ADD COLUMN IF NOT EXISTS actor_type VARCHAR(20) DEFAULT 'superadmin';
+        """)
+        cur.execute("""
+            UPDATE audit_logs
+            SET actor_type = 'superadmin'
+            WHERE actor_type IS NULL;
+        """)
+        # Multi-user superadmin: per-user platform admins (pgcrypto bcrypt).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS platform_admins (
+                id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                email         VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                role          VARCHAR(20) NOT NULL DEFAULT 'support'
+                              CHECK (role IN ('owner', 'admin', 'support')),
+                is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at    TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_platform_admins_email
+            ON platform_admins (LOWER(email));
+        """)
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS slots_balance INTEGER DEFAULT 0;
