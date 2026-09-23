@@ -880,10 +880,11 @@ except Exception as e:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 try:
-    from routers.notifications import router as notifications_router
+    from routers.notifications import router as notifications_router, staff_router as notifications_staff_router
 
     app.include_router(notifications_router)
-    logger.info("[App] Notifications router mounted (/api/v1/tenant/{tenant_id}/notifications)")
+    app.include_router(notifications_staff_router)
+    logger.info("[App] Notifications router mounted (/api/v1/tenant/{tenant_id}/notifications + staff/nudge)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Notifications router not mounted: {e}")
 
