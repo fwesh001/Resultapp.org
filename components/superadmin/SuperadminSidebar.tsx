@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Building2,
   ReceiptText,
+  Bell,
   Settings,
   ShieldCheck,
   LogOut,
@@ -19,6 +20,7 @@ const nav = [
   { label: "Dashboard", href: "/superadmin", icon: LayoutDashboard },
   { label: "Tenants", href: "/superadmin/tenants", icon: Building2 },
   { label: "Ledger & Audit", href: "/superadmin/ledger", icon: ReceiptText },
+  { label: "Notifications", href: "/superadmin/notifications", icon: Bell },
   { label: "Settings", href: "/superadmin/settings", icon: Settings },
 ];
 
