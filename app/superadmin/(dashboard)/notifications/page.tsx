@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bell, Loader2, Pencil, Send, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface NotificationTemplate {
   event_type: string;
@@ -98,14 +99,19 @@ export default function NotificationsPage() {
   }
 
   const [bRole, setBRole] = useState<"all" | "admin_only">("all");
+  const [showBroadcastConfirm, setShowBroadcastConfirm] = useState(false);
 
   async function sendBroadcast(e: React.FormEvent) {
     e.preventDefault();
-    if (bAudience === "all" && !window.confirm(
-      bRole === "admin_only"
-        ? "Send this broadcast to EVERY Tenant Admin on the platform?"
-        : "Send this broadcast to EVERY school admin and staff on the platform?"
-    )) return;
+    if (bAudience === "all") {
+      setShowBroadcastConfirm(true);
+      return;
+    }
+    await runBroadcast();
+  }
+
+  async function runBroadcast() {
+    setShowBroadcastConfirm(false);
     setSending(true);
     setSendError(null);
     setSendResult(null);
