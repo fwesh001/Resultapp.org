@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2,
@@ -116,8 +116,11 @@ function parseAssessments(template: GradingTemplate | null): Assessment[] {
 
 export default function SmartStaffHubPage() {
   const params = useParams<{ subdomain: string }>();
+  const searchParams = useSearchParams();
   const rawTenant = params.subdomain || "";
   const tenantId = rawTenant.toLowerCase().trim();
+  // Nudge deep-link guard (?action=grade&subject=&class?/&term?) — fires once.
+  const deepLinkHandled = useRef(false);
 
   // Hub state
   const [allocations, setAllocations] = useState<Allocation[]>([]);
