@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import { toTitleCase } from "@/lib/format";
 
 interface AdminShellProps {
