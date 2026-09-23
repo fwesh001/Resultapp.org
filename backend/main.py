@@ -91,6 +91,16 @@ async def lifespan(app: FastAPI):
         init_grading_tables()
     except Exception as e:
         logger.warning(f"Grading tables init warning (may be DB unreachable in dev): {e}")
+    try:
+        from services.db_manager import init_notification_tables, seed_default_notification_templates
+
+        init_notification_tables()
+        try:
+            seed_default_notification_templates()
+        except Exception as e:
+            logger.warning(f"Notification templates seed warning: {e}")
+    except Exception as e:
+        logger.warning(f"Notification tables init warning (may be DB unreachable in dev): {e}")
     yield
     # Shutdown: no-op
 
