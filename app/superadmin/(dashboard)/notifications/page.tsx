@@ -119,6 +119,7 @@ export default function NotificationsPage() {
           category: bCategory,
           cta_link: bCta.trim() || null,
           tenant_id: bAudience === "tenant" ? bSubdomain.trim().toLowerCase() : null,
+          target_role: bRole,
         }),
       });
       const data = await res.json().catch(() => ({}));
