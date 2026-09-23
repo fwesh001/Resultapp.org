@@ -958,6 +958,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
           onImported={() => void fetchAll()}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        title={pendingDelete ? `Delete this ${pendingDelete.type}?` : "Delete?"}
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete.type, pendingDelete.id); }}
+      />
     </div>
   );
 }
