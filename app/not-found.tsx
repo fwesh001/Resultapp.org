@@ -55,10 +55,10 @@ export default function NotFound() {
       />
       {/* Ghost watermark (large screens only) */}
       <span
-        className="pointer-events-none absolute select-none text-[20rem] font-extrabold leading-none text-white/[0.03] max-md:hidden"
+        className="pointer-events-none absolute max-w-full select-none text-[20rem] font-extrabold leading-none text-white/[0.03] max-md:hidden"
         aria-hidden="true"
       >
-        404
+        {watermark}
       </span>
 
       {/* Focused card */}
@@ -79,7 +79,7 @@ export default function NotFound() {
         </p>
 
         <Link
-          href="/"
+          href={homeHref}
           className="mt-6 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 transition hover:bg-purple-500"
         >
           <Home className="h-4 w-4 shrink-0" />
