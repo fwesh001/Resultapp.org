@@ -94,12 +94,12 @@ export default function AdminShell({
               {toTitleCase(schoolName)}
             </span>
           </Link>
-          <NotificationBell tenantId={subdomain} />
+          <NotificationBell tenantId={subdomain} portal="admin" />
         </div>
 
         {/* Desktop top header */}
         <div className="hidden items-center justify-end border-b border-purple-500/20 bg-[#0B0514]/90 px-6 py-3 backdrop-blur-md md:flex">
-          <NotificationBell tenantId={subdomain} />
+          <NotificationBell tenantId={subdomain} portal="admin" />
         </div>
 
         <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
