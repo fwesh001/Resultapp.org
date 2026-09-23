@@ -93,6 +93,17 @@ export default function FocusedGradingPage() {
   const decodedSubjectName = safeDecode(subjectName);
 
   const [term, setTerm] = useState(() => validTerm(searchParams.get("term")));
+  // Default-plus-override: explicit ?term wins; otherwise adopt the global
+  // admin term once loaded (direct visits with no query param).
+  const [termTouched, setTermTouched] = useState(() => searchParams.get("term") !== null);
+  const globalTerm = useGlobalTerm(tenantId);
+
+  useEffect(() => {
+    if (!termTouched && globalTerm && term !== globalTerm.term) {
+      setTerm(globalTerm.term);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [globalTerm, termTouched]);
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
