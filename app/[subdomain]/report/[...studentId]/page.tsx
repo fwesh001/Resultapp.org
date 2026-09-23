@@ -71,10 +71,14 @@ export default async function ReportPage({
 
   const tenantId = subdomain.toLowerCase().trim();
   const studentId = normalizeStudentId(rawStudentId);
-  const effectiveTerm = (term || "Term 1").trim() || "Term 1";
   const session = currentAcademicSession();
 
   const school = await getTenant(tenantId);
+  // Default-plus-override: explicit ?term wins, else the admin's global term.
+  const requestedTerm = (term || "").trim();
+  const globalTerm = school?.currentTerm?.trim() || "Term 1";
+  const effectiveTerm = requestedTerm || globalTerm;
+  const effectiveSession = school?.currentSession?.trim() || session;
 
   // Suspended tenants: report cards blocked for everyone except a signed-in
   // tenant admin (who keeps the billing hatch via the portal link below).
@@ -116,7 +120,7 @@ export default async function ReportPage({
       const qs = new URLSearchParams({
         student_id: studentId,
         term: effectiveTerm,
-        academic_session: session,
+        academic_session: effectiveSession,
       });
       const res = await fetch(
         `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/credits/publications?${qs.toString()}`,
