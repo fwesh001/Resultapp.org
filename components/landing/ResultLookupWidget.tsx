@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useGlobalTerm } from "@/lib/useGlobalTerm";
 
 interface ResultLookupWidgetProps {
   subdomain: string;
@@ -13,6 +14,16 @@ export default function ResultLookupWidget({
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [term, setTerm] = useState("Term 1");
+  // Default-plus-override: global admin term until the user picks otherwise.
+  const [termTouched, setTermTouched] = useState(false);
+  const globalTerm = useGlobalTerm(subdomain);
+
+  useEffect(() => {
+    if (!termTouched && globalTerm && term !== globalTerm.term) {
+      setTerm(globalTerm.term);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [globalTerm, termTouched]);
 
   function normalizePrefixLower(raw: string): string {
     const v = raw.replace(/\s+/g, "");
@@ -70,7 +81,10 @@ export default function ResultLookupWidget({
       <select
         id="term"
         value={term}
-        onChange={(e) => setTerm(e.target.value)}
+        onChange={(e) => {
+          setTermTouched(true);
+          setTerm(e.target.value);
+        }}
         className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
       >
         <option>Term 1</option>
