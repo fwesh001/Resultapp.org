@@ -97,9 +97,15 @@ export default function NotificationsPage() {
     }
   }
 
+  const [bRole, setBRole] = useState<"all" | "admin_only">("all");
+
   async function sendBroadcast(e: React.FormEvent) {
     e.preventDefault();
-    if (bAudience === "all" && !window.confirm("Send this broadcast to EVERY school admin and staff on the platform?")) return;
+    if (bAudience === "all" && !window.confirm(
+      bRole === "admin_only"
+        ? "Send this broadcast to EVERY Tenant Admin on the platform?"
+        : "Send this broadcast to EVERY school admin and staff on the platform?"
+    )) return;
     setSending(true);
     setSendError(null);
     setSendResult(null);
