@@ -353,30 +353,48 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             phone = (payload.phone or "").strip() or None
             role = (payload.role or "").strip()
 
-            if not staff_id or not full_name or not role:
-                raise HTTPException(status_code=400, detail="staff requires staff_id, full_name, role")
-            # Defensive de-duplication: if a caller sends the full prefixed ID
-            # (e.g. pasted "STAFF/001"), strip the configured prefix once so
-            # the stored ID never becomes "STAFF//001". Best-effort lookup —
-            # a lookup failure leaves staff_id untouched (never blocks create).
-            try:
-                from services.db_manager import SCHOOLS_REGISTRY_TABLE as _schools_tbl
+            if not full_name or not role:
+                raise HTTPException(status_code=400, detail="staff requires full_name, role (staff_id auto-assigned when blank)")
+            allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
+            if role not in allowed_roles:
+                raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
 
-                cur.execute(
-                    f"SELECT COALESCE(staff_id_prefix, 'STAFF/') FROM {_schools_tbl} WHERE subdomain = %s;",
-                    (tid,),
-                )
-                _prow = cur.fetchone()
-                _prefix = ((_prow[0] if _prow else None) or "STAFF/").strip() or "STAFF/"
+            # Lock the schools row (symmetry with students path) + read prefix.
+            try:
+                cur.execute("BEGIN;")
+            except Exception:
+                pass
+            from services.db_manager import SCHOOLS_REGISTRY_TABLE as _schools_tbl
+
+            cur.execute(
+                f"SELECT COALESCE(staff_id_prefix, 'STAFF/') FROM {_schools_tbl} WHERE subdomain = %s FOR UPDATE;",
+                (tid,),
+            )
+            _prow = cur.fetchone()
+            if _prow is None:
+                cur.execute("ROLLBACK;")
+                raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
+            # Effective prefix is always lowercase (staff/001 not STAFF/001).
+            _prefix = ((_prow[0] if _prow else None) or "STAFF/").strip().lower() or "staff/"
+            if not staff_id:
+                # Blank ID → next sequential from the school's configured prefix.
+                staff_id = _next_prefixed_ids(cur, _prefix, TENANT_STAFF_TABLE, "staff_id", 1)[0]
+            else:
+                # Defensive de-duplication: strip a pasted full prefix once so
+                # the stored ID never becomes "staff//001".
                 if staff_id.lower().startswith(_prefix.lower()):
                     _suffix = staff_id[len(_prefix):].strip()
                     if _suffix:
                         staff_id = f"{_prefix}{_suffix}"
-            except Exception:
-                pass
-            allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
-            if role not in allowed_roles:
-                raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
+                # Lowercase prefix before slash (staff/001 not STAFF/001).
+                if "/" in staff_id:
+                    _pfx, _rest = staff_id.split("/", 1)
+                    staff_id = _pfx.lower() + "/" + _rest
+                else:
+                    import re as _re_sid
+
+                    _m_sid = _re_sid.match(r"^([A-Za-z]+)(.*)$", staff_id)
+                    staff_id = (_m_sid.group(1).lower() + _m_sid.group(2)) if _m_sid else staff_id.lower()
 
             cur.execute(
                 f"""
