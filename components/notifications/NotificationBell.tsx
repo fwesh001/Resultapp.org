@@ -235,7 +235,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
                           <span className="mt-0.5 line-clamp-3 break-words text-xs text-zinc-400">{n.message}</span>
                           <span className="mt-1.5 flex items-center gap-2">
                             <span className={`inline-block rounded-full border px-2 py-px text-[11px] ${style.badgeClasses}`}>
-                              {n.category || "SYSTEM"}
+                              {style.label ?? n.category ?? "SYSTEM"}
                             </span>
                             {n.created_at && <span className="text-[11px] text-zinc-500">{timeAgo(n.created_at)}</span>}
                           </span>
