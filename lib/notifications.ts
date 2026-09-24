@@ -58,6 +58,14 @@ export const NOTIFICATION_CATEGORIES: Record<string, NotificationCategoryStyle> 
     dotClasses: "bg-emerald-400",
     icon: Megaphone,
   },
+  ANNOUNCEMENT: {
+    badgeClasses: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+    iconClasses: "text-indigo-300",
+    avatarClasses: "bg-indigo-500/15 border-indigo-500/30",
+    dotClasses: "bg-indigo-400",
+    icon: CircleUser,
+    label: "Principal",
+  },
 };
 
 export const FALLBACK_CATEGORY_STYLE: NotificationCategoryStyle = {
