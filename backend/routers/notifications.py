@@ -20,6 +20,7 @@ Endpoints:
 - POST /{notification_id}/read                     mark one as read
 - POST /read-all                                   mark all as read
 - POST /api/v1/tenant/{tenant_id}/staff/nudge      admin → staff grading reminder
+- POST /api/v1/tenant/{tenant_id}/staff/broadcast  admin → staff announcement
 """
 
 import logging
