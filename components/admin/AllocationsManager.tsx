@@ -154,19 +154,27 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     return raw ? raw.toLowerCase() : tenantId.toLowerCase();
   }, [tenantId, idPrefixProp]);
 
-  // Prefix for new Staff IDs — case preserved (e.g. STAFF/), default STAFF/.
+  // Effective prefix for new Staff IDs — always lowercase (e.g. staff/),
+  // so minted IDs are lowercase regardless of Settings casing.
   const staffPrefix = useMemo(() => {
     const raw = (staffIdPrefixProp || "STAFF/").trim();
-    return raw || "STAFF/";
+    return (raw || "STAFF/").toLowerCase();
   }, [staffIdPrefixProp]);
 
-  /** Strip a leading duplicate prefix (paste guard) so concat never yields PREFIX/PREFIX…. */
-  function stripStaffPrefix(value: string): string {
-    const v = value.trim();
-    if (v.toLowerCase().startsWith(staffPrefix.toLowerCase())) {
-      return v.slice(staffPrefix.length).trim();
+  function nextStaffId(prefix: string, existing: Staff[]): string {
+    const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(\\d+)$`, "i");
+    let max = 0;
+    for (const s of existing) {
+      const m = s.staff_id.match(re);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (Number.isFinite(n) && n > max) max = n;
+      }
     }
-    return v;
+    // If no prefixed IDs exist yet, fall back to total count + 1 so staff/001 appears on first create.
+    const fallback = existing.filter((s) => s.subdomain.toLowerCase() === tenantId.toLowerCase()).length;
+    const nextNum = max > 0 ? max + 1 : fallback + 1;
+    return `${prefix}/${String(nextNum).padStart(3, "0")}`;
   }
 
   // Keep prefix in sync if school.idPrefix becomes available via props later — no-op for now.
@@ -201,7 +209,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   function openAddStaff() {
     setEditingRecord(null);
-    setStaffForm({ staff_id: "", full_name: "", email: "", phone: "", role: "Teacher" });
+    setStaffForm({ staff_id: nextStaffId(staffPrefix, staff), full_name: "", email: "", phone: "", role: "Teacher" });
     setShowStaffModal(true);
   }
 
