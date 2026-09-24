@@ -76,13 +76,14 @@ def staff_login(tenant_id: str, payload: StaffLoginRequest):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Dual-login: staff_id OR email, password validated via pgcrypto crypt
+        # Dual-login: staff_id OR email (both case-insensitive so legacy
+        # uppercase IDs like STAFF/001 keep working), password via crypt.
         cur.execute(
             f"""
             SELECT id, staff_id, full_name, email, role
             FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s
-              AND (staff_id = %s OR email = %s)
+              AND (LOWER(staff_id) = LOWER(%s) OR LOWER(email) = LOWER(%s))
               AND password_hash = crypt(%s, password_hash)
             """,
             (tid, identifier, identifier, password),
@@ -126,12 +127,13 @@ def staff_dashboard(tenant_id: str, staff_id: str):
         conn = _connect_as_superuser()
         cur = conn.cursor()
 
-        # Resolve staff full_name via OR query (staff_id string OR UUID)
-        # Cast id to text for comparison to allow both
+        # Resolve staff full_name via OR query (staff_id string OR UUID).
+        # staff_id/email match case-insensitively (legacy uppercase IDs);
+        # cast id to text for comparison to allow both.
         cur.execute(
             f"""
             SELECT full_name, staff_id, id FROM {TENANT_STAFF_TABLE}
-            WHERE subdomain = %s AND (staff_id = %s OR id::text = %s OR email = %s)
+            WHERE subdomain = %s AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
             LIMIT 1
             """,
             (tid, sid, sid, sid),
