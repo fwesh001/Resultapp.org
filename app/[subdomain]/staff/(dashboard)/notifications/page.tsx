@@ -16,7 +16,7 @@ export default async function StaffNotificationsPage({
 
   return (
     <Suspense fallback={<p className="p-8 text-sm text-zinc-400">Loading notifications…</p>}>
-      <NotificationInbox tenantId={subdomain} basePath={`/${subdomain}/staff`} />
+      <NotificationInbox tenantId={subdomain} basePath={`/${subdomain}/staff`} portal="staff" />
     </Suspense>
   );
 }
