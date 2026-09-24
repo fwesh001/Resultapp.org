@@ -208,7 +208,7 @@ def resolve_staff_user_id(
         row = cur.fetchone()
         return str(row[0]) if row else None
 
-    # 1-2. Exact id / staff_id (both unique per tenant) — return immediately.
+    # 1-2. Exact id / case-insensitive staff_id (both unique per tenant) — return immediately.
     found = _one(
         f"SELECT id::text FROM {TENANT_STAFF_TABLE} "
         f"WHERE subdomain = %s {active_filter} AND id::text = %s LIMIT 1;",
