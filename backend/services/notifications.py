@@ -63,7 +63,7 @@ def render_template(template: str, context: Dict[str, Any]) -> str:
 # Recipient collection (raw psycopg2 cursor, caller owns the transaction)
 # ---------------------------------------------------------------------------
 
-VALID_TARGET_ROLES = ("all", "admin_only")
+VALID_TARGET_ROLES = ("all", "admin_only", "staff_only")
 
 
 def _collect_recipients(
@@ -90,15 +90,31 @@ def _collect_recipients(
     recipients: List[Tuple[str, str, str]] = []
     if tenant_id is None:
         # Broadcast: every admin email (+ every active staff unless admin_only).
-        cur.execute(
-            f"""
-            SELECT subdomain, email FROM {SCHOOLS_REGISTRY_TABLE}
-            WHERE deleted_at IS NULL AND email IS NOT NULL AND email <> '';
-            """
-        )
-        for subdomain, email in cur.fetchall():
-            recipients.append((subdomain, str(email).strip().lower(), "admin"))
-        if role == "admin_only":
+        # staff_only skips the schools query entirely (admin visibility copies
+        # are written separately by dispatch_manual as pre-read rows).
+        if role != "staff_only":
+            cur.execute(
+                f"""
+                SELECT subdomain, email FROM {SCHOOLS_REGISTRY_TABLE}
+                WHERE deleted_at IS NULL AND email IS NOT NULL AND email <> '';
+                """
+            )
+            for subdomain, email in cur.fetchall():
+                recipients.append((subdomain, str(email).strip().lower(), "admin"))
+        if role in ("admin_only", "staff_only"):
+            if role == "staff_only":
+                cur.execute(
+                    f"""
+                    SELECT subdomain, id::text FROM {TENANT_STAFF_TABLE} s
+                    WHERE COALESCE(s.is_active, TRUE) = TRUE
+                      AND EXISTS (
+                        SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} sch
+                        WHERE sch.subdomain = s.subdomain AND sch.deleted_at IS NULL
+                      );
+                    """
+                )
+                for subdomain, uid in cur.fetchall():
+                    recipients.append((subdomain, str(uid), "staff"))
             return recipients
         cur.execute(
             f"""
@@ -122,7 +138,9 @@ def _collect_recipients(
     row = cur.fetchone()
     if row is None:
         raise ValueError(f"Unknown tenant '{tid}'")
-    if row[0]:
+    # staff_only skips the admin email entirely (dispatch_manual writes the
+    # admin a pre-read visibility copy separately).
+    if row[0] and role != "staff_only":
         recipients.append((tid, str(row[0]).strip().lower(), "admin"))
     if role == "admin_only":
         return recipients
