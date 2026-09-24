@@ -356,8 +356,9 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             if not staff_id or not full_name or not role:
                 raise HTTPException(status_code=400, detail="staff requires staff_id, full_name, role")
             # Defensive de-duplication: if a caller sends the full prefixed ID
-            // (e.g. pasted "STAFF/001"), strip the configured prefix once so
-            // the stored ID never becomes "STAFF//001".
+            # (e.g. pasted "STAFF/001"), strip the configured prefix once so
+            # the stored ID never becomes "STAFF//001". Best-effort lookup —
+            # a lookup failure leaves staff_id untouched (never blocks create).
             try:
                 from services.db_manager import SCHOOLS_REGISTRY_TABLE as _schools_tbl
 
@@ -366,17 +367,13 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                     (tid,),
                 )
                 _prow = cur.fetchone()
-                _prefix = ((_prow[0] if _prow and _prow[0] else "STAFF/")).strip() or "STAFF/"
+                _prefix = ((_prow[0] if _prow else None) or "STAFF/").strip() or "STAFF/"
                 if staff_id.lower().startswith(_prefix.lower()):
-                    staff_id = staff_id[len(_prefix):].strip()
-                    if staff_id:
-                        staff_id = f"{_prefix}{staff_id}"
-            except HTTPException:
-                raise
+                    _suffix = staff_id[len(_prefix):].strip()
+                    if _suffix:
+                        staff_id = f"{_prefix}{_suffix}"
             except Exception:
                 pass
-            if not staff_id or staff_id == _prefix.strip() if "_prefix" in dir() else False:
-                raise HTTPException(status_code=400, detail="staff requires staff_id, full_name, role")
             allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
             if role not in allowed_roles:
                 raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
