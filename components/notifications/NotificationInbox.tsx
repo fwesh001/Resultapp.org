@@ -389,7 +389,7 @@ export default function NotificationInbox({ tenantId, basePath }: NotificationIn
                         </span>
                         <span className="mt-2 flex flex-wrap items-center gap-2">
                           <span className={`inline-block rounded-full border px-2 py-px text-[11px] ${style.badgeClasses}`}>
-                            {n.category || "SYSTEM"}
+                            {style.label ?? n.category ?? "SYSTEM"}
                           </span>
                           {n.created_at && (
                             <span className="text-[11px] text-zinc-500">{timeAgo(n.created_at)}</span>
