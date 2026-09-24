@@ -301,17 +301,17 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       }
       payload = { ...payload, student_id: studentForm.student_id.trim(), full_name: studentForm.full_name.trim(), class_name: studentForm.class_name.trim(), gender: studentForm.gender || null };
     } else if (type === "staff") {
-      // staffForm.staff_id holds the SUFFIX only in Add mode; the fixed
-      // prefix chip is concatenated here (paste-guarded, never doubled).
-      const staffSuffix = stripStaffPrefix(staffForm.staff_id);
-      if (!staffSuffix || !staffForm.full_name.trim() || !staffForm.role.trim()) {
-        setError("Staff ID, Full Name and Role are required");
+      // Add mode sends a blank staff_id — the backend mints the next
+      // sequential ID authoritatively (race-proof, always lowercase).
+      // The read-only suggestion above is indicative only.
+      if (!staffForm.full_name.trim() || !staffForm.role.trim()) {
+        setError("Full Name and Role are required");
         setSubmitting(false);
         return;
       }
       payload = {
         ...payload,
-        staff_id: `${staffPrefix}${staffSuffix}`,
+        staff_id: "",
         full_name: staffForm.full_name.trim(),
         email: staffForm.email.trim() || null,
         phone: staffForm.phone.trim() || null,
