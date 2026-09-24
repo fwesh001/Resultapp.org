@@ -1,4 +1,4 @@
-import { AlertCircle, Bell, Info, Megaphone, Rocket, ShieldAlert, type LucideIcon } from "lucide-react";
+import { AlertCircle, Bell, CircleUser, Info, Megaphone, Rocket, ShieldAlert, type LucideIcon } from "lucide-react";
 
 /**
  * Modular category → UI mapping for the Notification Engine.
@@ -18,6 +18,8 @@ export interface NotificationCategoryStyle {
   dotClasses: string;
   /** Lucide icon component. */
   icon: LucideIcon;
+  /** Display label for the category pill. Defaults to the category key. */
+  label?: string;
 }
 
 export const NOTIFICATION_CATEGORIES: Record<string, NotificationCategoryStyle> = {
