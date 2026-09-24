@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Inbox,
   Loader2,
+  Plus,
   Search,
 } from "lucide-react";
 import {
@@ -16,11 +17,17 @@ import {
   getCategoryStyle,
   type InboxNotification,
 } from "@/lib/notifications";
+import { toast } from "@/components/ui/toast";
+import ComposeAnnouncementModal, {
+  type AnnouncementPayload,
+} from "@/components/notifications/ComposeAnnouncementModal";
 
 interface NotificationInboxProps {
   tenantId: string;
   /** Portal base path, e.g. "/vhs/admin" — reserved for CTA normalization. */
   basePath: string;
+  /** Active portal — admin sees the Compose Announcement button. */
+  portal?: "admin" | "staff";
 }
 
 const PAGE_LIMIT = 50;
@@ -49,7 +56,7 @@ function isSafeLink(link: string): boolean {
  * Shared two-column tenant inbox: filter sidebar + accordion feed.
  * Sidebar stacks above the feed on mobile (flex-col → md:flex-row).
  */
-export default function NotificationInbox({ tenantId, basePath }: NotificationInboxProps) {
+export default function NotificationInbox({ tenantId, basePath, portal }: NotificationInboxProps) {
   void basePath;
   const router = useRouter();
   const searchParams = useSearchParams();
