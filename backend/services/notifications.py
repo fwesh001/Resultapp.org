@@ -75,7 +75,9 @@ def _collect_recipients(
 
     tenant_id=None → platform-wide broadcast (all non-deleted schools).
     target_role='admin_only' → Tenant Admin emails ONLY (schools table);
-    the tenant_staff query is skipped entirely.
+    the tenant_staff query is skipped entirely. target_role='staff_only' →
+    active Staff ONLY; admin visibility copies are handled separately by
+    dispatch_manual (pre-read rows, not part of this fan-out).
     """
     from services.db_manager import (
         SCHOOLS_REGISTRY_TABLE,
