@@ -476,6 +476,79 @@ def nudge_staff(tenant_id: str, payload: StaffNudgeRequest):
                 pass
 
 
+VALID_ANNOUNCEMENT_TYPES = ("Meeting", "Urgent", "Reminder", "General")
+
+
+class StaffBroadcastRequest(BaseModel):
+    message_type: str = Field(..., min_length=1, max_length=20)
+    title: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+@staff_router.post("/broadcast", summary="Send a categorized announcement to all staff (admin)")
+def broadcast_to_staff(tenant_id: str, payload: StaffBroadcastRequest):
+    """Tenant admin → all active staff announcement (ANNOUNCEMENT category).
+
+    Auth: shared secret (FastAPI) + tenant admin_session enforced by the
+    Next.js proxy (app/api/admin/announcements). Title is formatted as
+    "[{message_type}] {title}". The composing admin gets a pre-read
+    visibility copy (no bell); staff get unread inbox rows.
+    """
+    from services.db_manager import _connect_as_superuser, get_school_by_subdomain
+    from services.notifications import dispatch_manual
+
+    tid = _validate_tenant_id(tenant_id)
+    if get_school_by_subdomain(tid) is None:
+        raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+
+    mtype = (payload.message_type or "").strip()
+    if mtype not in VALID_ANNOUNCEMENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"message_type must be one of {list(VALID_ANNOUNCEMENT_TYPES)}",
+        )
+    title = (payload.title or "").strip()
+    message = (payload.message or "").strip()
+    if not title or not message:
+        raise HTTPException(status_code=400, detail="title and message are required")
+
+    # Staff identity check: tenant must have at least one active staffer.
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        from services.db_manager import TENANT_STAFF_TABLE
+
+        cur.execute(
+            f"SELECT COUNT(*) FROM {TENANT_STAFF_TABLE} "
+            f"WHERE subdomain = %s AND COALESCE(is_active, TRUE) = TRUE;",
+            (tid,),
+        )
+        if int(cur.fetchone()[0] or 0) == 0:
+            raise HTTPException(status_code=400, detail="No active staff to announce to")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    try:
+        result = dispatch_manual(
+            category="ANNOUNCEMENT",
+            title=f"[{mtype}] {title}",
+            message=message,
+            tenant_id=tid,
+            target_role="staff_only",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _logger.exception(f"[notifications] staff broadcast failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Announcement failed: {e}")
+    return {"success": True, "subdomain": tid, "message_type": mtype, **result}
+
+
 @router.post("/read-all", summary="Mark all inbox notifications as read")
 def mark_all_read(tenant_id: str, payload: MarkReadRequest):
     from services.db_manager import (
