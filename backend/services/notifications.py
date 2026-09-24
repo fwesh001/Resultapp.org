@@ -218,7 +218,7 @@ def resolve_staff_user_id(
         return found
     found = _one(
         f"SELECT id::text FROM {TENANT_STAFF_TABLE} "
-        f"WHERE subdomain = %s {active_filter} AND staff_id = %s LIMIT 1;",
+        f"WHERE subdomain = %s {active_filter} AND LOWER(staff_id) = LOWER(%s) LIMIT 1;",
         (tid, ident),
     )
     if found:
