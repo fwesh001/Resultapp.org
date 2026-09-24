@@ -738,7 +738,8 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
         if srow is None:
             cur.execute("ROLLBACK;")
             raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
-        staff_prefix = (srow[0] or "STAFF/").strip() or "STAFF/"
+        # Effective prefix is always lowercase (staff/001 not STAFF/001).
+        staff_prefix = ((srow[0] or "STAFF/").strip().lower()) or "staff/"
 
         new_ids = _next_prefixed_ids(cur, staff_prefix, TENANT_STAFF_TABLE, "staff_id", len(cleaned))
         placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))"] * len(cleaned))
