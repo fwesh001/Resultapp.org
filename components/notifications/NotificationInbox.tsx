@@ -81,6 +81,38 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
   // Accordion expansion per notification id
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
+  // Admin announcement composer
+  const [showCompose, setShowCompose] = useState(false);
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
+
+  async function sendAnnouncement(payload: AnnouncementPayload) {
+    if (sendingAnnouncement) return;
+    setSendingAnnouncement(true);
+    try {
+      const res = await fetch("/api/admin/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: tid, ...payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
+      }
+      const count = Number((data as { recipient_count?: number }).recipient_count || 0);
+      setShowCompose(false);
+      toast.success(`Announcement sent to ${count} staff member${count === 1 ? "" : "s"}`);
+      // Refresh feed — the admin's own copy arrives pre-read (no bell).
+      setExpanded(new Set());
+      await load(0, false);
+    } catch (e) {
+      toast.error("Could not send announcement", {
+        description: e instanceof Error ? e.message : "Try again",
+      });
+    } finally {
+      setSendingAnnouncement(false);
+    }
+  }
+
   // Debounce search input → committed query
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
