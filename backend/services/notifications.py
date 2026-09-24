@@ -539,6 +539,50 @@ def dispatch_manual(
             conn.close()
 
 
+def _insert_admin_visibility_copies(cur, tenant_id: Optional[str], notification_id: int) -> int:
+    """Write pre-read admin copies for a staff_only dispatch.
+
+    One row per Tenant Admin email (scoped tenant, or every non-deleted
+    school for broadcasts) with is_read=TRUE and read_at=NOW() — visible
+    in the admin feed, invisible to the unread bell. Returns row count.
+    Caller owns the transaction.
+    """
+    from services.db_manager import (
+        NOTIFICATION_READS_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        _sanitize_subdomain,
+    )
+
+    if tenant_id is None:
+        cur.execute(
+            f"""
+            SELECT subdomain, email FROM {SCHOOLS_REGISTRY_TABLE}
+            WHERE deleted_at IS NULL AND email IS NOT NULL AND email <> '';
+            """
+        )
+        admins = [(s, str(e).strip().lower()) for (s, e) in cur.fetchall()]
+    else:
+        tid = _sanitize_subdomain(tenant_id)
+        cur.execute(
+            f"SELECT email FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+            (tid,),
+        )
+        row = cur.fetchone()
+        admins = [(tid, str(row[0]).strip().lower())] if row and row[0] else []
+    if not admins:
+        return 0
+    cur.executemany(
+        f"""
+        INSERT INTO {NOTIFICATION_READS_TABLE}
+            (notification_id, tenant_id, user_id, user_type, is_read, read_at)
+        VALUES (%s, %s, %s, 'admin', TRUE, NOW())
+        ON CONFLICT (notification_id, tenant_id, user_id) DO NOTHING;
+        """,
+        [(notification_id, t, u) for (t, u) in admins],
+    )
+    return len(admins)
+
+
 def fire_credit_threshold_alerts(
     tenant_id: str,
     new_balance: int,
