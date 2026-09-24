@@ -846,24 +846,27 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {isEditingStaff ? (
             <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" disabled />
           ) : (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="input-staff-id" className="text-sm font-medium text-purple-100">
-                Staff ID
-              </label>
-              <div className="flex h-10 w-full items-center overflow-hidden rounded-xl border border-purple-800/50 bg-purple-950/30 text-sm text-purple-50 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500">
-                <span aria-hidden="true" className="shrink-0 select-none border-r border-purple-800/50 bg-purple-900/40 px-3 font-mono">
-                  {staffPrefix}
-                </span>
-                <input
-                  id="input-staff-id"
-                  value={staffForm.staff_id}
-                  onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: stripStaffPrefix(e.target.value) }))}
-                  placeholder="e.g., 001"
-                  autoComplete="off"
-                  className="h-full min-w-0 flex-1 bg-transparent px-3 py-2 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus:outline-none"
-                />
+            <>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Input label="Staff ID" value={staffForm.staff_id} onChange={() => {}} placeholder={`e.g., ${staffPrefix}/001`} disabled />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStaffForm((p) => ({ ...p, staff_id: nextStaffId(staffPrefix, staff) }))}
+                  className="mb-[2px] shrink-0 rounded-xl border border-purple-500/20 bg-purple-900/20 text-purple-200 hover:bg-purple-800/30 hover:text-white"
+                  title="Generate next Staff ID"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Auto
+                </Button>
               </div>
-            </div>
+              <p className="text-xs text-purple-300/40">
+                Leave blank to auto-assign the next Staff ID (<span className="font-mono text-purple-200">{staffPrefix}/…</span> from Settings, always lowercase). Existing IDs are never changed.
+              </p>
+            </>
           )}
           <Input label="Full Name" value={staffForm.full_name} onChange={(e) => setStaffForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Mr. Okoro" />
           <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
