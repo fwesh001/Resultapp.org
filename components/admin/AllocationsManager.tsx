@@ -29,7 +29,7 @@ const STANDARD_SUBJECTS = [
   "Basic Technology",
 ];
 
-export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenantId: string; idPrefix?: string }) {
+export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPrefix: staffIdPrefixProp }: { tenantId: string; idPrefix?: string; staffIdPrefix?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("Students");
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -153,6 +153,21 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
     const raw = (idPrefixProp || tenantId).trim();
     return raw ? raw.toLowerCase() : tenantId.toLowerCase();
   }, [tenantId, idPrefixProp]);
+
+  // Prefix for new Staff IDs — case preserved (e.g. STAFF/), default STAFF/.
+  const staffPrefix = useMemo(() => {
+    const raw = (staffIdPrefixProp || "STAFF/").trim();
+    return raw || "STAFF/";
+  }, [staffIdPrefixProp]);
+
+  /** Strip a leading duplicate prefix (paste guard) so concat never yields PREFIX/PREFIX…. */
+  function stripStaffPrefix(value: string): string {
+    const v = value.trim();
+    if (v.toLowerCase().startsWith(staffPrefix.toLowerCase())) {
+      return v.slice(staffPrefix.length).trim();
+    }
+    return v;
+  }
 
   // Keep prefix in sync if school.idPrefix becomes available via props later — no-op for now.
 
@@ -278,14 +293,17 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
       }
       payload = { ...payload, student_id: studentForm.student_id.trim(), full_name: studentForm.full_name.trim(), class_name: studentForm.class_name.trim(), gender: studentForm.gender || null };
     } else if (type === "staff") {
-      if (!staffForm.staff_id.trim() || !staffForm.full_name.trim() || !staffForm.role.trim()) {
+      // staffForm.staff_id holds the SUFFIX only in Add mode; the fixed
+      // prefix chip is concatenated here (paste-guarded, never doubled).
+      const staffSuffix = stripStaffPrefix(staffForm.staff_id);
+      if (!staffSuffix || !staffForm.full_name.trim() || !staffForm.role.trim()) {
         setError("Staff ID, Full Name and Role are required");
         setSubmitting(false);
         return;
       }
       payload = {
         ...payload,
-        staff_id: staffForm.staff_id.trim(),
+        staff_id: `${staffPrefix}${staffSuffix}`,
         full_name: staffForm.full_name.trim(),
         email: staffForm.email.trim() || null,
         phone: staffForm.phone.trim() || null,
@@ -817,7 +835,28 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp }: { tenan
         className="border-purple-500/20 bg-[#0B0514] text-white"
       >
         <div className="space-y-3">
-          <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" disabled={isEditingStaff} />
+          {isEditingStaff ? (
+            <Input label="Staff ID" value={staffForm.staff_id} onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: e.target.value }))} placeholder="e.g., STF/003" disabled />
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="input-staff-id" className="text-sm font-medium text-purple-100">
+                Staff ID
+              </label>
+              <div className="flex h-10 w-full items-center overflow-hidden rounded-xl border border-purple-800/50 bg-purple-950/30 text-sm text-purple-50 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500">
+                <span aria-hidden="true" className="shrink-0 select-none border-r border-purple-800/50 bg-purple-900/40 px-3 font-mono">
+                  {staffPrefix}
+                </span>
+                <input
+                  id="input-staff-id"
+                  value={staffForm.staff_id}
+                  onChange={(e) => setStaffForm((p) => ({ ...p, staff_id: stripStaffPrefix(e.target.value) }))}
+                  placeholder="e.g., 001"
+                  autoComplete="off"
+                  className="h-full min-w-0 flex-1 bg-transparent px-3 py-2 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
           <Input label="Full Name" value={staffForm.full_name} onChange={(e) => setStaffForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Mr. Okoro" />
           <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
           <Input label="Phone" value={staffForm.phone} onChange={(e) => setStaffForm((p) => ({ ...p, phone: e.target.value }))} placeholder="080..." />
