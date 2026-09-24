@@ -28,7 +28,7 @@ export default async function AllocationsPage({
       </div>
 
       <div className="mt-6">
-        <AllocationsManager tenantId={tenantId} idPrefix={school?.idPrefix ?? tenantId.toLowerCase()} />
+        <AllocationsManager tenantId={tenantId} idPrefix={school?.idPrefix ?? tenantId.toLowerCase()} staffIdPrefix={school?.staffIdPrefix ?? "STAFF/"} />
       </div>
     </div>
   );
