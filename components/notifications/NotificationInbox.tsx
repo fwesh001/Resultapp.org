@@ -251,17 +251,35 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
           <Bell className="h-5 w-5 text-purple-300" />
         </span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold tracking-tight text-white">Notifications</h1>
           <p className="text-sm text-zinc-400">
             {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up."}
           </p>
         </div>
+        {portal === "admin" && (
+          <button
+            type="button"
+            onClick={() => setShowCompose(true)}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+          >
+            <Plus className="h-4 w-4" /> Compose Announcement
+          </button>
+        )}
       </div>
+
+      {portal === "admin" && (
+        <ComposeAnnouncementModal
+          open={showCompose}
+          onOpenChange={(o) => { if (!o) setShowCompose(false); }}
+          sending={sendingAnnouncement}
+          onSubmit={(p) => void sendAnnouncement(p)}
+        />
+      )}
 
       <div className="flex flex-col gap-6 md:flex-row">
         {/* Left sidebar: Filters (stacks on top for mobile) */}
