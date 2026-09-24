@@ -448,7 +448,8 @@ def dispatch_manual(
     tenant_id=None → platform-wide broadcast. No template involved
     (event_type stored as NULL). Raises ValueError on bad input.
     target_role='admin_only' → Tenant Admin emails only (schools table);
-    'all' (default) → Admins + all active Staff.
+    'staff_only' → active Staff only, plus a pre-read visibility copy for
+    each Tenant Admin (is_read=TRUE, no bell); 'all' (default) → everyone.
     """
     from services.db_manager import (
         NOTIFICATIONS_TABLE,
@@ -506,6 +507,12 @@ def dispatch_manual(
                 """,
                 [(notification_id, t, u, ut) for (t, u, ut) in unique],
             )
+        # Admin visibility record: for staff_only sends, each Tenant Admin
+        # gets a PRE-READ copy (is_read=TRUE, read_at=NOW()) — a silent feed
+        # record of what was sent, never a bell alert.
+        admin_copies = 0
+        if role == "staff_only":
+            admin_copies = _insert_admin_visibility_copies(cur, tid, notification_id)
         cur.execute("COMMIT;")
         logger.info(
             f"[notifications] Manual '{cat}' #{notification_id} "
@@ -517,6 +524,7 @@ def dispatch_manual(
             "category": cat,
             "target_role": role,
             "recipient_count": len(unique),
+            "admin_copies": admin_copies,
         }
     except Exception:
         try:
