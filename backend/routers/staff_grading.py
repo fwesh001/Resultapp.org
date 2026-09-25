@@ -171,6 +171,7 @@ def get_grading_bundle(
     class_name: str,
     subject_name: str,
     term: str = Query("Term 1"),
+    staff_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     tid = _validate_tenant_id(tenant_id)
@@ -188,7 +189,14 @@ def get_grading_bundle(
     if template is None:
         raise HTTPException(status_code=404, detail=f"No grading template found for tenant '{tid}' — ask an admin to create one")
 
-    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, _connect_as_superuser
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        TENANT_GRADES_TABLE,
+        TENANT_STAFF_TABLE,
+        TENANT_ALLOCATIONS_TABLE,
+        TENANT_FORM_ASSIGNMENTS_TABLE,
+        _connect_as_superuser,
+    )
 
     conn = None
     try:
@@ -214,6 +222,47 @@ def get_grading_bundle(
                 academic[sid] = row[1] or {}
                 behavioural[sid] = row[2] or {}
 
+        # Capability flags for the staff hub split. Absent staff_id preserves
+        # the legacy permissive response; the proxy always sends staff_id.
+        can_grade_academic: bool = True
+        can_grade_traits: bool = True
+        _caller = (staff_id or "").strip()
+        if _caller:
+            can_grade_academic = False
+            can_grade_traits = False
+            cur.execute(
+                f"""
+                SELECT staff_id, full_name FROM {TENANT_STAFF_TABLE}
+                WHERE subdomain = %s
+                  AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
+                LIMIT 1
+                """,
+                (tid, _caller, _caller, _caller),
+            )
+            _srow = cur.fetchone()
+            if _srow is not None:
+                _csid, _cname = str(_srow[0]), str(_srow[1])
+                cur.execute(
+                    f"""
+                    SELECT 1 FROM {TENANT_ALLOCATIONS_TABLE}
+                    WHERE subdomain = %s AND class_name = %s AND subject_name = %s AND staff_name = %s
+                    LIMIT 1
+                    """,
+                    (tid, class_name, subject_name, _cname),
+                )
+                if cur.fetchone() is not None:
+                    can_grade_academic = True
+                cur.execute(
+                    f"""
+                    SELECT 1 FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+                    WHERE subdomain = %s AND class_name = %s AND LOWER(staff_id) = LOWER(%s)
+                    LIMIT 1
+                    """,
+                    (tid, class_name, _csid),
+                )
+                if cur.fetchone() is not None:
+                    can_grade_traits = True
+
         return {
             "template": _template_payload(template),
             "students": students,
@@ -222,6 +271,8 @@ def get_grading_bundle(
             "term": term,
             "class_name": class_name,
             "subject_name": subject_name,
+            "can_grade_academic": can_grade_academic,
+            "can_grade_traits": can_grade_traits,
         }
     except HTTPException:
         raise
