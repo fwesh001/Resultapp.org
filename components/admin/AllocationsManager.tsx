@@ -714,6 +714,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   </tbody>
                 </table>
               </div>
+              <PaginationBar
+                page={page}
+                total={totals.Subjects}
+                loaded={subjects.length}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
             </div>
           )}
 
@@ -721,7 +728,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Allocate" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Allocate — Command Center ({filteredAllocations.length}/{allocations.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Allocate — Command Center ({filteredAllocations.length} of {totals.Allocate} • page {page})</h3>
                 <Button onClick={() => setShowAllocModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                   <Plus className="h-4 w-4" /> Assign Subject
                 </Button>
