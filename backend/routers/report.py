@@ -800,7 +800,6 @@ def get_report_bundle(
                 # Also expose A1..Exam breakdown already in g["breakdown"]
 
             # Overall ranking from SQL grand totals.
-            my_grand_total = grand_totals.get(sid_lower, 0.0)
             overall_position = int(grand_ranks.get(sid_lower, 1)) if grand_ranks else 1
             overall_position_ordinal = _ordinal(overall_position)
         else:
