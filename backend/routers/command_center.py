@@ -259,85 +259,85 @@ def _missing_for_class(cur, tid: str, t: str, cls: str) -> dict:
     deliberately uncapped — publish depends on the full list.
     """
     # Roster for the class.
-        cur.execute(
-            """
-            SELECT student_id, full_name
-            FROM tenant_students
-            WHERE subdomain = %s AND class_name = %s
-            ORDER BY full_name;
-            """,
-            (tid, cls),
-        )
-        roster = [{"student_id": r[0], "full_name": r[1]} for r in cur.fetchall()]
-        if not roster:
-            return {
-                "subdomain": tid,
-                "class_name": cls,
-                "term": t,
-                "subjects": [],
-                "total_pending": 0,
-            }
-        # Expected subjects + assigned staff.
-        cur.execute(
-            """
-            SELECT subject_name, staff_name
-            FROM tenant_allocations
-            WHERE subdomain = %s AND class_name = %s
-            ORDER BY subject_name;
-            """,
-            (tid, cls),
-        )
-        allocations = [{"subject_name": r[0], "staff_name": r[1]} for r in cur.fetchall()]
-        # Staff contact lookup.
-        cur.execute(
-            "SELECT full_name, email, phone FROM tenant_staff WHERE subdomain = %s;",
-            (tid,),
-        )
-        contacts = {r[0]: {"email": r[1], "phone": r[2]} for r in cur.fetchall()}
-        # Existing grade coverage for the term.
-        student_ids = [s["student_id"] for s in roster]
-        cur.execute(
-            """
-            SELECT student_id, subject_name
-            FROM tenant_grades
-            WHERE subdomain = %s AND term = %s AND student_id = ANY(%s);
-            """,
-            (tid, t, student_ids),
-        )
-        covered = {(r[0], r[1]) for r in cur.fetchall()}
-        graded_ids = {sid for (sid, _subj) in covered}
-        graded_students = [s for s in roster if s["student_id"] in graded_ids]
-
-        subjects = []
-        total_pending = 0
-        for a in allocations:
-            subj = a["subject_name"]
-            pending = [s for s in roster if (s["student_id"], subj) not in covered]
-            pending_count = len(pending)
-            total_pending += pending_count
-            contact = contacts.get(a["staff_name"] or "", {})
-            subjects.append(
-                {
-                    "subject_name": subj,
-                    "staff_name": a["staff_name"],
-                    "staff_email": contact.get("email"),
-                    "staff_phone": contact.get("phone"),
-                    # Full count stays accurate; preview array capped (H4)
-                    # to bound payload growth. graded_students below is
-                    # deliberately uncapped — publish depends on it.
-                    "pending_count": pending_count,
-                    "pending_students": pending[:50],
-                    "pending_preview_capped": pending_count > 50,
-                }
-            )
+    cur.execute(
+        """
+        SELECT student_id, full_name
+        FROM tenant_students
+        WHERE subdomain = %s AND class_name = %s
+        ORDER BY full_name;
+        """,
+        (tid, cls),
+    )
+    roster = [{"student_id": r[0], "full_name": r[1]} for r in cur.fetchall()]
+    if not roster:
         return {
             "subdomain": tid,
             "class_name": cls,
             "term": t,
-            "subjects": subjects,
-            "total_pending": total_pending,
-            "graded_students": graded_students,
+            "subjects": [],
+            "total_pending": 0,
         }
+    # Expected subjects + assigned staff.
+    cur.execute(
+        """
+        SELECT subject_name, staff_name
+        FROM tenant_allocations
+        WHERE subdomain = %s AND class_name = %s
+        ORDER BY subject_name;
+        """,
+        (tid, cls),
+    )
+    allocations = [{"subject_name": r[0], "staff_name": r[1]} for r in cur.fetchall()]
+    # Staff contact lookup.
+    cur.execute(
+        "SELECT full_name, email, phone FROM tenant_staff WHERE subdomain = %s;",
+        (tid,),
+    )
+    contacts = {r[0]: {"email": r[1], "phone": r[2]} for r in cur.fetchall()}
+    # Existing grade coverage for the term.
+    student_ids = [s["student_id"] for s in roster]
+    cur.execute(
+        """
+        SELECT student_id, subject_name
+        FROM tenant_grades
+        WHERE subdomain = %s AND term = %s AND student_id = ANY(%s);
+        """,
+        (tid, t, student_ids),
+    )
+    covered = {(r[0], r[1]) for r in cur.fetchall()}
+    graded_ids = {sid for (sid, _subj) in covered}
+    graded_students = [s for s in roster if s["student_id"] in graded_ids]
+
+    subjects = []
+    total_pending = 0
+    for a in allocations:
+        subj = a["subject_name"]
+        pending = [s for s in roster if (s["student_id"], subj) not in covered]
+        pending_count = len(pending)
+        total_pending += pending_count
+        contact = contacts.get(a["staff_name"] or "", {})
+        subjects.append(
+            {
+                "subject_name": subj,
+                "staff_name": a["staff_name"],
+                "staff_email": contact.get("email"),
+                "staff_phone": contact.get("phone"),
+                # Full count stays accurate; preview array capped (H4)
+                # to bound payload growth. graded_students below is
+                # deliberately uncapped — publish depends on it.
+                "pending_count": pending_count,
+                "pending_students": pending[:50],
+                "pending_preview_capped": pending_count > 50,
+            }
+        )
+    return {
+        "subdomain": tid,
+        "class_name": cls,
+        "term": t,
+        "subjects": subjects,
+        "total_pending": total_pending,
+        "graded_students": graded_students,
+    }
 
 
 @router.get("/missing", summary="Missing grades grouped by subject + staff")
