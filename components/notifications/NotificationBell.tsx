@@ -36,6 +36,147 @@ function isSafeLink(link: string): boolean {
   return v.startsWith("/") || v.startsWith("https://") || v.startsWith("http://");
 }
 
+/**
+ * Shared unread-count poller (Bug 2 fix).
+ *
+ * The admin/staff shells mount TWO bell instances (mobile + desktop headers,
+ * one CSS-hidden but still mounted), so a per-instance scheduler polls every
+ * interval in pairs. This module-level poller runs ONE loop per tenant and
+ * fans the count out to every subscriber badge.
+ *
+ * Preserves C1 semantics: 120s base, 2x exponential backoff to 10min ceiling
+ * with jitter, hidden-tab gate (no network while hidden), single immediate
+ * refresh on focus/return-to-tab. Poke coalescing (POKE_MIN_INTERVAL_MS)
+ * absorbs the focus+visibilitychange double-fire on tab return.
+ */
+type UnreadSubscriber = (count: number) => void;
+
+interface SharedPoller {
+  subs: Set<UnreadSubscriber>;
+  timer: ReturnType<typeof setTimeout> | null;
+  failures: number;
+  inFlight: boolean;
+  lastStart: number;
+  lastCount: number | null;
+  stopped: boolean;
+  onVisibility: () => void;
+  onFocus: () => void;
+}
+
+const POLLERS = new Map<string, SharedPoller>();
+const POKE_MIN_INTERVAL_MS = 15000;
+
+async function fetchUnread(tid: string): Promise<{ ok: boolean; count: number | null }> {
+  // Hidden tabs never hit the network (C1 visibility gate).
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    return { ok: true, count: null };
+  }
+  try {
+    const res = await fetch(`/api/notifications/unread-count?tenant_id=${encodeURIComponent(tid)}`, {
+      cache: "no-store",
+    });
+    if (res.status === 401) return { ok: true, count: null }; // signed out — stay silent, no backoff
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, count: null };
+    return { ok: true, count: Number((data as { unread_count?: number }).unread_count || 0) };
+  } catch {
+    // best-effort poll — never surface errors for the badge
+    return { ok: false, count: null };
+  }
+}
+
+function pollerDelay(failures: number): number {
+  return Math.min(POLL_BASE_MS * 2 ** failures, POLL_MAX_MS) + Math.random() * POLL_JITTER_MS;
+}
+
+function pollerSchedule(tid: string): void {
+  const poller = POLLERS.get(tid);
+  if (!poller || poller.stopped) return;
+  poller.timer = setTimeout(() => void pollerTick(tid), pollerDelay(poller.failures));
+}
+
+async function pollerTick(tid: string): Promise<void> {
+  const poller = POLLERS.get(tid);
+  if (!poller || poller.stopped || poller.inFlight) return;
+  if (typeof document === "undefined" || document.visibilityState === "visible") {
+    poller.inFlight = true;
+    poller.lastStart = Date.now();
+    const { ok, count } = await fetchUnread(tid);
+    poller.inFlight = false;
+    if (POLLERS.get(tid) !== poller || poller.stopped) return;
+    poller.failures = ok ? 0 : poller.failures + 1;
+    if (count !== null) {
+      poller.lastCount = count;
+      for (const cb of poller.subs) {
+        try {
+          cb(count);
+        } catch {
+          // subscriber teardown race — ignore
+        }
+      }
+    }
+  }
+  pollerSchedule(tid);
+}
+
+function pollerPoke(tid: string): void {
+  const poller = POLLERS.get(tid);
+  if (!poller || poller.stopped || poller.inFlight) return;
+  // Coalesce the focus + visibilitychange double-fire on tab return.
+  if (Date.now() - poller.lastStart < POKE_MIN_INTERVAL_MS) return;
+  if (poller.timer) {
+    clearTimeout(poller.timer);
+    poller.timer = null;
+  }
+  void pollerTick(tid);
+}
+
+function subscribeUnread(tid: string, cb: UnreadSubscriber): () => void {
+  let poller = POLLERS.get(tid);
+  if (!poller) {
+    const created: SharedPoller = {
+      subs: new Set(),
+      timer: null,
+      failures: 0,
+      inFlight: false,
+      lastStart: 0,
+      lastCount: null,
+      stopped: false,
+      onVisibility: () => {
+        if (document.visibilityState === "visible") pollerPoke(tid);
+      },
+      onFocus: () => pollerPoke(tid),
+    };
+    poller = created;
+    POLLERS.set(tid, poller);
+    document.addEventListener("visibilitychange", poller.onVisibility);
+    window.addEventListener("focus", poller.onFocus);
+    void pollerTick(tid);
+  }
+  poller.subs.add(cb);
+  // Late mounters hydrate instantly from the last known count.
+  if (poller.lastCount !== null) {
+    const snapshot = poller.lastCount;
+    try {
+      cb(snapshot);
+    } catch {
+      // ignore
+    }
+  }
+  return () => {
+    const current = POLLERS.get(tid);
+    if (!current) return;
+    current.subs.delete(cb);
+    if (current.subs.size === 0) {
+      current.stopped = true;
+      if (current.timer) clearTimeout(current.timer);
+      document.removeEventListener("visibilitychange", current.onVisibility);
+      window.removeEventListener("focus", current.onFocus);
+      if (POLLERS.get(tid) === current) POLLERS.delete(tid);
+    }
+  };
+}
+
 /** Tenant inbox bell — badge + hand-rolled dropdown (no menu library). */
 export default function NotificationBell({ tenantId, portal }: NotificationBellProps) {
   const router = useRouter();
