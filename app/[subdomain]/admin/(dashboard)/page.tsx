@@ -61,7 +61,11 @@ export default async function AdminDashboardPage({
         liveActiveStaff = d.active_staff ?? 0;
         liveOk = true;
       } else {
-        console.error(`[admin dashboard] summary fetch failed for '${subdomain}': upstream status ${r.status}`);
+        // Include the backend detail body (bounded): distinguishes
+        // "No school found" (unknown tenant) from "Not Found" (stale
+        // backend missing the route) from validation 400s.
+        const body = (await r.text().catch(() => "")).slice(0, 300);
+        console.error(`[admin dashboard] summary fetch failed for '${subdomain}': upstream status ${r.status} detail=${body || "<empty>"}`);
       }
     }
   } catch (e) {
