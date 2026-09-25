@@ -126,15 +126,6 @@ export default function FormGridPage() {
 
     setSavingSid(studentId);
     try {
-      const body: Record<string, unknown> = {
-        tenant_id: tenantId,
-        term,
-        subject_name: contextSubject,
-        class_name: grid.class_name,
-        assessment_key: "behavioural",
-        scores: items.length > 0 ? items : [{ student_id: studentId, trait: grid.allowed_traits[0], score: "X" }],
-      };
-      void body;
       // Behavioural rows require at least one score item server-side; when
       // only a remark changed, send the already-stored first trait back so
       // the row (and remark) persists without altering grades.
