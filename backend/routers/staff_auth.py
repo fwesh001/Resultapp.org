@@ -119,7 +119,7 @@ def staff_dashboard(tenant_id: str, staff_id: str):
     if not sid:
         raise HTTPException(status_code=400, detail="staff_id is required")
 
-    from services.db_manager import TENANT_ALLOCATIONS_TABLE, TENANT_STAFF_TABLE, _connect_as_superuser, _row_to_dict
+    from services.db_manager import TENANT_ALLOCATIONS_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser, _row_to_dict
     from datetime import datetime
 
     conn = None
@@ -165,11 +165,23 @@ def staff_dashboard(tenant_id: str, staff_id: str):
             d["id"] = str(d["id"])
             allocs.append(d)
 
+        # Form-teacher assignments for this staffer (contextual allocations).
+        cur.execute(
+            f"""
+            SELECT class_name FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+            WHERE subdomain = %s AND LOWER(staff_id) = LOWER(%s)
+            ORDER BY class_name
+            """,
+            (tid, str(staff.get("staff_id") or "")),
+        )
+        form_classes = [{"class_name": r[0]} for r in cur.fetchall()]
+
         # Also return staff profile
         return {
             "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None},
             "allocations": allocs,
             "count": len(allocs),
+            "form_classes": form_classes,
         }
     except HTTPException:
         raise
