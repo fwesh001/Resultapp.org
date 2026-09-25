@@ -320,6 +320,74 @@ def post_grading_batch(
         )
         class_ids = {r[0] for r in cur.fetchall()}
 
+        # --- Caller resolution (staff_id | UUID | email, case-insensitive) ---
+        cur.execute(
+            f"""
+            SELECT staff_id, full_name FROM {TENANT_STAFF_TABLE}
+            WHERE subdomain = %s
+              AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
+            LIMIT 1
+            """,
+            (tid, caller_id, caller_id, caller_id),
+        )
+        staff_row = cur.fetchone()
+        if staff_row is None:
+            raise HTTPException(status_code=403, detail=f"Unknown staff '{caller_id}' in tenant '{tid}'")
+        caller_staff_id, caller_name = str(staff_row[0]), str(staff_row[1])
+
+        # --- Normalize remarks up-front (form-teacher domain) ---
+        remark_updates: Dict[str, str] = {}
+        for _rk, _rv in (payload.remarks or {}).items():
+            _raw_r = (_rk or "").strip()
+            if "/" in _raw_r:
+                _pfx_r, _rest_r = _raw_r.split("/", 1)
+                _rsid = _pfx_r.lower() + "/" + _rest_r
+            else:
+                import re as _re_r
+                _m_r = _re_r.match(r"^([A-Za-z]+)(.*)$", _raw_r)
+                _rsid = (_m_r.group(1).lower() + _m_r.group(2)) if _m_r else _raw_r.lower()
+            if not _rsid:
+                raise HTTPException(status_code=422, detail="Every remark needs a student_id")
+            if _rsid not in class_ids:
+                raise HTTPException(status_code=422, detail=f"Student '{_rsid}' is not in class '{class_name}'")
+            _text = str(_rv or "").strip()
+            if len(_text) > 500:
+                raise HTTPException(status_code=422, detail=f"Remark for '{_rsid}' exceeds 500 characters")
+            if _text:
+                remark_updates[_rsid] = _text
+
+        # --- Atomic authorization (all-or-nothing: 403 writes NOTHING) ---
+        # Academic side: caller must hold the subject allocation for this class.
+        if not is_behavioural:
+            cur.execute(
+                f"""
+                SELECT 1 FROM {TENANT_ALLOCATIONS_TABLE}
+                WHERE subdomain = %s AND class_name = %s AND subject_name = %s AND staff_name = %s
+                LIMIT 1
+                """,
+                (tid, class_name, subject_name, caller_name),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Staff '{caller_staff_id}' has no subject allocation for '{subject_name}' in '{class_name}'",
+                )
+        # Form-teacher side: traits and/or remarks require the form assignment.
+        if is_behavioural or remark_updates:
+            cur.execute(
+                f"""
+                SELECT 1 FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+                WHERE subdomain = %s AND class_name = %s AND LOWER(staff_id) = LOWER(%s)
+                LIMIT 1
+                """,
+                (tid, class_name, caller_staff_id),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Staff '{caller_staff_id}' is not the Form Teacher for '{class_name}'",
+                )
+
         for entry in payload.scores:
             _raw = (entry.student_id or "").strip()
             # Lowercase prefix before slash (vhs/005)
