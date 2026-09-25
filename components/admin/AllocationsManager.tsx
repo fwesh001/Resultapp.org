@@ -512,7 +512,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Students" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Registered Students ({filteredStudents.length}/{students.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Registered Students ({filteredStudents.length} of {totals.Students} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button onClick={() => setBulkEntity("students")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
                     <Upload className="h-4 w-4" /> Bulk Upload
