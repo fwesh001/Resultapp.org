@@ -185,20 +185,24 @@ export default async function AdminDashboardPage({
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Publication Progress</h2>
             <span className="text-sm font-semibold text-purple-300">
-              {liveCompletion}% complete
+              {liveOk ? `${liveCompletion}% complete` : "Stats unavailable"}
             </span>
           </div>
           <p className="mt-1 text-sm text-purple-200/60">
-            {livePublished} of {displayUsed || liveStudents} results published • {currentTerm} {liveSession}
+            {liveOk
+              ? `${livePublished} of ${displayUsed || liveStudents} results published • ${currentTerm} ${liveSession}`
+              : `Could not reach live data • ${currentTerm} ${liveSession}`}
           </p>
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/5">
             <div
               className="h-full rounded-full bg-purple-500"
-              style={{ width: `${Math.min(100, liveCompletion)}%` }}
+              style={{ width: `${liveOk ? Math.min(100, liveCompletion) : 0}%` }}
             />
           </div>
           <p className="mt-3 text-xs text-purple-200/50">
-            {livePublished} of {displayUsed || liveStudents} results published.
+            {liveOk
+              ? `${livePublished} of ${displayUsed || liveStudents} results published.`
+              : "Publication stats unavailable."}
           </p>
         </div>
       </div>
