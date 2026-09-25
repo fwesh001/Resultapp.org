@@ -570,7 +570,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                     )}
                   </tbody>
                 </table>
+                </table>
               </div>
+              <PaginationBar
+                page={page}
+                total={totals.Students}
+                loaded={students.length}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
             </div>
           )}
 
@@ -578,7 +586,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Staff" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Staff Members ({filteredStaff.length}/{staff.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Staff Members ({filteredStaff.length} of {totals.Staff} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button onClick={() => setBulkEntity("staff")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
                     <Upload className="h-4 w-4" /> Bulk Upload
