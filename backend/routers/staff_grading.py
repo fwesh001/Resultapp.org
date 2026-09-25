@@ -256,16 +256,24 @@ def get_form_grid(
         if _caller:
             cur.execute(
                 f"""
-                SELECT f.class_name FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
-                JOIN {TENANT_STAFF_TABLE} s
-                  ON s.subdomain = f.subdomain AND LOWER(s.staff_id) = LOWER(f.staff_id)
-                WHERE f.subdomain = %s AND f.class_name = %s
-                  AND (LOWER(s.staff_id) = LOWER(%s) OR s.id::text = %s OR LOWER(s.email) = LOWER(%s))
+                SELECT staff_id FROM {TENANT_STAFF_TABLE}
+                WHERE subdomain = %s
+                  AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
                 LIMIT 1
                 """,
-                (tid, class_name, _caller, _caller, _caller),
+                (tid, _caller, _caller, _caller),
             )
-            is_form_teacher = cur.fetchone() is not None
+            _srow = cur.fetchone()
+            if _srow is not None:
+                cur.execute(
+                    f"""
+                    SELECT 1 FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+                    WHERE subdomain = %s AND class_name = %s AND LOWER(staff_id) = LOWER(%s)
+                    LIMIT 1
+                    """,
+                    (tid, class_name, str(_srow[0])),
+                )
+                is_form_teacher = cur.fetchone() is not None
 
         return {
             "students": students,
