@@ -192,10 +192,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Forward session staff identity so the backend can compute
+  // can_grade_academic / can_grade_traits capability flags.
   const url =
     `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading` +
     `/${encodeURIComponent(className)}/${encodeURIComponent(subjectName)}` +
-    `?term=${encodeURIComponent(term)}`;
+    `?term=${encodeURIComponent(term)}&staff_id=${encodeURIComponent(session.staffId)}`;
 
   let backendRes: Response;
   try {
@@ -262,6 +264,10 @@ export async function POST(req: NextRequest) {
 
   const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading/batch`;
 
+  // Inject caller identity server-side (client-supplied staff_id is ignored
+  // by the backend contract — session is the source of truth).
+  const { staff_id: _clientStaffId, ...restBody } = body;
+  void _clientStaffId;
   let backendRes: Response;
   try {
     backendRes = await fetch(url, {
@@ -270,7 +276,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "X-API-SECRET-KEY": secret,
       },
-      body: JSON.stringify({ ...body, tenant_id: tenantId }),
+      body: JSON.stringify({ ...restBody, tenant_id: tenantId, staff_id: session.staffId }),
       cache: "no-store",
     });
   } catch (e) {
