@@ -325,7 +325,8 @@ def get_missing(class_name: str, term: str, tenant_id: str = ""):
         for a in allocations:
             subj = a["subject_name"]
             pending = [s for s in roster if (s["student_id"], subj) not in covered]
-            total_pending += len(pending)
+            pending_count = len(pending)
+            total_pending += pending_count
             contact = contacts.get(a["staff_name"] or "", {})
             subjects.append(
                 {
@@ -333,8 +334,12 @@ def get_missing(class_name: str, term: str, tenant_id: str = ""):
                     "staff_name": a["staff_name"],
                     "staff_email": contact.get("email"),
                     "staff_phone": contact.get("phone"),
-                    "pending_count": len(pending),
-                    "pending_students": pending,
+                    # Full count stays accurate; preview array capped (H4)
+                    # to bound payload growth. graded_students below is
+                    # deliberately uncapped — publish depends on it.
+                    "pending_count": pending_count,
+                    "pending_students": pending[:50],
+                    "pending_preview_capped": pending_count > 50,
                 }
             )
         return {
