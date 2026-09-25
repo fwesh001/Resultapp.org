@@ -591,9 +591,9 @@ export default function FocusedGradingPage() {
         )}
       </Modal>
 
-      {/* View 2b — Behavioural entry modal */}
+      {/* View 2b — Behavioural entry modal (form-teacher-only) */}
       <Modal
-        open={behaviouralOpen}
+        open={behaviouralOpen && bundle?.can_grade_traits !== false}
         onOpenChange={setBehaviouralOpen}
         title="Behavioural Traits • A–E"
         description={`${decodedClassName} • ${decodedSubjectName} • ${term} — tap a student, grade each trait, save.`}
