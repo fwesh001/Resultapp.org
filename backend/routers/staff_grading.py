@@ -100,29 +100,13 @@ def _serialize_rows(cursor, rows):
 def _get_active_template(db: Session, tid: str, class_name: Optional[str] = None):
     """Newest active template bound to the class, else newest global template.
 
-    Binding lives in `applies_to_classes` (empty = all classes). Inactive
-    (soft-deleted) templates are never returned. Filtering is done in Python
-    so JSON-vs-JSONB dialect differences never matter (template counts are tiny).
+    Delegates to the shared service (H3 perf fix): single SQL row fetch with
+    match-quality ordering on Postgres, Python-filter fallback on other
+    dialects (e.g. SQLite in tests). Semantics preserved exactly.
     """
-    rows = (
-        db.query(models.GradingTemplate)
-        .filter(
-            models.GradingTemplate.tenant_id == tid,
-            models.GradingTemplate.is_active == True,  # noqa: E712
-        )
-        .order_by(models.GradingTemplate.created_at.desc())
-        .all()
-    )
-    if not rows:
-        return None
-    cls = (class_name or "").strip().lower()
-    if cls:
-        for t in rows:
-            bound = getattr(t, "applies_to_classes", None) or []
-            norm = {str(c).strip().lower() for c in bound if str(c).strip()}
-            if not norm or cls in norm:
-                return t
-    return rows[0]
+    from services.grading_templates import get_active_template as _shared
+
+    return _shared(db, tid, class_name)
 
 
 def _template_payload(template) -> Dict[str, Any]:
