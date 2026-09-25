@@ -7,7 +7,7 @@ Prefix: /api/v1/admin
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 # Lazy verify to avoid circular import at module load (same pattern as grading.py)
@@ -689,12 +689,18 @@ def global_ledger(
 
 
 @router.get("/ledger/export", summary="Stream full ledger as CSV (superadmin)")
-def export_ledger_csv(token_type: Optional[str] = None, subdomain: Optional[str] = None):
-    """Streams the (filtered) ledger as CSV using stdlib csv — no pagination bottleneck."""
+def export_ledger_csv(token_type: Optional[str] = None, subdomain: Optional[str] = None, request: Request = None):  # type: ignore[assignment]
+    """Streams the (filtered) ledger as CSV using stdlib csv — no pagination bottleneck.
+
+    Gates (M2): 3 starts/min throttle per (IP, filters), then a COUNT(*)
+    circuit breaker at 100,000 rows. Both run synchronously BEFORE the
+    StreamingResponse starts (status can't change once streaming begins).
+    """
     import csv as _csv
     import io as _io
     from fastapi.responses import StreamingResponse
     from services.db_manager import BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
+    from services.rate_limit import check as _rl_check
 
     ttype = (token_type or "").strip().upper() or None
     if ttype and ttype not in ("SLOT", "CREDIT"):
@@ -708,6 +714,37 @@ def export_ledger_csv(token_type: Optional[str] = None, subdomain: Optional[str]
         where.append("l.subdomain = %s")
         params.append(subdomain.strip().lower())
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    # Gate 1 — throttle: max 3 export starts per 60s sliding window.
+    # The backend sees only the shared API secret (no per-user identity),
+    # so the key is caller IP + filter tuple.
+    _ip = request.client.host if request is not None and request.client else "unknown"
+    _allowed, _retry_after = _rl_check(f"ledger-export|{_ip}|{ttype}|{(subdomain or '').strip().lower()}")
+    if not _allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Export throttled: max 3 per minute.",
+            headers={"Retry-After": str(_retry_after)},
+        )
+
+    # Gate 2 — circuit breaker: refuse oversized exports before streaming.
+    _count_conn = None
+    try:
+        _count_conn = _connect_as_superuser()
+        _count_cur = _count_conn.cursor()
+        _count_cur.execute(f"SELECT COUNT(*) FROM {BILLING_LEDGER_TABLE} l {where_sql};", tuple(params))
+        _export_rows = int(_count_cur.fetchone()[0] or 0)
+    finally:
+        if _count_conn:
+            try:
+                _count_conn.close()
+            except Exception:
+                pass
+    if _export_rows > 100_000:
+        raise HTTPException(
+            status_code=400,
+            detail="Export too large. Exports over 100,000 rows require a scheduled background job. Please contact support.",
+        )
 
     def row_iter():
         buf = _io.StringIO()
