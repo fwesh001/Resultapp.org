@@ -66,6 +66,30 @@ interface SharedPoller {
 const POLLERS = new Map<string, SharedPoller>();
 const POKE_MIN_INTERVAL_MS = 15000;
 
+/**
+ * Cross-poller fetch dedup.
+ *
+ * Covers the React StrictMode (dev) mount→unmount→remount burst and any
+ * future double-subscribe race: the first poller's in-flight request keeps
+ * flying after teardown, so a poller born milliseconds later reuses the same
+ * promise instead of firing a duplicate request. Window is deliberately
+ * short (10s) — steady-state cadence still comes from the 120s scheduler.
+ */
+const RECENT_FETCHES = new Map<string, { promise: Promise<{ ok: boolean; count: number | null }>; startedAt: number }>();
+const RECENT_REUSE_MS = 10000;
+
+function dedupedFetchUnread(tid: string): Promise<{ ok: boolean; count: number | null }> {
+  const now = Date.now();
+  const recent = RECENT_FETCHES.get(tid);
+  if (recent && now - recent.startedAt < RECENT_REUSE_MS) return recent.promise;
+  const p = fetchUnread(tid);
+  RECENT_FETCHES.set(tid, { promise: p, startedAt: now });
+  void p.finally(() => {
+    if (RECENT_FETCHES.get(tid)?.promise === p) RECENT_FETCHES.delete(tid);
+  });
+  return p;
+}
+
 async function fetchUnread(tid: string): Promise<{ ok: boolean; count: number | null }> {
   // Hidden tabs never hit the network (C1 visibility gate).
   if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -101,7 +125,7 @@ async function pollerTick(tid: string): Promise<void> {
   if (typeof document === "undefined" || document.visibilityState === "visible") {
     poller.inFlight = true;
     poller.lastStart = Date.now();
-    const { ok, count } = await fetchUnread(tid);
+    const { ok, count } = await dedupedFetchUnread(tid);
     poller.inFlight = false;
     if (POLLERS.get(tid) !== poller || poller.stopped) return;
     poller.failures = ok ? 0 : poller.failures + 1;
