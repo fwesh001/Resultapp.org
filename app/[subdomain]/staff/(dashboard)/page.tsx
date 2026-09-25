@@ -21,7 +21,7 @@ async function getStaffDashboard(tenantId: string, staffId: string) {
   const headers: Record<string, string> = secret ? { "X-API-SECRET-KEY": secret } : {};
   const res = await fetch(url, { headers, cache: "no-store" });
   if (!res.ok) return null;
-  return (await res.json().catch(() => null)) as { staff?: { full_name: string }; allocations?: Array<{ id: string; subject_name: string; class_name: string; staff_name: string }>; count?: number } | null;
+  return (await res.json().catch(() => null)) as { staff?: { full_name: string }; allocations?: Array<{ id: string; subject_name: string; class_name: string; staff_name: string }>; count?: number; form_classes?: Array<{ class_name: string }> } | null;
 }
 
 export default async function StaffDashboardPage({
@@ -60,6 +60,7 @@ export default async function StaffDashboardPage({
   ]);
 
   const allocations = dashboard?.allocations || [];
+  const formClasses = dashboard?.form_classes || [];
   const initialTerm = school?.currentTerm?.trim() || "Term 1";
 
   return (
