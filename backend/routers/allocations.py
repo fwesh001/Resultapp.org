@@ -57,6 +57,62 @@ def _ensure_tenant_exists(tid: str):
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
 
 
+def _list_form_assignments(tid: str, page: int = 1, limit: int = 20):
+    """Paginated form-teacher assignments with staff names resolved."""
+    from services.db_manager import TENANT_FORM_ASSIGNMENTS_TABLE, TENANT_STAFF_TABLE, _connect_as_superuser
+
+    try:
+        page = max(1, int(page or 1))
+    except Exception:
+        page = 1
+    try:
+        limit = max(1, min(int(limit or 20), 100))
+    except Exception:
+        limit = 20
+    offset = (page - 1) * limit
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FROM {TENANT_FORM_ASSIGNMENTS_TABLE} WHERE subdomain = %s",
+            (tid,),
+        )
+        total = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT f.id, f.subdomain, f.class_name, f.staff_id, s.full_name, f.created_at
+            FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
+            LEFT JOIN {TENANT_STAFF_TABLE} s
+              ON s.subdomain = f.subdomain AND LOWER(s.staff_id) = LOWER(f.staff_id)
+            WHERE f.subdomain = %s
+            ORDER BY f.created_at DESC LIMIT %s OFFSET %s
+            """,
+            (tid, limit, offset),
+        )
+        data = _serialize_rows(cur, cur.fetchall())
+        return {
+            "subdomain": tid,
+            "entity_type": "form_assignments",
+            "data": data,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[roster] paginated list failed for {tid}/form_assignments: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list form_assignments: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers — serialize rows like _row_to_dict + iso timestamps
 # ---------------------------------------------------------------------------
