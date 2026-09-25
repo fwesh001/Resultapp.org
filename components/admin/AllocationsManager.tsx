@@ -645,6 +645,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   </tbody>
                 </table>
               </div>
+              <PaginationBar
+                page={page}
+                total={totals.Staff}
+                loaded={staff.length}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
             </div>
           )}
 
@@ -652,7 +659,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Subjects" && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-white">Master Subjects ({filteredSubjects.length}/{subjects.length})</h3>
+                <h3 className="text-sm font-semibold text-white">Master Subjects ({filteredSubjects.length} of {totals.Subjects} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button
                     onClick={() => handleCreate("bulk_subjects")}
