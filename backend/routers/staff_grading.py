@@ -162,6 +162,136 @@ def _template_traits_and_scale(behavioral_structure: Any):
 
 
 # ---------------------------------------------------------------------------
+# GET — form-teacher grid for one class + term (traits + remarks, all subjects)
+# NOTE: registered BEFORE /{class_name}/{subject_name} so "forms" never
+# matches the class_name path param.
+# ---------------------------------------------------------------------------
+
+@router.get("/forms/{class_name}", summary="Form grid: roster + merged traits + remarks")
+def get_form_grid(
+    tenant_id: str,
+    class_name: str,
+    term: str = Query("Term 1"),
+    staff_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Form-teacher workspace data (read-only).
+
+    Merges behavioural_traits across all subjects for the term (latest write
+    wins per trait) and surfaces the first non-empty remark per student.
+    `subjects` provides the save-context subject for trait/remark writes
+    (grade rows require a subject attachment). `is_form_teacher` lets the
+    frontend refuse non-assigned viewers.
+    """
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+
+    term = (term or "").strip()
+    if term not in VALID_TERMS:
+        raise HTTPException(status_code=400, detail="term must be one of Term 1, Term 2, Term 3")
+    class_name = (class_name or "").strip()
+    if not class_name:
+        raise HTTPException(status_code=400, detail="class_name is required")
+
+    template = _get_active_template(db, tid, class_name)
+    if template is None:
+        raise HTTPException(status_code=404, detail=f"No grading template found for tenant '{tid}' — ask an admin to create one")
+    traits_allowed, scale_allowed = _template_traits_and_scale(
+        getattr(template, "behavioral_structure", None) or {}
+    )
+
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        TENANT_GRADES_TABLE,
+        TENANT_ALLOCATIONS_TABLE,
+        TENANT_FORM_ASSIGNMENTS_TABLE,
+        _connect_as_superuser,
+    )
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        cur.execute(
+            f"SELECT id, student_id, full_name, class_name, gender FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s ORDER BY full_name",
+            (tid, class_name),
+        )
+        students = _serialize_rows(cur, cur.fetchall())
+        student_ids = [s["student_id"] for s in students]
+
+        traits: Dict[str, Dict[str, str]] = {}
+        remarks: Dict[str, str] = {}
+        if student_ids:
+            cur.execute(
+                f"""
+                SELECT student_id, behavioural_traits, remarks
+                FROM {TENANT_GRADES_TABLE}
+                WHERE subdomain = %s AND term = %s AND student_id = ANY(%s)
+                ORDER BY updated_at DESC
+                """,
+                (tid, term, student_ids),
+            )
+            for sid, b_traits, remark in cur.fetchall():
+                if isinstance(b_traits, dict):
+                    slot = traits.setdefault(sid, {})
+                    for k, v in b_traits.items():
+                        kk, vv = str(k).strip(), str(v).strip()
+                        if kk and vv and kk not in slot:
+                            slot[kk] = vv
+                if sid not in remarks and isinstance(remark, str) and remark.strip():
+                    remarks[sid] = remark.strip()
+
+        cur.execute(
+            f"""
+            SELECT DISTINCT subject_name FROM {TENANT_ALLOCATIONS_TABLE}
+            WHERE subdomain = %s AND class_name = %s ORDER BY subject_name
+            """,
+            (tid, class_name),
+        )
+        subjects = [r[0] for r in cur.fetchall() if r[0]]
+
+        is_form_teacher = False
+        _caller = (staff_id or "").strip()
+        if _caller:
+            cur.execute(
+                f"""
+                SELECT f.class_name FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
+                JOIN {TENANT_STAFF_TABLE} s
+                  ON s.subdomain = f.subdomain AND LOWER(s.staff_id) = LOWER(f.staff_id)
+                WHERE f.subdomain = %s AND f.class_name = %s
+                  AND (LOWER(s.staff_id) = LOWER(%s) OR s.id::text = %s OR LOWER(s.email) = LOWER(%s))
+                LIMIT 1
+                """,
+                (tid, class_name, _caller, _caller, _caller),
+            )
+            is_form_teacher = cur.fetchone() is not None
+
+        return {
+            "students": students,
+            "traits": traits,
+            "remarks": remarks,
+            "subjects": subjects,
+            "allowed_traits": traits_allowed,
+            "scale": scale_allowed,
+            "term": term,
+            "class_name": class_name,
+            "is_form_teacher": is_form_teacher,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[staff-grading] form grid failed for {tid}/{class_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load form grid: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # GET — grading bundle for one class + subject + term
 # ---------------------------------------------------------------------------
 
