@@ -338,6 +338,75 @@ def _missing_for_class(cur, tid: str, t: str, cls: str) -> dict:
             "total_pending": total_pending,
             "graded_students": graded_students,
         }
+
+
+@router.get("/missing", summary="Missing grades grouped by subject + staff")
+def get_missing(class_name: str, term: str, tenant_id: str = ""):
+    """Cross-reference roster × allocations × grades (single class).
+
+    Thin wrapper over _missing_for_class — behavior unchanged.
+    """
+    from services.db_manager import _connect_as_superuser
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+    t, _session = _resolve_term_session(term, None)
+    if not t:
+        raise HTTPException(status_code=400, detail="term is required")
+    cls = (class_name or "").strip()
+    if not cls:
+        raise HTTPException(status_code=400, detail="class_name is required")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        return _missing_for_class(cur, tid, t, cls)
+    finally:
+        _close(conn)
+
+
+#: Max classes per /missing-batch request (H2) — bounds the single request.
+MISSING_BATCH_MAX_CLASSES = 20
+
+
+@router.get("/missing-batch", summary="Missing grades for several classes (one round-trip)")
+def get_missing_batch(class_names: str, term: str, tenant_id: str = ""):
+    """Batch variant of /missing for the publish flow (H2).
+
+    `class_names` is a comma-separated list (class names contain no commas).
+    Resolves each class on ONE connection and returns
+    { subdomain, term, classes: { "<class>": <get_missing payload> } }.
+    """
+    from services.db_manager import _connect_as_superuser
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+    t, _session = _resolve_term_session(term, None)
+    if not t:
+        raise HTTPException(status_code=400, detail="term is required")
+    seen: dict = {}
+    for raw in (class_names or "").split(","):
+        cls = (raw or "").strip()
+        if cls and cls not in seen:
+            seen[cls] = True
+    classes = list(seen.keys())
+    if not classes:
+        raise HTTPException(status_code=400, detail="class_names is required")
+    if len(classes) > MISSING_BATCH_MAX_CLASSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MISSING_BATCH_MAX_CLASSES} classes per batch",
+        )
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        out: dict = {}
+        for cls in classes:
+            out[cls] = _missing_for_class(cur, tid, t, cls)
+        return {"subdomain": tid, "term": t, "classes": out}
     finally:
         _close(conn)
 
