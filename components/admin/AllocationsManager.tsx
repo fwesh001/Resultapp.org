@@ -38,6 +38,35 @@ const TAB_ENTITY: Record<Tab, string> = {
   Allocate: "allocations",
 };
 
+function PaginationBar({ page, total, loaded, onPrev, onNext }: { page: number; total: number; loaded: number; onPrev: () => void; onNext: () => void }) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  return (
+    <div className="flex items-center justify-between gap-3 pt-1">
+      <p className="text-xs text-purple-300/50">
+        Showing {loaded} of {total} • page {page} of {totalPages}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={page <= 1}
+          className="rounded-full border border-purple-500/20 px-4 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+        >
+          Prev
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={page >= totalPages}
+          className="rounded-full border border-purple-500/20 px-4 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPrefix: staffIdPrefixProp }: { tenantId: string; idPrefix?: string; staffIdPrefix?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("Students");
   // Server-side pagination (C2): one entity per page, 20 rows.
