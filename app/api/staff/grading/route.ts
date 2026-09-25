@@ -108,6 +108,40 @@ export async function GET(req: NextRequest) {
 
   const base = getBackendBase();
 
+  // Form mode (explicit): ?view=form&class_name= — checked before hub mode
+  // since form requests carry no subject_name.
+  const view = String(params.get("view") ?? "").trim().toLowerCase();
+  if (view === "form") {
+    if (!className) {
+      return NextResponse.json(
+        { success: false, error: "view=form requires class_name" },
+        { status: 400 },
+      );
+    }
+    const formUrl =
+      `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/forms/` +
+      `${encodeURIComponent(className)}?term=${encodeURIComponent(term)}` +
+      `&staff_id=${encodeURIComponent(session.staffId)}`;
+    try {
+      const fr = await fetch(formUrl, {
+        headers: { "X-API-SECRET-KEY": secret },
+        cache: "no-store",
+      });
+      const fdata = await fr.json().catch(() => ({}));
+      if (!fr.ok) {
+        const detail = (fdata as { detail?: unknown })?.detail ?? "Form grid failed";
+        return NextResponse.json({ success: false, error: String(detail) }, { status: fr.status });
+      }
+      return NextResponse.json(fdata, { status: 200 });
+    } catch (e) {
+      console.error("[api/staff/grading GET form] backend fetch failed", e);
+      return NextResponse.json(
+        { success: false, error: "Could not reach grading service" },
+        { status: 502 },
+      );
+    }
+  }
+
   // Hub mode: no class/subject -> allocations + active template
   if (!className || !subjectName) {
     const dashboardUrl = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/${encodeURIComponent(session.staffId)}/dashboard`;
