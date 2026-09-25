@@ -12,7 +12,9 @@ interface NotificationBellProps {
   portal?: "admin" | "staff";
 }
 
-const POLL_MS = 30000;
+const POLL_BASE_MS = 120000; // 120s idle cadence (C1 cost fix)
+const POLL_MAX_MS = 600000; // 10min ceiling on repeated failure
+const POLL_JITTER_MS = 15000; // ± jitter to de-thunder concurrent tabs
 const INBOX_LIMIT = 20;
 
 function timeAgo(iso: string): string {
