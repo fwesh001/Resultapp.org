@@ -47,17 +47,24 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
   const rootRef = useRef<HTMLDivElement>(null);
   const tid = (tenantId || "").toLowerCase().trim();
 
-  const pollUnread = useCallback(async () => {
-    if (!tid) return;
+  const pollUnread = useCallback(async (): Promise<boolean> => {
+    if (!tid) return true;
+    // Hidden tabs never hit the network (C1 visibility gate).
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return true;
     try {
       const res = await fetch(`/api/notifications/unread-count?tenant_id=${encodeURIComponent(tid)}`, {
         cache: "no-store",
       });
-      if (res.status === 401) return; // signed out — stay silent
+      if (res.status === 401) return true; // signed out — stay silent, no backoff
       const data = await res.json().catch(() => ({}));
-      if (res.ok) setUnread(Number((data as { unread_count?: number }).unread_count || 0));
+      if (res.ok) {
+        setUnread(Number((data as { unread_count?: number }).unread_count || 0));
+        return true;
+      }
+      return false;
     } catch {
       // best-effort poll — never surface errors for the badge
+      return false;
     }
   }, [tid]);
 
