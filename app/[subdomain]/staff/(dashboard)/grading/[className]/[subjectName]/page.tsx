@@ -51,6 +51,9 @@ interface Bundle {
   term: string;
   class_name: string;
   subject_name: string;
+  // Capability flags from the backend (absent = legacy permissive backend).
+  can_grade_academic?: boolean;
+  can_grade_traits?: boolean;
 }
 
 interface Assessment {
@@ -486,7 +489,9 @@ export default function FocusedGradingPage() {
                   </button>
                 );
               })}
-              {traits.length > 0 && (
+              {/* Behavioural entry is form-teacher-only: hidden (not disabled)
+                  for subject teachers without the form assignment. */}
+              {traits.length > 0 && bundle?.can_grade_traits !== false && (
                 <button
                   key="behavioural"
                   type="button"
