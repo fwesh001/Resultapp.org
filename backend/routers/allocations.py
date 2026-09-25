@@ -1147,10 +1147,11 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
         "staff": "tenant_staff",
         "allocation": "tenant_allocations",
         "subject": "tenant_subjects",
+        "form_assignment": "tenant_form_assignments",
     }
     table = mapping.get(record_type)
     if not table:
-        raise HTTPException(status_code=400, detail="record_type must be student|staff|allocation|subject")
+        raise HTTPException(status_code=400, detail="record_type must be student|staff|allocation|subject|form_assignment")
 
     # Validate UUID
     import uuid
