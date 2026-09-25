@@ -253,6 +253,12 @@ class BatchPayload(BaseModel):
     class_name: str
     assessment_key: str
     scores: List[BatchScore] = Field(..., min_length=1)
+    # Caller identity — REQUIRED (contextual allocations). The Next.js proxy
+    # injects this server-side from staff_session; client values are ignored.
+    staff_id: str = Field(..., min_length=1)
+    # Optional per-student remarks (student_id -> text). Form-teacher-only,
+    # stored on tenant_grades.remarks. Absent key = preserve existing.
+    remarks: Optional[Dict[str, str]] = None
 
 
 @router.post("/batch", status_code=201, summary="Save batch scores for one assessment")
