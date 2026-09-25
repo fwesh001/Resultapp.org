@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
       );
     }
     const formUrl =
-      `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/forms/` +
+      `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading/forms/` +
       `${encodeURIComponent(className)}?term=${encodeURIComponent(term)}` +
       `&staff_id=${encodeURIComponent(session.staffId)}`;
     try {
