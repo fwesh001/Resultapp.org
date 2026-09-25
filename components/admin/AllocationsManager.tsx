@@ -29,8 +29,20 @@ const STANDARD_SUBJECTS = [
   "Basic Technology",
 ];
 
+const PAGE_SIZE = 20;
+
+const TAB_ENTITY: Record<Tab, string> = {
+  Students: "students",
+  Staff: "staff",
+  Subjects: "subjects",
+  Allocate: "allocations",
+};
+
 export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPrefix: staffIdPrefixProp }: { tenantId: string; idPrefix?: string; staffIdPrefix?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("Students");
+  // Server-side pagination (C2): one entity per page, 20 rows.
+  const [page, setPage] = useState(1);
+  const [totals, setTotals] = useState<Record<Tab, number>>({ Students: 0, Staff: 0, Subjects: 0, Allocate: 0 });
 
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -80,17 +92,28 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     return grouped;
   }, [allocations]);
 
-  const fetchAll = useCallback(async () => {
+  // Paginated fetch (C2): loads only the active tab's current page.
+  // Client-side search/class filters apply to the loaded page only.
+  const fetchEntity = useCallback(async (tab: Tab, pageNum: number) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
+      const qs = new URLSearchParams({
+        tenant_id: tenantId,
+        entity_type: TAB_ENTITY[tab],
+        page: String(pageNum),
+        limit: String(PAGE_SIZE),
+      });
+      const res = await fetch(`/api/admin/allocations?${qs.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed ${res.status}`);
-      setStudents((data as { students?: Student[] }).students || []);
-      setStaff((data as { staff?: Staff[] }).staff || []);
-      setAllocations((data as { allocations?: Allocation[] }).allocations || []);
-      setSubjects((data as { subjects?: Subject[] }).subjects || []);
+      const rows = (data as { data?: unknown[] }).data || [];
+      const total = Number((data as { total?: number }).total || 0);
+      if (tab === "Students") setStudents(rows as Student[]);
+      else if (tab === "Staff") setStaff(rows as Staff[]);
+      else if (tab === "Subjects") setSubjects(rows as Subject[]);
+      else setAllocations(rows as Allocation[]);
+      setTotals((prev) => ({ ...prev, [tab]: total }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load roster");
     } finally {
@@ -98,9 +121,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }, [tenantId]);
 
+  // Legacy full-blob refresh (mutations): re-fetch the active tab's page.
+  const fetchAll = useCallback(async () => {
+    await fetchEntity(activeTab, page);
+  }, [fetchEntity, activeTab, page]);
+
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    void fetchEntity(activeTab, page);
+  }, [fetchEntity, activeTab, page]);
 
   // auto-dismiss toast
   useEffect(() => {
@@ -415,7 +443,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setPage(1); }}
               className={
                 activeTab === tab.key
                   ? "rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_14px_rgba(147,51,234,0.3)]"
