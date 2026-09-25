@@ -1170,6 +1170,71 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         </div>
       </Modal>
 
+      {/* Assign Form Teacher Modal — class + staff (exactly one per class) */}
+      <Modal open={showFormModal} onOpenChange={setShowFormModal} title="Assign Form Teacher" description="Select a class and the staff member responsible for its behavioural traits and remarks" className="border-purple-500/20 bg-[#0B0514] text-white">
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-purple-100">Class</label>
+            {availableClasses.length === 0 ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+                Register students first to generate classes. Classes are derived from the Students roster.
+              </div>
+            ) : (
+              <select
+                value={formAssignForm.class_name}
+                onChange={(e) => setFormAssignForm((p) => ({ ...p, class_name: e.target.value }))}
+                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              >
+                <option value="" className="bg-[#0B0514]">
+                  Select class
+                </option>
+                {availableClasses.map((c) => (
+                  <option key={c} value={c} className="bg-[#0B0514]">
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-purple-100">Staff</label>
+            {staff.length === 0 ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+                No staff yet. Add staff in the Staff tab.
+              </div>
+            ) : (
+              <select
+                value={formAssignForm.staff_id}
+                onChange={(e) => setFormAssignForm((p) => ({ ...p, staff_id: e.target.value }))}
+                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              >
+                <option value="" className="bg-[#0B0514]">
+                  Select staff
+                </option>
+                {staff.map((s) => (
+                  <option key={s.id} value={s.staff_id} className="bg-[#0B0514]">
+                    {s.full_name} — {s.role}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <p className="text-xs text-purple-300/40">Tip: One form teacher per class — assigning again overwrites the previous teacher.</p>
+          <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
+            <Button
+              onClick={() => handleCreate("form_assignment")}
+              disabled={submitting || availableClasses.length === 0 || staff.length === 0}
+              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {bulkEntity && (
         <BulkUploadModal
           open={bulkEntity !== null}
