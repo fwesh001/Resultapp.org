@@ -49,7 +49,18 @@ export async function GET(req: NextRequest) {
   const guardGet = await requireAdminSession(tenantId);
   if (guardGet) return guardGet;
 
-  const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster`;
+  // Forward server-side pagination to FastAPI (C2). Absent params hit the
+  // legacy full-blob branch on the backend (deprecated).
+  const sp = req.nextUrl.searchParams;
+  const fwd = new URLSearchParams();
+  const entityType = (sp.get("entity_type") || "").trim().toLowerCase();
+  if (entityType) fwd.set("entity_type", entityType);
+  const page = (sp.get("page") || "").trim();
+  if (page) fwd.set("page", page);
+  const limit = (sp.get("limit") || "").trim();
+  if (limit) fwd.set("limit", limit);
+  const suffix = fwd.toString() ? `?${fwd.toString()}` : "";
+  const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster${suffix}`;
   try {
     const r = await fetch(url, { headers: { "X-API-SECRET-KEY": secret }, cache: "no-store" });
     const data = await r.json().catch(() => ({}));
