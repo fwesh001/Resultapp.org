@@ -69,21 +69,23 @@ export default async function AdminDashboardPage({
   }
   // Fallback: derive slot capacity from schools row when command-center is unreachable
   const slotCapacity = school?.slotsBalance ?? school?.credits?.totalPurchased ?? 0;
-  // Use live roster count when available, else fall back to schools-derived used approximation
-  const displayUsed = liveStudents > 0 ? liveStudents : 0;
+  // Used slots come strictly from the live summary (no derivation when
+  // unreachable — the cards below render "unavailable" instead of zeros).
+  const displayUsed = liveOk ? liveStudents : 0;
   const displayCapacity = slotCapacity > 0 ? slotCapacity : Math.max(displayUsed, 0);
   const remaining = Math.max(0, displayCapacity - displayUsed);
 
   const stats = [
     {
       label: "Slots",
-      value: `${displayUsed} / ${displayCapacity} Slots`,
-      sub: `${remaining} remaining`,
+      value: liveOk ? `${displayUsed} / ${displayCapacity} Slots` : "—",
+      sub: liveOk ? `${remaining} remaining` : "Stats unavailable",
       icon: Users,
     },
     {
       label: "Active Staff",
-      value: String(liveActiveStaff),
+      value: liveOk ? String(liveActiveStaff) : "—",
+      sub: liveOk ? undefined : "Stats unavailable",
       icon: UserCheck,
     },
     {
