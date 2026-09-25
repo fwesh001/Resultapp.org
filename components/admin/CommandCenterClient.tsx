@@ -41,6 +41,7 @@ interface MissingData {
   subjects: MissingSubject[];
   total_pending: number;
   graded_students: Array<{ student_id: string; full_name: string }>;
+  pending_preview_capped?: boolean;
 }
 
 interface CommandCenterClientProps {
@@ -168,22 +169,36 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
   async function publishClasses(classNames: string[]) {
     if (classNames.length === 0 || publishing) return;
     // Resolve graded student IDs (never publish students with no grades).
+    // Unresolved classes are fetched in ONE batch request (H2), not serially.
     setPublishing(true);
     try {
+      const unresolved = classNames.filter((cn) => !missing[cn]);
+      let batch: Record<string, MissingData> = {};
+      if (unresolved.length > 0) {
+        const qs = new URLSearchParams({
+          tenant_id: tenantId,
+          view: "missing-batch",
+          class_names: unresolved.join(","),
+          term,
+        });
+        const res = await fetch(`/api/admin/results?${qs.toString()}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || (data as { success?: boolean }).success === false) {
+          throw new Error((data as { error?: string }).error || `Failed to resolve ${unresolved.join(", ")}`);
+        }
+        batch = (data as { classes?: Record<string, MissingData> }).classes || {};
+        for (const cn of unresolved) {
+          if (!batch[cn]) throw new Error(`Failed to resolve ${cn}`);
+        }
+        setMissing((prev) => ({ ...prev, ...batch }));
+      }
       const allIds: string[] = [];
       for (const cn of classNames) {
-        let m = missing[cn];
-        if (!m) {
-          const qs = new URLSearchParams({ tenant_id: tenantId, view: "missing", class_name: cn, term });
-          const res = await fetch(`/api/admin/results?${qs.toString()}`, { cache: "no-store" });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || (data as { success?: boolean }).success === false) {
-            throw new Error((data as { error?: string }).error || `Failed to resolve ${cn}`);
-          }
-          m = data as MissingData;
-          setMissing((prev) => ({ ...prev, [cn]: m as MissingData }));
-        }
-        for (const s of m.graded_students) allIds.push(s.student_id);
+        // Batch-resolved classes are read from the response directly —
+        // setMissing above hasn't re-rendered yet (no stale-state skip).
+        const resolved = missing[cn] ?? batch[cn];
+        if (!resolved) continue;
+        for (const s of resolved.graded_students) allIds.push(s.student_id);
       }
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length === 0) {
