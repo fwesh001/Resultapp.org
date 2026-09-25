@@ -88,11 +88,43 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
     }
   }, [tid]);
 
-  // Initial poll + 30s interval.
+  // Visibility-gated poll with exponential backoff (C1):
+  // 120s base while visible, doubling on failure up to 10min; hidden tabs
+  // schedule silently without fetching; focus/visible triggers one refresh.
   useEffect(() => {
-    void pollUnread();
-    const id = setInterval(() => void pollUnread(), POLL_MS);
-    return () => clearInterval(id);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+    const clearTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = null;
+    };
+    const delayFor = (fails: number) =>
+      Math.min(POLL_BASE_MS * 2 ** fails, POLL_MAX_MS) + Math.random() * POLL_JITTER_MS;
+    const tick = async () => {
+      if (cancelled) return;
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        const ok = await pollUnread();
+        if (!cancelled) failures = ok ? 0 : failures + 1;
+      }
+      if (!cancelled) timeoutId = setTimeout(() => void tick(), delayFor(failures));
+    };
+    const poke = () => {
+      clearTimer();
+      void tick();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") poke();
+    };
+    void tick();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", poke);
+    return () => {
+      cancelled = true;
+      clearTimer();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", poke);
+    };
   }, [pollUnread]);
 
   // Load inbox when opened.
