@@ -800,6 +800,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   )}
                 </div>
               )}
+              <PaginationBar
+                page={page}
+                total={totals.Allocate}
+                loaded={allocations.length}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
             </div>
           )}
         </>
