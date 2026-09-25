@@ -868,6 +868,64 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
               />
             </div>
           )}
+
+          {/* Form Classes Tab — exactly one form teacher per class */}
+          {activeTab === "Forms" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Form Classes ({filteredForms.length} of {totals.Forms} • page {page})</h3>
+                <Button onClick={() => setShowFormModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                  <Plus className="h-4 w-4" /> Assign Form Teacher
+                </Button>
+              </div>
+              <p className="text-xs text-purple-300/40">Each class has exactly one form teacher for behavioural traits and remarks. Re-assigning a class overwrites the previous teacher.</p>
+              <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                      <th className="px-4 py-3">Class</th>
+                      <th className="px-4 py-3">Form Teacher</th>
+                      <th className="px-4 py-3">Staff ID</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredForms.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-purple-200/40">
+                          {formAssignments.length === 0 ? "No form teachers assigned yet." : "No assignments match search."}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredForms.map((f) => (
+                        <tr key={f.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
+                          <td className="px-4 py-3 font-medium text-white">{f.class_name}</td>
+                          <td className="px-4 py-3">{f.full_name || "—"}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{f.staff_id}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => setPendingDelete({ type: "form_assignment", id: f.id })}
+                              className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
+                              aria-label="Remove form assignment"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationBar
+                page={page}
+                total={totals.Forms}
+                loaded={formAssignments.length}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            </div>
+          )}
         </>
       )}
 
