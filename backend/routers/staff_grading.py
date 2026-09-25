@@ -282,7 +282,19 @@ def post_grading_batch(
     academic_structure = getattr(template, "academic_structure", None) or {}
     behavioral_structure = getattr(template, "behavioral_structure", None) or {}
 
-    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, _connect_as_superuser
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        TENANT_GRADES_TABLE,
+        TENANT_STAFF_TABLE,
+        TENANT_ALLOCATIONS_TABLE,
+        TENANT_FORM_ASSIGNMENTS_TABLE,
+        _connect_as_superuser,
+    )
+
+    # Caller identity is mandatory — no legacy anonymous writes.
+    caller_id = (payload.staff_id or "").strip()
+    if not caller_id:
+        raise HTTPException(status_code=422, detail="staff_id is required")
 
     is_behavioural = assessment_key == "behavioural"
     if not is_behavioural:
