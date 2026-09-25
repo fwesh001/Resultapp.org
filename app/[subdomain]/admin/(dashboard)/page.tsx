@@ -29,10 +29,10 @@ export default async function AdminDashboardPage({
   // Live wiring — subscription card retired in favor of dual-ledger.
   const currentTerm = school?.currentTerm ?? "Term 1";
   const currentSession = school?.currentSession ?? currentAcademicSession();
-  const slotsUsed = school?.slotsBalance != null && school?.creditBalance != null
-    ? Math.max(0, (school?.slotsBalance ?? 0) > 0 ? 0 : 0)
-    : 0;
   // Fetch live counts best-effort (server-side, no-store so publish revalidates via school tag).
+  // liveOk gates every derived stat: on failure we render an explicit
+  // "unavailable" state instead of authoritative-looking zeros (Bug 1 fix).
+  let liveOk = false;
   let liveStudents = 0;
   let liveActiveStaff = 0;
   let livePublished = 0;
@@ -41,7 +41,9 @@ export default async function AdminDashboardPage({
   try {
     const base = (process.env.BACKEND_URL || "http://159.223.178.34:8000").replace(/\/$/, "");
     const secret = (process.env.BACKEND_API_SECRET || process.env.PROVISION_API_SECRET || process.env.API_SECRET_KEY || "").trim();
-    if (secret) {
+    if (!secret) {
+      console.error(`[admin dashboard] summary fetch skipped for '${subdomain}': missing BACKEND_API_SECRET`);
+    } else {
       const qs = new URLSearchParams({ term: currentTerm, academic_session: currentSession });
       const r = await fetch(`${base}/api/v1/tenant/${encodeURIComponent(subdomain)}/command-center/summary?${qs.toString()}`, {
         headers: { "X-API-SECRET-KEY": secret },
@@ -57,10 +59,13 @@ export default async function AdminDashboardPage({
         liveCompletion = d.completion_pct ?? 0;
         liveSession = d.academic_session ?? currentSession;
         liveActiveStaff = d.active_staff ?? 0;
+        liveOk = true;
+      } else {
+        console.error(`[admin dashboard] summary fetch failed for '${subdomain}': upstream status ${r.status}`);
       }
     }
-  } catch {
-    // Fallback to roster-derived counts is handled below via tenant metadata
+  } catch (e) {
+    console.error(`[admin dashboard] summary fetch errored for '${subdomain}': ${e instanceof Error ? e.message : "network failure"}`);
   }
   // Fallback: derive slot capacity from schools row when command-center is unreachable
   const slotCapacity = school?.slotsBalance ?? school?.credits?.totalPurchased ?? 0;
