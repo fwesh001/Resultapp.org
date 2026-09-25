@@ -426,7 +426,7 @@ def post_grading_batch(
                     raise HTTPException(status_code=422, detail=f"Score for '{sid}' ({val}) exceeds max {max_score} for '{assessment_key}'")
                 academic_updates.setdefault(sid, {})[assessment_key] = val
 
-        all_sids = set(academic_updates) | set(trait_updates)
+        all_sids = set(academic_updates) | set(trait_updates) | set(remark_updates)
         if not all_sids:
             raise HTTPException(status_code=422, detail="No scores to save")
         rows = [
@@ -437,21 +437,25 @@ def post_grading_batch(
                 payload.term,
                 json.dumps(academic_updates.get(sid, {})),
                 json.dumps(trait_updates.get(sid, {})),
+                remark_updates.get(sid),
             )
             for sid in all_sids
         ]
         # Single round-trip batched upsert (Option B): one server round-trip
         # regardless of class size. Same JSONB-merge semantics as the former
         # per-student loop (single-assessment saves never wipe siblings).
+        # remarks: NULL in EXCLUDED preserves the stored value; a provided
+        # string overwrites it.
         from psycopg2.extras import execute_values
 
         upsert_sql = (
             f"INSERT INTO {TENANT_GRADES_TABLE} "
-            "(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits) "
+            "(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits, remarks) "
             "VALUES %s "
             "ON CONFLICT (subdomain, student_id, subject_name, term) "
             f"DO UPDATE SET academic_scores = {TENANT_GRADES_TABLE}.academic_scores || EXCLUDED.academic_scores, "
             f"behavioural_traits = {TENANT_GRADES_TABLE}.behavioural_traits || EXCLUDED.behavioural_traits, "
+            f"remarks = CASE WHEN EXCLUDED.remarks IS NULL THEN {TENANT_GRADES_TABLE}.remarks ELSE EXCLUDED.remarks END, "
             "updated_at = NOW()"
         )
         # Chunk to bound single-statement size for very large classes.
@@ -460,13 +464,14 @@ def post_grading_batch(
                 cur,
                 upsert_sql,
                 rows[_i : _i + 500],
-                template="(%s, %s, %s, %s, %s::jsonb, %s::jsonb)",
+                template="(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)",
             )
         conn.commit()
-        logger.info(f"[staff-grading] batch saved {tid}/{class_name}/{subject_name}/{assessment_key} for {len(all_sids)} students")
+        logger.info(f"[staff-grading] batch saved {tid}/{class_name}/{subject_name}/{assessment_key} for {len(all_sids)} students by {caller_staff_id}")
         return {
             "success": True,
             "saved": len(all_sids),
+            "remarks_saved": len(remark_updates),
             "term": payload.term,
             "subject_name": subject_name,
             "class_name": class_name,
