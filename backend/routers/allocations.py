@@ -125,7 +125,7 @@ def list_roster(tenant_id: str, entity_type: Optional[str] = None, page: int = 1
         if entity not in entity_map:
             raise HTTPException(
                 status_code=400,
-                detail="entity_type must be one of students, staff, allocations, subjects",
+                detail="entity_type must be one of students, staff, allocations, subjects, form_assignments",
             )
         table, columns = entity_map[entity]
         try:
