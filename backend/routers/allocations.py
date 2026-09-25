@@ -94,6 +94,7 @@ def list_roster(tenant_id: str, entity_type: Optional[str] = None, page: int = 1
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
         TENANT_SUBJECTS_TABLE,
+        TENANT_FORM_ASSIGNMENTS_TABLE,
         _connect_as_superuser,
     )
 
@@ -101,6 +102,8 @@ def list_roster(tenant_id: str, entity_type: Optional[str] = None, page: int = 1
     # Shape: { subdomain, entity_type, data, total, page, limit }.
     if entity_type is not None:
         entity = (entity_type or "").strip().lower()
+        if entity == "form_assignments":
+            return _list_form_assignments(tid, page, limit)
         entity_map = {
             "students": (
                 TENANT_STUDENTS_TABLE,
