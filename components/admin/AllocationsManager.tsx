@@ -201,6 +201,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     });
   }, [allocations, q, allocateClassFilter]);
 
+  const filteredForms = useMemo(() => {
+    // Client-side search applies to the loaded page only (C2 convention).
+    if (!q) return formAssignments;
+    return formAssignments.filter((f) =>
+      [f.class_name, f.staff_id, f.full_name || ""].some((v) => v.toLowerCase().includes(q)),
+    );
+  }, [formAssignments, q]);
+
   const filteredAllocationsByClass = useMemo(() => {
     const sorted = [...filteredAllocations].sort((a, b) => a.class_name.localeCompare(b.class_name) || a.subject_name.localeCompare(b.subject_name));
     const grouped = new Map<string, Allocation[]>();
@@ -298,7 +306,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }
 
-  async function handleCreate(type: "student" | "staff" | "allocation" | "subject" | "bulk_subjects") {
+  async function handleCreate(type: "student" | "staff" | "allocation" | "subject" | "bulk_subjects" | "form_assignment") {
     // If editing, delegate to PATCH
     const isEditingStudent = type === "student" && editingRecord && "student_id" in editingRecord;
     const isEditingStaff = type === "staff" && editingRecord && "staff_id" in editingRecord;
@@ -389,6 +397,18 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       payload = { ...payload, subject_name: subjectForm.subject_name.trim() };
     } else if (type === "bulk_subjects") {
       payload = { ...payload, subjects: STANDARD_SUBJECTS };
+    } else if (type === "form_assignment") {
+      // Exactly one form teacher per class — re-assigning overwrites.
+      if (!formAssignForm.class_name.trim() || !formAssignForm.staff_id.trim()) {
+        setError("Class and Staff are required");
+        setSubmitting(false);
+        return;
+      }
+      payload = {
+        ...payload,
+        class_name: formAssignForm.class_name.trim(),
+        staff_id: formAssignForm.staff_id.trim(),
+      };
     } else {
       // allocation
       if (!allocForm.subject_name.trim() || !allocForm.staff_name.trim() || !allocForm.class_name.trim()) {
@@ -430,6 +450,9 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       } else if (type === "allocation") {
         setAllocForm({ class_name: "", subject_name: "", staff_name: "" });
         setShowAllocModal(false);
+      } else if (type === "form_assignment") {
+        setFormAssignForm({ class_name: "", staff_id: "" });
+        setShowFormModal(false);
       }
       // bulk_subjects has no modal
       await fetchAll();
@@ -440,7 +463,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }
 
-  async function handleDelete(type: "student" | "staff" | "allocation" | "subject", id: string) {
+  async function handleDelete(type: "student" | "staff" | "allocation" | "subject" | "form_assignment", id: string) {
     setPendingDelete(null);
     setDeleting(true);
     try {
@@ -463,6 +486,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     { key: "Staff", label: "Staff", icon: UserCog },
     { key: "Subjects", label: "Subjects", icon: BookOpen },
     { key: "Allocate", label: "Allocate", icon: Layers },
+    { key: "Forms", label: "Form Classes", icon: GraduationCap },
   ];
 
   const isEditingStudent = !!(editingRecord && activeTab === "Students" && "student_id" in editingRecord);
