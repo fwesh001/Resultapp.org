@@ -247,30 +247,18 @@ def get_classes(term: Optional[str] = None, academic_session: Optional[str] = No
         _close(conn)
 
 
-@router.get("/missing", summary="Missing grades grouped by subject + staff")
-def get_missing(class_name: str, term: str, tenant_id: str = ""):
-    """Cross-reference roster × allocations × grades.
+def _missing_for_class(cur, tid: str, t: str, cls: str) -> dict:
+    """Per-class missing-grades payload on an already-open cursor.
 
-    Expected subjects for the class come from tenant_allocations
-    (subject_name, staff_name). A student is pending for a subject when
-    no tenant_grades row exists for (subdomain, student_id, subject, term).
+    Shared core for GET /missing (single class) and GET /missing-batch
+    (many classes, one connection). Cross-references roster × allocations ×
+    grades: expected subjects come from tenant_allocations; a student is
+    pending for a subject when no tenant_grades row exists for
+    (subdomain, student_id, subject, term). pending_students previews are
+    capped at 50 per subject (counts stay exact); graded_students is
+    deliberately uncapped — publish depends on the full list.
     """
-    from services.db_manager import _connect_as_superuser
-
-    tid = _validate_tenant_id(tenant_id)
-    _ensure_tenant(tid)
-    t, _session = _resolve_term_session(term, None)
-    if not t:
-        raise HTTPException(status_code=400, detail="term is required")
-    cls = (class_name or "").strip()
-    if not cls:
-        raise HTTPException(status_code=400, detail="class_name is required")
-
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-        # Roster for the class.
+    # Roster for the class.
         cur.execute(
             """
             SELECT student_id, full_name
