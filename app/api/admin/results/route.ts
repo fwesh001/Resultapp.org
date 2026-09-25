@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
   const academicSession = searchParams.get("academic_session") || "";
   const view = searchParams.get("view") || "";
   const className = searchParams.get("class_name") || "";
+  const classNames = searchParams.get("class_names") || "";
 
   if (!tenantId) {
     return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
@@ -77,6 +78,21 @@ export async function GET(req: NextRequest) {
       const qs = new URLSearchParams({ class_name: className, term });
       const data = await proxyGet(
         `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/command-center/missing?${qs.toString()}`,
+        secret,
+      );
+      return NextResponse.json({ success: true, ...(data as Record<string, unknown>) });
+    }
+    // Batch passthrough (H2): ?view=missing-batch&class_names=JSS1,JSS2&term=Term%201
+    if (view === "missing-batch") {
+      if (!classNames || !term) {
+        return NextResponse.json(
+          { success: false, error: "view=missing-batch requires class_names and term" },
+          { status: 400 },
+        );
+      }
+      const qs = new URLSearchParams({ class_names: classNames, term });
+      const data = await proxyGet(
+        `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/command-center/missing-batch?${qs.toString()}`,
         secret,
       );
       return NextResponse.json({ success: true, ...(data as Record<string, unknown>) });
