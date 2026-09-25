@@ -411,6 +411,89 @@ def _build_grouped_template(academic_structure: Optional[Dict[str, Any]]) -> Opt
     }
 
 
+def _rank_class_stats_sql(cur, subject_names, class_student_ids_lower, peer_totals):
+    """Class averages + competition ranks via SQL window functions (H1).
+
+    `peer_totals`: {(sid_lower, subject): total} computed once in Python with
+    the canonical total helpers (alias/weight fidelity stays in Python).
+    Postgres builds the full roster×subjects grid (missing cells count as 0,
+    matching the legacy zero-fill rule) and returns AVG() per subject,
+    RANK() per subject (competition rank: 1 + strictly-greater count, ties
+    share a rank), plus grand totals and overall RANK().
+
+    Returns (per_subject, grand_totals, grand_ranks):
+      per_subject: {subject: (avg_float, {sid_lower: rank_int})}
+      grand_totals: {sid_lower: grand_float}
+      grand_ranks: {sid_lower: rank_int}
+    """
+    peers = [k[0] for k in peer_totals.keys()]
+    subjs = [k[1] for k in peer_totals.keys()]
+    totals = [float(v) for v in peer_totals.values()]
+    cur.execute(
+        """
+        WITH subjects(s) AS (SELECT UNNEST(%s::text[])),
+        roster(sid) AS (SELECT UNNEST(%s::text[])),
+        given(peer, subj, total) AS (
+          SELECT UNNEST(%s::text[]), UNNEST(%s::text[]), UNNEST(%s::float8[])
+        ),
+        grid AS (
+          SELECT r.sid AS sid, s.s AS subj, COALESCE(g.total, 0.0) AS total
+          FROM roster r CROSS JOIN subjects s
+          LEFT JOIN given g ON g.peer = r.sid AND g.subj = s.s
+        ),
+        per_subj AS (
+          SELECT sid, subj, total,
+                 AVG(total) OVER (PARTITION BY subj) AS avg_subj,
+                 RANK() OVER (PARTITION BY subj ORDER BY total DESC) AS rnk_subj
+          FROM grid
+        ),
+        grand AS (
+          SELECT sid, SUM(total) AS gtotal FROM grid GROUP BY sid
+        ),
+        grand_ranked AS (
+          SELECT sid, gtotal, RANK() OVER (ORDER BY gtotal DESC) AS rnk_all FROM grand
+        )
+        SELECT p.subj, p.sid, p.avg_subj, p.rnk_subj, gr.gtotal, gr.rnk_all
+        FROM per_subj p JOIN grand_ranked gr ON gr.sid = p.sid;
+        """,
+        (subject_names, class_student_ids_lower, peers, subjs, totals),
+    )
+    per_subject: Dict[str, Any] = {}
+    grand_totals: Dict[str, float] = {}
+    grand_ranks: Dict[str, int] = {}
+    for subj, sid, avg_s, rnk_s, gtotal, rnk_all in cur.fetchall():
+        entry = per_subject.get(subj)
+        if entry is None:
+            entry = [float(avg_s or 0.0), {}]
+            per_subject[subj] = entry
+        entry[1][sid] = int(rnk_s)
+        grand_totals[sid] = float(gtotal or 0.0)
+        grand_ranks[sid] = int(rnk_all)
+    return per_subject, grand_totals, grand_ranks
+
+
+def _zero_class_stats(subject_names, class_student_ids_lower):
+    """Degradation fallback: all-zero grid (mirrors the legacy zero-maps).
+
+    AVG = 0.0 per subject; every peer ties at rank 1 overall and per subject.
+    """
+    per_subject = {s: (0.0, {sid: 1 for sid in class_student_ids_lower}) for s in subject_names}
+    grand_totals = {sid: 0.0 for sid in class_student_ids_lower}
+    grand_ranks = {sid: 1 for sid in class_student_ids_lower}
+    return per_subject, grand_totals, grand_ranks
+
+
+def _peer_total_for_scores(academic_structure, pr_scores) -> float:
+    """One peer row's total via the canonical chain (granular, else weighted)."""
+    if not isinstance(pr_scores, dict):
+        pr_scores = {}
+    br = _extract_breakdown(pr_scores)
+    gt = _compute_simple_granular_total(br)
+    if gt is None:
+        gt = _compute_total(academic_structure, pr_scores)
+    return float(gt)
+
+
 @router.get("/{student_id:path}", summary="Report card bundle: student bio + template + grades + behavioural + summary + rankings")
 def get_report_bundle(
     tenant_id: str,
@@ -615,15 +698,24 @@ def get_report_bundle(
         if student is not None and grades_out and class_name and class_student_ids:
             # Build subject list from this student's grades
             subject_names = [g["subject_name"] for g in grades_out]
+            # Normalize roster once (case-insensitive during migration).
+            class_ids_lower = [
+                s.lower() if isinstance(s, str) else str(s).lower() for s in class_student_ids
+            ]
+            sid_lower = sid.lower() if isinstance(sid, str) else str(sid).lower()
 
-            # Bulk fetch peers' grades for those subjects/term (tenant_grades primary)
-            # Map: subject -> list of totals per peer
-            subject_totals_map: Dict[str, List[float]] = {s: [] for s in subject_names}
-            grand_totals_map: Dict[str, float] = {sid_peer: 0.0 for sid_peer in class_student_ids}
+            # Bulk fetch peers' grades for those subjects/term (tenant_grades primary).
+            # Per-row totals use the canonical chain (granular, else weighted) in
+            # ONE Python pass; averages + competition ranks come from SQL window
+            # functions over the roster×subjects grid (H1 hybrid).
+            per_subject: Dict[str, Any] = {}
+            grand_totals: Dict[str, float] = {}
+            grand_ranks: Dict[str, int] = {}
 
             try:
                 # Fetch from tenant_grades bulk
                 # Use psycopg2 ANY for arrays
+                peer_totals: Dict[tuple, float] = {}
                 if subject_names:
                     cur.execute(
                         f"""
@@ -634,40 +726,15 @@ def get_report_bundle(
                         (tid, term, subject_names, class_student_ids),
                     )
                     peer_rows = cur.fetchall()
-                    # Group by peer and subject, compute granular total per row
-                    # For accurate grand totals, need per peer per subject total
-                    peer_subject_total: Dict[tuple, float] = {}
                     for pr_sid, pr_subj, pr_scores in peer_rows:
-                        pr_scores = pr_scores or {}
-                        if not isinstance(pr_scores, dict):
-                            pr_scores = {}
-                        br = _extract_breakdown(pr_scores)
-                        gt = _compute_simple_granular_total(br)
-                        if gt is None:
-                            gt = _compute_total(academic_structure, pr_scores)
-                        peer_subject_total[(pr_sid, pr_subj)] = float(gt)
-                        # also store lower variant for case-insensitive lookup during migration
-                        _low = pr_sid.lower() if isinstance(pr_sid, str) else str(pr_sid).lower()
-                        if _low != pr_sid:
-                            peer_subject_total[(_low, pr_subj)] = float(gt)
+                        key = (
+                            pr_sid.lower() if isinstance(pr_sid, str) else str(pr_sid).lower(),
+                            pr_subj,
+                        )
+                        peer_totals[key] = _peer_total_for_scores(academic_structure, pr_scores or {})
 
-                    # Populate subject totals map and grand totals
-                    for subj in subject_names:
-                        for peer_sid in class_student_ids:
-                            tot = peer_subject_total.get((peer_sid, subj))
-                            if tot is None:
-                                tot = peer_subject_total.get((peer_sid.lower() if isinstance(peer_sid, str) else str(peer_sid).lower(), subj))
-                            if tot is None:
-                                # No record for this peer/subject -> treat as 0 for average but still counts towards denominator
-                                tot = 0.0
-                            subject_totals_map[subj].append(float(tot))
-                            grand_totals_map[peer_sid] += float(tot)
-
-                    # Fallback supplement from legacy if tenant_grades gave sparse data and legacy exists
-                    # Check if any subject has zero totals for all peers but legacy may have data
-                    # Simple heuristic: if all totals for a subject are 0 and grades_out came from legacy, legacy already covered.
-                    # But to handle mixed migration, we could also supplement legacy totals if peer_subject_total missing and legacy has record
-                    # For brevity, only supplement if tenant_grades peer_rows empty
+                    # Legacy supplement (migration safety net): only when
+                    # tenant_grades yielded nothing, same as before.
                     if not peer_rows:
                         # Try legacy bulk — case-insensitive for migration window
                         from sqlalchemy import func as _func3
@@ -681,69 +748,60 @@ def get_report_bundle(
                             )
                             .all()
                         )
-                        # Reset maps
-                        subject_totals_map = {s: [] for s in subject_names}
-                        grand_totals_map = {sid_peer: 0.0 for sid_peer in class_student_ids}
-                        leg_map: Dict[tuple, float] = {}
                         for rec in legacy_rows:
                             k = (rec.student_id.lower() if isinstance(rec.student_id, str) else str(rec.student_id).lower(), rec.subject)
                             sc = getattr(rec, "scores", {}) or {}
+                            # Same priority as before: granular breakdown first,
+                            # then stored total_score, then weighted fallback.
                             br = _extract_breakdown(sc)
                             gt = _compute_simple_granular_total(br)
-                            if gt is None:
-                                gt_val = getattr(rec, "total_score", None)
-                                if gt_val is None:
-                                    gt_val = _compute_total(academic_structure, sc)
+                            if gt is not None:
+                                peer_totals[k] = float(gt)
+                                continue
+                            gt_val = getattr(rec, "total_score", None)
+                            if gt_val is not None:
                                 try:
-                                    gt = float(gt_val)
+                                    peer_totals[k] = float(gt_val)
+                                    continue
                                 except Exception:
-                                    gt = 0.0
-                            leg_map[k] = float(gt)  # type: ignore
-                        for subj in subject_names:
-                            for peer_sid in class_student_ids:
-                                tot = leg_map.get((peer_sid.lower() if isinstance(peer_sid, str) else str(peer_sid).lower(), subj), 0.0)
-                                # fallback try original case
-                                if tot == 0.0:
-                                    tot = leg_map.get((peer_sid, subj), 0.0)
-                                subject_totals_map[subj].append(float(tot))
-                                grand_totals_map[peer_sid] += float(tot)
+                                    pass
+                            peer_totals[k] = _peer_total_for_scores(academic_structure, sc)
+
+                if peer_totals:
+                    per_subject, grand_totals, grand_ranks = _rank_class_stats_sql(
+                        cur, subject_names, class_ids_lower, peer_totals
+                    )
+                else:
+                    per_subject, grand_totals, grand_ranks = _zero_class_stats(
+                        subject_names, class_ids_lower
+                    )
             except Exception as e:
                 logger.warning(f"[report:classStats] bulk fetch failed for {tid}/{class_name}/{term}: {e}")
-                # keep maps with zeros
+                per_subject, grand_totals, grand_ranks = _zero_class_stats(
+                    subject_names, class_ids_lower
+                )
 
             # Now enrich grades_out with classAverage and subjectPosition
             for g in grades_out:
                 subj = g["subject_name"]
-                totals_for_subj = subject_totals_map.get(subj, [])
-                if totals_for_subj and no_in_class > 0:
-                    avg = round(sum(totals_for_subj) / no_in_class, 1)
+                entry = per_subject.get(subj)
+                if entry is not None and no_in_class > 0:
+                    avg = round(float(entry[0]), 1)
                 else:
                     # fallback average of this subject alone (just my total) if no peers
                     avg = round(float(g["total"]), 1) if no_in_class else 0.0
                 g["classAverage"] = avg
 
-                # Standard competition ranking: 1 + count of strictly greater totals
-                my_total = float(g["total"])
-                greater = sum(1 for t in totals_for_subj if t > my_total)
-                pos = greater + 1 if totals_for_subj else 1
+                # Competition rank from SQL (ties share a rank).
+                pos = int(entry[1].get(sid_lower, 1)) if entry is not None else 1
                 g["subjectPosition"] = pos
                 g["subjectPositionOrdinal"] = _ordinal(pos)
 
                 # Also expose A1..Exam breakdown already in g["breakdown"]
 
-            # Overall ranking — case-insensitive lookup for pre-migration UPPER rows
-            my_grand_total = grand_totals_map.get(sid, None)
-            if my_grand_total is None:
-                # try lower/upper variant
-                for k, v in grand_totals_map.items():
-                    if k.lower() == sid.lower():
-                        my_grand_total = v
-                        break
-                if my_grand_total is None:
-                    my_grand_total = 0.0
-            # Count peers with greater grand total
-            greater_overall = sum(1 for v in grand_totals_map.values() if v > my_grand_total)
-            overall_position = (greater_overall + 1) if grand_totals_map else 1
+            # Overall ranking from SQL grand totals.
+            my_grand_total = grand_totals.get(sid_lower, 0.0)
+            overall_position = int(grand_ranks.get(sid_lower, 1)) if grand_ranks else 1
             overall_position_ordinal = _ordinal(overall_position)
         else:
             # No student or no grades: keep subject stats null
