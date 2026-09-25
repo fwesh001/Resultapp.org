@@ -12,7 +12,8 @@ from main import app  # noqa: E402
 client = TestClient(app, raise_server_exceptions=False)
 
 targets = [
-    "/api/v1/tenant/vhs/staff/forms/JSS1?term=Term%201",
+    # Correct full path incl. /grading/ segment.
+    "/api/v1/tenant/vhs/staff/grading/forms/JSS1?term=Term%201",
     "/api/v1/tenant/vhs/staff/grading/JSS1/Maths?term=Term%201",
 ]
 for t in targets:
