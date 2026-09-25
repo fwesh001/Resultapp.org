@@ -1720,6 +1720,7 @@ TENANT_STAFF_TABLE = "tenant_staff"
 TENANT_ALLOCATIONS_TABLE = "tenant_allocations"
 TENANT_SUBJECTS_TABLE = "tenant_subjects"
 TENANT_GRADES_TABLE = "tenant_grades"
+TENANT_FORM_ASSIGNMENTS_TABLE = "tenant_form_assignments"
 
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
 
@@ -1811,6 +1812,26 @@ def init_roster_registry() -> None:
                 UNIQUE(subdomain, student_id, subject_name, term)
             );
         """)
+
+        # Form assignments — exactly ONE form teacher per class (contextual allocations).
+        # staff_id is a logical link to tenant_staff.staff_id (not an FK so
+        # roster edits never cascade). Empty table = no behavior change.
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_FORM_ASSIGNMENTS_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                class_name VARCHAR(60) NOT NULL,
+                staff_id VARCHAR(60) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, class_name)
+            );
+        """)
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_subdomain ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain);")
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_staff ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain, staff_id);")
+
+        # Remarks — nullable per-student per-subject per-term comment, form-teacher-only writes.
+        cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS remarks TEXT;")
 
         # Indexes for fast subdomain-scoped lookups
         for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE, TENANT_GRADES_TABLE]:
