@@ -47,25 +47,32 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
   const rootRef = useRef<HTMLDivElement>(null);
   const tid = (tenantId || "").toLowerCase().trim();
 
-  const pollUnread = useCallback(async (): Promise<boolean> => {
-    if (!tid) return true;
-    // Hidden tabs never hit the network (C1 visibility gate).
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return true;
+  const loadInbox = useCallback(async () => {
+    if (!tid) return;
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/notifications/unread-count?tenant_id=${encodeURIComponent(tid)}`, {
-        cache: "no-store",
-      });
-      if (res.status === 401) return true; // signed out — stay silent, no backoff
+      const res = await fetch(
+        `/api/notifications/inbox?tenant_id=${encodeURIComponent(tid)}&limit=${INBOX_LIMIT}&offset=0`,
+        { cache: "no-store" },
+      );
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setUnread(Number((data as { unread_count?: number }).unread_count || 0));
-        return true;
-      }
-      return false;
-    } catch {
-      // best-effort poll — never surface errors for the badge
-      return false;
+      if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
+      setItems(((data as { notifications?: InboxNotification[] }).notifications || []).slice(0, INBOX_LIMIT));
+      setUnread(Number((data as { unread_count?: number }).unread_count || 0));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load notifications");
+    } finally {
+      setLoading(false);
     }
+  }, [tid]);
+
+  // Shared badge subscription — one poller per tenant no matter how many
+  // bell instances are mounted (mobile + desktop shells). Fan-out keeps
+  // every badge consistent from a single fetch per interval.
+  useEffect(() => {
+    if (!tid) return;
+    return subscribeUnread(tid, setUnread);
   }, [tid]);
 
   const loadInbox = useCallback(async () => {
