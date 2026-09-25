@@ -570,7 +570,6 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                     )}
                   </tbody>
                 </table>
-                </table>
               </div>
               <PaginationBar
                 page={page}
