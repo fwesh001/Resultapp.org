@@ -84,8 +84,8 @@ def _serialize_rows(cursor, rows):
 # GET — fetch all lists for tenant (now 4: students, staff, allocations, subjects)
 # ---------------------------------------------------------------------------
 
-@router.get("", summary="List students, staff, allocations, subjects for tenant")
-def list_roster(tenant_id: str):
+@router.get("", summary="List roster for tenant (paginated per entity; legacy full blob when entity_type omitted)")
+def list_roster(tenant_id: str, entity_type: Optional[str] = None, page: int = 1, limit: int = 20):
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant_exists(tid)
 
@@ -97,6 +97,81 @@ def list_roster(tenant_id: str):
         _connect_as_superuser,
     )
 
+    # Paginated path — one entity per request: COUNT(*) + LIMIT/OFFSET.
+    # Shape: { subdomain, entity_type, data, total, page, limit }.
+    if entity_type is not None:
+        entity = (entity_type or "").strip().lower()
+        entity_map = {
+            "students": (
+                TENANT_STUDENTS_TABLE,
+                "id, subdomain, student_id, full_name, class_name, gender, created_at",
+            ),
+            "staff": (
+                TENANT_STAFF_TABLE,
+                "id, subdomain, staff_id, full_name, email, phone, role, created_at",
+            ),
+            "allocations": (
+                TENANT_ALLOCATIONS_TABLE,
+                "id, subdomain, subject_name, staff_name, class_name, created_at",
+            ),
+            "subjects": (
+                TENANT_SUBJECTS_TABLE,
+                "id, subdomain, subject_name, created_at",
+            ),
+        }
+        if entity not in entity_map:
+            raise HTTPException(
+                status_code=400,
+                detail="entity_type must be one of students, staff, allocations, subjects",
+            )
+        table, columns = entity_map[entity]
+        try:
+            page = max(1, int(page or 1))
+        except Exception:
+            page = 1
+        try:
+            limit = max(1, min(int(limit or 20), 100))
+        except Exception:
+            limit = 20
+        offset = (page - 1) * limit
+
+        conn = None
+        try:
+            conn = _connect_as_superuser()
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE subdomain = %s",
+                (tid,),
+            )
+            total = int(cur.fetchone()[0] or 0)
+            cur.execute(
+                f"SELECT {columns} FROM {table} WHERE subdomain = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (tid, limit, offset),
+            )
+            data = _serialize_rows(cur, cur.fetchall())
+            return {
+                "subdomain": tid,
+                "entity_type": entity,
+                "data": data,
+                "total": total,
+                "page": page,
+                "limit": limit,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception(f"[roster] paginated list failed for {tid}/{entity}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to list {entity}: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    # Backward-compatibility branch — legacy callers with no entity_type get
+    # the full four-entity blob (unbounded; deprecated, prefer paginated path).
+    logger.warning(f"[roster] legacy un-paginated list used for '{tid}' — migrate to entity_type+page+limit")
     conn = None
     try:
         conn = _connect_as_superuser()
