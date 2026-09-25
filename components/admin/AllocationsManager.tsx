@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search, Upload } from "lucide-react";
+import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search, Upload, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -14,8 +14,9 @@ type Student = { id: string; subdomain: string; student_id: string; full_name: s
 type Staff = { id: string; subdomain: string; staff_id: string; full_name: string; email: string | null; phone: string | null; role: string; created_at: string };
 type Allocation = { id: string; subdomain: string; subject_name: string; staff_name: string; class_name: string; created_at: string };
 type Subject = { id: string; subdomain: string; subject_name: string; created_at: string };
+type FormAssignment = { id: string; subdomain: string; class_name: string; staff_id: string; full_name: string | null; created_at: string };
 
-type Tab = "Students" | "Staff" | "Subjects" | "Allocate";
+type Tab = "Students" | "Staff" | "Subjects" | "Allocate" | "Forms";
 
 const STAFF_ROLES = ["Teacher", "Form Master", "Vice Principal", "Principal", "Admin"] as const;
 const STANDARD_SUBJECTS = [
@@ -36,6 +37,7 @@ const TAB_ENTITY: Record<Tab, string> = {
   Staff: "staff",
   Subjects: "subjects",
   Allocate: "allocations",
+  Forms: "form_assignments",
 };
 
 function PaginationBar({ page, total, loaded, onPrev, onNext }: { page: number; total: number; loaded: number; onPrev: () => void; onNext: () => void }) {
@@ -71,12 +73,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [activeTab, setActiveTab] = useState<Tab>("Students");
   // Server-side pagination (C2): one entity per page, 20 rows.
   const [page, setPage] = useState(1);
-  const [totals, setTotals] = useState<Record<Tab, number>>({ Students: 0, Staff: 0, Subjects: 0, Allocate: 0 });
+  const [totals, setTotals] = useState<Record<Tab, number>>({ Students: 0, Staff: 0, Subjects: 0, Allocate: 0, Forms: 0 });
 
   const [students, setStudents] = useState<Student[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [formAssignments, setFormAssignments] = useState<FormAssignment[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showAllocModal, setShowAllocModal] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
   const [bulkEntity, setBulkEntity] = useState<BulkEntity | null>(null);
 
   // forms
@@ -100,9 +104,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [staffForm, setStaffForm] = useState({ staff_id: "", full_name: "", email: "", phone: "", role: "Teacher" });
   const [subjectForm, setSubjectForm] = useState({ subject_name: "" });
   const [allocForm, setAllocForm] = useState({ class_name: "", subject_name: "", staff_name: "" });
+  const [formAssignForm, setFormAssignForm] = useState({ class_name: "", staff_id: "" });
 
   const [submitting, setSubmitting] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<{ type: "student" | "staff" | "allocation" | "subject"; id: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ type: "student" | "staff" | "allocation" | "subject" | "form_assignment"; id: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Computed available classes from registered students (unique, sorted)
@@ -141,6 +146,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       if (tab === "Students") setStudents(rows as Student[]);
       else if (tab === "Staff") setStaff(rows as Staff[]);
       else if (tab === "Subjects") setSubjects(rows as Subject[]);
+      else if (tab === "Forms") setFormAssignments(rows as FormAssignment[]);
       else setAllocations(rows as Allocation[]);
       setTotals((prev) => ({ ...prev, [tab]: total }));
     } catch (e) {
