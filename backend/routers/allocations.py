@@ -282,7 +282,7 @@ from pydantic import BaseModel, Field
 from typing import Optional as Opt, List
 
 class RosterCreate(BaseModel):
-    type: Literal["student", "staff", "allocation", "subject", "bulk_subjects"] = Field(..., description='Record type')
+    type: Literal["student", "staff", "allocation", "subject", "bulk_subjects", "form_assignment"] = Field(..., description='Record type')
     # student
     student_id: Opt[str] = None
     full_name: Opt[str] = None
@@ -310,6 +310,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
         TENANT_SUBJECTS_TABLE,
+        TENANT_FORM_ASSIGNMENTS_TABLE,
         _connect_as_superuser,
         _row_to_dict,
     )
@@ -321,6 +322,46 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+
+        if typ == "form_assignment":
+            # Admin-only upstream (proxy enforces admin_session). Exactly one
+            # form teacher per class: re-assigning overwrites via upsert.
+            class_name = (payload.class_name or "").strip()
+            staff_id = (payload.staff_id or "").strip()
+            if not class_name or not staff_id:
+                raise HTTPException(status_code=400, detail="form_assignment requires class_name and staff_id")
+            cur.execute(
+                f"SELECT 1 FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s LIMIT 1;",
+                (tid, class_name),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=422, detail=f"Unknown class '{class_name}' — no students registered in it")
+            cur.execute(
+                f"SELECT staff_id, full_name FROM {TENANT_STAFF_TABLE} WHERE subdomain = %s AND LOWER(staff_id) = LOWER(%s) LIMIT 1;",
+                (tid, staff_id),
+            )
+            _srow = cur.fetchone()
+            if _srow is None:
+                raise HTTPException(status_code=422, detail=f"Unknown staff_id '{staff_id}'")
+            staff_id = str(_srow[0])
+            cur.execute(
+                f"""
+                INSERT INTO {TENANT_FORM_ASSIGNMENTS_TABLE} (subdomain, class_name, staff_id, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (subdomain, class_name)
+                DO UPDATE SET staff_id = EXCLUDED.staff_id, updated_at = NOW()
+                RETURNING id, subdomain, class_name, staff_id, created_at;
+                """,
+                (tid, class_name, staff_id),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            d = _row_to_dict(row, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            d["id"] = str(d["id"])
+            d["staff_name"] = str(_srow[1])
+            return {"type": "form_assignment", "record": d}
 
         if typ == "subject":
             subject_name = (payload.subject_name or "").strip()
