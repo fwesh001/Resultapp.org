@@ -435,6 +435,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       if (type === "bulk_subjects") {
         const count = (data as { count?: number }).count ?? 0;
         setSuccess(`Quick add: ${count} subjects added (duplicates skipped)`);
+      } else if (type === "form_assignment") {
+        setSuccess("Form teacher assigned");
       } else {
         setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} added`);
       }
