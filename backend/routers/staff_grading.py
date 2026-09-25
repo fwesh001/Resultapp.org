@@ -358,17 +358,40 @@ def post_grading_batch(
                 academic_updates.setdefault(sid, {})[assessment_key] = val
 
         all_sids = set(academic_updates) | set(trait_updates)
-        for sid in all_sids:
-            cur.execute(
-                f"""
-                INSERT INTO {TENANT_GRADES_TABLE} (subdomain, student_id, subject_name, term, academic_scores, behavioural_traits)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb)
-                ON CONFLICT (subdomain, student_id, subject_name, term)
-                DO UPDATE SET academic_scores = {TENANT_GRADES_TABLE}.academic_scores || EXCLUDED.academic_scores,
-                              behavioural_traits = {TENANT_GRADES_TABLE}.behavioural_traits || EXCLUDED.behavioural_traits,
-                              updated_at = NOW()
-                """,
-                (tid, sid, subject_name, payload.term, json.dumps(academic_updates.get(sid, {})), json.dumps(trait_updates.get(sid, {}))),
+        if not all_sids:
+            raise HTTPException(status_code=422, detail="No scores to save")
+        rows = [
+            (
+                tid,
+                sid,
+                subject_name,
+                payload.term,
+                json.dumps(academic_updates.get(sid, {})),
+                json.dumps(trait_updates.get(sid, {})),
+            )
+            for sid in all_sids
+        ]
+        # Single round-trip batched upsert (Option B): one server round-trip
+        # regardless of class size. Same JSONB-merge semantics as the former
+        # per-student loop (single-assessment saves never wipe siblings).
+        from psycopg2.extras import execute_values
+
+        upsert_sql = (
+            f"INSERT INTO {TENANT_GRADES_TABLE} "
+            "(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits) "
+            "VALUES %s "
+            "ON CONFLICT (subdomain, student_id, subject_name, term) "
+            f"DO UPDATE SET academic_scores = {TENANT_GRADES_TABLE}.academic_scores || EXCLUDED.academic_scores, "
+            f"behavioural_traits = {TENANT_GRADES_TABLE}.behavioural_traits || EXCLUDED.behavioural_traits, "
+            "updated_at = NOW()"
+        )
+        # Chunk to bound single-statement size for very large classes.
+        for _i in range(0, len(rows), 500):
+            execute_values(
+                cur,
+                upsert_sql,
+                rows[_i : _i + 500],
+                template="(%s, %s, %s, %s, %s::jsonb, %s::jsonb)",
             )
         conn.commit()
         logger.info(f"[staff-grading] batch saved {tid}/{class_name}/{subject_name}/{assessment_key} for {len(all_sids)} students")
