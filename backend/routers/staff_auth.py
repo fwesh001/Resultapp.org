@@ -194,6 +194,84 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
                 pass
 
 
+# ---------------------------------------------------------------------------
+# PATCH /{identifier}/profile — self-service signature upload (staff-only)
+# ---------------------------------------------------------------------------
+
+class StaffProfileUpdate(BaseModel):
+    signature_url: Optional[str] = Field(default=None, max_length=512)
+
+
+@router.patch("/{identifier}/profile", summary="Update own staff profile (signature)")
+def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileUpdate):
+    """Update a staffer's own signature_url. Identity enforcement (caller may
+    only edit their own row) lives in the Next.js proxy via staff_session;
+    this router trusts the proxy under the shared secret (established pattern).
+    """
+    from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser, _row_to_dict
+    from datetime import datetime
+
+    tid = _validate_tenant_id(tenant_id)
+    ident = (identifier or "").strip()
+    if not ident:
+        raise HTTPException(status_code=400, detail="identifier is required")
+    if payload.signature_url is None:
+        raise HTTPException(status_code=400, detail="signature_url is required")
+    url = payload.signature_url.strip()
+    if len(url) > 512:
+        raise HTTPException(status_code=422, detail="signature_url too long (max 512 chars)")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {TENANT_STAFF_TABLE} SET signature_url = %s
+            WHERE subdomain = %s
+              AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
+            RETURNING id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at;
+            """,
+            (url or None, tid, ident, ident, ident),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Staff not found")
+        row = cur.fetchone()
+        conn.commit()
+        d = _row_to_dict(row, cur)
+        d["id"] = str(d["id"])
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        return {"success": True, "staff": d}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[staff_auth] profile update failed for {tid}/{ident}: {e}")
+        raise HTTPException(status_code=500, detail=f"Profile update failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[staff_auth] dashboard failed for {tid}/{sid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load dashboard: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.get("/dashboard", summary="Get staff dashboard allocations (query-param staff_id)")
 def staff_dashboard_by_query(tenant_id: str, staff_id: str = ""):
     """Query-param variant — the canonical route for staff_ids containing "/"."""
