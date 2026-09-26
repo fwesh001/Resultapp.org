@@ -278,6 +278,17 @@ async def root():
         "provision": "POST /api/v1/provision (requires X-API-SECRET-KEY)",
     }
 
+@app.get("/api/version", tags=["health"])
+async def version():
+    """Report the exact code revision serving traffic.
+
+    Answers "did the deploy actually take effect?" without guessing: compare
+    `commit` here against `git rev-parse --short HEAD` in the checkout.
+    Computed once at import; falls back to "unknown" (never fails startup).
+    """
+    return {"service": "resultapp backend", "commit": _SERVER_COMMIT, "status": "ok"}
+
+
 @app.get("/health", tags=["health"])
 async def health():
     db_ok = test_connection()
