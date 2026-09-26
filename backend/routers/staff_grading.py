@@ -279,6 +279,17 @@ def get_form_grid(
         )
         subjects = [r[0] for r in cur.fetchall() if r[0]]
 
+        # Teacher's own auto-remark scheme for this class (may be empty).
+        cur.execute(
+            f"""
+            SELECT teacher_remark_scheme FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+            WHERE subdomain = %s AND class_name = %s LIMIT 1
+            """,
+            (tid, class_name),
+        )
+        _srow = cur.fetchone()
+        teacher_scheme = _srow[0] if _srow and isinstance(_srow[0], list) else []
+
         is_form_teacher = False
         _caller = (staff_id or "").strip()
         if _caller:
@@ -307,6 +318,9 @@ def get_form_grid(
             "students": students,
             "traits": traits,
             "remarks": remarks,
+            "form_teacher_remarks": form_teacher_remarks,
+            "averages": averages,
+            "teacher_scheme": teacher_scheme,
             "subjects": subjects,
             "allowed_traits": traits_allowed,
             "scale": scale_allowed,
