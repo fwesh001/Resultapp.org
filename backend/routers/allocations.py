@@ -1091,6 +1091,7 @@ class RosterPatch(BaseModel):
     email: Opt[str] = None
     phone: Opt[str] = None
     role: Opt[str] = None
+    signature_url: Opt[str] = None
 
 
 @router.patch("/{record_type}/{record_id}", summary="Update a roster record (partial)")
@@ -1150,11 +1151,16 @@ def update_roster_record(tenant_id: str, record_type: str, record_id: str, paylo
             if v not in allowed_roles:
                 raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
             updates["role"] = v
+        if payload.signature_url is not None:
+            v = payload.signature_url.strip()
+            if len(v) > 512:
+                raise HTTPException(status_code=422, detail="signature_url too long (max 512 chars)")
+            updates["signature_url"] = v or None
         if not updates:
-            raise HTTPException(status_code=400, detail="No updatable fields provided (full_name, email, phone, role)")
+            raise HTTPException(status_code=400, detail="No updatable fields provided (full_name, email, phone, role, signature_url)")
 
         table = "tenant_staff"
-        returning = "id, subdomain, staff_id, full_name, email, phone, role, created_at"
+        returning = "id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at"
 
     # Do NOT allow updating student_id / staff_id per spec (ID immutable)
     set_clause = ", ".join(f"{col} = %s" for col in updates)
