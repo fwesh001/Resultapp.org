@@ -370,16 +370,6 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
               >
                 Publish selected ({selectedNames.length})
               </button>
-              <button
-                type="button"
-                disabled={applyingRemarks || publishing || selectedNames.length === 0}
-                onClick={() => confirmApplyRemarks(selectedNames)}
-                title="Evaluate the principal remark scheme against unpublished students in the selected classes"
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-5 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {applyingRemarks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                ✨ Auto-Apply Principal Remarks
-              </button>
             </div>
           </div>
 
