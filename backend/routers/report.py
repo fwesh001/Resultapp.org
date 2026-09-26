@@ -580,15 +580,26 @@ def get_report_bundle(
 
             # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows
             cur.execute(
-                f"SELECT subject_name, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY subject_name",
+                f"SELECT subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark, principal_remark FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY subject_name",
                 (tid, sid, term),
             )
             rows = cur.fetchall()
+            # Smart Remarks outputs: first non-empty across subject rows.
+            # form_teacher_remark preferred, legacy `remarks` as fallback.
+            form_teacher_remark_out: Optional[str] = None
+            principal_remark_out: Optional[str] = None
             if rows:
                 for r in rows:
                     subject_name = r[0]
                     academic_scores = r[1] or {}
                     behavioural_traits = r[2] or {}
+                    if form_teacher_remark_out is None:
+                        for cand in (r[4], r[3]):
+                            if isinstance(cand, str) and cand.strip():
+                                form_teacher_remark_out = cand.strip()
+                                break
+                    if principal_remark_out is None and isinstance(r[5], str) and r[5].strip():
+                        principal_remark_out = r[5].strip()
                     if not isinstance(academic_scores, dict):
                         academic_scores = {}
                     if not isinstance(behavioural_traits, dict):
