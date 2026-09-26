@@ -71,6 +71,9 @@ interface ReportResponse {
   behavioural: Record<string, string>;
   form_teacher_remark?: string | null;
   principal_remark?: string | null;
+  published_at?: string | null;
+  form_teacher_name?: string | null;
+  form_teacher_signature_url?: string | null;
   summary: {
     totalScore: number;
     average: number;
@@ -87,7 +90,7 @@ interface ReportResponse {
   student_id: string;
   attendance?: { present: number | null; outOf: number | null };
   termMeta?: { termEnding: string | null; newTermBegins: string | null };
-  school?: { school_name?: string | null; address?: string | null; new_term_begins?: string | null; logo_url?: string | null; motto?: string | null } | null;
+  school?: { school_name?: string | null; address?: string | null; new_term_begins?: string | null; logo_url?: string | null; motto?: string | null; principal_signature_url?: string | null } | null;
 }
 
 interface StudentReportCardProps {
@@ -209,6 +212,10 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const behavioural = data?.behavioural ?? {};
   const formTeacherRemark = (data?.form_teacher_remark || "").trim();
   const principalRemark = (data?.principal_remark || "").trim();
+  const publishedDisplay = data?.published_at ? formatTermDate(data.published_at) : "";
+  const formTeacherName = (data?.form_teacher_name || "").trim();
+  const formTeacherSig = (data?.form_teacher_signature_url || "").trim();
+  const principalSig = (schoolFromReport?.principal_signature_url || "").trim();
   const summary = data?.summary ?? {
     totalScore: 0,
     average: 0,
