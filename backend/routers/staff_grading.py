@@ -223,17 +223,28 @@ def get_form_grid(
 
         traits: Dict[str, Dict[str, str]] = {}
         remarks: Dict[str, str] = {}
+        form_teacher_remarks: Dict[str, str] = {}
+        # Per-student average inputs: subject -> total via the canonical chain.
+        subject_totals: Dict[str, Dict[str, float]] = {}
         if student_ids:
             cur.execute(
                 f"""
-                SELECT student_id, behavioural_traits, remarks
+                SELECT student_id, subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark
                 FROM {TENANT_GRADES_TABLE}
                 WHERE subdomain = %s AND term = %s AND student_id = ANY(%s)
                 ORDER BY updated_at DESC
                 """,
                 (tid, term, student_ids),
             )
-            for sid, b_traits, remark in cur.fetchall():
+            # Canonical total chain (same definition as the report summary).
+            from routers.report import (
+                _extract_breakdown as _rb_extract,
+                _compute_simple_granular_total as _rb_granular,
+                _compute_total as _rb_total,
+            )
+
+            academic_structure = getattr(template, "academic_structure", None)
+            for sid, subj, a_scores, b_traits, remark, ft_remark in cur.fetchall():
                 if isinstance(b_traits, dict):
                     slot = traits.setdefault(sid, {})
                     for k, v in b_traits.items():
@@ -242,6 +253,22 @@ def get_form_grid(
                             slot[kk] = vv
                 if sid not in remarks and isinstance(remark, str) and remark.strip():
                     remarks[sid] = remark.strip()
+                if sid not in form_teacher_remarks and isinstance(ft_remark, str) and ft_remark.strip():
+                    form_teacher_remarks[sid] = ft_remark.strip()
+                if isinstance(a_scores, dict) and subj:
+                    br = _rb_extract(a_scores)
+                    gt = _rb_granular(br)
+                    if gt is None:
+                        gt = _rb_total(academic_structure, a_scores)
+                    try:
+                        subject_totals.setdefault(sid, {})[subj] = float(gt)
+                    except Exception:
+                        pass
+        # Canonical report average: mean of per-subject totals (1-decimal).
+        averages: Dict[str, Optional[float]] = {}
+        for sid in student_ids:
+            totals = list(subject_totals.get(sid, {}).values())
+            averages[sid] = round(sum(totals) / len(totals), 1) if totals else None
 
         cur.execute(
             f"""
