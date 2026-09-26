@@ -557,6 +557,8 @@ def get_report_bundle(
         # If student missing, still return 200 with student:null for frontend banner
         grades_out: List[Dict[str, Any]] = []
         behavioural_merged: Dict[str, str] = {}
+        form_teacher_remark_out: Optional[str] = None
+        principal_remark_out: Optional[str] = None
 
         class_student_ids: List[str] = []
         class_name: Optional[str] = None
