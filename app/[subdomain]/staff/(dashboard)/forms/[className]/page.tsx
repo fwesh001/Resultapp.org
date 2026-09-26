@@ -77,10 +77,12 @@ export default function FormGridPage() {
   const [grid, setGrid] = useState<FormGrid | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"entry" | "settings">("entry");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [traitDrafts, setTraitDrafts] = useState<Record<string, string>>({});
   const [remarkDrafts, setRemarkDrafts] = useState<Record<string, string>>({});
   const [remarkTouched, setRemarkTouched] = useState<Set<string>>(new Set());
+  const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
   const [savingSid, setSavingSid] = useState<string | null>(null);
 
   const fetchGrid = useCallback(async () => {
@@ -98,7 +100,8 @@ export default function FormGridPage() {
       const data = (await res.json()) as FormGrid & { error?: string };
       if (!res.ok) throw new Error(data.error || `Failed to load (${res.status})`);
       setGrid(data);
-      // Seed drafts from stored values.
+      // Seed drafts from stored values (canonical form_teacher_remarks first,
+      // legacy remarks as fallback).
       const td: Record<string, string> = {};
       for (const [sid, tm] of Object.entries(data.traits || {})) {
         for (const [trait, grade] of Object.entries(tm || {})) {
@@ -106,8 +109,9 @@ export default function FormGridPage() {
         }
       }
       setTraitDrafts(td);
-      setRemarkDrafts({ ...(data.remarks || {}) });
+      setRemarkDrafts({ ...(data.remarks || {}), ...(data.form_teacher_remarks || {}) });
       setRemarkTouched(new Set());
+      setAutoFilled(new Set());
       setExpandedStudent(null);
     } catch (err) {
       setGrid(null);
@@ -122,7 +126,41 @@ export default function FormGridPage() {
   }, [fetchGrid]);
 
   function expandStudent(studentId: string) {
-    setExpandedStudent((prev) => (prev === studentId ? null : studentId));
+    setExpandedStudent((prev) => {
+      const next = prev === studentId ? null : studentId;
+      // Auto-fill empty remark from the teacher scheme on first expand.
+      if (next !== null && grid) {
+        const current = remarkDrafts[studentId] ?? "";
+        if (!current.trim()) {
+          const suggestion = evaluateSchemeLocal(
+            grid.averages?.[studentId] ?? null,
+            grid.teacher_scheme,
+          );
+          if (suggestion) {
+            setRemarkDrafts((drafts) => ({ ...drafts, [studentId]: suggestion }));
+            setRemarkTouched((touched) => new Set(touched).add(studentId));
+            setAutoFilled((filled) => new Set(filled).add(studentId));
+          }
+        }
+      }
+      return next;
+    });
+  }
+
+  async function saveScheme(bands: RemarkBand[]) {
+    const qs = new URLSearchParams({
+      tenant_id: tenantId,
+      class_name: decodedClassName,
+    });
+    const res = await fetch(`/api/staff/grading?${qs.toString()}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bands }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; bands?: RemarkBand[] };
+    if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
+    setGrid((prev) => (prev ? { ...prev, teacher_scheme: data.bands ?? bands } : prev));
+    toast.success("Auto-remark scheme saved");
   }
 
   async function handleSave(studentId: string) {
