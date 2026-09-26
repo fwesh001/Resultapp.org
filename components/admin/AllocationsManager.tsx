@@ -225,11 +225,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     return raw ? raw.toLowerCase() : tenantId.toLowerCase();
   }, [tenantId, idPrefixProp]);
 
-  // Effective prefix for new Staff IDs — always lowercase (e.g. staff/),
-  // so minted IDs are lowercase regardless of Settings casing.
+  // Effective prefix for new Staff IDs — lowercase with NO trailing slash
+  // (e.g. "staff"), so minted IDs are "staff/001" and never "staff//001"
+  // regardless of Settings casing.
   const staffPrefix = useMemo(() => {
     const raw = (staffIdPrefixProp || "STAFF/").trim();
-    return (raw || "STAFF/").toLowerCase();
+    return (raw || "STAFF/").toLowerCase().replace(/\/+$/, "");
   }, [staffIdPrefixProp]);
 
   function nextStaffId(prefix: string, existing: Staff[]): string {
