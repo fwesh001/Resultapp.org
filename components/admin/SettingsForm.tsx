@@ -254,6 +254,16 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       {activeTab === "branding" && (
         <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
+      <UploadField
+        id="principal-signature-url"
+        label="Principal's signature"
+        name="principal_signature_url"
+        defaultValue={school?.principalSignatureUrl ?? ""}
+        extraFields={{ subdomain: school?.slug ?? "", kind: "signature" }}
+        helper="Transparent PNG works best. Printed on report cards in the Principal's signature box."
+        preview="image"
+        previewVariant="square"
+      />
       <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <label
