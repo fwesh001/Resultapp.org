@@ -9,10 +9,11 @@ tenant_allocations, tenant_staff) — no schema changes required.
 """
 
 import logging
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from typing import Optional as _Optional
 from fastapi import Header as _Header
