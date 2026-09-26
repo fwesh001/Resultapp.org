@@ -219,6 +219,7 @@ class TenantProfileUpdate(BaseModel):
     current_term: Optional[str] = None
     current_session: Optional[str] = None
     principal_remark_scheme: Optional[list] = None
+    principal_signature_url: Optional[str] = None
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
@@ -275,9 +276,12 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
         else:
             data["staff_id_prefix"] = raw_sprefix
     # Normalize blank optional strings to NULL so cleared fields don't store ""
-    for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
+    for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "principal_signature_url"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
+    if "principal_signature_url" in data and isinstance(data["principal_signature_url"], str):
+        if len(data["principal_signature_url"]) > 512:
+            raise HTTPException(status_code=422, detail="principal_signature_url too long (max 512 chars)")
     # Principal remark scheme: validated + normalized server-side (shared
     # helper). Stored as canonical JSON text with an explicit ::jsonb cast
     # since psycopg2 cannot parameterize a cast suffix.
@@ -293,7 +297,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             raise HTTPException(status_code=422, detail=f"Invalid principal_remark_scheme: {e}")
         _principal_scheme_jsonb = True
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme", "principal_signature_url")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
@@ -321,7 +325,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                      credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, created_at, updated_at;
+                          credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, principal_signature_url, created_at, updated_at;
             """,
             tuple(values),
         )
