@@ -19,7 +19,8 @@
 #
 # Env overrides: DEPLOY_UNIT (default resultapp-provision),
 #                DEPLOY_PORT (default 8000),
-#                SKIP_DEPS=1, VENV_DIR (default ./venv).
+#                SKIP_DEPS=1, VENV_DIR (default ./venv),
+#                GIT_REMOTE (default origin), GIT_BRANCH (default main).
 #
 set -uo pipefail
 
@@ -58,6 +59,20 @@ ok "tree clean"
 # ---------------------------------------------------------------- 2. pull
 step "2/7 Pulling latest code (with per-file diffstat)"
 BEFORE_SHA="$(git rev-parse --short HEAD)"
+# Checkouts that lost upstream tracking (or sit detached after manual
+# `git checkout <sha>` calls) make bare `git pull` fail with "no tracking
+# information". Repair deterministically instead of dying cryptically.
+REMOTE="${GIT_REMOTE:-origin}"
+BRANCH="${GIT_BRANCH:-main}"
+CUR_BRANCH="$(git branch --show-current 2>/dev/null || true)"
+if [ -z "$CUR_BRANCH" ]; then
+  die "detached HEAD with no branch — attach it first: git checkout -B $BRANCH $REMOTE/$BRANCH (tree is clean, nothing to lose)"
+fi
+if ! git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  warn "no upstream tracking on '$CUR_BRANCH' — linking it to $REMOTE/$BRANCH"
+  git branch --set-upstream-to="$REMOTE/$BRANCH" "$CUR_BRANCH" \
+    || die "cannot set upstream for '$CUR_BRANCH' (does $REMOTE/$BRANCH exist?)"
+fi
 git pull --stat || die "git pull failed — remote unreachable or merge conflict"
 AFTER_SHA="$(git rev-parse --short HEAD)"
 printf '%sbefore:%s %s  %safter:%s %s\n' "$DIM" "$RESET" "$BEFORE_SHA" "$DIM" "$RESET" "$AFTER_SHA"
