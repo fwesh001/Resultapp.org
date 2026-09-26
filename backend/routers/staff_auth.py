@@ -109,16 +109,14 @@ def staff_login(tenant_id: str, payload: StaffLoginRequest):
 
 
 # ---------------------------------------------------------------------------
-# GET /{staff_id}/dashboard — allocations for this staff
+# Dashboard core — shared by the path and query variants below.
+# NOTE: staff_ids may contain "/" (e.g. "staff/001"), which cannot travel
+# safely in a path segment across server versions. New callers must use
+# GET /dashboard?staff_id=... ; /{staff_id}/dashboard is kept for
+# backward compatibility (slash-free IDs only).
 # ---------------------------------------------------------------------------
 
-@router.get("/{staff_id}/dashboard", summary="Get staff dashboard allocations")
-def staff_dashboard(tenant_id: str, staff_id: str):
-    tid = _validate_tenant_id(tenant_id)
-    sid = (staff_id or "").strip()
-    if not sid:
-        raise HTTPException(status_code=400, detail="staff_id is required")
-
+def _load_staff_dashboard(tid: str, sid: str) -> dict:
     from services.db_manager import TENANT_ALLOCATIONS_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser, _row_to_dict
     from datetime import datetime
 
