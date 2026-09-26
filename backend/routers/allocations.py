@@ -6,6 +6,7 @@ Uses raw psycopg2 (mirrors db_manager / admin router), indexed by subdomain.
 
 from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Header
+from psycopg2.extensions import ISOLATION_LEVEL_READ_COMMITTED
 import os
 import logging
 
@@ -538,20 +539,21 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             if role not in allowed_roles:
                 raise HTTPException(status_code=400, detail=f"role must be one of {', '.join(sorted(allowed_roles))}")
 
-            # Lock the schools row (symmetry with students path) + read prefix.
-            try:
-                cur.execute("BEGIN;")
-            except Exception:
-                pass
+            # Driver-managed transaction (no raw BEGIN/COMMIT strings): psycopg2
+            # opens the implicit transaction on first statement, which works
+            # identically on direct connections and through transaction poolers
+            # (client-issued transaction verbs are what desync poolers).
+            conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
             from services.db_manager import SCHOOLS_REGISTRY_TABLE as _schools_tbl
 
+            # Lock the schools row (symmetry with students path) + read prefix.
             cur.execute(
                 f"SELECT COALESCE(staff_id_prefix, 'STAFF/') FROM {_schools_tbl} WHERE subdomain = %s FOR UPDATE;",
                 (tid,),
             )
             _prow = cur.fetchone()
             if _prow is None:
-                cur.execute("ROLLBACK;")
+                conn.rollback()
                 raise HTTPException(status_code=404, detail=f"Unknown tenant '{tid}'")
             # Effective prefix is always lowercase (staff/001 not STAFF/001).
             _prefix = ((_prow[0] if _prow else None) or "STAFF/").strip().lower() or "staff/"
