@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronDown, HeartHandshake, Loader2, MessageSquareText, Save, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ChevronDown, HeartHandshake, Loader2, MessageSquareText, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { toast } from "@/components/ui/toast";
+import SchemeBuilder from "@/components/remarks/SchemeBuilder";
+import type { RemarkBand } from "@/types/school";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
 
@@ -19,12 +21,31 @@ interface FormGrid {
   students: GridStudent[];
   traits: Record<string, Record<string, string>>;
   remarks: Record<string, string>;
+  form_teacher_remarks?: Record<string, string>;
+  averages?: Record<string, number | null>;
+  teacher_scheme?: RemarkBand[];
   subjects: string[];
   allowed_traits: string[];
   scale: string[];
   term: string;
   class_name: string;
   is_form_teacher: boolean;
+}
+
+/** Client mirror of the server band evaluation (server is authoritative). */
+function evaluateSchemeLocal(average: number | null | undefined, bands: RemarkBand[] | undefined): string | null {
+  if (average === null || average === undefined || !Number.isFinite(average)) return null;
+  const avg = Math.round(Number(average) * 10) / 10;
+  const ordered = [...(bands || [])]
+    .filter((b) => b && Number.isFinite(Number(b.min)) && Number.isFinite(Number(b.max)))
+    .sort((a, b) => Number(a.min) - Number(b.min) || Number(a.max) - Number(b.max));
+  for (const b of ordered) {
+    if (Number(b.min) <= avg && avg <= Number(b.max)) {
+      const text = String(b.text || "").trim();
+      return text || null;
+    }
+  }
+  return null;
 }
 
 function validTerm(value: string | null): string {
