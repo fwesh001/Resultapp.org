@@ -215,7 +215,6 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const publishedDisplay = data?.published_at ? formatTermDate(data.published_at) : "";
   const formTeacherName = (data?.form_teacher_name || "").trim();
   const formTeacherSig = (data?.form_teacher_signature_url || "").trim();
-  const principalSig = (schoolFromReport?.principal_signature_url || "").trim();
   const summary = data?.summary ?? {
     totalScore: 0,
     average: 0,
