@@ -259,17 +259,6 @@ def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileU
                 conn.close()
             except Exception:
                 pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"[staff_auth] dashboard failed for {tid}/{sid}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load dashboard: {e}")
-    finally:
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
 
 
 @router.get("/dashboard", summary="Get staff dashboard allocations (query-param staff_id)")
