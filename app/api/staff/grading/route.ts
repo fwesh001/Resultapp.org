@@ -227,6 +227,7 @@ export async function GET(req: NextRequest) {
 
     const allocations = (dashData as { allocations?: unknown })?.allocations ?? [];
     const formClasses = (dashData as { form_classes?: unknown })?.form_classes ?? [];
+    const hubStaff = (dashData as { staff?: unknown })?.staff ?? null;
     // Backend list_templates returns array directly
     let template: unknown = null;
     if (Array.isArray(tmplData)) {
@@ -247,6 +248,7 @@ export async function GET(req: NextRequest) {
       {
         allocations,
         form_classes: formClasses,
+        staff: hubStaff,
         template,
         tenant_id: tenantId,
       },
