@@ -1766,7 +1766,8 @@ def publish_student_results(
         cur.execute("COMMIT;")
         logger.info(
             f"[DB] Published {published_now} card(s) for '{subdomain}' {term} "
-            f"(skipped {len(already)} already published, balance {balance})"
+            f"(skipped {len(already)} already published, balance {balance}, "
+            f"principal remarks applied {principal_remarks_applied})"
         )
         return {
             "subdomain": subdomain,
@@ -1776,6 +1777,7 @@ def publish_student_results(
             "already_published": sorted(already),
             "new_balance": balance,
             "reference_id": batch_ref if published_now else None,
+            "principal_remarks_applied": principal_remarks_applied,
         }
     except Exception:
         try:
