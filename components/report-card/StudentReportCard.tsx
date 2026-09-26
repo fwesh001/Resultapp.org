@@ -69,6 +69,8 @@ interface ReportResponse {
   groupedTemplate?: GroupedTemplate | null;
   grades: GradeRow[];
   behavioural: Record<string, string>;
+  form_teacher_remark?: string | null;
+  principal_remark?: string | null;
   summary: {
     totalScore: number;
     average: number;
