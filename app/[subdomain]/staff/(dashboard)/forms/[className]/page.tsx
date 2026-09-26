@@ -163,10 +163,74 @@ export default function FormGridPage() {
     toast.success("Auto-remark scheme saved");
   }
 
+  // Shared writer: posts one student's traits + remark and merges the result
+  // into grid state. Throws on failure; callers own toasts/status UI.
+  async function persistBehavioural(
+    snapshot: FormGrid,
+    studentId: string,
+    traitItems: Array<{ student_id: string; trait: string; score: string }>,
+    remarkText: string | null,
+  ): Promise<void> {
+    const contextSubject = snapshot.subjects[0];
+    if (!contextSubject) {
+      throw new Error("No subjects allocated to this class yet");
+    }
+    // Behavioural rows require at least one score item server-side; when
+    // only a remark changed, send the already-stored first trait back so
+    // the row (and remark) persists without altering grades.
+    const payloadScores =
+      traitItems.length > 0
+        ? traitItems
+        : (() => {
+            const existing = snapshot.traits[studentId] || {};
+            const firstTrait = snapshot.allowed_traits.find((t) => existing[t]);
+            if (!firstTrait) {
+              throw new Error("Grade at least one trait before saving a remark alone");
+            }
+            return [{ student_id: studentId, trait: firstTrait, score: existing[firstTrait] }];
+          })();
+    const payload: Record<string, unknown> = {
+      tenant_id: tenantId,
+      term,
+      subject_name: contextSubject,
+      class_name: snapshot.class_name,
+      assessment_key: "behavioural",
+      scores: payloadScores,
+      // Smart Remarks cutover: persist into form_teacher_remark.
+      remark_kind: "form_teacher",
+    };
+    if (remarkText !== null) payload.remarks = { [studentId]: remarkText };
+    const res = await fetch("/api/staff/grading", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
+    setGrid((prev) => {
+      if (!prev) return prev;
+      const traits = { ...prev.traits };
+      const merged = { ...(traits[studentId] || {}) };
+      for (const i of payloadScores as Array<{ trait: string; score: string }>) merged[i.trait] = i.score;
+      traits[studentId] = merged;
+      const remarks = { ...prev.remarks };
+      const formTeacherRemarks = { ...(prev.form_teacher_remarks || {}) };
+      if (remarkText !== null) {
+        if (remarkText) {
+          remarks[studentId] = remarkText;
+          formTeacherRemarks[studentId] = remarkText;
+        } else {
+          delete remarks[studentId];
+          delete formTeacherRemarks[studentId];
+        }
+      }
+      return { ...prev, traits, remarks, form_teacher_remarks: formTeacherRemarks };
+    });
+  }
+
   async function handleSave(studentId: string) {
     if (!grid || savingSid) return;
-    const contextSubject = grid.subjects[0];
-    if (!contextSubject) {
+    if (grid.subjects.length === 0) {
       toast.error("No subjects allocated to this class yet", {
         description: "Ask an admin to allocate subjects first.",
       });
@@ -185,57 +249,7 @@ export default function FormGridPage() {
 
     setSavingSid(studentId);
     try {
-      // Behavioural rows require at least one score item server-side; when
-      // only a remark changed, send the already-stored first trait back so
-      // the row (and remark) persists without altering grades.
-      const payloadScores =
-        items.length > 0
-          ? items
-          : (() => {
-              const existing = grid.traits[studentId] || {};
-              const firstTrait = grid.allowed_traits.find((t) => existing[t]);
-              if (!firstTrait) {
-                throw new Error("Grade at least one trait before saving a remark alone");
-              }
-              return [{ student_id: studentId, trait: firstTrait, score: existing[firstTrait] }];
-            })();
-      const payload: Record<string, unknown> = {
-        tenant_id: tenantId,
-        term,
-        subject_name: contextSubject,
-        class_name: grid.class_name,
-        assessment_key: "behavioural",
-        scores: payloadScores,
-        // Smart Remarks cutover: persist into form_teacher_remark.
-        remark_kind: "form_teacher",
-      };
-      if (remarkText !== null) payload.remarks = { [studentId]: remarkText };
-      const res = await fetch("/api/staff/grading", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
-      setGrid((prev) => {
-        if (!prev) return prev;
-        const traits = { ...prev.traits };
-        const merged = { ...(traits[studentId] || {}) };
-        for (const i of payloadScores as Array<{ trait: string; score: string }>) merged[i.trait] = i.score;
-        traits[studentId] = merged;
-        const remarks = { ...prev.remarks };
-        const formTeacherRemarks = { ...(prev.form_teacher_remarks || {}) };
-        if (remarkText !== null) {
-          if (remarkText) {
-            remarks[studentId] = remarkText;
-            formTeacherRemarks[studentId] = remarkText;
-          } else {
-            delete remarks[studentId];
-            delete formTeacherRemarks[studentId];
-          }
-        }
-        return { ...prev, traits, remarks, form_teacher_remarks: formTeacherRemarks };
-      });
+      await persistBehavioural(grid, studentId, items, remarkText);
       setRemarkTouched((prev) => {
         const next = new Set(prev);
         next.delete(studentId);
@@ -246,6 +260,11 @@ export default function FormGridPage() {
         next.delete(studentId);
         return next;
       });
+      setAutoSaveStatus((prev) => {
+        const next = { ...prev };
+        delete next[studentId];
+        return next;
+      });
       setExpandedStudent(null);
       toast.success(`Saved behavioural record for ${studentId}`);
     } catch (err) {
@@ -254,6 +273,41 @@ export default function FormGridPage() {
       });
     } finally {
       setSavingSid(null);
+    }
+  }
+
+  // Background auto-save: persists an auto-filled remark immediately, once
+  // per student per term. Guard key is claimed synchronously before the first
+  // await, so concurrent invocations cannot double-fire (no effect involved).
+  async function autoSaveRemark(studentId: string, text: string, snapshot: FormGrid): Promise<void> {
+    const key = `${term}::${studentId}`;
+    if (autoSaveGuard.current.has(key)) return;
+    autoSaveGuard.current.add(key);
+    setAutoSaveStatus((prev) => ({ ...prev, [studentId]: "saving" }));
+    try {
+      const traitItems = (snapshot.allowed_traits || [])
+        .map((t) => ({
+          student_id: studentId,
+          trait: t,
+          score: (traitDrafts[`${studentId}::${t}`] || "").trim().toUpperCase(),
+        }))
+        .filter((i) => i.score !== "");
+      await persistBehavioural(snapshot, studentId, traitItems, text);
+      // Keep the teacher's newer keystrokes if they typed during the flight.
+      setRemarkDrafts((drafts) => {
+        if ((drafts[studentId] ?? "") !== text) return drafts;
+        return drafts;
+      });
+      setRemarkTouched((prev) => {
+        if ((remarkDrafts[studentId] ?? "") !== text) return prev;
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+      setAutoSaveStatus((prev) => ({ ...prev, [studentId]: "saved" }));
+    } catch {
+      autoSaveGuard.current.delete(key);
+      setAutoSaveStatus((prev) => ({ ...prev, [studentId]: "failed" }));
     }
   }
 
