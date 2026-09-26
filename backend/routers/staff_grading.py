@@ -490,6 +490,10 @@ class BatchPayload(BaseModel):
     # Optional per-student remarks (student_id -> text). Form-teacher-only,
     # stored on tenant_grades.remarks. Absent key = preserve existing.
     remarks: Optional[Dict[str, str]] = None
+    # Remark destination cutover: "legacy" (default, preserves old behavior)
+    # writes tenant_grades.remarks; "form_teacher" writes
+    # tenant_grades.form_teacher_remark (Smart Remarks canonical output).
+    remark_kind: Optional[Literal["legacy", "form_teacher"]] = None
 
 
 @router.post("/batch", status_code=201, summary="Save batch scores for one assessment")
