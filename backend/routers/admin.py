@@ -278,19 +278,20 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
     for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
-    # Principal remark scheme: validated + normalized server-side (shared helper).
+    # Principal remark scheme: validated + normalized server-side (shared
+    # helper). Stored as canonical JSON text with an explicit ::jsonb cast
+    # since psycopg2 cannot parameterize a cast suffix.
+    import json as _json
+
+    _principal_scheme_jsonb = False
     if "principal_remark_scheme" in data:
         from services.remark_schemes import validate_scheme as _validate_scheme
 
         try:
-            data["principal_remark_scheme"] = __import__("json").dumps(_validate_scheme(data["principal_remark_scheme"]))
+            data["principal_remark_scheme"] = _json.dumps(_validate_scheme(data["principal_remark_scheme"]))
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"Invalid principal_remark_scheme: {e}")
-        # Store canonical JSON text; Postgres casts to JSONB on assignment.
-        data["principal_remark_scheme"] = data["principal_remark_scheme"] + "::jsonb"
-        # NOTE: psycopg2 cannot parameterize a ::jsonb cast suffix — the SET
-        # clause below special-cases this key (see set_clause construction).
-        data["__principal_scheme_jsonb__"] = True
+        _principal_scheme_jsonb = True
 
     allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme")
     updates = {k: data[k] for k in allowed if k in data}
@@ -300,7 +301,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
     set_parts = []
     values: list = []
     for col, val in updates.items():
-        if col == "principal_remark_scheme" and data.get("__principal_scheme_jsonb__"):
+        if col == "principal_remark_scheme" and _principal_scheme_jsonb:
             set_parts.append(f"{col} = %s::jsonb")
         else:
             set_parts.append(f"{col} = %s")
