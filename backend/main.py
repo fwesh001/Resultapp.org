@@ -218,6 +218,7 @@ class TenantMetadata(BaseModel):
     id_prefix: Optional[str] = None
     staff_id_prefix: Optional[str] = None
     principal_remark_scheme: Optional[list] = None
+    principal_signature_url: Optional[str] = None
     deleted_at: Optional[str] = None
     current_term: Optional[str] = None
     current_session: Optional[str] = None
