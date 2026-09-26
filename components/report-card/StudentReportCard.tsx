@@ -708,7 +708,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                           }}
                         />
                       ) : formTeacherName ? (
-                        <p className="font-cursive text-sm italic text-slate-900">{formTeacherName}</p>
+                        <p className="font-serif text-sm italic text-slate-900">{formTeacherName}</p>
                       ) : (
                         <div className="h-6 border-b border-slate-400" />
                       )}
