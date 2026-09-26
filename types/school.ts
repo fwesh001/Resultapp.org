@@ -3,6 +3,13 @@
  * Covers school onboarding, student credits, subscriptions, and result compilation.
  */
 
+// Grade-band remark scheme shared by principal + form-teacher editors.
+export interface RemarkBand {
+  min: number;
+  max: number;
+  text: string;
+}
+
 // School onboarding & profile
 export interface School {
   id: string;
@@ -24,6 +31,7 @@ export interface School {
   currentTerm?: string;
   currentSession?: string;
   newTermBegins?: string;
+  principalRemarkScheme?: RemarkBand[];
   slotsBalance?: number;
   creditBalance?: number;
   createdAt: string; // ISO date
