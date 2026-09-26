@@ -47,10 +47,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       "current_session",
       "new_term_begins",
       "logo_url",
-      "hero_bg_url",
-      "id_prefix",
-      "staff_id_prefix",
-    ]) {
+        "hero_bg_url",
+        "id_prefix",
+        "staff_id_prefix",
+        "principal_signature_url",
+      ]) {
       const value = formData.get(field);
       if (typeof value === "string") {
         if (field === "id_prefix") payload[field] = value.trim().toLowerCase();
