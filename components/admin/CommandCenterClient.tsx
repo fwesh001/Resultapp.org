@@ -260,6 +260,47 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
   const selectedNames = useMemo(() => Object.keys(selected).filter((k) => selected[k]), [selected]);
   const readyClasses = useMemo(() => classes.filter((c) => c.status === "Ready to Publish"), [classes]);
 
+  function confirmApplyRemarks(classNames: string[]) {
+    if (classNames.length === 0 || applyingRemarks) return;
+    setPendingApply({
+      classes: classNames,
+      message:
+        `Auto-apply principal remarks for ${classNames.length} class(es) (${term}${session ? `, ${session}` : ""})? ` +
+        `Unpublished students get scheme-matched remarks. Existing manual remarks are never overwritten.`,
+    });
+  }
+
+  async function runApplyRemarks() {
+    if (!pendingApply || applyingRemarks) return;
+    const { classes: classNames } = pendingApply;
+    setPendingApply(null);
+    setApplyingRemarks(true);
+    try {
+      const res = await fetch("/api/admin/results/apply-principal-remarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, term, academic_session: session || undefined, class_names: classNames }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || (data as { success?: boolean }).success === false) {
+        throw new Error((data as { error?: string }).error || `Apply failed (${res.status})`);
+      }
+      const d = data as { applied?: number; skipped_no_grades?: number; skipped_has_remarks?: number; skipped_no_band?: number; skipped_published?: number };
+      const parts = [
+        `${d.applied ?? 0} applied`,
+        `${d.skipped_has_remarks ?? 0} kept manual`,
+        `${d.skipped_no_grades ?? 0} no grades`,
+        `${d.skipped_no_band ?? 0} no band`,
+        `${d.skipped_published ?? 0} published`,
+      ];
+      toast.success(`Principal remarks: ${parts.join(" • ")}`);
+    } catch (e) {
+      toast.error("Could not apply principal remarks", { description: e instanceof Error ? e.message : "Try again" });
+    } finally {
+      setApplyingRemarks(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -372,6 +413,16 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Publish selected ({selectedNames.length})
+              </button>
+              <button
+                type="button"
+                disabled={applyingRemarks || publishing || selectedNames.length === 0}
+                onClick={() => confirmApplyRemarks(selectedNames)}
+                title="Evaluate the principal remark scheme against unpublished students in the selected classes"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-5 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {applyingRemarks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                ✨ Auto-Apply Principal Remarks
               </button>
             </div>
           </div>
