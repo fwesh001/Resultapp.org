@@ -42,7 +42,7 @@ const PROFILE_FIELDS = [
   "hero_bg_url",
   "id_prefix",
   "staff_id_prefix",
-  "principal_remark_scheme",
+  "principal_signature_url",
 ] as const;
 
 export async function PATCH(req: NextRequest) {
