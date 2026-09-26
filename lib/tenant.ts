@@ -40,6 +40,7 @@ interface TenantRegistrySchool {
   current_term: string | null;
   current_session: string | null;
   new_term_begins: string | null;
+  principal_remark_scheme?: Array<{ min: number; max: number; text: string }> | null;
   location: string | null;
   status: string | null;
   created_at: string;
@@ -81,6 +82,9 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     currentTerm: raw.current_term?.trim() || "Term 1",
     currentSession: raw.current_session?.trim() || undefined,
     newTermBegins: raw.new_term_begins ?? undefined,
+    principalRemarkScheme: Array.isArray(raw.principal_remark_scheme)
+      ? (raw.principal_remark_scheme as Array<{ min: number; max: number; text: string }>)
+      : undefined,
     slotsBalance: raw.slots_balance ?? raw.student_count ?? 0,
     creditBalance: raw.credit_balance ?? 0,
     createdAt: raw.created_at,
