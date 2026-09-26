@@ -583,6 +583,47 @@ def get_report_bundle(
             except Exception:
                 class_student_ids = [sid]
 
+            # Publication timestamp for the Date lines (exact session first,
+            # then latest across sessions for pre-migration rows).
+            try:
+                _sess = _academic_session()
+                cur.execute(
+                    "SELECT published_at FROM result_publications WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s AND academic_session = %s LIMIT 1",
+                    (tid, sid, term, _sess),
+                )
+                _prow = cur.fetchone()
+                if _prow is None:
+                    cur.execute(
+                        "SELECT published_at FROM result_publications WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY published_at DESC LIMIT 1",
+                        (tid, sid, term),
+                    )
+                    _prow = cur.fetchone()
+                if _prow is not None and _prow[0] is not None:
+                    published_at_out = _prow[0].isoformat() if hasattr(_prow[0], "isoformat") else str(_prow[0])
+            except Exception:
+                published_at_out = None
+
+            # Form-teacher identity for the signature line: class assignment
+            # joined to staff (name + signature image, either may be null).
+            try:
+                cur.execute(
+                    f"""
+                    SELECT s.full_name, s.signature_url FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
+                    JOIN {TENANT_STAFF_TABLE} s
+                      ON s.subdomain = f.subdomain AND LOWER(s.staff_id) = LOWER(f.staff_id)
+                    WHERE f.subdomain = %s AND f.class_name = %s LIMIT 1
+                    """,
+                    (tid, class_name),
+                )
+                _ftrow = cur.fetchone()
+                if _ftrow is not None:
+                    if _ftrow[0] and str(_ftrow[0]).strip():
+                        form_teacher_name_out = str(_ftrow[0]).strip()
+                    if _ftrow[1] and str(_ftrow[1]).strip():
+                        form_teacher_signature_out = str(_ftrow[1]).strip()
+            except Exception:
+                pass
+
             # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows
             cur.execute(
                 f"SELECT subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark, principal_remark FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY subject_name",
