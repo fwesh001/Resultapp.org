@@ -552,14 +552,15 @@ def apply_principal_remarks(tenant_id: str, payload: ApplyPrincipalRemarksReques
         # has no SQLAlchemy session). Falls back to granular/raw-sum.
         academic_structure = None
         try:
+            # NOTE: grading_templates.tenant_id mirrors the subdomain.
             cur.execute(
                 """
                 SELECT academic_structure FROM grading_templates
                 WHERE tenant_id = %s AND is_active = TRUE
                 ORDER BY created_at DESC LIMIT 1;
                 """,
+                (tid,),
             )
-            # NOTE: grading_templates.tenant_id mirrors the subdomain.
             tpl_row = cur.fetchone()
             if tpl_row and isinstance(tpl_row[0], dict):
                 academic_structure = tpl_row[0]
