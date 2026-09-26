@@ -294,6 +294,32 @@ export default function FormGridPage() {
         </div>
       </div>
 
+      {!loading && !error && grid?.is_form_teacher && (
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2" role="tablist" aria-label="Form-teacher workspace">
+          {(
+            [
+              { id: "entry", label: "Student Entry" },
+              { id: "settings", label: "Auto-Remark Settings" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={
+                activeTab === t.id
+                  ? "rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white"
+                  : "rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 p-8 text-sm text-purple-200/60">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading form grid…
@@ -304,6 +330,16 @@ export default function FormGridPage() {
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-200">
           <ShieldAlert className="h-5 w-5 shrink-0" />
           <p>You are not the assigned Form Teacher for {decodedClassName}. Behavioural records are restricted to the designated form teacher.</p>
+        </div>
+      ) : grid && activeTab === "settings" ? (
+        <div className="space-y-3 rounded-2xl border border-emerald-500/15 bg-white/[0.02] p-5" role="tabpanel" aria-label="Auto-Remark Settings">
+          <div>
+            <h2 className="text-base font-semibold text-white">Auto-remark bands for {decodedClassName}</h2>
+            <p className="mt-1 text-sm text-purple-200/60">
+              When you expand a student with an empty remark, their average auto-fills the matching text. You can always edit before saving.
+            </p>
+          </div>
+          <SchemeBuilder initial={grid.teacher_scheme || []} onSave={saveScheme} accent="emerald" />
         </div>
       ) : grid ? (
         <div className="space-y-2">
