@@ -40,6 +40,7 @@ interface TenantRegistrySchool {
   current_term: string | null;
   current_session: string | null;
   new_term_begins: string | null;
+  principal_signature_url?: string | null;
   principal_remark_scheme?: Array<{ min: number; max: number; text: string }> | null;
   location: string | null;
   status: string | null;
@@ -82,6 +83,7 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     currentTerm: raw.current_term?.trim() || "Term 1",
     currentSession: raw.current_session?.trim() || undefined,
     newTermBegins: raw.new_term_begins ?? undefined,
+    principalSignatureUrl: raw.principal_signature_url?.trim() ? raw.principal_signature_url.trim() : undefined,
     principalRemarkScheme: Array.isArray(raw.principal_remark_scheme)
       ? (raw.principal_remark_scheme as Array<{ min: number; max: number; text: string }>)
       : undefined,
