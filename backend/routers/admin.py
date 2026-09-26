@@ -313,18 +313,18 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-            cur.execute(
-                f"""
-                UPDATE {SCHOOLS_REGISTRY_TABLE}
-                SET {set_clause}, updated_at = NOW()
-                WHERE subdomain = %s
-                RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
-                          logo_url, hero_bg_url, motto, proprietor_name, registration_number,
-                          is_verified, is_active, subscription_plan, subscription_status, student_count,
-                          credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, created_at, updated_at;
-                """,
-                tuple(values),
-            )
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET {set_clause}, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
+                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
+                      is_verified, is_active, subscription_plan, subscription_status, student_count,
+                      credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, created_at, updated_at;
+            """,
+            tuple(values),
+        )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
         row = cur.fetchone()
