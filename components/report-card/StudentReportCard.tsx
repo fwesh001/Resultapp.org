@@ -207,6 +207,8 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const student = data?.student ?? null;
   const grades = data?.grades ?? [];
   const behavioural = data?.behavioural ?? {};
+  const formTeacherRemark = (data?.form_teacher_remark || "").trim();
+  const principalRemark = (data?.principal_remark || "").trim();
   const summary = data?.summary ?? {
     totalScore: 0,
     average: 0,
@@ -683,7 +685,9 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Class Teacher / Master&apos;s Remarks</p>
-                  <div className="mt-1.5 min-h-[36px] rounded border border-dashed border-slate-300 bg-white p-1.5 text-xs text-slate-400" />
+                  <div className="mt-1.5 min-h-[36px] rounded border border-dashed border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                    {formTeacherRemark || <span className="text-slate-400">—</span>}
+                  </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
                       <div className="h-6 border-b border-slate-400" />
@@ -698,7 +702,9 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-none">Principal&apos;s Remarks</p>
-                  <div className="mt-1.5 min-h-[36px] rounded border border-dashed border-slate-300 bg-white p-1.5 text-xs text-slate-400" />
+                  <div className="mt-1.5 min-h-[36px] rounded border border-dashed border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                    {principalRemark || <span className="text-slate-400">—</span>}
+                  </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
                       <div className="h-6 border-b border-slate-400" />
