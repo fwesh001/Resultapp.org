@@ -32,6 +32,7 @@ export interface School {
   currentSession?: string;
   newTermBegins?: string;
   principalRemarkScheme?: RemarkBand[];
+  principalSignatureUrl?: string;
   slotsBalance?: number;
   creditBalance?: number;
   createdAt: string; // ISO date
