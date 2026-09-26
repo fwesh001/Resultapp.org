@@ -589,6 +589,15 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             if isinstance(d.get("created_at"), datetime):
                 d["created_at"] = d["created_at"].isoformat()
             d["id"] = str(d["id"])
+            # Write-verification guard: re-read the committed row so a lost
+            # write can never surface as a false 201 (silent-ghost incident).
+            cur.execute(
+                f"SELECT id FROM {TENANT_STAFF_TABLE} WHERE id = %s AND subdomain = %s;",
+                (d["id"], tid),
+            )
+            if cur.fetchone() is None:
+                logger.error(f"[roster] staff write vanished post-commit for {tid}/{staff_id}")
+                raise HTTPException(status_code=500, detail="Staff save failed verification — please retry")
             return {"type": "staff", "record": d}
 
         if typ == "allocation":
