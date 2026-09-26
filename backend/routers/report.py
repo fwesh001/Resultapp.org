@@ -883,12 +883,14 @@ def get_report_bundle(
         raw_new_term = (school_info.get("new_term_begins") or "").strip() if school_info else ""
         school_logo = (school_info.get("logo_url") or "").strip() if school_info else ""
         school_motto = (school_info.get("motto") or "").strip() if school_info else ""
+        school_sig = (school_info.get("principal_signature_url") or "").strip() if school_info else ""
         school_payload = {
             "school_name": school_info.get("school_name") if school_info else None,
             "address": school_address or None,
             "new_term_begins": raw_new_term or None,
             "logo_url": school_logo or None,
             "motto": school_motto or None,
+            "principal_signature_url": school_sig or None,
         }
 
         return {
@@ -899,6 +901,9 @@ def get_report_bundle(
             "behavioural": behavioural_merged,
             "form_teacher_remark": form_teacher_remark_out,
             "principal_remark": principal_remark_out,
+            "published_at": published_at_out,
+            "form_teacher_name": form_teacher_name_out,
+            "form_teacher_signature_url": form_teacher_signature_out,
             "summary": {
                 "totalScore": total_score,
                 "average": average,
