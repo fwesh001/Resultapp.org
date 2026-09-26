@@ -205,6 +205,7 @@ def get_form_grid(
         TENANT_GRADES_TABLE,
         TENANT_ALLOCATIONS_TABLE,
         TENANT_FORM_ASSIGNMENTS_TABLE,
+        TENANT_STAFF_TABLE,
         _connect_as_superuser,
     )
 
