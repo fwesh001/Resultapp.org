@@ -356,6 +356,12 @@ def init_schools_registry() -> None:
             SET staff_id_prefix = 'STAFF/'
             WHERE staff_id_prefix IS NULL;
         """)
+        # Smart Remarks: principal-authored grade-band scheme (JSONB array of
+        # {min, max, text}); empty array = feature off. Additive only.
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS principal_remark_scheme JSONB DEFAULT '[]'::jsonb;
+        """)
         # Phase: Superadmin Command Center — immutable audit trail for manual ops
         cur.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -1832,6 +1838,11 @@ def init_roster_registry() -> None:
 
         # Remarks — nullable per-student per-subject per-term comment, form-teacher-only writes.
         cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS remarks TEXT;")
+        # Smart Remarks outputs (cutover targets; legacy `remarks` kept for history).
+        cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS form_teacher_remark TEXT;")
+        cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS principal_remark TEXT;")
+        # Smart Remarks: form-teacher-authored grade-band scheme per class.
+        cur.execute(f"ALTER TABLE {TENANT_FORM_ASSIGNMENTS_TABLE} ADD COLUMN IF NOT EXISTS teacher_remark_scheme JSONB DEFAULT '[]'::jsonb;")
 
         # Indexes for fast subdomain-scoped lookups
         for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE, TENANT_GRADES_TABLE]:
