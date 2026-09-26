@@ -1,8 +1,7 @@
-"""Collision probe: POST an EXPLICIT staff_id that already exists ('stf001').
+"""Behavior map: which single-create paths persist on the live backend?
 
-409 UNIQUE violation -> writer sees the same DB as readers (rollback theory).
-201 Created         -> writer is on a different DB (split-brain theory).
-No cleanup needed: nothing new should persist either way (verify after).
+For each entity: POST -> GET presence check -> DELETE cleanup.
+Prints a persist/ghost verdict per entity.
 """
 
 import json
@@ -47,13 +46,31 @@ def call(method, path, body=None):
             return e.code, {}
 
 
-print("== POST duplicate staff_id='stf001' (exists per GET) ==")
-s, resp = call("POST", f"/api/v1/tenant/{TID}/roster",
-               {"type": "staff", "staff_id": "stf001", "full_name": "ZZZ Collision",
-                "email": None, "phone": None, "role": "Teacher"})
-print("status:", s, "| body:", json.dumps(resp)[:220])
+def check(entity, list_entity, idkey, probe_body, match):
+    s, resp = call("POST", f"/api/v1/tenant/{TID}/roster", probe_body)
+    rec = resp.get("record", {}) if isinstance(resp, dict) else {}
+    uid = rec.get("id")
+    _, lst = call("GET", f"/api/v1/tenant/{TID}/roster?entity_type={list_entity}&page=1&limit=100")
+    rows = lst.get("data", []) if isinstance(lst.get("data"), list) else []
+    present = any(match(r, rec) for r in rows)
+    print(f"{entity}: POST={s} id={str(rec.get(idkey))[:24]} present-after-GET={present} "
+          f"-> {'PERSISTS' if present else 'GHOST'}")
+    if uid:
+        ds, _ = call("DELETE", f"/api/v1/tenant/{TID}/roster/{entity}/{uid}")
+        print(f"   cleanup {entity}/{str(uid)[:8]} -> {ds}")
+    return present
 
-print("== GET total afterwards ==")
-s2, lst = call("GET", f"/api/v1/tenant/{TID}/roster?entity_type=staff&page=1&limit=100")
-rows = lst.get("data", []) if isinstance(lst.get("data"), list) else []
-print("total:", lst.get("total"), "| ids:", [r.get("staff_id") for r in rows][:10])
+
+check("student", "students", "student_id",
+      {"type": "student", "student_id": "", "full_name": "ZZZ Probe",
+       "class_name": "JSS 1", "gender": None},
+      lambda r, rec: r.get("student_id") == rec.get("student_id"))
+
+check("staff", "staff", "staff_id",
+      {"type": "staff", "staff_id": "zzprobe/001", "full_name": "ZZZ Probe",
+       "email": None, "phone": None, "role": "Teacher"},
+      lambda r, rec: r.get("staff_id") == rec.get("staff_id"))
+
+check("subject", "subjects", "subject_name",
+      {"type": "subject", "subject_name": "ZZZ Probe Subject"},
+      lambda r, rec: r.get("subject_name") == rec.get("subject_name"))
