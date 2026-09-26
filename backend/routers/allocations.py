@@ -584,6 +584,13 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 (tid, staff_id, full_name, email, phone, role),
             )
             row = cur.fetchone()
+            # Serialize FIRST: any statement executed after this (including the
+            # forensic SELECT below) replaces cur.description, which would map
+            # the row onto the wrong columns (KeyError 'id' incident).
+            d = _row_to_dict(row, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            d["id"] = str(d["id"])
             # Forensic capture (silent-ghost incident): writer txn/pid BEFORE
             # commit, so a future guard trip can be correlated at the Postgres
             # layer (same xid visible elsewhere? different backend pid?).
@@ -594,10 +601,6 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             except Exception:
                 pass
             conn.commit()
-            d = _row_to_dict(row, cur)
-            if isinstance(d.get("created_at"), datetime):
-                d["created_at"] = d["created_at"].isoformat()
-            d["id"] = str(d["id"])
             # Write-verification guard on a FRESH connection: re-reading on the
             # writer's own connection would see uncommitted rows and prove
             # nothing. A missing row here means the commit did not stick, so
