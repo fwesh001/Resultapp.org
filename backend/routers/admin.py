@@ -218,6 +218,7 @@ class TenantProfileUpdate(BaseModel):
     staff_id_prefix: Optional[str] = None
     current_term: Optional[str] = None
     current_session: Optional[str] = None
+    principal_remark_scheme: Optional[list] = None
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
@@ -277,14 +278,35 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
     for key in ("motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins"):
         if key in data and isinstance(data[key], str) and not data[key].strip():
             data[key] = None
+    # Principal remark scheme: validated + normalized server-side (shared helper).
+    if "principal_remark_scheme" in data:
+        from services.remark_schemes import validate_scheme as _validate_scheme
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session")
+        try:
+            data["principal_remark_scheme"] = __import__("json").dumps(_validate_scheme(data["principal_remark_scheme"]))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid principal_remark_scheme: {e}")
+        # Store canonical JSON text; Postgres casts to JSONB on assignment.
+        data["principal_remark_scheme"] = data["principal_remark_scheme"] + "::jsonb"
+        # NOTE: psycopg2 cannot parameterize a ::jsonb cast suffix — the SET
+        # clause below special-cases this key (see set_clause construction).
+        data["__principal_scheme_jsonb__"] = True
+
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
 
-    set_clause = ", ".join(f"{col} = %s" for col in updates)
-    values = list(updates.values()) + [tid]
+    set_parts = []
+    values: list = []
+    for col, val in updates.items():
+        if col == "principal_remark_scheme" and data.get("__principal_scheme_jsonb__"):
+            set_parts.append(f"{col} = %s::jsonb")
+        else:
+            set_parts.append(f"{col} = %s")
+        values.append(val)
+    set_clause = ", ".join(set_parts)
+    values = values + [tid]
 
     conn = None
     try:
