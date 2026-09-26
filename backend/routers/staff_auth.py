@@ -195,29 +195,27 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# PATCH /{identifier}/profile — self-service signature upload (staff-only)
+# PATCH profile — self-service signature upload (staff-only).
+# NOTE: staff_ids may contain "/" (e.g. "staff/001"), which cannot travel
+# safely in a path segment across server versions. The canonical route is
+# PATCH /profile?staff_id=... ; /{identifier}/profile is kept for backward
+# compatibility (slash-free identifiers only).
 # ---------------------------------------------------------------------------
 
 class StaffProfileUpdate(BaseModel):
     signature_url: Optional[str] = Field(default=None, max_length=512)
 
 
-@router.patch("/{identifier}/profile", summary="Update own staff profile (signature)")
-def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileUpdate):
-    """Update a staffer's own signature_url. Identity enforcement (caller may
-    only edit their own row) lives in the Next.js proxy via staff_session;
-    this router trusts the proxy under the shared secret (established pattern).
-    """
+def _update_staff_signature(tid: str, ident: str, signature_url: Optional[str]) -> dict:
     from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser, _row_to_dict
     from datetime import datetime
 
-    tid = _validate_tenant_id(tenant_id)
     ident = (identifier or "").strip()
     if not ident:
         raise HTTPException(status_code=400, detail="identifier is required")
-    if payload.signature_url is None:
+    if signature_url is None:
         raise HTTPException(status_code=400, detail="signature_url is required")
-    url = payload.signature_url.strip()
+    url = signature_url.strip()
     if len(url) > 512:
         raise HTTPException(status_code=422, detail="signature_url too long (max 512 chars)")
 
@@ -259,6 +257,27 @@ def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileU
                 conn.close()
             except Exception:
                 pass
+
+
+@router.patch("/profile", summary="Update own staff profile via query identifier")
+def update_staff_profile_by_query(
+    tenant_id: str,
+    payload: StaffProfileUpdate,
+    staff_id: Optional[str] = Query(None),
+):
+    """Canonical self-edit route. Identity enforcement (caller may only edit
+    their own row) lives in the Next.js proxy via staff_session; this router
+    trusts the proxy under the shared secret (established pattern).
+    """
+    tid = _validate_tenant_id(tenant_id)
+    return _update_staff_signature(tid, staff_id or "", payload.signature_url)
+
+
+@router.patch("/{identifier}/profile", summary="Update own staff profile (signature)")
+def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileUpdate):
+    """Legacy path variant — kept for backward compatibility (slash-free IDs)."""
+    tid = _validate_tenant_id(tenant_id)
+    return _update_staff_signature(tid, identifier, payload.signature_url)
 
 
 @router.get("/dashboard", summary="Get staff dashboard allocations (query-param staff_id)")
