@@ -853,6 +853,8 @@ def get_report_bundle(
             "groupedTemplate": grouped_template,
             "grades": grades_out,
             "behavioural": behavioural_merged,
+            "form_teacher_remark": form_teacher_remark_out,
+            "principal_remark": principal_remark_out,
             "summary": {
                 "totalScore": total_score,
                 "average": average,
