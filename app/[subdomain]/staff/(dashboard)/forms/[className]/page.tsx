@@ -126,25 +126,21 @@ export default function FormGridPage() {
   }, [fetchGrid]);
 
   function expandStudent(studentId: string) {
-    setExpandedStudent((prev) => {
-      const next = prev === studentId ? null : studentId;
-      // Auto-fill empty remark from the teacher scheme on first expand.
-      if (next !== null && grid) {
-        const current = remarkDrafts[studentId] ?? "";
-        if (!current.trim()) {
-          const suggestion = evaluateSchemeLocal(
-            grid.averages?.[studentId] ?? null,
-            grid.teacher_scheme,
-          );
-          if (suggestion) {
-            setRemarkDrafts((drafts) => ({ ...drafts, [studentId]: suggestion }));
-            setRemarkTouched((touched) => new Set(touched).add(studentId));
-            setAutoFilled((filled) => new Set(filled).add(studentId));
-          }
-        }
+    const opening = expandedStudent !== studentId;
+    // Auto-fill an empty remark from the teacher scheme on expand. The teacher
+    // can still edit freely before saving; untouched empties stay manual.
+    if (opening && grid && !(remarkDrafts[studentId] ?? "").trim()) {
+      const suggestion = evaluateSchemeLocal(
+        grid.averages?.[studentId] ?? null,
+        grid.teacher_scheme,
+      );
+      if (suggestion) {
+        setRemarkDrafts((drafts) => ({ ...drafts, [studentId]: suggestion }));
+        setRemarkTouched((touched) => new Set(touched).add(studentId));
+        setAutoFilled((filled) => new Set(filled).add(studentId));
       }
-      return next;
-    });
+    }
+    setExpandedStudent(opening ? studentId : null);
   }
 
   async function saveScheme(bands: RemarkBand[]) {
