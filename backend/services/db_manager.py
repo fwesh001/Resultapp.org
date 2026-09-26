@@ -1640,6 +1640,74 @@ def publish_student_results(
             raise ValueError(
                 f"Insufficient credits: need {len(to_publish)}, balance is {balance}"
             )
+        # Smart Remarks auto-apply (degrade-to-zero): evaluate the principal
+        # scheme against every resolved student's canonical average (including
+        # already-published re-prints, so late-configured schemes backfill)
+        # and persist principal_remark where currently empty. Any failure here
+        # must NEVER block the paid publication below.
+        principal_remarks_applied = 0
+        try:
+            from services.remark_schemes import evaluate_scheme as _eval_scheme
+            from routers.report import (
+                _extract_breakdown as _rb_extract,
+                _compute_simple_granular_total as _rb_granular,
+                _compute_total as _rb_total,
+            )
+
+            _school = get_school_by_subdomain(subdomain)
+            _scheme = (_school or {}).get("principal_remark_scheme") or []
+            if isinstance(_scheme, list) and _scheme and unique_ids:
+                cur.execute(
+                    """
+                    SELECT academic_structure FROM grading_templates
+                    WHERE tenant_id = %s AND is_active = TRUE
+                    ORDER BY created_at DESC LIMIT 1;
+                    """,
+                    (subdomain,),
+                )
+                _tpl_row = cur.fetchone()
+                _astruct = _tpl_row[0] if _tpl_row and isinstance(_tpl_row[0], dict) else None
+                cur.execute(
+                    """
+                    SELECT student_id, academic_scores FROM tenant_grades
+                    WHERE subdomain = %s AND term = %s AND student_id = ANY(%s);
+                    """,
+                    (subdomain, term, unique_ids),
+                )
+                _totals: dict = {}
+                for _psid, _pscores in ((r[0], r[1]) for r in cur.fetchall()):
+                    if not isinstance(_pscores, dict):
+                        continue
+                    _br = _rb_extract(_pscores)
+                    _gt = _rb_granular(_br)
+                    if _gt is None:
+                        _gt = _rb_total(_astruct, _pscores)
+                    try:
+                        _totals.setdefault(_psid, []).append(float(_gt))
+                    except Exception:
+                        pass
+                _writes: list = []
+                for _psid in unique_ids:
+                    _ts = _totals.get(_psid) or []
+                    if not _ts:
+                        continue
+                    _avg = round(sum(_ts) / len(_ts), 1)
+                    _txt = _eval_scheme(_avg, _scheme)
+                    if _txt:
+                        _writes.append((_txt, subdomain, term, _psid))
+                if _writes:
+                    cur.executemany(
+                        """
+                        UPDATE tenant_grades SET principal_remark = %s, updated_at = NOW()
+                        WHERE subdomain = %s AND term = %s AND student_id = %s
+                          AND (principal_remark IS NULL OR principal_remark = '');
+                        """,
+                        _writes,
+                    )
+                    principal_remarks_applied = int(cur.rowcount or 0)
+        except Exception as _re:
+            logger.warning(f"[DB] Principal auto-remarks skipped for '{subdomain}': {_re}")
+            principal_remarks_applied = 0
         published_now = 0
         if to_publish:
             cur.execute(
