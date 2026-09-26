@@ -461,7 +461,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             id_prefix = (srow[1] or tid).strip().lower() or tid
             # Blank ID → next sequential from the school's configured prefix
             if not student_id:
-                student_id = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", 1)[0]
+                student_id = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", 1, tid)[0]
             if slots < 1:
                 cur.execute("ROLLBACK;")
                 # Count used for helpful error
@@ -557,7 +557,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             _prefix = ((_prow[0] if _prow else None) or "STAFF/").strip().lower() or "staff/"
             if not staff_id:
                 # Blank ID → next sequential from the school's configured prefix.
-                staff_id = _next_prefixed_ids(cur, _prefix, TENANT_STAFF_TABLE, "staff_id", 1)[0]
+                staff_id = _next_prefixed_ids(cur, _prefix, TENANT_STAFF_TABLE, "staff_id", 1, tid)[0]
             else:
                 # Defensive de-duplication: strip a pasted full prefix once so
                 # the stored ID never becomes "staff//001".
@@ -784,7 +784,7 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         id_prefix = (srow[1] or tid).strip().lower() or tid
 
         # --- Phase 3: assign sequential IDs (O(1) scan) ---
-        new_ids = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", len(cleaned))
+        new_ids = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", len(cleaned), tid)
         fresh = [
             {
                 "student_id": nid,
@@ -931,7 +931,7 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
         # Effective prefix is always lowercase (staff/001 not STAFF/001).
         staff_prefix = ((srow[0] or "STAFF/").strip().lower()) or "staff/"
 
-        new_ids = _next_prefixed_ids(cur, staff_prefix, TENANT_STAFF_TABLE, "staff_id", len(cleaned))
+        new_ids = _next_prefixed_ids(cur, staff_prefix, TENANT_STAFF_TABLE, "staff_id", len(cleaned), tid)
         placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))"] * len(cleaned))
         flat: list = []
         for c, nid in zip(cleaned, new_ids):
