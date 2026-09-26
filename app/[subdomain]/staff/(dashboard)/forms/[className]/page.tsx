@@ -116,6 +116,8 @@ export default function FormGridPage() {
       setRemarkDrafts({ ...(data.remarks || {}), ...(data.form_teacher_remarks || {}) });
       setRemarkTouched(new Set());
       setAutoFilled(new Set());
+      autoSaveGuard.current = new Set();
+      setAutoSaveStatus({});
       setExpandedStudent(null);
     } catch (err) {
       setGrid(null);
@@ -131,8 +133,9 @@ export default function FormGridPage() {
 
   function expandStudent(studentId: string) {
     const opening = expandedStudent !== studentId;
-    // Auto-fill an empty remark from the teacher scheme on expand. The teacher
-    // can still edit freely before saving; untouched empties stay manual.
+    // Auto-fill an empty remark from the teacher scheme on expand, then
+    // background-save it immediately (once per student per term). The teacher
+    // can still edit freely; manual save remains the override path.
     if (opening && grid && !(remarkDrafts[studentId] ?? "").trim()) {
       const suggestion = evaluateSchemeLocal(
         grid.averages?.[studentId] ?? null,
@@ -142,6 +145,7 @@ export default function FormGridPage() {
         setRemarkDrafts((drafts) => ({ ...drafts, [studentId]: suggestion }));
         setRemarkTouched((touched) => new Set(touched).add(studentId));
         setAutoFilled((filled) => new Set(filled).add(studentId));
+        void autoSaveRemark(studentId, suggestion, grid);
       }
     }
     setExpandedStudent(opening ? studentId : null);
@@ -160,6 +164,9 @@ export default function FormGridPage() {
     const data = (await res.json().catch(() => ({}))) as { error?: string; bands?: RemarkBand[] };
     if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
     setGrid((prev) => (prev ? { ...prev, teacher_scheme: data.bands ?? bands } : prev));
+    // New bands may match previously skipped students — re-arm auto-save.
+    autoSaveGuard.current = new Set();
+    setAutoSaveStatus({});
     toast.success("Auto-remark scheme saved");
   }
 
