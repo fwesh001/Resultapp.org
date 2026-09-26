@@ -490,6 +490,14 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 (tid, student_id, full_name, class_name, gender),
             )
             row = cur.fetchone()
+            # Serialize IMMEDIATELY: subsequent statements below (slot UPDATE,
+            # ledger INSERT without RETURNING) invalidate cur.description, so
+            # serializing after COMMIT raised "'NoneType' object is not
+            # iterable" (500 post-commit while the row persisted).
+            d = _row_to_dict(row, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            d["id"] = str(d["id"])
             # Decrement slot and log
             cur.execute(
                 f"""
@@ -513,10 +521,6 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 (tid, ref, f"Allocated slot for student {student_id}"),
             )
             cur.execute("COMMIT;")
-            d = _row_to_dict(row, cur)
-            if isinstance(d.get("created_at"), datetime):
-                d["created_at"] = d["created_at"].isoformat()
-            d["id"] = str(d["id"])
             # Include remaining slots in response for UI feedback
             d["slots_remaining"] = int(new_slots[0] or 0) if new_slots else slots - 1
             return {"type": "student", "record": d}
