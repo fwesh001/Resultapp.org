@@ -342,6 +342,146 @@ def get_form_grid(
 
 
 # ---------------------------------------------------------------------------
+# Teacher remark scheme — per-class auto-remark bands (form-teacher-only)
+# ---------------------------------------------------------------------------
+
+class SchemePayload(BaseModel):
+    bands: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+def _resolve_form_teacher(cur, tid: str, class_name: str, staff_id: str) -> str:
+    """Resolve caller to canonical staff_id and require the form assignment.
+
+    Returns canonical staff_id. Raises 403 (unknown staff) or 403 (not the
+    form teacher). Shared by scheme + trait/remark write paths.
+    """
+    from services.db_manager import TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE
+
+    caller = (staff_id or "").strip()
+    if not caller:
+        raise HTTPException(status_code=422, detail="staff_id is required")
+    cur.execute(
+        f"""
+        SELECT staff_id FROM {TENANT_STAFF_TABLE}
+        WHERE subdomain = %s
+          AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
+        LIMIT 1
+        """,
+        (tid, caller, caller, caller),
+    )
+    srow = cur.fetchone()
+    if srow is None:
+        raise HTTPException(status_code=403, detail=f"Unknown staff '{caller}' in tenant '{tid}'")
+    canonical = str(srow[0])
+    cur.execute(
+        f"""
+        SELECT 1 FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+        WHERE subdomain = %s AND class_name = %s AND LOWER(staff_id) = LOWER(%s)
+        LIMIT 1
+        """,
+        (tid, class_name, canonical),
+    )
+    if cur.fetchone() is None:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Staff '{canonical}' is not the Form Teacher for '{class_name}'",
+        )
+    return canonical
+
+
+@router.get("/forms/{class_name}/scheme", summary="Read the form-teacher remark scheme")
+def get_teacher_scheme(
+    tenant_id: str,
+    class_name: str,
+    staff_id: Optional[str] = Query(None),
+):
+    """Return this class's teacher_remark_scheme (any staff reader allowed)."""
+    from services.db_manager import TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+    class_name = (class_name or "").strip()
+    if not class_name:
+        raise HTTPException(status_code=400, detail="class_name is required")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT teacher_remark_scheme FROM {TENANT_FORM_ASSIGNMENTS_TABLE}
+            WHERE subdomain = %s AND class_name = %s LIMIT 1
+            """,
+            (tid, class_name),
+        )
+        row = cur.fetchone()
+        bands = row[0] if row and isinstance(row[0], list) else []
+        return {"subdomain": tid, "class_name": class_name, "bands": bands}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.put("/forms/{class_name}/scheme", summary="Save the form-teacher remark scheme")
+def put_teacher_scheme(tenant_id: str, class_name: str, payload: SchemePayload, staff_id: Optional[str] = Query(None)):
+    """Validate + store bands. Writer must be the class's form teacher."""
+    import json as _json
+
+    from services.db_manager import TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser
+    from services.remark_schemes import validate_scheme
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant_exists(tid)
+    class_name = (class_name or "").strip()
+    if not class_name:
+        raise HTTPException(status_code=400, detail="class_name is required")
+    try:
+        normalized = validate_scheme(payload.bands)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid scheme: {e}")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        canonical = _resolve_form_teacher(cur, tid, class_name, staff_id or "")
+        cur.execute(
+            f"""
+            UPDATE {TENANT_FORM_ASSIGNMENTS_TABLE}
+            SET teacher_remark_scheme = %s::jsonb, updated_at = NOW()
+            WHERE subdomain = %s AND class_name = %s
+            RETURNING class_name;
+            """,
+            (_json.dumps(normalized), tid, class_name),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"No form assignment for class '{class_name}'")
+        conn.commit()
+        logger.info(f"[staff-grading] scheme saved {tid}/{class_name} by {canonical}")
+        return {"success": True, "subdomain": tid, "class_name": class_name, "bands": normalized}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[staff-grading] scheme save failed for {tid}/{class_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save scheme: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # GET — grading bundle for one class + subject + term
 # ---------------------------------------------------------------------------
 
