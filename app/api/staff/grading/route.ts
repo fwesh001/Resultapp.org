@@ -142,6 +142,38 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Scheme mode: ?view=scheme&class_name= — the teacher's own auto-remark
+  // bands for the class (read-only here; writes go through PUT below).
+  if (view === "scheme") {
+    if (!className) {
+      return NextResponse.json(
+        { success: false, error: "view=scheme requires class_name" },
+        { status: 400 },
+      );
+    }
+    const schemeUrl =
+      `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading/forms/` +
+      `${encodeURIComponent(className)}/scheme?staff_id=${encodeURIComponent(session.staffId)}`;
+    try {
+      const sr = await fetch(schemeUrl, {
+        headers: { "X-API-SECRET-KEY": secret },
+        cache: "no-store",
+      });
+      const sdata = await sr.json().catch(() => ({}));
+      if (!sr.ok) {
+        const detail = (sdata as { detail?: unknown })?.detail ?? "Scheme fetch failed";
+        return NextResponse.json({ success: false, error: String(detail) }, { status: sr.status });
+      }
+      return NextResponse.json(sdata, { status: 200 });
+    } catch (e) {
+      console.error("[api/staff/grading GET scheme] backend fetch failed", e);
+      return NextResponse.json(
+        { success: false, error: "Could not reach grading service" },
+        { status: 502 },
+      );
+    }
+  }
+
   // Hub mode: no class/subject -> allocations + active template.
   // Dashboard uses the query-param route: staff_ids may contain "/" and
   // cannot travel safely in a path segment across server versions.
