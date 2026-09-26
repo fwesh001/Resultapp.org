@@ -5,7 +5,7 @@ Protected by _verify_allocations_secret fallback (system-to-system)
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from pydantic import BaseModel, Field
 import os
 import logging
