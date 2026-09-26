@@ -559,6 +559,9 @@ def get_report_bundle(
         behavioural_merged: Dict[str, str] = {}
         form_teacher_remark_out: Optional[str] = None
         principal_remark_out: Optional[str] = None
+        published_at_out: Optional[str] = None
+        form_teacher_name_out: Optional[str] = None
+        form_teacher_signature_out: Optional[str] = None
 
         class_student_ids: List[str] = []
         class_name: Optional[str] = None
