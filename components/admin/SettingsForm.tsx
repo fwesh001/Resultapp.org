@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import UploadField from "@/components/ui/UploadField";
-import type { School } from "@/types/school";
+import SchemeBuilder from "@/components/remarks/SchemeBuilder";
+import type { RemarkBand, School } from "@/types/school";
 
 interface SettingsFormProps {
   school: School | null;
@@ -356,6 +357,34 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <p className="mt-1 text-xs text-purple-300/40">
           Resumption date for the next term (e.g., 2026-01-09). Displayed as “09 Jan 2026” on report cards. Leave empty for “—”.
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4">
+        <h3 className="text-sm font-semibold text-white">Principal&apos;s Remark Scheme</h3>
+        <p className="mt-1 text-xs text-purple-300/50">
+          Grade bands that auto-generate principal remarks from overall averages. Used by the “Auto-Apply Principal Remarks” bulk action. Averages in gaps stay manual.
+        </p>
+        <div className="mt-3">
+          <SchemeBuilder
+            initial={school?.principalRemarkScheme ?? []}
+            accent="purple"
+            onSave={async (bands: RemarkBand[]) => {
+              const subdomain = school?.slug ?? "";
+              if (!subdomain) throw new Error("Unknown school subdomain — cannot save.");
+              const res = await fetch("/api/admin/settings", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subdomain, principal_remark_scheme: bands }),
+              });
+              const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+              if (!res.ok || data.success === false) {
+                throw new Error(data.error || "Failed to save scheme.");
+              }
+              setSuccess("Principal remark scheme saved.");
+              router.refresh();
+            }}
+          />
+        </div>
       </div>
 
         </div>
