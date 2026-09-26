@@ -240,8 +240,9 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
       if (!res.ok || (data as { success?: boolean }).success === false) {
         throw new Error((data as { error?: string }).error || `Publish failed (${res.status})`);
       }
-      const d = data as { published_now?: number; new_balance?: number; already_published?: string[] };
-      toast.success(`Published ${d.published_now ?? uniqueIds.length} report card(s)`, {
+      const d = data as { published_now?: number; new_balance?: number; already_published?: string[]; principal_remarks_applied?: number };
+      const remarksNote = (d.principal_remarks_applied ?? 0) > 0 ? ` • ${d.principal_remarks_applied} principal remark(s) applied` : "";
+      toast.success(`Published ${d.published_now ?? uniqueIds.length} report card(s)${remarksNote}`, {
         description: d.already_published?.length ? `${d.already_published.length} were already published (free).` : `New balance: ${d.new_balance ?? balance} credits.`,
       });
       setSelected({});
