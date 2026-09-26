@@ -16,7 +16,9 @@ async function getStaffDashboard(tenantId: string, staffId: string) {
     process.env.BACKEND_URL?.trim() ||
     process.env.PROVISION_API_URL?.trim()?.replace(/\/api\/v1\/provision\/?$/, "") ||
     "http://159.223.178.34:8000";
-  const url = `${base.replace(/\/$/, "")}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/${encodeURIComponent(staffId)}/dashboard`;
+  // Query-param route: staff_ids may contain "/" (e.g. "staff/001"), which is
+  // unsafe in a path segment across server versions.
+  const url = `${base.replace(/\/$/, "")}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/dashboard?staff_id=${encodeURIComponent(staffId)}`;
   const secret = process.env.BACKEND_API_SECRET?.trim() || process.env.PROVISION_API_SECRET?.trim() || process.env.API_SECRET_KEY?.trim() || "";
   const headers: Record<string, string> = secret ? { "X-API-SECRET-KEY": secret } : {};
   const res = await fetch(url, { headers, cache: "no-store" });
