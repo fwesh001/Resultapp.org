@@ -362,6 +362,11 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS principal_remark_scheme JSONB DEFAULT '[]'::jsonb;
         """)
+        # Report signatures: centralized principal signature image (URL).
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS principal_signature_url TEXT;
+        """)
         # Phase: Superadmin Command Center — immutable audit trail for manual ops
         cur.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -1846,6 +1851,8 @@ def init_roster_registry() -> None:
         # Future-proof Active Staff flag — additive, defaults TRUE, counts WHERE is_active=TRUE
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
+        # Report signatures: per-staff signature image (URL), self-managed.
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS signature_url TEXT;")
 
         # Allocations — subject → staff → class
         cur.execute(f"""
