@@ -192,3 +192,23 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
                 conn.close()
             except Exception:
                 pass
+
+
+@router.get("/dashboard", summary="Get staff dashboard allocations (query-param staff_id)")
+def staff_dashboard_by_query(tenant_id: str, staff_id: str = ""):
+    """Query-param variant — the canonical route for staff_ids containing "/"."""
+    tid = _validate_tenant_id(tenant_id)
+    sid = (staff_id or "").strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="staff_id is required")
+    return _load_staff_dashboard(tid, sid)
+
+
+@router.get("/{staff_id}/dashboard", summary="Get staff dashboard allocations")
+def staff_dashboard(tenant_id: str, staff_id: str):
+    """Legacy path variant — kept for backward compatibility (slash-free IDs)."""
+    tid = _validate_tenant_id(tenant_id)
+    sid = (staff_id or "").strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="staff_id is required")
+    return _load_staff_dashboard(tid, sid)
