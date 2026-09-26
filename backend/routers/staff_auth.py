@@ -210,7 +210,7 @@ def _update_staff_signature(tid: str, ident: str, signature_url: Optional[str]) 
     from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser, _row_to_dict
     from datetime import datetime
 
-    ident = (identifier or "").strip()
+    ident = (ident or "").strip()
     if not ident:
         raise HTTPException(status_code=400, detail="identifier is required")
     if signature_url is None:
