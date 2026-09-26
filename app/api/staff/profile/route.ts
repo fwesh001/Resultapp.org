@@ -80,9 +80,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
+  // Query-param route: staff_ids may contain "/" (e.g. "staff/001"), which is
+  // unsafe in a path segment across server versions (same lesson as the
+  // dashboard route).
   try {
     const r = await fetch(
-      `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenant)}/staff/${encodeURIComponent(target)}/profile`,
+      `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenant)}/staff/profile?staff_id=${encodeURIComponent(target)}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
