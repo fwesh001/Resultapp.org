@@ -202,6 +202,8 @@ export default function FormGridPage() {
         class_name: grid.class_name,
         assessment_key: "behavioural",
         scores: payloadScores,
+        // Smart Remarks cutover: persist into form_teacher_remark.
+        remark_kind: "form_teacher",
       };
       if (remarkText !== null) payload.remarks = { [studentId]: remarkText };
       const res = await fetch("/api/staff/grading", {
@@ -218,13 +220,24 @@ export default function FormGridPage() {
         for (const i of payloadScores as Array<{ trait: string; score: string }>) merged[i.trait] = i.score;
         traits[studentId] = merged;
         const remarks = { ...prev.remarks };
+        const formTeacherRemarks = { ...(prev.form_teacher_remarks || {}) };
         if (remarkText !== null) {
-          if (remarkText) remarks[studentId] = remarkText;
-          else delete remarks[studentId];
+          if (remarkText) {
+            remarks[studentId] = remarkText;
+            formTeacherRemarks[studentId] = remarkText;
+          } else {
+            delete remarks[studentId];
+            delete formTeacherRemarks[studentId];
+          }
         }
-        return { ...prev, traits, remarks };
+        return { ...prev, traits, remarks, form_teacher_remarks: formTeacherRemarks };
       });
       setRemarkTouched((prev) => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+      setAutoFilled((prev) => {
         const next = new Set(prev);
         next.delete(studentId);
         return next;
