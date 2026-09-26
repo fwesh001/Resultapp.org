@@ -10,10 +10,11 @@ import { toTitleCase } from "@/lib/format";
 interface StaffShellProps {
   subdomain: string;
   schoolName: string;
+  formClasses?: Array<{ class_name: string }>;
   children: React.ReactNode;
 }
 
-export default function StaffShell({ subdomain, schoolName, children }: StaffShellProps) {
+export default function StaffShell({ subdomain, schoolName, formClasses, children }: StaffShellProps) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -34,7 +35,7 @@ export default function StaffShell({ subdomain, schoolName, children }: StaffShe
   return (
     <div className="flex h-screen bg-[#0B0514] text-white">
       <div className="hidden md:flex">
-        <StaffSidebar subdomain={subdomain} schoolName={schoolName} />
+        <StaffSidebar subdomain={subdomain} schoolName={schoolName} formClasses={formClasses} />
       </div>
 
       {open && (
@@ -47,7 +48,7 @@ export default function StaffShell({ subdomain, schoolName, children }: StaffShe
         >
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute left-0 top-0 h-full shadow-2xl">
-            <StaffSidebar subdomain={subdomain} schoolName={schoolName} onNavigate={() => setOpen(false)} />
+            <StaffSidebar subdomain={subdomain} schoolName={schoolName} formClasses={formClasses} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}
