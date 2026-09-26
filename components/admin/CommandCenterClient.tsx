@@ -501,16 +501,6 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
         loading={publishing}
         onConfirm={() => void runPublish()}
       />
-      <ConfirmDialog
-        open={pendingApply !== null}
-        onOpenChange={(o) => { if (!o) setPendingApply(null); }}
-        title="Auto-apply principal remarks?"
-        message={pendingApply?.message}
-        variant="default"
-        confirmLabel="Apply remarks"
-        loading={applyingRemarks}
-        onConfirm={() => void runApplyRemarks()}
-      />
     </div>
   );
 }
