@@ -168,7 +168,7 @@ def list_roster(tenant_id: str, entity_type: Optional[str] = None, page: int = 1
             ),
             "staff": (
                 TENANT_STAFF_TABLE,
-                "id, subdomain, staff_id, full_name, email, phone, role, created_at",
+                "id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at",
             ),
             "allocations": (
                 TENANT_ALLOCATIONS_TABLE,
@@ -581,7 +581,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 f"""
                 INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
                 VALUES (%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))
-                RETURNING id, subdomain, staff_id, full_name, email, phone, role, created_at;
+                RETURNING id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at;
                 """,
                 (tid, staff_id, full_name, email, phone, role),
             )
