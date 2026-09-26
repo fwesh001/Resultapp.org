@@ -697,12 +697,28 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
-                      <div className="h-6 border-b border-slate-400" />
+                      {formTeacherSig ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={formTeacherSig}
+                          alt="Class teacher signature"
+                          className="h-6 object-contain object-left"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : formTeacherName ? (
+                        <p className="font-cursive text-sm italic text-slate-900">{formTeacherName}</p>
+                      ) : (
+                        <div className="h-6 border-b border-slate-400" />
+                      )}
                       <p className="mt-0.5 text-[10px] font-medium leading-none text-slate-700">Class Teacher&apos;s Signature</p>
                     </div>
                     <div className="w-20">
                       <div className="h-6 border-b border-slate-400" />
-                      <p className="mt-0.5 text-[10px] leading-none text-slate-500">Date</p>
+                      <p className="mt-0.5 text-[10px] leading-none text-slate-500">
+                        {publishedDisplay ? `Date: ${publishedDisplay}` : "Date"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -714,12 +730,26 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
-                      <div className="h-6 border-b border-slate-400" />
+                      {principalSig ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={principalSig}
+                          alt="Principal signature"
+                          className="h-6 object-contain object-left"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="h-6 border-b border-slate-400" />
+                      )}
                       <p className="mt-0.5 text-[10px] font-medium leading-none text-slate-700">Principal&apos;s Signature</p>
                     </div>
                     <div className="w-20">
                       <div className="h-6 border-b border-slate-400" />
-                      <p className="mt-0.5 text-[10px] leading-none text-slate-500">Date</p>
+                      <p className="mt-0.5 text-[10px] leading-none text-slate-500">
+                        {publishedDisplay ? `Date: ${publishedDisplay}` : "Date"}
+                      </p>
                     </div>
                   </div>
                 </div>
