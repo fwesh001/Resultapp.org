@@ -367,3 +367,73 @@ export async function POST(req: NextRequest) {
   if (!backendRes.ok) return backendError(data, text, backendRes.status);
   return NextResponse.json(data, { status: 200 });
 }
+
+export async function PUT(req: NextRequest) {
+  // Scheme save: PUT /api/staff/grading?tenant_id=&class_name= { bands }
+  // Forwards staff identity server-side; backend enforces form-teacher auth.
+  const session = await getSessionDetails();
+  if (!session) return unauthorized();
+
+  const params = req.nextUrl.searchParams;
+  const tenantId = String(params.get("tenant_id") ?? params.get("tenantId") ?? "")
+    .toLowerCase()
+    .trim();
+  const className = String(params.get("class_name") ?? "").trim();
+  if (!tenantId || !className) {
+    return NextResponse.json(
+      { success: false, error: "Missing tenant_id or class_name" },
+      { status: 400 },
+    );
+  }
+  if (tenantId !== session.tenant) {
+    return NextResponse.json(
+      { success: false, error: "Session does not belong to this school" },
+      { status: 403 },
+    );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "Invalid JSON" },
+      { status: 400 },
+    );
+  }
+
+  const secret = getSecret();
+  if (!secret) {
+    return NextResponse.json(
+      { success: false, error: "Server misconfigured: missing BACKEND_API_SECRET" },
+      { status: 500 },
+    );
+  }
+
+  const url =
+    `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/grading/forms/` +
+    `${encodeURIComponent(className)}/scheme?staff_id=${encodeURIComponent(session.staffId)}`;
+  try {
+    const r = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-SECRET-KEY": secret,
+      },
+      body: JSON.stringify({ bands: body.bands ?? [] }),
+      cache: "no-store",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const detail = (data as { detail?: unknown })?.detail ?? "Scheme save failed";
+      return NextResponse.json({ success: false, error: String(detail) }, { status: r.status });
+    }
+    return NextResponse.json(data, { status: 200 });
+  } catch (e) {
+    console.error("[api/staff/grading PUT scheme] backend fetch failed", e);
+    return NextResponse.json(
+      { success: false, error: "Could not reach grading service" },
+      { status: 502 },
+    );
+  }
+}
