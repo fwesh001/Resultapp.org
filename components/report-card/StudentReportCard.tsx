@@ -230,6 +230,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // Prefer report school address, else fallback to prop schoolName's tenant address via page wrapper? For now use report
   const schoolAddress = (schoolFromReport?.address ?? "").trim() || "";
   // Logo: report payload wins, page-level tenant logo is the fallback.
+  const principalSig = (schoolFromReport?.principal_signature_url || "").trim();
   const rawLogo = (schoolFromReport?.logo_url ?? schoolLogoUrl ?? "").trim();
   const schoolMottoText = (schoolFromReport?.motto ?? schoolMotto ?? "").trim();
   const hasLogo = Boolean(rawLogo) && !imgError;
