@@ -7,7 +7,9 @@
 # (First time only, make it executable:  chmod +x ./update.sh)
 #
 # What it does:
-#   1. Shows working-tree status (dirty tree aborts the pull loudly).
+#   1. Verifies the working tree is pull-safe (aborts ONLY on files that
+#      truly conflict with incoming changes — identical or disjoint local
+#      modifications, e.g. this script checked out ahead, are harmless).
 #   2. git pull --stat  (full +++/--- per-file visuals, as requested).
 #   3. Installs Python deps (skip with SKIP_DEPS=1).
 #   4. Pre-flight: byte-compiles the backend BEFORE touching the live server,
@@ -49,30 +51,48 @@ step "1/7 Working tree"
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   die "not inside a git checkout ($APP_DIR)"
 fi
-DIRTY="$(git status --short)"
-if [ -n "$DIRTY" ]; then
-  printf '%s\n' "$DIRTY"
-  die "working tree is dirty — commit or stash droplet-local changes first (pull would fail halfway)"
-fi
-ok "tree clean"
-
-# ---------------------------------------------------------------- 2. pull
-step "2/7 Pulling latest code (with per-file diffstat)"
-BEFORE_SHA="$(git rev-parse --short HEAD)"
+REMOTE="${GIT_REMOTE:-origin}"
+BRANCH="${GIT_BRANCH:-main}"
 # Checkouts that lost upstream tracking (or sit detached after manual
 # `git checkout <sha>` calls) make bare `git pull` fail with "no tracking
 # information". Repair deterministically instead of dying cryptically.
-REMOTE="${GIT_REMOTE:-origin}"
-BRANCH="${GIT_BRANCH:-main}"
 CUR_BRANCH="$(git branch --show-current 2>/dev/null || true)"
 if [ -z "$CUR_BRANCH" ]; then
-  die "detached HEAD with no branch — attach it first: git checkout -B $BRANCH $REMOTE/$BRANCH (tree is clean, nothing to lose)"
+  die "detached HEAD with no branch — attach it first: git checkout -B $BRANCH $REMOTE/$BRANCH"
 fi
 if ! git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
   warn "no upstream tracking on '$CUR_BRANCH' — linking it to $REMOTE/$BRANCH"
   git branch --set-upstream-to="$REMOTE/$BRANCH" "$CUR_BRANCH" \
     || die "cannot set upstream for '$CUR_BRANCH' (does $REMOTE/$BRANCH exist?)"
 fi
+git fetch "$REMOTE" || die "git fetch failed — remote unreachable"
+# Pull-safety: only dirty files that incoming changes actually touch AND
+# differ from are dangerous. Identical content (e.g. this script delivered
+# ahead of the pull) or disjoint paths proceed — the merge cannot break.
+# NOTE: paths with spaces are not supported here (repo has none).
+INCOMING="$(git diff --name-only "HEAD...@{u}" 2>/dev/null || true)"
+DIRTY_FILES="$(git status --short | awk '{print $NF}')"
+CONFLICT=""
+for _f in $DIRTY_FILES; do
+  if printf '%s\n' "$INCOMING" | grep -qxF -- "$_f"; then
+    if [ -f "$_f" ] && git show "@{u}:$_f" 2>/dev/null | cmp -s -- - "$_f"; then
+      continue
+    fi
+    CONFLICT="${CONFLICT:+$CONFLICT }${_f}"
+  fi
+done
+if [ -n "$CONFLICT" ]; then
+  die "local changes conflict with incoming $REMOTE/$BRANCH in: $CONFLICT — stash or commit them first (e.g. git stash push -- $CONFLICT)"
+fi
+if [ -z "$DIRTY_FILES" ]; then
+  ok "tree clean"
+else
+  warn "proceeding with harmless local modifications (no overlap with incoming changes)"
+fi
+
+# ---------------------------------------------------------------- 2. pull
+step "2/7 Pulling latest code (with per-file diffstat)"
+BEFORE_SHA="$(git rev-parse --short HEAD)"
 git pull --stat || die "git pull failed — remote unreachable or merge conflict"
 AFTER_SHA="$(git rev-parse --short HEAD)"
 printf '%sbefore:%s %s  %safter:%s %s\n' "$DIM" "$RESET" "$BEFORE_SHA" "$DIM" "$RESET" "$AFTER_SHA"
