@@ -532,7 +532,7 @@ def get_report_bundle(
 
     # Fetch student bio from tenant_students
     student = None
-    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser, _row_to_dict
+    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser, _row_to_dict
 
     conn = None
     try:
