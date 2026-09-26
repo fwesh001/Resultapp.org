@@ -1,5 +1,9 @@
-"""Flap test: same staff POST 3x. Rollback -> 201 with SAME id each time.
-Persistence -> first 201, rest 409. Cleans up any created rows."""
+"""Collision probe: POST an EXPLICIT staff_id that already exists ('stf001').
+
+409 UNIQUE violation -> writer sees the same DB as readers (rollback theory).
+201 Created         -> writer is on a different DB (split-brain theory).
+No cleanup needed: nothing new should persist either way (verify after).
+"""
 
 import json
 import logging
@@ -43,21 +47,13 @@ def call(method, path, body=None):
             return e.code, {}
 
 
-created_ids = []
-for i in range(3):
-    s, resp = call("POST", f"/api/v1/tenant/{TID}/roster",
-                   {"type": "staff", "staff_id": "", "full_name": "ZZZ Flap",
-                    "email": None, "phone": None, "role": "Teacher"})
-    rec = resp.get("record", {}) if isinstance(resp, dict) else {}
-    print(f"attempt {i}: status={s} staff_id={rec.get('staff_id')} uuid={rec.get('id')}")
-    if rec.get("id"):
-        created_ids.append(rec["id"])
+print("== POST duplicate staff_id='stf001' (exists per GET) ==")
+s, resp = call("POST", f"/api/v1/tenant/{TID}/roster",
+               {"type": "staff", "staff_id": "stf001", "full_name": "ZZZ Collision",
+                "email": None, "phone": None, "role": "Teacher"})
+print("status:", s, "| body:", json.dumps(resp)[:220])
 
-s, lst = call("GET", f"/api/v1/tenant/{TID}/roster?entity_type=staff&page=1&limit=100")
+print("== GET total afterwards ==")
+s2, lst = call("GET", f"/api/v1/tenant/{TID}/roster?entity_type=staff&page=1&limit=100")
 rows = lst.get("data", []) if isinstance(lst.get("data"), list) else []
-print("final total:", lst.get("total"), "| flap rows visible:",
-      sum(1 for r in rows if r.get("full_name") == "ZZZ Flap"))
-
-for uid in created_ids:
-    st, _ = call("DELETE", f"/api/v1/tenant/{TID}/roster/staff/{uid}")
-    print("cleanup", uid[:8], "->", st)
+print("total:", lst.get("total"), "| ids:", [r.get("staff_id") for r in rows][:10])
