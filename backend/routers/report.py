@@ -588,8 +588,6 @@ def get_report_bundle(
             rows = cur.fetchall()
             # Smart Remarks outputs: first non-empty across subject rows.
             # form_teacher_remark preferred, legacy `remarks` as fallback.
-            form_teacher_remark_out: Optional[str] = None
-            principal_remark_out: Optional[str] = None
             if rows:
                 for r in rows:
                     subject_name = r[0]
