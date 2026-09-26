@@ -133,6 +133,28 @@ if not API_SECRET and ENV == "production":
     logger.warning("API_SECRET_KEY not set! All provision requests will be rejected in production.")
 
 
+def _server_commit() -> str:
+    """Short git SHA of the serving checkout (best-effort, never raises)."""
+    try:
+        import subprocess
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=here,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        sha = (out.stdout or "").strip()
+        return sha if out.returncode == 0 and sha else "unknown"
+    except Exception:
+        return "unknown"
+
+
+_SERVER_COMMIT = _server_commit()
+
+
 # ---------------------------------------------------------------------------
 # Security dependency
 # ---------------------------------------------------------------------------
