@@ -680,17 +680,19 @@ def post_grading_batch(
         # regardless of class size. Same JSONB-merge semantics as the former
         # per-student loop (single-assessment saves never wipe siblings).
         # remarks: NULL in EXCLUDED preserves the stored value; a provided
-        # string overwrites it.
+        # string overwrites it. remark_kind selects the destination column
+        # (cutover: legacy `remarks` vs Smart Remarks `form_teacher_remark`).
         from psycopg2.extras import execute_values
 
+        remark_col = "form_teacher_remark" if (payload.remark_kind or "") == "form_teacher" else "remarks"
         upsert_sql = (
             f"INSERT INTO {TENANT_GRADES_TABLE} "
-            "(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits, remarks) "
+            f"(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits, {remark_col}) "
             "VALUES %s "
             "ON CONFLICT (subdomain, student_id, subject_name, term) "
             f"DO UPDATE SET academic_scores = {TENANT_GRADES_TABLE}.academic_scores || EXCLUDED.academic_scores, "
             f"behavioural_traits = {TENANT_GRADES_TABLE}.behavioural_traits || EXCLUDED.behavioural_traits, "
-            f"remarks = CASE WHEN EXCLUDED.remarks IS NULL THEN {TENANT_GRADES_TABLE}.remarks ELSE EXCLUDED.remarks END, "
+            f"{remark_col} = CASE WHEN EXCLUDED.{remark_col} IS NULL THEN {TENANT_GRADES_TABLE}.{remark_col} ELSE EXCLUDED.{remark_col} END, "
             "updated_at = NOW()"
         )
         # Chunk to bound single-statement size for very large classes.
