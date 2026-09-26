@@ -465,7 +465,22 @@ export default function FormGridPage() {
                         </select>
                       </div>
                     ))}
-                    {autoFilled.has(s.student_id) && (
+                    {autoSaveStatus[s.student_id] === "saving" && (
+                      <p className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving remark…
+                      </p>
+                    )}
+                    {autoSaveStatus[s.student_id] === "saved" && (
+                      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                        <Sparkles className="h-3.5 w-3.5" /> ✨ Auto-saved from your scheme (avg {avg !== null ? `${avg}%` : "—"}) — edit and click save to override.
+                      </p>
+                    )}
+                    {autoSaveStatus[s.student_id] === "failed" && (
+                      <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
+                        Auto-save failed — click Save to retry.
+                      </p>
+                    )}
+                    {!autoSaveStatus[s.student_id] && autoFilled.has(s.student_id) && (
                       <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
                         <Sparkles className="h-3.5 w-3.5" /> Auto-filled from your scheme (avg {avg !== null ? `${avg}%` : "—"}) — edit freely before saving.
                       </p>
