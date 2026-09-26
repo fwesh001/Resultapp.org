@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
+import { getStaffDashboard } from "@/lib/staffDashboard";
 import { BookOpen, Users, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -9,21 +10,6 @@ export const dynamic = "force-dynamic";
 interface StaffSession {
   staff: { id: string; staff_id: string; full_name: string; email?: string | null; role?: string };
   tenant_id?: string;
-}
-
-async function getStaffDashboard(tenantId: string, staffId: string) {
-  const base =
-    process.env.BACKEND_URL?.trim() ||
-    process.env.PROVISION_API_URL?.trim()?.replace(/\/api\/v1\/provision\/?$/, "") ||
-    "http://159.223.178.34:8000";
-  // Query-param route: staff_ids may contain "/" (e.g. "staff/001"), which is
-  // unsafe in a path segment across server versions.
-  const url = `${base.replace(/\/$/, "")}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/dashboard?staff_id=${encodeURIComponent(staffId)}`;
-  const secret = process.env.BACKEND_API_SECRET?.trim() || process.env.PROVISION_API_SECRET?.trim() || process.env.API_SECRET_KEY?.trim() || "";
-  const headers: Record<string, string> = secret ? { "X-API-SECRET-KEY": secret } : {};
-  const res = await fetch(url, { headers, cache: "no-store" });
-  if (!res.ok) return null;
-  return (await res.json().catch(() => null)) as { staff?: { full_name: string }; allocations?: Array<{ id: string; subject_name: string; class_name: string; staff_name: string }>; count?: number; form_classes?: Array<{ class_name: string }> } | null;
 }
 
 export default async function StaffDashboardPage({
