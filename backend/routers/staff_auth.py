@@ -174,9 +174,14 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         )
         form_classes = [{"class_name": r[0]} for r in cur.fetchall()]
 
-        # Also return staff profile
+        # Also return staff profile (signature included for the profile page).
+        cur.execute(
+            f"SELECT signature_url FROM {TENANT_STAFF_TABLE} WHERE subdomain = %s AND full_name = %s LIMIT 1;",
+            (tid, staff_name),
+        )
+        _sigrow = cur.fetchone()
         return {
-            "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None},
+            "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None, "signature_url": (_sigrow[0] if _sigrow and _sigrow[0] else None)},
             "allocations": allocs,
             "count": len(allocs),
             "form_classes": form_classes,
