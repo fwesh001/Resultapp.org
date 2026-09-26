@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, HeartHandshake, Loader2, MessageSquareText, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
@@ -84,6 +84,10 @@ export default function FormGridPage() {
   const [remarkTouched, setRemarkTouched] = useState<Set<string>>(new Set());
   const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
   const [savingSid, setSavingSid] = useState<string | null>(null);
+  // Background auto-save: fires once per student per term (ref guard checked
+  // synchronously before the first await — no effect loop can double-fire).
+  const autoSaveGuard = useRef<Set<string>>(new Set());
+  const [autoSaveStatus, setAutoSaveStatus] = useState<Record<string, "saving" | "saved" | "failed">>({});
 
   const fetchGrid = useCallback(async () => {
     if (!tenantId || !decodedClassName) return;
