@@ -584,6 +584,15 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                 (tid, staff_id, full_name, email, phone, role),
             )
             row = cur.fetchone()
+            # Forensic capture (silent-ghost incident): writer txn/pid BEFORE
+            # commit, so a future guard trip can be correlated at the Postgres
+            # layer (same xid visible elsewhere? different backend pid?).
+            _w_txid = _w_pid = None
+            try:
+                cur.execute("SELECT txid_current(), pg_backend_pid();")
+                _w_txid, _w_pid = cur.fetchone()
+            except Exception:
+                pass
             conn.commit()
             d = _row_to_dict(row, cur)
             if isinstance(d.get("created_at"), datetime):
@@ -594,6 +603,8 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             # nothing. A missing row here means the commit did not stick, so
             # fail loudly (500) instead of returning a false 201.
             _vconn = None
+            _verified = False
+            _v_txid = _v_pid = _v_total = None
             try:
                 _vconn = _connect_as_superuser()
                 _vcur = _vconn.cursor()
@@ -602,6 +613,13 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                     (d["id"], tid),
                 )
                 _verified = _vcur.fetchone() is not None
+                _vcur.execute("SELECT txid_current(), pg_backend_pid();")
+                _v_txid, _v_pid = _vcur.fetchone()
+                _vcur.execute(
+                    f"SELECT COUNT(*) FROM {TENANT_STAFF_TABLE} WHERE subdomain = %s;",
+                    (tid,),
+                )
+                _v_total = int((_vcur.fetchone() or [0])[0] or 0)
             finally:
                 if _vconn:
                     try:
@@ -609,7 +627,11 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                     except Exception:
                         pass
             if not _verified:
-                logger.error(f"[roster] staff write vanished post-commit for {tid}/{staff_id}")
+                logger.error(
+                    f"[roster] staff write vanished post-commit for {tid}/{staff_id} "
+                    f"writer_txid={_w_txid} writer_pid={_w_pid} "
+                    f"verify_txid={_v_txid} verify_pid={_v_pid} verify_total={_v_total}"
+                )
                 raise HTTPException(status_code=500, detail="Staff save failed verification — please retry")
             return {"type": "staff", "record": d}
 
