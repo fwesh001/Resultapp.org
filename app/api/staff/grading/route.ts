@@ -8,9 +8,9 @@ import { cookies } from "next/headers";
  * only forwards when the session's tenant matches the requested tenant.
  * Injects X-API-SECRET-KEY server-side; the secret never reaches the browser.
  *
- * GET modes:
- *  - Hub mode (no class/subject): ?tenant_id=&tenantId — returns { allocations, template }
- *    by fan-out to /staff/{staffId}/dashboard + /templates/{tenantId} in parallel.
+  * GET modes:
+  *  - Hub mode (no class/subject): ?tenant_id=&tenantId — returns { allocations, template }
+  *    by fan-out to /staff/dashboard?staff_id= + /templates/{tenantId} in parallel.
  *  - Bundle mode: ?tenant_id=&class_name=&subject_name=&term=Term 1 — forwards to
  *    /api/v1/tenant/{tenant_id}/staff/grading/{class}/{subject}?term=
  * POST { tenant_id, term, subject_name, class_name, assessment_key, scores }
@@ -142,9 +142,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Hub mode: no class/subject -> allocations + active template
+  // Hub mode: no class/subject -> allocations + active template.
+  // Dashboard uses the query-param route: staff_ids may contain "/" and
+  // cannot travel safely in a path segment across server versions.
   if (!className || !subjectName) {
-    const dashboardUrl = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/${encodeURIComponent(session.staffId)}/dashboard`;
+    const dashboardUrl = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/staff/dashboard?staff_id=${encodeURIComponent(session.staffId)}`;
     const templatesUrl = `${base}/api/v1/templates/${encodeURIComponent(tenantId)}`;
 
     let dashboardRes: Response;
