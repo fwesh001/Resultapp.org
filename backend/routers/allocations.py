@@ -674,21 +674,32 @@ class BatchSubjectsPayload(BaseModel):
     rows: List[BatchSubjectRow] = Field(..., min_length=1, max_length=2000)
 
 
-def _next_prefixed_ids(cur, prefix: str, table: str, id_col: str, count: int) -> list[str]:
+def _next_prefixed_ids(cur, prefix: str, table: str, id_col: str, count: int, subdomain: str = "") -> list[str]:
     """Generate `count` sequential IDs (`PREFIX/001`, …) in ONE scan.
 
     Reads existing IDs with a LIKE scan, resumes from max(trailing_int)+1,
     and skips taken numbers. O(1) round-trips regardless of batch size.
     Matching is case-insensitive on the prefix; generated IDs preserve the
     configured prefix casing (e.g. STAFF/001).
+
+    The prefix is normalized (trailing slashes stripped) so a configured
+    `STAFF/` prefix mints `staff/001`, never `staff//001`. The scan is scoped
+    to `subdomain` when given so other tenants' IDs can't shift sequencing.
     """
     import re as _re_seq
 
+    prefix = (prefix or "").strip().rstrip("/")
     like_pattern = f"{prefix}/%"
-    cur.execute(
-        f"SELECT {id_col} FROM {table} WHERE {id_col} ILIKE %s;",
-        (like_pattern,),
-    )
+    if subdomain:
+        cur.execute(
+            f"SELECT {id_col} FROM {table} WHERE subdomain = %s AND {id_col} ILIKE %s;",
+            (subdomain, like_pattern),
+        )
+    else:
+        cur.execute(
+            f"SELECT {id_col} FROM {table} WHERE {id_col} ILIKE %s;",
+            (like_pattern,),
+        )
     taken: set[int] = set()
     prefix_lc = prefix.lower()
     for (existing_id,) in cur.fetchall():
