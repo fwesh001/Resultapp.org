@@ -354,6 +354,7 @@ export default function FormGridPage() {
               (t) => grid.traits[s.student_id]?.[t],
             ).length;
             const saving = savingSid === s.student_id;
+            const avg = grid.averages?.[s.student_id] ?? null;
             return (
               <div
                 key={s.id}
@@ -370,6 +371,7 @@ export default function FormGridPage() {
                   </span>
                   <span className="text-xs text-purple-300/50">
                     {doneCount}/{grid.allowed_traits.length}
+                    {avg !== null && <span className="ml-2 text-emerald-300/80">avg {avg}%</span>}
                   </span>
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-emerald-300 transition ${expanded ? "rotate-180" : ""}`}
@@ -400,6 +402,11 @@ export default function FormGridPage() {
                         </select>
                       </div>
                     ))}
+                    {autoFilled.has(s.student_id) && (
+                      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                        <Sparkles className="h-3.5 w-3.5" /> Auto-filled from your scheme (avg {avg !== null ? `${avg}%` : "—"}) — edit freely before saving.
+                      </p>
+                    )}
                     <label className="flex items-start gap-2 pt-1">
                       <MessageSquareText className="mt-2 h-4 w-4 shrink-0 text-emerald-300/70" />
                       <textarea
