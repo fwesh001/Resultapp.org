@@ -293,17 +293,15 @@ export default function FormGridPage() {
         }))
         .filter((i) => i.score !== "");
       await persistBehavioural(snapshot, studentId, traitItems, text);
-      // Keep the teacher's newer keystrokes if they typed during the flight.
-      setRemarkDrafts((drafts) => {
-        if ((drafts[studentId] ?? "") !== text) return drafts;
-        return drafts;
-      });
-      setRemarkTouched((prev) => {
-        if ((remarkDrafts[studentId] ?? "") !== text) return prev;
-        const next = new Set(prev);
-        next.delete(studentId);
-        return next;
-      });
+      // Keep the teacher's newer keystrokes if they typed during the flight:
+      // only clear "touched" when the draft still matches what was saved.
+      if ((remarkDrafts[studentId] ?? "") === text) {
+        setRemarkTouched((prev) => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+      }
       setAutoSaveStatus((prev) => ({ ...prev, [studentId]: "saved" }));
     } catch {
       autoSaveGuard.current.delete(key);
