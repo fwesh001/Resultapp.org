@@ -10,7 +10,6 @@ import {
   Coins,
   Loader2,
   Send,
-  Sparkles,
   Users,
 } from "lucide-react";
 import { toast } from "@/components/ui/toast";
@@ -68,8 +67,6 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
   const [publishing, setPublishing] = useState(false);
   const [nudging, setNudging] = useState<string | null>(null);
   const [pendingPublish, setPendingPublish] = useState<{ ids: string[]; message: string } | null>(null);
-  const [applyingRemarks, setApplyingRemarks] = useState(false);
-  const [pendingApply, setPendingApply] = useState<{ classes: string[]; message: string } | null>(null);
 
   /** In-app nudge: dispatches STAFF_GRADING_REMINDER with a grading-hub deep link. */
   async function nudgeStaff(className: string, s: MissingSubject) {
