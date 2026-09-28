@@ -372,35 +372,3 @@ def update_ticket(ticket_id: UUID, body: SupportTicketStatusUpdate):
     )
 
     return {"ticket": ticket}
-
-
-@admin_router.get("/support-tickets/stats/summary", summary="Ticket counts by status")
-def tickets_summary():
-    """Small header widget: open / in_progress / resolved counts."""
-    from services.db_manager import _connect_as_superuser, _row_to_dict
-    from services.db_manager import SUPPORT_TICKETS_TABLE
-
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT status, COUNT(*) AS count FROM {SUPPORT_TICKETS_TABLE}
-            GROUP BY status;
-            """
-        )
-        rows: List[Dict[str, Any]] = [_row_to_dict(r, cur) for r in cur.fetchall()]
-        counts = {r["status"]: int(r["count"]) for r in rows}
-        return {
-            "open": counts.get("open", 0),
-            "in_progress": counts.get("in_progress", 0),
-            "resolved": counts.get("resolved", 0),
-            "total": sum(counts.values()),
-        }
-    except Exception as e:
-        _logger.exception("[support] ticket summary failed")
-        raise HTTPException(status_code=500, detail="Could not load ticket counts")
-    finally:
-        if conn:
-            conn.close()
