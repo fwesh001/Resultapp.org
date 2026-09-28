@@ -389,7 +389,7 @@ export default function TicketsPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
               {tickets.length === 0 && (
