@@ -33,7 +33,6 @@ export default function SuperadminSettingsPage() {
 
   async function handleSave() {
     setPriceSaving(true);
-    setPriceMsg(null);
     setPriceError(null);
     try {
       const res = await fetch("/api/admin/config/credit-price", {
@@ -43,7 +42,7 @@ export default function SuperadminSettingsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
-      setPriceMsg(`Saved: ${formatNaira((data as { credit_price: number }).credit_price)} per credit`);
+      toast.success(`Saved: ${formatNaira((data as { credit_price: number }).credit_price)} per credit`);
     } catch (e) {
       setPriceError(e instanceof Error ? e.message : "Failed to save");
     } finally {
