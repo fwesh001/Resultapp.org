@@ -25,6 +25,138 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ---------------------------------------------------------------------------
+   Button micro-interactions
+   ---------------------------------------------------------------------------
+   One `::after` layer per button, revealed by animating `clip-path`. Deliberately
+   NOT width/height: dimension animation forces layout on every frame, while
+   `clip-path` interpolates on the compositor.
+
+   `isolation: isolate` is load-bearing. The fill must paint above the button's
+   own background but below its text. Per the CSS painting order a `z-index: -1`
+   child sits at step 2 — after the parent's background (step 1), before inline
+   text (step 5) — but `position: relative` with `z-index: auto` does not create
+   a stacking context, so the pseudo-element would resolve against an ancestor
+   and be painted behind it. `isolation: isolate` scopes it to this button.
+
+   Each animation class declares only the two clip shapes. From/to are always the
+   same shape *type* (circle→circle, inset→inset) so they interpolate; mixing
+   types would snap. Colour is NOT set here — `variant` supplies `--btn-fill`,
+   which keeps colour and motion independent axes.
+--------------------------------------------------------------------------- */
+
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.btn-anim {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.btn-anim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--btn-fill);
+  clip-path: var(--clip-from);
+  transition: clip-path 450ms var(--ease-out-soft);
+}
+
+.btn-anim:hover::after,
+.btn-anim:focus-visible::after {
+  clip-path: var(--clip-to);
+}
+
+/* Primary — "Liquid Rise": a dome rising from the bottom edge. */
+.btn-liquid {
+  --clip-from: circle(0% at 50% 100%);
+  --clip-to: circle(150% at 50% 100%);
+}
+
+/* Outline — "Slide-In": a fill wiping in from the left edge. */
+.btn-slide {
+  --clip-from: inset(0 100% 0 0);
+  --clip-to: inset(0 0 0 0);
+}
+
+/* Ghost — "Radial Expand": a soft bloom outward from the exact centre. */
+.btn-radial {
+  --clip-from: circle(0% at 50% 50%);
+  --clip-to: circle(150% at 50% 50%);
+}
+
+/* Destructive — "The Drop": a red mass falling from the top edge. */
+.btn-drop {
+  --clip-from: circle(0% at 50% 0%);
+  --clip-to: circle(150% at 50% 0%);
+}
+
+/* `animation="none"` — keep the base, drop the motion. */
+.btn-anim.btn-anim-off::after {
+  display: none;
+}
+.btn-anim.btn-anim-off:hover {
+  background-color: var(--btn-fill);
+}
+
+/* Fill colours for the two variants that need the label to invert on hover.
+   200ms against the fill's 450ms so the text trails the shape rather than
+   racing it. */
+.btn-anim.btn-outline:hover,
+.btn-anim.btn-outline:focus-visible,
+.btn-anim.btn-ghost:hover,
+.btn-anim.btn-ghost:focus-visible {
+  color: var(--btn-fg-hover, currentColor);
+}
+
+/* A disabled or in-flight button must not animate — the fill would imply the
+   control is live. */
+.btn-anim:disabled::after,
+.btn-anim[aria-busy="true"]::after {
+  display: none;
+}
+
+/* Respect users who ask for less motion: snap to the end state instantly so
+   the hover affordance still reads, just without the tween. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-anim::after {
+    transition: none;
+  }
+  .btn-anim:hover::after,
+  .btn-anim:focus-visible::after {
+    clip-path: var(--clip-to);
+  }
+}
+
+/* Windows High Contrast drops backgrounds, so a clip-path fill is simply
+   invisible. Fall back to the system highlight colours. */
+@media (forced-colors: active) {
+  .btn-anim::after {
+    display: none;
+  }
+  .btn-anim:hover,
+  .btn-anim:focus-visible {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}
+
+/* clip-path shapes are unprefixed from Chrome 88 / Firefox 83 / Safari 14.
+   Below that, keep every style and lose only the motion. */
+@supports not (clip-path: circle(0% at 50% 50%)) {
+  .btn-anim::after {
+    display: none;
+  }
+  .btn-anim:hover,
+  .btn-anim:focus-visible {
+    background-color: var(--btn-fill);
+  }
+}
+
 /* Sticky action bar — keeps Save buttons visible at the bottom of long
    forms and scrolling modals (Settings, Template Builder, Allocate). */
 .action-bar-sticky {
