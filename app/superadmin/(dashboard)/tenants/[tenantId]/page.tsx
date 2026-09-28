@@ -129,7 +129,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
     );
     if (data) {
       setShowSuspend(false);
-      setNotice(suspending ? "Tenant suspended." : "Tenant reactivated.");
+      toast.success(suspending ? "Tenant suspended." : "Tenant reactivated.");
       await load();
     }
   }
