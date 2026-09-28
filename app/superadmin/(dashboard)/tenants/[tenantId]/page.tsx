@@ -37,7 +37,6 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [grantType, setGrantType] = useState<"CREDIT" | "SLOT">("CREDIT");
   const [grantAmount, setGrantAmount] = useState("50");
