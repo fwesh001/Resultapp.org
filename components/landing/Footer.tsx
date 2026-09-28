@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Lock } from "lucide-react";
 import type { School } from "@/types/school";
 import { toTitleCase } from "@/lib/format";
 
@@ -126,9 +125,16 @@ export default function Footer({ school, subdomain }: FooterProps) {
             </a>{" "}
             • Academic Registry Portal
           </p>
-          <p className="inline-flex items-center gap-1.5">
-            <Lock className="h-3.5 w-3.5" />
-            Secured with SSL encryption
+          <p>
+            built by{" "}
+            <a
+              href="https://zabdiel.tech"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-purple-200 underline-offset-4 hover:text-white hover:underline"
+            >
+              ZABDIEL
+            </a>
           </p>
         </div>
       </div>
