@@ -25,7 +25,10 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
   }, [open ]);
 
   const links = [
-    { label: "Check Result", href: `/${subdomain}#result-checker` },
+    // Bare hash, not a path: on a subdomain host the middleware rewrites
+    // `/<sub>` to `/<sub>/<sub>`, which matches no route. A fragment-only href
+    // stays same-document on both the apex and subdomain hosts.
+    { label: "Check Result", href: "#result-checker" },
     { label: "Staff Portal", href: `/${subdomain}/staff` },
     { label: "Admin", href: `/${subdomain}/admin` },
   ];
