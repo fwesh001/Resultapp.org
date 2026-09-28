@@ -197,12 +197,6 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
           <span>{error}</span>
         </div>
       )}
-      {notice && (
-        <div className="mt-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
 
       {school && (
         <>
