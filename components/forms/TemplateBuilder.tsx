@@ -309,11 +309,14 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
       if (isEditMode) {
-        setSuccess(`"${body.name}" updated.`);
+        toast.success(`"${body.name}" updated.`, {
+          description: "Staff will see it when entering scores.",
+        });
         onSaved?.();
-        setTimeout(() => setSuccess(null), 5000);
       } else {
-        setSuccess(`"${body.name}" is ready to use.`);
+        toast.success(`"${body.name}" is ready to use.`, {
+          description: "Staff will see it when entering scores.",
+        });
         setTemplateName("");
         setCategories(defaultCategories());
         setTraits(DEFAULT_TRAITS);
