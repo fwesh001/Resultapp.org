@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { Settings, AlertCircle, Loader2 } from "lucide-react";
 import { formatNaira } from "@/lib/pricing";
+import { toast } from "@/components/ui/toast";
 
 /** Global Settings — platform tunables (moved out of the Dashboard). */
 export default function SuperadminSettingsPage() {
