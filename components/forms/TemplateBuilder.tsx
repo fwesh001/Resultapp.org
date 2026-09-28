@@ -323,7 +323,6 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         setGrades(defaultGrades());
         setAppliesTo([]);
         setActiveTab("academic");
-        setTimeout(() => setSuccess(null), 5000);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the template. Please try again.");
