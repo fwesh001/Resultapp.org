@@ -152,7 +152,6 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
   const [labelInput, setLabelInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   function addClassBinding() {
     const v = classInput.trim();
