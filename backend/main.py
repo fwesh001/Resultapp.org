@@ -101,6 +101,12 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Notification templates seed warning: {e}")
     except Exception as e:
         logger.warning(f"Notification tables init warning (may be DB unreachable in dev): {e}")
+    try:
+        from services.db_manager import init_support_tables
+
+        init_support_tables()
+    except Exception as e:
+        logger.warning(f"Support tables init warning (may be DB unreachable in dev): {e}")
     yield
     # Shutdown: no-op
 
