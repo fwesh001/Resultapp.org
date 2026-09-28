@@ -19,13 +19,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"profile" | "branding">("profile");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSubmitting(true);
-    setSuccess(null);
     setError(null);
 
     const subdomain = school?.slug ?? "";
