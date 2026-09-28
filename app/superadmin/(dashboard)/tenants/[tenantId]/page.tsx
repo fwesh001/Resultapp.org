@@ -144,7 +144,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
     );
     if (data) {
       setShowDelete(false);
-      setNotice("School deleted (soft-delete — ledger preserved).");
+      toast.success("School deleted (soft-delete — ledger preserved).");
       await load();
     }
   }
