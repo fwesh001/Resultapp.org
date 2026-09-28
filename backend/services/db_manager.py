@@ -2345,51 +2345,54 @@ def list_support_tickets(
     Returns {tickets, total, page, limit}. `search` ILIKEs against
     submitter_email, tenant_id and the serialized payload so a reporter can
     find a ticket by the words they typed.
+
+    Filter values are validated BEFORE a connection is opened so a bad query
+    string fails fast as a 400 instead of consuming a superuser connection.
     """
+    where: List[str] = []
+    params: List[Any] = []
+
+    status_f = (status or "").strip().lower()
+    if status_f and status_f != "all":
+        if status_f not in VALID_SUPPORT_TICKET_STATUSES:
+            raise ValueError(f"Invalid status '{status_f}'")
+        where.append("status = %s")
+        params.append(status_f)
+
+    type_f = (ticket_type or "").strip().lower()
+    if type_f and type_f != "all":
+        if type_f not in VALID_SUPPORT_TICKET_TYPES:
+            raise ValueError(f"Invalid type '{type_f}'")
+        where.append("type = %s")
+        params.append(type_f)
+
+    tenant_f = (tenant_id or "").strip().lower()
+    if tenant_f:
+        where.append("tenant_id = %s")
+        params.append(tenant_f)
+
+    q = (search or "").strip()
+    if q:
+        where.append(
+            "(submitter_email ILIKE %s OR COALESCE(tenant_id, '') ILIKE %s"
+            " OR payload::text ILIKE %s)"
+        )
+        like = f"%{q}%"
+        params.extend([like, like, like])
+
+    page = max(1, int(page or 1))
+    limit = max(1, min(int(limit or 50), 200))
+    offset = (page - 1) * limit
+
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+
     conn = None
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
 
-        where: List[str] = []
-        params: List[Any] = []
-
-        status_f = (status or "").strip().lower()
-        if status_f and status_f != "all":
-            if status_f not in VALID_SUPPORT_TICKET_STATUSES:
-                raise ValueError(f"Invalid status '{status_f}'")
-            where.append("status = %s")
-            params.append(status_f)
-
-        type_f = (ticket_type or "").strip().lower()
-        if type_f and type_f != "all":
-            if type_f not in VALID_SUPPORT_TICKET_TYPES:
-                raise ValueError(f"Invalid type '{type_f}'")
-            where.append("type = %s")
-            params.append(type_f)
-
-        tenant_f = (tenant_id or "").strip().lower()
-        if tenant_f:
-            where.append("tenant_id = %s")
-            params.append(tenant_f)
-
-        q = (search or "").strip()
-        if q:
-            where.append(
-                "(submitter_email ILIKE %s OR COALESCE(tenant_id, '') ILIKE %s"
-                " OR payload::text ILIKE %s)"
-            )
-            like = f"%{q}%"
-            params.extend([like, like, like])
-
-        clause = f"WHERE {' AND '.join(where)}" if where else ""
-
         cur.execute(f"SELECT COUNT(*) FROM {SUPPORT_TICKETS_TABLE} {clause};", tuple(params))
         total = int(cur.fetchone()[0] or 0)
-
-        page = max(1, int(page or 1))
-        limit = max(1, min(int(limit or 50), 200))
-        offset = (page - 1) * limit
 
         cur.execute(
             f"""
