@@ -428,7 +428,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed ${res.status}`);
       if (type === "bulk_subjects") {
         const count = (data as { count?: number }).count ?? 0;
-        setSuccess(`Quick add: ${count} subjects added (duplicates skipped)`);
+        toast.success(`Quick add: ${count} subjects added (duplicates skipped)`);
       } else if (type === "form_assignment") {
         setSuccess("Form teacher assigned");
       } else {
