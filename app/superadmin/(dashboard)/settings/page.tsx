@@ -96,11 +96,6 @@ export default function SuperadminSettingsPage() {
             {priceSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Price
           </button>
-          {priceMsg && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {priceMsg}
-            </span>
-          )}
         </div>
       </div>
     </div>
