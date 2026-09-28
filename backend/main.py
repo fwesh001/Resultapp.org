@@ -930,6 +930,19 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Notifications router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Support Hub — public ticket intake + superadmin triage
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.support import router as support_router, admin_router as support_admin_router
+
+    app.include_router(support_router)
+    app.include_router(support_admin_router)
+    logger.info("[App] Support router mounted (POST /api/v1/support/tickets + /api/v1/admin/support-tickets/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Support router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
