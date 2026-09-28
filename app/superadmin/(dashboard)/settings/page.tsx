@@ -10,7 +10,6 @@ export default function SuperadminSettingsPage() {
   const [creditPrice, setCreditPrice] = useState<number>(200);
   const [priceLoading, setPriceLoading] = useState(true);
   const [priceSaving, setPriceSaving] = useState(false);
-  const [priceMsg, setPriceMsg] = useState<string | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
 
   useEffect(() => {
