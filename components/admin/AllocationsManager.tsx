@@ -165,13 +165,6 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     void fetchEntity(activeTab, page);
   }, [fetchEntity, activeTab, page]);
 
-  // auto-dismiss toast
-  useEffect(() => {
-    if (!success) return;
-    const t = setTimeout(() => setSuccess(null), 3000);
-    return () => clearTimeout(t);
-  }, [success]);
-
   // Reset filters when tenant changes? Keep search global
   const q = searchTerm.toLowerCase().trim();
 
