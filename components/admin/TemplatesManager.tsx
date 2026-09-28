@@ -93,7 +93,6 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
 
   async function handleToggleActive(t: TemplateItem) {
     setActingId(t.id);
-    setNotice(null);
     setError(null);
     try {
       const res = await fetch(`/api/templates?id=${t.id}`, {
