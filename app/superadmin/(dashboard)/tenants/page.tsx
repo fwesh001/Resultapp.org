@@ -134,7 +134,7 @@ export default function TenantsDirectoryPage() {
     );
     if (data) {
       setDeleteTarget(null);
-      setNotice("School deleted (soft-delete — ledger preserved).");
+      toast.success("School deleted (soft-delete — ledger preserved).");
       await load();
     }
   }
