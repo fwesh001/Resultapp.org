@@ -8,11 +8,11 @@ import {
   PowerOff,
   Trash2,
   Loader2,
-  AlertCircle,
-  BookOpen,
-  CheckCircle2,
-} from "lucide-react";
-import { Button } from "@/components/ui/Button";
+    AlertCircle,
+    BookOpen,
+  } from "lucide-react";
+  import { toast } from "@/components/ui/toast";
+  import { Button } from "@/components/ui/Button";
 import { TemplateBuilder } from "@/components/forms/TemplateBuilder";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
