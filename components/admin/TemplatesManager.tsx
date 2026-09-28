@@ -121,7 +121,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
-      setNotice(`"${t.name}" disabled.`);
+      toast.success(`"${t.name}" disabled.`);
       if (editing?.id === t.id) {
         setEditing(null);
         setShowBuilder(false);
