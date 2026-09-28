@@ -41,7 +41,6 @@ export default function TenantsDirectoryPage() {
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<TenantMenuTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TenantMenuTarget | null>(null);
@@ -146,7 +145,7 @@ export default function TenantsDirectoryPage() {
       "restore",
     );
     if (data) {
-      setNotice("School restored.");
+      toast.success("School restored.");
       await load();
     }
   }
