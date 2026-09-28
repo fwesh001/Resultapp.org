@@ -167,7 +167,11 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
     );
     if (data && typeof data.temp_password === "string") {
       setTempPassword(data.temp_password);
-      setNotice("Temp password generated — copy it now, it is shown only once.");
+      // Reinforcement only — the secret itself stays in the inline block below,
+      // since a toast would auto-dismiss and lose it.
+      toast.warning("Temp password generated — copy it now, it is shown only once.", {
+        duration: 10000,
+      });
       await load();
     }
   }
