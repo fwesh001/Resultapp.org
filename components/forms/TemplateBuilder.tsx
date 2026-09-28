@@ -250,7 +250,6 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
 
     if (!templateName.trim() || templateName.trim().length < 3) {
       setError("Please give your template a name (at least 3 characters).");
