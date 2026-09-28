@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, CheckCircle2, AlertCircle, X, Sparkles, Pencil, Search, Upload, GraduationCap } from "lucide-react";
+import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, AlertCircle, X, Sparkles, Pencil, Search, Upload, GraduationCap } from "lucide-react";
+import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
