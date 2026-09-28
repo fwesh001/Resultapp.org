@@ -156,13 +156,6 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
           <span>{error}</span>
         </div>
       )}
-      {notice && (
-        <div className="flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-
       {/* List */}
       <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6">
         <div className="flex items-center justify-between gap-2">
