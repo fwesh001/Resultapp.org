@@ -97,11 +97,6 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       onSubmit={handleSubmit}
       className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6"
     >
-      {success && (
-        <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-          {success}
-        </p>
-      )}
       {error && (
         <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
