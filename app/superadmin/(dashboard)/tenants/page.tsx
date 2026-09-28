@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Building2, Search, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Building2, Search, AlertCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import { toast } from "@/components/ui/toast";
 import { TenantRowMenu, type TenantMenuTarget } from "@/components/superadmin/TenantRowMenu";
 import { SuspendTenantModal, DeleteTenantModal } from "@/components/superadmin/TenantLifecycleModals";
 
@@ -84,7 +85,6 @@ export default function TenantsDirectoryPage() {
   async function callLifecycle(url: string, init: RequestInit, kind: string): Promise<Record<string, unknown> | null> {
     setActing(kind);
     setError(null);
-    setNotice(null);
     try {
       const res = await fetch(url, init);
       const data = await res.json().catch(() => ({}));
