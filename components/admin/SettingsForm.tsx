@@ -76,7 +76,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         throw new Error(data.error || "Failed to save settings.");
       }
 
-      setSuccess(data.message || "School profile updated successfully.");
+      toast.success(data.message || "School profile updated successfully.");
       router.refresh();
     } catch (err) {
       setError(
