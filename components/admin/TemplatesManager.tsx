@@ -114,7 +114,6 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
   async function handleDelete(t: TemplateItem) {
     setPendingDelete(null);
     setActingId(t.id);
-    setNotice(null);
     setError(null);
     try {
       const res = await fetch(`/api/templates?id=${t.id}&tenant_id=${encodeURIComponent(tenantId)}`, {
