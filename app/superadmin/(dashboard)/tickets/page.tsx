@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { LifeBuoy, Loader2, AlertCircle, Search, ChevronDown, ChevronUp, Paperclip, Star, RefreshCw } from "lucide-react";
 
 type TicketStatus = "open" | "in_progress" | "resolved";
