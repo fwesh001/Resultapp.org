@@ -2164,6 +2164,350 @@ def seed_default_notification_templates() -> Dict[str, Any]:
             conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Support Hub — cross-tenant tickets from the public /support page
+# ---------------------------------------------------------------------------
+# `tenant_id` is NULL for anonymous marketing-page submissions, and is set to
+# ON DELETE SET NULL (not CASCADE, unlike `notifications`) so a ticket survives
+# deletion of the school it was filed against — it is a platform-level record of
+# a customer interaction, not a per-tenant notification.
+#
+# The proxy (app/api/support/route.ts) is the only writer and it resolves
+# identity from cookies; `submitter_email` is user-supplied ONLY when
+# `submitter_kind = 'anonymous'`. Authenticated submitters always carry the
+# session email, so nobody can file a ticket "as" a tenant admin by typing one.
+# ---------------------------------------------------------------------------
+
+SUPPORT_TICKETS_TABLE = "support_tickets"
+
+VALID_SUPPORT_TICKET_TYPES = ("bug", "feedback")
+VALID_SUPPORT_TICKET_STATUSES = ("open", "in_progress", "resolved")
+VALID_SUPPORT_SUBMITTER_KINDS = ("admin", "staff", "anonymous")
+
+#: Per-field cap applied to every string inside the `payload` JSONB.
+MAX_SUPPORT_PAYLOAD_FIELD_LEN = 4000
+#: Whole-body cap so a single ticket cannot bloat the row / WAL.
+MAX_SUPPORT_PAYLOAD_BYTES = 64 * 1024
+
+
+def init_support_tables() -> None:
+    """Create the support ticket table if it does not exist (idempotent).
+
+    Safe to call on every startup. Additive only — never drops or alters
+    existing columns. Mirrors init_notification_tables.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {SUPPORT_TICKETS_TABLE} (
+                id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                type             VARCHAR(20) NOT NULL DEFAULT 'bug'
+                                   CHECK (type IN ('bug', 'feedback')),
+                payload          JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                tenant_id        VARCHAR(60)
+                                   REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE SET NULL,
+                submitter_email  VARCHAR(255),
+                submitter_role   VARCHAR(50),
+                submitter_kind   VARCHAR(20) NOT NULL DEFAULT 'anonymous'
+                                   CHECK (submitter_kind IN ('admin', 'staff', 'anonymous')),
+                submitter_id     TEXT,
+                status           VARCHAR(20) NOT NULL DEFAULT 'open'
+                                   CHECK (status IN ('open', 'in_progress', 'resolved')),
+                resolution_note  TEXT,
+                resolved_by      VARCHAR(255),
+                resolved_at      TIMESTAMPTZ,
+                created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
+        # Newest-first listing (the dashboard's default order).
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_support_tickets_created
+            ON {SUPPORT_TICKETS_TABLE} (created_at DESC);
+        """)
+        # Per-tenant drill-in from the tenant detail page.
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_support_tickets_tenant_created
+            ON {SUPPORT_TICKETS_TABLE} (tenant_id, created_at DESC);
+        """)
+        # Open-only / status-filtered tabs.
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_support_tickets_status
+            ON {SUPPORT_TICKETS_TABLE} (status, created_at DESC);
+        """)
+        conn.commit()
+        logger.info(f"[DB] Support tables ready ({SUPPORT_TICKETS_TABLE})")
+    except Exception as e:
+        logger.error(f"[DB] Failed to initialize support tables: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def _normalize_support_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """JSON-safe ticket row: datetimes -> isoformat, payload always a dict."""
+    import json as _json
+
+    payload = row.get("payload")
+    if isinstance(payload, str):
+        try:
+            payload = _json.loads(payload)
+        except Exception:
+            payload = {}
+    row["payload"] = payload if isinstance(payload, dict) else {}
+    for ts_field in ("created_at", "updated_at", "resolved_at"):
+        value = row.get(ts_field)
+        if isinstance(value, datetime):
+            row[ts_field] = value.isoformat()
+        elif value is not None:
+            row[ts_field] = str(value)
+    for id_field in ("id",):
+        if row.get(id_field) is not None:
+            row[id_field] = str(row[id_field])
+    return row
+
+
+def create_support_ticket(
+    ticket_type: str,
+    payload: Dict[str, Any],
+    tenant_id: Optional[str] = None,
+    submitter_email: Optional[str] = None,
+    submitter_role: Optional[str] = None,
+    submitter_kind: str = "anonymous",
+    submitter_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Insert one support ticket. Returns the normalized created row.
+
+    `tenant_id` must already be validated + existence-checked by the caller;
+    the FK is the last line of defence.
+    """
+    from psycopg2.extras import Json
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {SUPPORT_TICKETS_TABLE}
+                (type, payload, tenant_id, submitter_email, submitter_role,
+                 submitter_kind, submitter_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'open')
+            RETURNING *;
+            """,
+            (
+                ticket_type,
+                Json(payload or {}),
+                tenant_id or None,
+                (submitter_email or None),
+                (submitter_role or None),
+                submitter_kind or "anonymous",
+                (submitter_id or None),
+            ),
+        )
+        row = _row_to_dict(cur.fetchone(), cur)
+        conn.commit()
+        logger.info(
+            f"[DB] support ticket created id={row.get('id')} type={ticket_type} "
+            f"kind={submitter_kind} tenant={tenant_id or '-'}"
+        )
+        return _normalize_support_row(row)
+    except Exception:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def list_support_tickets(
+    status: Optional[str] = None,
+    ticket_type: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Newest-first support tickets across every tenant.
+
+    Returns {tickets, total, page, limit}. `search` ILIKEs against
+    submitter_email, tenant_id and the serialized payload so a reporter can
+    find a ticket by the words they typed.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        where: List[str] = []
+        params: List[Any] = []
+
+        status_f = (status or "").strip().lower()
+        if status_f and status_f != "all":
+            if status_f not in VALID_SUPPORT_TICKET_STATUSES:
+                raise ValueError(f"Invalid status '{status_f}'")
+            where.append("status = %s")
+            params.append(status_f)
+
+        type_f = (ticket_type or "").strip().lower()
+        if type_f and type_f != "all":
+            if type_f not in VALID_SUPPORT_TICKET_TYPES:
+                raise ValueError(f"Invalid type '{type_f}'")
+            where.append("type = %s")
+            params.append(type_f)
+
+        tenant_f = (tenant_id or "").strip().lower()
+        if tenant_f:
+            where.append("tenant_id = %s")
+            params.append(tenant_f)
+
+        q = (search or "").strip()
+        if q:
+            where.append(
+                "(submitter_email ILIKE %s OR COALESCE(tenant_id, '') ILIKE %s"
+                " OR payload::text ILIKE %s)"
+            )
+            like = f"%{q}%"
+            params.extend([like, like, like])
+
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+        cur.execute(f"SELECT COUNT(*) FROM {SUPPORT_TICKETS_TABLE} {clause};", tuple(params))
+        total = int(cur.fetchone()[0] or 0)
+
+        page = max(1, int(page or 1))
+        limit = max(1, min(int(limit or 50), 200))
+        offset = (page - 1) * limit
+
+        cur.execute(
+            f"""
+            SELECT * FROM {SUPPORT_TICKETS_TABLE}
+            {clause}
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s OFFSET %s;
+            """,
+            tuple(params) + (limit, offset),
+        )
+        rows = [_normalize_support_row(_row_to_dict(r, cur)) for r in cur.fetchall()]
+        return {"tickets": rows, "total": total, "page": page, "limit": limit}
+    except Exception:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_support_ticket(ticket_id: str) -> Optional[Dict[str, Any]]:
+    """Single ticket by UUID, or None."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT * FROM {SUPPORT_TICKETS_TABLE} WHERE id = %s;",
+            (str(ticket_id),),
+        )
+        row = _row_to_dict(cur.fetchone(), cur)
+        return _normalize_support_row(row) if row else None
+    except Exception:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def update_support_ticket_status(
+    ticket_id: str,
+    status: str,
+    resolved_by: Optional[str] = None,
+    resolution_note: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Move a ticket through open -> in_progress -> resolved.
+
+    `resolved_at` / `resolved_by` are stamped only while the ticket is actually
+    resolved and cleared on reopen, so the audit columns always describe the
+    current state rather than drifting. Returns None when the id is unknown.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {SUPPORT_TICKETS_TABLE}
+            SET status = %s,
+                resolved_by = %s,
+                resolved_at = CASE WHEN %s = 'resolved' THEN NOW() ELSE NULL END,
+                resolution_note = COALESCE(%s, resolution_note),
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (status, resolved_by or None, status, resolution_note or None, str(ticket_id)),
+        )
+        row = _row_to_dict(cur.fetchone(), cur)
+        if row:
+            conn.commit()
+        else:
+            conn.rollback()
+        return _normalize_support_row(row) if row else None
+    except Exception:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def tenant_exists(subdomain: str) -> bool:
+    """True when `subdomain` is a live row in the schools registry.
+
+    Guards the support ticket FK so a stale/typo'd tenant id produces a clean
+    400 instead of a psycopg2 ForeignKeyViolation surfacing as a 500.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s LIMIT 1;",
+            ((subdomain or "").lower().strip(),),
+        )
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.warning(f"[DB] tenant_exists check failed for '{subdomain}': {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
 def _row_to_dict(row, cursor) -> Dict[str, Any]:
     """Convert a psycopg2 cursor row to a dict using cursor column names."""
     if row is None:
