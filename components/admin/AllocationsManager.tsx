@@ -340,7 +340,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed ${res.status}`);
-        setSuccess(`${recordType.charAt(0).toUpperCase() + recordType.slice(1)} updated`);
+        toast.success(`${recordType.charAt(0).toUpperCase() + recordType.slice(1)} updated`);
         if (type === "student") closeStudentModal(false);
         else closeStaffModal(false);
         setEditingRecord(null);
