@@ -55,7 +55,7 @@ export default function Footer({ school, subdomain }: FooterProps) {
           <ul className="mt-3 space-y-2 text-sm">
             <li>
               <Link
-                href={`/${subdomain}#result-checker`}
+                href="#result-checker"
                 className="inline-flex min-h-[44px] items-center text-purple-200/70 transition hover:text-white"
               >
                 Result Checker
