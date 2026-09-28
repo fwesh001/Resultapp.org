@@ -430,9 +430,9 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         const count = (data as { count?: number }).count ?? 0;
         toast.success(`Quick add: ${count} subjects added (duplicates skipped)`);
       } else if (type === "form_assignment") {
-        setSuccess("Form teacher assigned");
+        toast.success("Form teacher assigned");
       } else {
-        setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} added`);
+        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added`);
       }
       if (type === "student") {
         setStudentForm({ student_id: "", full_name: "", class_name: "", gender: "" });
