@@ -154,7 +154,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
       fetch(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/restore`, { method: "POST" }),
     );
     if (data) {
-      setNotice("School restored.");
+      toast.success("School restored.");
       await load();
     }
   }
