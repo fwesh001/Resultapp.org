@@ -84,7 +84,6 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Filters & search & editing
   const [searchTerm, setSearchTerm] = useState("");
