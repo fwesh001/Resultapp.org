@@ -542,18 +542,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         )}
       </div>
 
-      {/* Toasts */}
+      {/* Inline errors stay here (validation is field-adjacent); success goes to
+          the global toast. */}
       {error && (
         <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0" /> <span className="flex-1">{error}</span>
           <button onClick={() => setError(null)} className="ml-2 rounded-full p-1 hover:bg-white/10">
             <X className="h-4 w-4" />
           </button>
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 shrink-0" /> {success}
         </div>
       )}
 
