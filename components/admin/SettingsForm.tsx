@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import UploadField from "@/components/ui/UploadField";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
+import { toast } from "@/components/ui/toast";
 import type { RemarkBand, School } from "@/types/school";
 
 interface SettingsFormProps {
