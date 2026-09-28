@@ -44,7 +44,6 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
