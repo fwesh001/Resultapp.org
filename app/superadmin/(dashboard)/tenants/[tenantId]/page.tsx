@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, Loader2, CheckCircle2, Coins, Layers, Power, KeyRound, Trash2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, Loader2, Coins, Layers, Power, KeyRound, Trash2 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import { toast } from "@/components/ui/toast";
 import { SuspendTenantModal, DeleteTenantModal } from "@/components/superadmin/TenantLifecycleModals";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
