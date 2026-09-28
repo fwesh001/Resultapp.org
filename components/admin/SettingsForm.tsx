@@ -384,7 +384,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
               if (!res.ok || data.success === false) {
                 throw new Error(data.error || "Failed to save scheme.");
               }
-              setSuccess("Principal remark scheme saved.");
+              toast.success("Principal remark scheme saved.");
               router.refresh();
             }}
           />
