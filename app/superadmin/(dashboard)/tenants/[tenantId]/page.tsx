@@ -105,7 +105,10 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
       }),
     );
     if (data) {
-      setNotice(`Granted ${amount} ${grantType.toLowerCase()} (new balance ${data.new_balance}). Free — excluded from MRR.`);
+      toast.success(
+        `Granted ${amount} ${grantType.toLowerCase()} (new balance ${data.new_balance}).`,
+        { description: "Free — excluded from MRR." },
+      );
       await load();
     }
   }
