@@ -331,7 +331,7 @@ export default function TicketsPage() {
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${t.id}-detail`} className="border-b border-white/5 bg-black/20">
+                      <tr className="border-b border-white/5 bg-black/20">
                         <td colSpan={8} className="px-6 py-5">
                           <dl className="grid gap-5 md:grid-cols-2">
                             <div>
