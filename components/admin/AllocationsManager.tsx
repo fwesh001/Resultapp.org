@@ -468,7 +468,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error || "Delete failed");
-      setSuccess(`${type} deleted`);
+      toast.success(`${type} deleted`);
       await fetchAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
