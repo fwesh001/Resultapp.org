@@ -116,7 +116,7 @@ export default function TenantsDirectoryPage() {
     );
     if (data) {
       setSuspendTarget(null);
-      setNotice(suspending ? "Tenant suspended." : "Tenant reactivated.");
+      toast.success(suspending ? "Tenant suspended." : "Tenant reactivated.");
       await load();
     }
   }
