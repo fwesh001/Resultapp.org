@@ -117,8 +117,14 @@ export default async function TenantPage({
             </div>
           </div>
 
-          {/* Result lookup — centered */}
-          <div className="mx-auto mt-12 max-w-xl text-center">
+          {/* Result lookup — centered. Carries the #result-checker anchor so a
+              hard load of /#result-checker lands directly on the checker rather
+              than the top of the hero. scroll-mt-24 keeps the heading clear of
+              the sticky Navbar. */}
+          <div
+            id="result-checker"
+            className="mx-auto mt-12 max-w-xl scroll-mt-24 text-center"
+          >
             <h2 className="text-2xl font-semibold">Check Results Online</h2>
             <p className="mt-2 text-sm text-purple-200/70">
               Parents — enter your child&apos;s Student ID and select a term
