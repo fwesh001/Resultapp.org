@@ -77,7 +77,6 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
 
   async function runAction(kind: string, fn: () => Promise<Response>) {
     setActing(kind);
-    setNotice(null);
     setError(null);
     try {
       const res = await fn();
