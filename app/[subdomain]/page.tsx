@@ -69,8 +69,7 @@ export default async function TenantPage({
 
       {/* Section 1 — Hero with dynamic background */}
       <section
-        id="result-checker"
-        className="relative scroll-mt-24 overflow-hidden border-b border-purple-500/20 bg-[#0B0514] bg-cover bg-center"
+        className="relative overflow-hidden border-b border-purple-500/20 bg-[#0B0514] bg-cover bg-center"
         style={{ backgroundImage: `url(${heroBg})` }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-[#0B0514]/95 via-[#0B0514]/80 to-transparent" />
