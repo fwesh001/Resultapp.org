@@ -88,17 +88,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Sign the session. `data` is the upstream identity body and is passed by
+  // reference, so the iat/exp claims the signer adds live only on its own copy —
+  // `data` below is untouched, which is what keeps the signed token out of the
+  // response body at line 104.
   try {
-    const cookieStore = await cookies();
-    cookieStore.set("admin_session", JSON.stringify(data), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12, // 12h (mirrors staff_session)
-    });
+    await setSessionCookie(SESSION_COOKIES.admin, data as Record<string, unknown>);
   } catch (e) {
-    console.warn("[admin login proxy] cookie set failed", e);
+    // A signing failure must not hand back a success the client would then
+    // treat as authenticated. Fail closed.
+    console.error("[admin login proxy] session signing failed", e);
+    return NextResponse.json(
+      { success: false, error: "Could not establish a secure session" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ success: true, ...data }, { status: 200 });
