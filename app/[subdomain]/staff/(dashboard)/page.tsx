@@ -1,17 +1,21 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
 import { getStaffDashboard } from "@/lib/staffDashboard";
+import { readStaffSession } from "@/lib/staffAuth";
 import { BookOpen, Users, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-interface StaffSession {
-  staff: { id: string; staff_id: string; full_name: string; email?: string | null; role?: string };
-  tenant_id?: string;
-}
-
+/**
+ * Staff dashboard page.
+ *
+ * Uses the shared `readStaffSession` guard: signature verified, and
+ * `tenant_id` must match this portal. The previous inline version parsed the
+ * cookie with no signature check and then fell back to the URL subdomain when
+ * `tenant_id` was absent, so an unsigned cookie scoped to no tenant at all
+ * still rendered a dashboard (LEGAL_REMEDIATION.md P0-0).
+ */
 export default async function StaffDashboardPage({
   params,
 }: {
@@ -20,27 +24,16 @@ export default async function StaffDashboardPage({
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
 
-  const cookieStore = await cookies();
-  const rawSession = cookieStore.get("staff_session")?.value;
-  if (!rawSession) {
+  const identity = await readStaffSession(subdomain);
+  if (!identity) {
     redirect(`/${subdomain}/staff/login`);
   }
 
-  let session: StaffSession | null = null;
-  try {
-    session = JSON.parse(rawSession) as StaffSession;
-  } catch {
-    redirect(`/${subdomain}/staff/login`);
-  }
-
-  const staff = session?.staff;
-  if (!staff) {
-    redirect(`/${subdomain}/staff/login`);
-  }
-
-  // Use staff_id for dashboard fetch (supports both UUID and staff_id string via backend OR query)
-  const staffId = staff.staff_id || staff.id;
-  const tenantForFetch = (session?.tenant_id as string) || subdomain;
+  // staff_id preferred for the backend OR query; falls back to the row UUID.
+  const staffId = identity.staffId;
+  // No fallback to the URL subdomain — a session without a tenant is rejected
+  // by readStaffSession rather than silently adopted.
+  const tenantForFetch = identity.tenantId;
 
   const [school, dashboard] = await Promise.all([
     getTenant(subdomain).catch(() => null),
