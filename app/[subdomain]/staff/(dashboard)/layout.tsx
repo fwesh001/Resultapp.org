@@ -1,17 +1,24 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant";
 import { getStaffDashboard, type StaffFormClass } from "@/lib/staffDashboard";
+import { readStaffSession } from "@/lib/staffAuth";
 import StaffShell from "@/components/staff/StaffShell";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
 
-interface StaffSession {
-  staff?: { id?: string; staff_id?: string };
-  tenant_id?: string;
-}
-
+/**
+ * Guarded staff dashboard layout.
+ *
+ * Uses the shared `readStaffSession` guard, which verifies the HMAC signature
+ * AND requires the session's `tenant_id` to match this portal. The previous
+ * inline version did `JSON.parse` with no signature check and never compared
+ * `tenant_id` at all, so a session for one school would have rendered another
+ * school's dashboard (LEGAL_REMEDIATION.md P0-0).
+ *
+ * Server Components cannot delete cookies, so an invalid session redirects to
+ * login rather than clearing the cookie here.
+ */
 export default async function StaffDashboardLayout({
   children,
   params,
@@ -22,24 +29,14 @@ export default async function StaffDashboardLayout({
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
 
-  const cookieStore = await cookies();
-  const session = cookieStore.get("staff_session")?.value;
-
-  if (!session) {
+  // Bound to this portal's subdomain — a cross-tenant session is rejected.
+  const identity = await readStaffSession(subdomain);
+  if (!identity) {
     redirect(`/${subdomain}/staff/login`);
   }
 
   // Resolve staff identity for the sidebar "My Form Class" link.
-  let staffId = "";
-  try {
-    const parsed = JSON.parse(session) as StaffSession;
-    staffId = String(parsed?.staff?.staff_id || parsed?.staff?.id || "").trim();
-  } catch {
-    redirect(`/${subdomain}/staff/login`);
-  }
-  if (!staffId) {
-    redirect(`/${subdomain}/staff/login`);
-  }
+  const staffId = identity.staffId;
 
   const school = await getTenant(subdomain);
   const schoolName = school?.name || subdomain;
