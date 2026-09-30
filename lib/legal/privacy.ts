@@ -11,7 +11,6 @@ import {
   SUPPORT_EMAIL,
   SUPPORT_HOURS,
   SUPPORT_PHONE_DISPLAY,
-  SUPPORT_PHONE_TEL,
   TRADING_NAME,
 } from "./constants";
 
