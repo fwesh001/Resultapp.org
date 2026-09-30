@@ -129,10 +129,10 @@ export default async function ReportPage({
         schoolName={school?.name || null}
         canPrint={isPublished}
       />
-      {!isPublished && (
+      {!isPublished && isAdminPreview && (
         <div className="mx-auto mb-3 flex max-w-4xl justify-center print:hidden">
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-            Draft preview • Not yet published — free to view, printing unlocks on publication
+            Draft preview • Not yet published — printing unlocks on publication
           </span>
         </div>
       )}
