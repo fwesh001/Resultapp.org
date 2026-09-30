@@ -875,16 +875,55 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                 ),
             )
         row = cur.fetchone()
-        conn.commit()
-        return _row_to_dict(row, cur)
+
+        # ---- Consent record, same transaction --------------------------
+        # A registration without recorded acceptance is not a registration we
+        # can evidence later, so this is a hard requirement, not best-effort.
+        terms_version = kwargs.get("terms_version")
+        privacy_version = kwargs.get("privacy_version")
+        accepted_by = kwargs.get("accepted_by") or kwargs.get("email")
+        consent_written = None
+        if terms_version and privacy_version and accepted_by:
+            consent_written = _insert_tenant_consent(
+                cur,
+                subdomain,
+                terms_version,
+                privacy_version,
+                accepted_by,
+                kwargs.get("consent_ip"),
+            )
+        else:
+            logger.error(
+                "[DB] Refusing to register '%s': missing consent record "
+                "(terms_version=%r privacy_version=%r accepted_by=%r)",
+                subdomain, terms_version, privacy_version, accepted_by,
+            )
+            try:
+                cur.execute("ROLLBACK;")
+            except Exception:
+                pass
+            raise ValueError(
+                "terms_version, privacy_version and accepted_by are required to register a school"
+            )
+
+        cur.execute("COMMIT;")
+        out = _row_to_dict(row, cur)
+        out["consent"] = consent_written
+        return out
     except Exception as e:
         logger.error(f"[DB] Failed to register school '{subdomain}': {e}")
         if conn:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         raise
     finally:
         if conn:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
