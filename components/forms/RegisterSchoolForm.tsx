@@ -37,6 +37,9 @@ interface FormValues {
   adminPassword: string;
   adminPasswordConfirm: string;
   studentCount: string; // keep string for controlled input
+  // Affirmative acceptance of the Terms of Service and Privacy Policy.
+  // Persisted server-side with the version strings from lib/legal/constants.ts.
+  acceptTerms: boolean;
 }
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
@@ -196,6 +199,13 @@ export function RegisterSchoolForm() {
       next.studentCount = "Must be greater than 0";
     } else if (count > 10000) {
       next.studentCount = "Maximum 10,000 students";
+    }
+
+    // Hard gate — registration is refused server-side without this, so it is
+    // enforced here too rather than letting the user pay and then fail.
+    if (!values.acceptTerms) {
+      next.acceptTerms =
+        "You must accept the Terms of Service and Privacy Policy to continue";
     }
 
     setErrors(next);
