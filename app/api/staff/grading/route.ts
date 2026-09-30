@@ -59,7 +59,15 @@ async function getSessionDetails(
   }
 }
 
-function unauthorized() {
+/**
+ * 401 and drop the offending cookie.
+ *
+ * A rejected session — unsigned, forged, tampered, expired or tenant-mismatched
+ * — is removed so the browser stops presenting it, rather than leaving a
+ * credential in the jar for the user to keep retrying.
+ */
+async function unauthorized() {
+  await clearSessionCookie(SESSION_COOKIES.staff);
   return NextResponse.json(
     { success: false, error: "Unauthorized — please sign in again" },
     { status: 401 },
