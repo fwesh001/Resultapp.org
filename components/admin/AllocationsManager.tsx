@@ -33,6 +33,37 @@ const STANDARD_SUBJECTS = [
 
 const PAGE_SIZE = 20;
 
+const STUDENT_FIELDS = "Name, admission number, class and gender";
+
+/**
+ * Confirm-dialog copy.
+ *
+ * Deleting a student is destructive and irreversible beyond the roster row: it
+ * also purges every score, behavioural rating, free-text teacher/form-master/
+ * principal remark, and the publication record. The slot is returned, but
+ * credits already spent publishing that student's results are not, and nothing
+ * can be recovered afterwards. Say so, rather than "This action cannot be
+ * undone."
+ */
+function deleteWarning(type: string): string | undefined {
+  if (type === "student") {
+    return `This permanently erases the student's ${STUDENT_FIELDS}, all of their scores and behavioural assessments, every teacher and principal remark written about them, and their publication record. One slot of capacity is returned to your account; credits already spent on their results are not. This cannot be undone.`;
+  }
+  if (type === "staff") {
+    return "This removes the staff account. Grades they have already entered stay on the roster, but they will lose portal access immediately.";
+  }
+  if (type === "subject") {
+    return "This removes the subject. Existing grades for it stay on student records, but it will no longer be available for grading or report cards.";
+  }
+  if (type === "allocation") {
+    return "This removes the subject-to-staff allocation. Grades already entered are not affected.";
+  }
+  if (type === "form_assignment") {
+    return "This removes the form teacher assignment. Grades and remarks already entered are not affected.";
+  }
+  return undefined;
+}
+
 const TAB_ENTITY: Record<Tab, string> = {
   Students: "students",
   Staff: "staff",
