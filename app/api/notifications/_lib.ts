@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { readSessionCookie, clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /** Shared helpers for tenant notification proxies (server-only). */
 
@@ -38,6 +38,12 @@ interface Identity {
  * Crucial identity handling: accept EITHER session cookie.
  * - admin_session { admin: { email }, tenant_id } → user_type='admin', user_id=email
  * - staff_session { staff: { id, staff_id, email }, tenant_id } → user_type='staff', user_id=id||staff_id
+ *
+ * Both cookies are HMAC-signed (LEGAL_REMEDIATION.md P0-0) and verified via
+ * `readSessionCookie`, which returns null for unsigned, forged, tampered or
+ * expired values. A bad signature must fall through to "no identity" rather
+ * than throwing, so a forged cookie cannot probe which cookie type is accepted.
+ *
  * Returns the identity or a 401 JSON response when neither matches the tenant.
  */
 export async function requireTenantIdentity(
@@ -50,52 +56,51 @@ export async function requireTenantIdentity(
     };
   }
 
-  let adminRaw: string | undefined;
-  let staffRaw: string | undefined;
-  try {
-    const store = await cookies();
-    adminRaw = store.get("admin_session")?.value;
-    staffRaw = store.get("staff_session")?.value;
-  } catch {
-    adminRaw = undefined;
-    staffRaw = undefined;
-  }
+  const unauthorized = async () => {
+    // Drop whatever was presented — a rejected cookie should not be resent.
+    await clearSessionCookie(SESSION_COOKIES.admin);
+    await clearSessionCookie(SESSION_COOKIES.staff);
+    return {
+      error: NextResponse.json(
+        { success: false, error: "Unauthorized — please sign in" },
+        { status: 401 },
+      ),
+    };
+  };
 
   // Admin first (admin and staff cookies are mutually exclusive per portal).
-  if (adminRaw) {
-    try {
-      const session = JSON.parse(adminRaw) as { admin?: { email?: string }; tenant_id?: string };
-      const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-      const email = String(session?.admin?.email || "").trim();
-      if (tenant === normalized && email && session?.admin) {
+  try {
+    const session = await readSessionCookie<{
+      admin?: { email?: string };
+      tenant_id?: string;
+    }>(SESSION_COOKIES.admin);
+    if (session) {
+      const tenant = String(session.tenant_id || "").toLowerCase().trim();
+      const email = String(session.admin?.email || "").trim();
+      if (tenant === normalized && email && session.admin) {
         return { identity: { user_id: email, user_type: "admin" } };
       }
-    } catch {
-      // fall through to staff check
     }
+  } catch {
+    // fall through to staff check
   }
 
-  if (staffRaw) {
-    try {
-      const session = JSON.parse(staffRaw) as {
-        staff?: { id?: string; staff_id?: string; email?: string };
-        tenant_id?: string;
-      };
-      const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-      const staff = session?.staff;
+  try {
+    const session = await readSessionCookie<{
+      staff?: { id?: string; staff_id?: string; email?: string };
+      tenant_id?: string;
+    }>(SESSION_COOKIES.staff);
+    if (session) {
+      const tenant = String(session.tenant_id || "").toLowerCase().trim();
+      const staff = session.staff;
       const userId = String(staff?.id || staff?.staff_id || "").trim();
       if (tenant === normalized && staff && userId) {
         return { identity: { user_id: userId, user_type: "staff" } };
       }
-    } catch {
-      // fall through to 401
     }
+  } catch {
+    // fall through to 401
   }
 
-  return {
-    error: NextResponse.json(
-      { success: false, error: "Unauthorized — please sign in" },
-      { status: 401 },
-    ),
-  };
+  return await unauthorized();
 }
