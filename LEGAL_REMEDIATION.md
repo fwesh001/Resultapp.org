@@ -20,6 +20,10 @@ processing (ToS §12.2), but nothing can carve us out for ours.
 
 ### Outstanding before the policy is fully accurate
 
+- **P0-0 is open and it is the most serious item in this document.** Session
+  cookies are unsigned JSON, so authentication can be forged outright. Until it
+  is fixed, treat every authenticated route as unauthenticated, and note that
+  it also undermines the P0-1 publication gate.
 - **P1 remains open.** Privacy Policy §9 and §10 still describe controls the
   code does not yet implement: no field-level encryption at rest (item 5) and
   no retention enforcement (item 9). Both are in the published text. They are
