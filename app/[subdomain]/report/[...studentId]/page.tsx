@@ -71,47 +71,29 @@ export default async function ReportPage({
 
   const tenantId = subdomain.toLowerCase().trim();
   const studentId = normalizeStudentId(rawStudentId);
-  const session = currentAcademicSession();
+  const derivedSession = currentAcademicSession();
 
   const school = await getTenant(tenantId);
   // Default-plus-override: explicit ?term wins, else the admin's global term.
   const requestedTerm = (term || "").trim();
   const globalTerm = school?.currentTerm?.trim() || "Term 1";
   const effectiveTerm = requestedTerm || globalTerm;
-  const effectiveSession = school?.currentSession?.trim() || session;
+  // Session resolution must match the backend gate exactly: the tenant's
+  // configured session wins, otherwise the derived one. The backend reads
+  // schools.current_session for the same reason.
+  const effectiveSession = school?.currentSession?.trim() || derivedSession;
 
   // Suspended tenants: report cards blocked for everyone except a signed-in
   // tenant admin (who keeps the billing hatch via the portal link below).
   if (school && school.isActive === false) {
-    let showBilling = false;
-    try {
-      const rawAdmin = (await cookies()).get("admin_session")?.value;
-      if (rawAdmin) {
-        const s = JSON.parse(rawAdmin) as { admin?: { email?: string }; tenant_id?: string };
-        showBilling =
-          String(s?.tenant_id || "").toLowerCase().trim() === tenantId && !!s?.admin?.email;
-      }
-    } catch {
-      showBilling = false;
-    }
+    const showBilling = await hasAdminSession(tenantId);
     return <SuspendedPortal schoolName={school.name} subdomain={tenantId} showBillingLink={showBilling} />;
   }
 
-  // Admin preview guard: a signed-in admin for THIS tenant sees the draft
-  // overlay (staff workflow); parents/guests see the Not Published state.
-  let isAdminPreview = false;
-  try {
-    const raw = (await cookies()).get("admin_session")?.value;
-    if (raw) {
-      const session = JSON.parse(raw) as { admin?: { email?: string }; tenant_id?: string };
-      const sessionTenant = String(session?.tenant_id || "").toLowerCase().trim();
-      if (sessionTenant === tenantId && session?.admin?.email) {
-        isAdminPreview = true;
-      }
-    }
-  } catch {
-    isAdminPreview = false;
-  }
+  // Admin preview: a signed-in admin for THIS tenant gets the draft bundle and
+  // the draft overlay. Resolved once and reused for the pill below, so the two
+  // can never disagree.
+  const isAdminPreview = await hasAdminSession(tenantId);
 
   // Publication check (server-side — no hydration flash, no client cost).
   let isPublished = false;  try {
