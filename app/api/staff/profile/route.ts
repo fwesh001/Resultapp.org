@@ -33,11 +33,6 @@ function getBackendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
-interface StaffSession {
-  staff?: { id?: string; staff_id?: string };
-  tenant_id?: string;
-}
-
 export async function PATCH(req: NextRequest) {
   const unauthorized = async () => {
     // Drop a rejected cookie so the browser stops resending it.
