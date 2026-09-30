@@ -13,7 +13,9 @@ import { calculateTieredTotal } from "@/lib/pricing";
  * Auth: header X-API-SECRET-KEY = BACKEND_API_SECRET (fallback PROVISION_API_SECRET)
  *
  * This route is server-only — the secret is never exposed to the client.
- * Keep SchoolRegistrationForm / /api/provision intact for Phase 3 (paid) flow.
+ * This is the only registration entrypoint. The legacy /api/provision route
+ * was removed as dead code (zero callers; it duplicated this payload shape and
+ * read the admin password back out of Flutterwave `meta`).
  */
 
 // ---------------------------------------------------------------------------
