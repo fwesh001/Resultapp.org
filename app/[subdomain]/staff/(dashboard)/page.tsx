@@ -47,9 +47,12 @@ export default async function StaffDashboardPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Welcome back, {staff.full_name}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-white">
+          Welcome back, {identity.fullName || identity.staffId}
+        </h1>
         <p className="mt-1 text-sm text-purple-200/60">
-          {staff.staff_id} {staff.role ? `• ${staff.role}` : ""} • {school?.name || subdomain}.resultapp.org
+          {identity.staffId}
+          {identity.role ? ` • ${identity.role}` : ""} • {school?.name || subdomain}.resultapp.org
         </p>
       </div>
 
