@@ -96,7 +96,8 @@ export default async function ReportPage({
   const isAdminPreview = await hasAdminSession(tenantId);
 
   // Publication check (server-side — no hydration flash, no client cost).
-  let isPublished = false;  try {
+  let isPublished = false;
+  try {
     const secret = getProxySecret();
     if (secret) {
       const qs = new URLSearchParams({
