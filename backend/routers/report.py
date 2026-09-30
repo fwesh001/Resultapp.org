@@ -945,6 +945,7 @@ def get_report_bundle(
             "form_teacher_remark": form_teacher_remark_out,
             "principal_remark": principal_remark_out,
             "published_at": published_at_out,
+            "is_published": is_published,
             "form_teacher_name": form_teacher_name_out,
             "form_teacher_signature_url": form_teacher_signature_out,
             "summary": {
@@ -958,7 +959,7 @@ def get_report_bundle(
                 "overallPositionOrdinal": overall_position_ordinal,
             },
             "term": term,
-            "academic_session": _academic_session(),
+            "academic_session": _session,
             "tenant_id": tid,
             "student_id": sid,
             "school": school_payload,
