@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /**
  * POST /api/admin/login
  * Body: { tenantId, identifier, password }
  * Forwards to FastAPI POST /api/v1/tenant/{tenantId}/admin/login
- * On success sets httpOnly secure cookie admin_session.
+ * On success sets a signed httpOnly secure cookie `admin_session`.
  *
  * Graceful NULL-hash handling: legacy schools without a password get a 403
  * with code=PASSWORD_NOT_SET so the login UI can show the friendly
