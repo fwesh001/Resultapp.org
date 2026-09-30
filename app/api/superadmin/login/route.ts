@@ -38,16 +38,18 @@ function getBackendBase(): string {
  * caller can fail closed rather than reporting a successful login that left no
  * usable credential behind.
  */
-async function setSessionCookie(value: Record<string, unknown>) {
-  try {
-    await setSessionCookieSigned(value);
-  } catch (e) {
-    console.error("[superadmin login] session signing failed", e);
-    throw e;
-  }
+async function mintSuperadminSession(value: Record<string, unknown>) {
+  await setSessionCookie(SESSION_COOKIES.superadmin, value);
 }
 
-const setSessionCookieSigned = setSessionCookie;
+/** Uniform fail-closed response for a session that could not be signed. */
+function signingFailed(e: unknown) {
+  console.error("[superadmin login] session signing failed", e);
+  return NextResponse.json(
+    { success: false, error: "Could not establish a secure session" },
+    { status: 500 },
+  );
+}
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
