@@ -6,7 +6,8 @@ Queries tenant_students (bio), active grading_templates, tenant_grades (primary)
 with graceful fallback to legacy student_academic_records / student_behavioral_records.
 Supports granular CA components A1/A2/T1/T2/Exam via exact + alias map.
 Calculates per-subject totals, class averages, subject positions, overall ranking.
-Always returns 200 even if student is null so frontend can show admission-number banner.
+Returns 404 for an unpublished result to anonymous callers (see the publication
+gate below); the 200-with-student:null shape is now admin-draft-scope only.
 """
 
 from typing import Any, Dict, List, Optional
@@ -14,7 +15,7 @@ import logging
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 import models
@@ -23,6 +24,12 @@ from database import get_db
 logger = logging.getLogger(__name__)
 
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
+
+#: Enumeration brake for the public result checker. Generous enough that a
+#: family checking several children in a sitting is never throttled, far too
+#: low to walk a roster. Buckets are per uvicorn worker (see rate_limit.py).
+REPORT_MAX_HITS = 30
+REPORT_WINDOW_S = 60
 
 CANONICAL_KEYS = ["A1", "A2", "T1", "T2", "Exam"]
 # Alias map: normalized lower key -> canonical
