@@ -572,7 +572,36 @@ def get_report_bundle(
         else:
             student = None
 
+        # ---- Publication gate (LEGAL_REMEDIATION.md P0 item 1) ----------
+        # This bundle carries scores, behavioural ratings, class rankings and
+        # free-text teacher/principal remarks about a minor. It may only be
+        # released when the school has published that result, or when the
+        # caller is a signed-in admin of this tenant who needs the draft.
+        #
+        # "Unpublished" and "unknown student" deliberately return the *same*
+        # 404 body so this endpoint cannot be used to discover which admission
+        # numbers exist, or which have grades entered but not yet released.
+        is_published = False
+        if student is not None:
+            try:
+                cur.execute(
+                    "SELECT 1 FROM result_publications "
+                    "WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) "
+                    "AND term = %s AND academic_session = %s LIMIT 1",
+                    (tid, sid, term, _session),
+                )
+                is_published = cur.fetchone() is not None
+            except Exception:
+                # Fail closed — an unreadable publication table means unpublished.
+                logger.exception(f"[report] publication check failed for {tid}/{sid}/{term}")
+                is_published = False
+
+        if not include_draft and (student is None or not is_published):
+            raise HTTPException(status_code=404, detail="Report not found")
+
         # If student missing, still return 200 with student:null for frontend banner
+        # (admin draft scope only — the gate above has already rejected anonymous
+        # callers at this point, so this branch is unreachable for them).
         grades_out: List[Dict[str, Any]] = []
         behavioural_merged: Dict[str, str] = {}
         form_teacher_remark_out: Optional[str] = None
