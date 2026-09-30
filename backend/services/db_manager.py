@@ -1033,6 +1033,11 @@ RESULT_PUBLICATIONS_TABLE = "result_publications"
 BILLING_LEDGER_TABLE = "billing_ledger"
 APP_SETTINGS_TABLE = "app_settings"
 
+#: Append-only record of which version of the Terms of Service and Privacy
+#: Policy a school accepted, when, and by whom (LEGAL_REMEDIATION.md P0 item 4).
+#: A school may accept new versions over time, so this is history, not state.
+TENANT_CONSENTS_TABLE = "tenant_consents"
+
 #: Free trial credits granted on registration (frictionless onboarding).
 TRIAL_CREDITS = 30
 TRIAL_SLOTS = 0  # slots are purchased via student_count; credits are the trial gift
