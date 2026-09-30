@@ -271,6 +271,48 @@ top-up changes no status column.
 - **Fix:** make the action honest, or wire the CTA to a request rather than to
   billing. ToS §8.5 promises prompt restoration once the risk is resolved.
 
+### 16. Two publication-status predicates disagree (surfaced by the P0-1 fix)
+
+Now that the backend report gate is the control, its definition of "published"
+has to match the one the report page still uses for the draft pill and the
+print button. They do not:
+
+- `backend/services/db_manager.py:1554-1584` `is_result_published()` — matches
+  `LOWER(student_id) = LOWER(...)`.
+- `backend/routers/credits.py:168-184` `GET /credits/publications` — matches
+  `student_id = %s`, **case-sensitive**.
+
+On normalised input they agree, but they are not the same predicate, and a
+row with a non-lowercased `student_id` would read as published on one side and
+unpublished on the other.
+
+- **Fix:** make `credits.py` use `LOWER()` on both sides, or have
+  `app/[subdomain]/report/[...studentId]/page.tsx` stop duplicating the check
+  and take `is_published` from the report response. Note
+  `result_publications` has a **case-sensitive** `UNIQUE` constraint while all
+  readers normalise — `backend/scripts/migrate_lowercase_ids.py` exists to fix
+  legacy rows but is a one-off, and the publish path compensates with a
+  `LOWER()` pre-select.
+
+### 17. Admission number retained in the billing ledger (approved carve-out)
+
+`backend/routers/allocations.py` writes
+`f"Slot refund for deleted student {sid}"` into `billing_ledger.description`
+on every student deletion. The admission number is a pupil identifier, and it
+survives the P0-2 cascade that erases everything else about that child.
+
+**Accepted deliberately.** `billing_ledger` is an append-only financial record
+retained under Privacy Policy §10 (7 years, legal obligation), and the string
+is the audit trail tying a slot refund to the pupil it returned capacity for.
+Mutating a financial ledger to remove an identifier is a worse compliance
+outcome than retaining the identifier, and `ON CONFLICT (reference_id) DO
+NOTHING` makes the rows non-editable by design anyway.
+
+- **Do not** scrub this without a decision from the product owner plus a
+  finance sign-off. If it is ever in scope, the correct fix is to key the
+  ledger on the `tenant_students` row UUID (which is already in `reference_id`
+  as `{record_id}`) rather than the admission number, for *future* rows only.
+
 ---
 
 ## P2 — hardening
