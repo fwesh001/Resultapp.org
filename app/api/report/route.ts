@@ -100,10 +100,7 @@ export async function GET(req: NextRequest) {
   // Reject malformed admission numbers before they reach the backend so a
   // junk id cannot be used to probe query behaviour.
   if (!STUDENT_ID_RE.test(studentId)) {
-    return NextResponse.json(
-      { success: false, error: "Report not found" },
-      { status: 404 },
-    );
+    return notFound();
   }
 
   // Scope: admin of this tenant gets the draft; everyone else gets the
