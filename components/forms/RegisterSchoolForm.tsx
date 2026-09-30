@@ -932,30 +932,57 @@ export function RegisterSchoolForm() {
         </p>
       )}
 
+      {/* Consent — a real, required checkbox, not a passive notice. The
+          accepted version strings are persisted server-side alongside the
+          tenant row (LEGAL_REMEDIATION.md P0 item 4). components/ui/Input
+          hardcodes text-input styling, so this is a raw checkbox. */}
+      <div className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.06] p-4">
+        <label htmlFor="acceptTerms" className="flex cursor-pointer items-start gap-3">
+          <input
+            id="acceptTerms"
+            type="checkbox"
+            checked={values.acceptTerms}
+            onChange={(e) => handleChange("acceptTerms", e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 rounded accent-purple-600"
+            aria-describedby="acceptTerms-error"
+          />
+          <span className="text-xs leading-5 text-purple-200/75">
+            I have read and accept the{" "}
+            <Link
+              href="/terms"
+              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+            >
+              Terms of Service
+            </Link>{" "}
+            (v{TERMS_VERSION}) and the{" "}
+            <Link
+              href="/privacy"
+              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+            >
+              Privacy Policy
+            </Link>{" "}
+            (v{PRIVACY_VERSION}) on behalf of this school, and confirm I am
+            authorised to bind it. Payments are final sale — see the{" "}
+            <Link
+              href="/refund-policy"
+              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+            >
+              Refund Policy
+            </Link>
+            .
+          </span>
+        </label>
+        {errors.acceptTerms && (
+          <p id="acceptTerms-error" role="alert" className="mt-2 pl-8 text-xs text-red-300">
+            {errors.acceptTerms}
+          </p>
+        )}
+      </div>
+
       <p className="text-center text-xs leading-5 text-purple-300/40">
-        By continuing, you agree to our{" "}
-        <Link
-          href="/terms"
-          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
-        >
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link
-          href="/privacy"
-          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
-        >
-          Privacy Policy
-        </Link>
-        . Payments are final sale &mdash; see our{" "}
-        <Link
-          href="/refund-policy"
-          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
-        >
-          Refund Policy
-        </Link>
-        . Your portal at{" "}
-        <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be created securely.
+        Your portal at{" "}
+        <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be
+        created securely.
       </p>
     </form>
   );
