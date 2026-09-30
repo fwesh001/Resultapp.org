@@ -462,7 +462,7 @@ export function RegisterSchoolForm() {
     setTxRef(null);
     setPaidConflict(null);
     setProvisioning(false);
-    setValues({ schoolName: "", subdomain: "", adminEmail: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "" });
+    setValues({ schoolName: "", subdomain: "", adminEmail: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "", acceptTerms: false });
     setErrors({});
     setCurrentStep(1);
   }
