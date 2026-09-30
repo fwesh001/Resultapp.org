@@ -33,19 +33,21 @@ function getBackendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
+/**
+ * Mint the signed superadmin session. Throws on a signing failure so the
+ * caller can fail closed rather than reporting a successful login that left no
+ * usable credential behind.
+ */
 async function setSessionCookie(value: Record<string, unknown>) {
-  await setSignedSession(value);
-}
-
-async function setSignedSession(value: Record<string, unknown>) {
   try {
-    await setSessionCookie(SESSION_COOKIES.superadmin, value);
+    await setSessionCookieSigned(value);
   } catch (e) {
-    // Fail closed: a signing failure must not report a successful login.
     console.error("[superadmin login] session signing failed", e);
     throw e;
   }
 }
+
+const setSessionCookieSigned = setSessionCookie;
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
