@@ -84,15 +84,27 @@ export async function readSessionCookie<T extends object>(
  *
  * Requires a Route Handler or Server Action — cookies are read-only in Server
  * Components, so a layout cannot clear a bad cookie and must redirect instead.
- * `path` is passed explicitly so the delete always matches the set.
  *
- * Returns false if the delete threw, so callers can stop reporting success
- * while leaving a live credential in the browser.
+ * `path` is stated explicitly on the expiring Set-Cookie rather than relying on
+ * the default, because a delete that does not match the path the cookie was set
+ * on leaves the cookie live in the browser.
+ *
+ * Returns false if the write threw, so callers can stop reporting success
+ * while a live credential remains.
  */
 export async function clearSessionCookie(name: SessionCookieName): Promise<boolean> {
   try {
     const store = await cookies();
-    store.delete(name, { path: COOKIE_PATH });
+    // An expired, empty value is the portable way to express "delete" while
+    // keeping the path under our control.
+    store.set(name, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: COOKIE_PATH,
+      expires: new Date(0),
+      maxAge: 0,
+    });
     return true;
   } catch {
     return false;
