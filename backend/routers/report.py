@@ -515,6 +515,7 @@ def get_report_bundle(
             "result is indistinguishable from an unknown student."
         ),
     ),
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     tid = _validate_tenant_id(tenant_id)
