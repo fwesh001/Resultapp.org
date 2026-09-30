@@ -499,6 +499,15 @@ def get_report_bundle(
     tenant_id: str,
     student_id: str,
     term: str = Query("Term 1"),
+    include_draft: bool = Query(
+        False,
+        description=(
+            "Set by the trusted Next.js proxy when the caller holds a valid "
+            "admin_session for this tenant. Returns the unpublished draft bundle "
+            "for the staff workflow. When false (the default) an unpublished "
+            "result is indistinguishable from an unknown student."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     tid = _validate_tenant_id(tenant_id)
@@ -523,6 +532,15 @@ def get_report_bundle(
     school_info = get_school_by_subdomain(tid)
     if school_info is None:
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+
+    # Session used for the publication decision.
+    #
+    # The tenant's configured session wins, so this agrees exactly with the
+    # Next.js report page (which resolves school.currentSession first). Using
+    # the derived session alone let the gate and the page disagree near the
+    # September rollover, because _academic_session() is naive server-local
+    # time while db_manager.current_academic_session() is UTC.
+    _session = (school_info.get("current_session") or "").strip() or _academic_session()
 
     # Fetch template (may be null) — re-resolved with class below once known
     template = _get_active_template(db, tid)
