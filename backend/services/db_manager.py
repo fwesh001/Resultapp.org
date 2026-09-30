@@ -1879,8 +1879,19 @@ def init_roster_registry() -> None:
         """)
 
         # Grades — per-student per-subject per-term scores (focused grading workflow)
-        # student_id is a logical link to tenant_students.student_id (not enforced as FK
-        # so roster edits never cascade-delete grades).
+        # student_id is a logical link to tenant_students.student_id (not enforced
+        # as an FK), so a database-level cascade is not possible.
+        #
+        # It was originally deliberate, to stop roster edits destroying grades.
+        # That was reversed: a non-FK link keyed on the admission-number *string*
+        # meant a re-enrolment reusing a withdrawn admission number inherited the
+        # previous pupil's grades, remarks, behavioural ratings and published
+        # state — and was published for free as already-published. Erasure also
+        # has to reach the free-text remarks about a child.
+        #
+        # The cascade is now application-level and transactional, in
+        # routers/allocations.py delete_roster_record. Any table added here that
+        # references a student MUST be added to that cascade.
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TENANT_GRADES_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
