@@ -292,7 +292,7 @@ export const termsOfService: LegalDocumentData = {
             "resells, sublicenses, or provides third-party access to the Service;",
             "breaches section 5, 6, or 12 in a way that we reasonably consider cannot be remedied; or",
             "engages in any other activity that exposes us to liability, regulatory action, or reputational harm.",
-        },
+          ],
         },
         {
           kind: "p",
