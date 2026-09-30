@@ -161,8 +161,9 @@ export const termsOfService: LegalDocumentData = {
           items: [
             "The School must change any default or initial password or PIN issued to a staff account before the account is used, and must ensure each member of staff holds an individual account rather than a shared one.",
             "The School must not share account credentials, and must not permit an Authorised User to work under another person's account.",
-            "The School must notify us promptly at " + SUPPORT_EMAIL + " if it suspects unauthorised access to an account, and should change the affected password immediately.",
-            "Sessions end automatically after 12 hours of inactivity. The School should not rely on a session remaining open and should not leave a portal open on a shared or public device.",
+            "The School must sign out, and change the affected password, at any time it suspects that a credential or a session has been exposed, and should do so before reporting it to us. Contacting us first does not suspend or end a session.",
+            "Every portal session expires **12 hours after it is created**. That limit is fixed: it is not extended by activity, it is not reset by signing in elsewhere, and it cannot be paused. **We do not currently provide a means to revoke an individual session before it expires.** We may terminate the School's access as a whole under section 8, and we invalidate all sessions automatically whenever our signing key is rotated, but we cannot end one session while leaving the account usable.",
+            "A session is a signed, tamper-proof token that cannot be edited or fabricated, so a School's access to another School's portal or data cannot be obtained by altering a session. The School should still not rely on a session remaining open, and must not leave a portal open on a shared or public device.",
             "The School is responsible for ensuring that the devices its staff use are appropriately secured.",
           ],
         },
