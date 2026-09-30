@@ -53,7 +53,7 @@ export const termsOfService: LegalDocumentData = {
         },
         {
           kind: "p",
-          text: `These Terms should be read together with our ${"Privacy Policy"} and ${"Refund Policy"}, which form part of this agreement. Where these Terms and the Refund Policy conflict, the Refund Policy governs matters of payment and refund.`,
+          text: "These Terms should be read together with our Privacy Policy and our Refund Policy, which form part of this agreement and are available at the legal links in the site footer. Where these Terms and the Refund Policy conflict, the Refund Policy governs matters of payment and refund.",
         },
         {
           kind: "p",
