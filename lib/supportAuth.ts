@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { readSessionCookie, SESSION_COOKIES } from "./session";
 
 /**
  * Support Hub — OPTIONAL identity resolution.
@@ -9,6 +9,12 @@ import { cookies } from "next/headers";
  * visitor on the marketing /support page is a first-class submitter, so this
  * returns `null` and the caller records an unlinked ticket.
  *
+ * NEVER THROWS. A rejected, unsigned, forged or tampered cookie must degrade to
+ * `null` so the ticket is filed as `anonymous` and the backend's own invariant
+ * check (support.py: an anonymous submitter may not carry a tenant_id) applies.
+ * Throwing here would let an attacker turn a bad cookie into an exception path
+ * rather than a silent downgrade.
+ *
  * Why this mostly returns null in practice: session cookies are host-only (no
  * Domain attribute), so the `admin_session` minted on `vhs.resultapp.org` is
  * never sent to `resultapp.org/support`. The reader is still correct and still
@@ -17,7 +23,9 @@ import { cookies } from "next/headers";
  *
  * Trust rule enforced by the caller: an authenticated session's email and
  * tenant always OVERWRITE whatever the visitor typed into the form, so nobody
- * can file a ticket "as" a tenant admin by typing their address.
+ * can file a ticket "as" a tenant admin by typing their address. That rule only
+ * holds because the session here is signature-verified — before P0-0 a forged
+ * cookie could plant a ticket attributed to a victim school.
  */
 
 export interface SubmitterIdentity {
@@ -26,17 +34,6 @@ export interface SubmitterIdentity {
   role: string | null;
   kind: "admin" | "staff";
   userId: string | null;
-}
-
-interface AdminSession {
-  admin?: { email?: string };
-  tenant_id?: string;
-}
-
-interface StaffSession {
-  staff?: { id?: string; staff_id?: string; email?: string };
-  role?: string;
-  tenant_id?: string;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9-]{3,30}$/;
@@ -53,58 +50,55 @@ function cleanEmail(value: unknown): string | null {
   return email;
 }
 
-function parse(raw: string | undefined): Record<string, unknown> | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Read whichever portal session is present. Admin wins over staff so a user who
- * is both is attributed as an admin. Never throws; any malformed cookie is
- * treated as "no session".
+ * is both is attributed as an admin. Never throws; any missing, unsigned,
+ * forged, malformed or expired cookie is treated as "no session".
  */
 export async function readOptionalSession(): Promise<SubmitterIdentity | null> {
-  let jar: Awaited<ReturnType<typeof cookies>>;
   try {
-    jar = await cookies();
+    const admin = await readSessionCookie<{
+      admin?: { email?: string };
+      tenant_id?: string;
+    }>(SESSION_COOKIES.admin);
+    if (admin) {
+      const tenantId = normalizeTenant(admin.tenant_id);
+      const email = cleanEmail(admin.admin?.email);
+      // A usable admin session needs both halves, mirroring requireAdminSession.
+      if (tenantId && email && admin.admin) {
+        return {
+          tenantId,
+          email,
+          role: "admin",
+          kind: "admin",
+          userId: email,
+        };
+      }
+    }
   } catch {
-    return null;
+    // fall through to staff
   }
 
-  const admin = parse(jar.get("admin_session")?.value) as AdminSession | null;
-  if (admin) {
-    const tenantId = normalizeTenant(admin.tenant_id);
-    const email = cleanEmail(admin.admin?.email);
-    // A usable admin session needs both halves, mirroring requireAdminSession.
-    if (tenantId && email && admin.admin) {
-      return {
-        tenantId,
-        email,
-        role: "admin",
-        kind: "admin",
-        userId: email,
-      };
+  try {
+    const staff = await readSessionCookie<{
+      staff?: { id?: string; staff_id?: string; email?: string; role?: string };
+      tenant_id?: string;
+    }>(SESSION_COOKIES.staff);
+    if (staff) {
+      const tenantId = normalizeTenant(staff.tenant_id);
+      const email = cleanEmail(staff.staff?.email);
+      if (tenantId && staff.staff) {
+        return {
+          tenantId,
+          email,
+          role: String(staff.staff?.role ?? "").trim() || "teacher",
+          kind: "staff",
+          userId: String(staff.staff.id ?? staff.staff.staff_id ?? email ?? ""),
+        };
+      }
     }
-  }
-
-  const staff = parse(jar.get("staff_session")?.value) as StaffSession | null;
-  if (staff) {
-    const tenantId = normalizeTenant(staff.tenant_id);
-    const email = cleanEmail(staff.staff?.email);
-    if (tenantId && staff.staff) {
-      return {
-        tenantId,
-        email,
-        role: staff.role?.trim() || "teacher",
-        kind: "staff",
-        userId: String(staff.staff.id ?? staff.staff.staff_id ?? email ?? ""),
-      };
-    }
+  } catch {
+    // fall through to anonymous
   }
 
   return null;
