@@ -1349,6 +1349,8 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
                         "cascaded_rows": cascaded,
                         "slots_refunded": 1,
                     },
+                    actor="tenant_admin",
+                    actor_type="admin",
                 )
             except Exception as _audit_err:
                 logger.warning(
