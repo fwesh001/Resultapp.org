@@ -2,7 +2,7 @@ import { StudentReportCard } from "@/components/report-card/StudentReportCard";
 import { ReportControlBar } from "@/components/report-card/ReportControlBar";
 import { getTenant } from "@/lib/tenant";
 import { currentAcademicSession } from "@/lib/format";
-import { cookies } from "next/headers";
+import { hasAdminSession } from "@/lib/adminAuth";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,14 @@ function getProxySecret(): string {
  * A report card is fully unlocked ONLY when the backend confirms a row in
  * result_publications for (tenant, student, term, session). Everything else
  * renders as a free "Draft — Pending Publication" preview (blurred, no print).
+ *
+ * Since P0-1 the *data* is gated server-side too, not just this banner:
+ * /api/report asks the backend for include_draft only when this page's
+ * viewer is a signed-in admin of the tenant. For everyone else the backend
+ * returns 404 for an unpublished result, so an anonymous visitor cannot
+ * distinguish "not published" from "no such admission number". That is why
+ * the draft pill below is admin-only — for the public it would sit above a
+ * "Student Not Found" card, which is both confusing and a telling signal.
  */
 function normalizeStudentId(raw: string | string[]): string {
   let s: string;
