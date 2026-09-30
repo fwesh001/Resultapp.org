@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { readStaffSession } from "@/lib/staffAuth";
 
 /**
  * Staff Grading Proxy — /api/staff/grading (GET + POST)
  *
- * Session guard: reads the httpOnly `staff_session` cookie set at login and
- * only forwards when the session's tenant matches the requested tenant.
+ * Session guard: verifies the HMAC-signed httpOnly `staff_session` cookie set
+ * at login (LEGAL_REMEDIATION.md P0-0) and only forwards when the session's
+ * tenant matches the requested tenant.
  * Injects X-API-SECRET-KEY server-side; the secret never reaches the browser.
  *
   * GET modes:
   *  - Hub mode (no class/subject): ?tenant_id=&tenantId — returns { allocations, template }
   *    by fan-out to /staff/dashboard?staff_id= + /templates/{tenantId} in parallel.
- *  - Bundle mode: ?tenant_id=&class_name=&subject_name=&term=Term 1 — forwards to
- *    /api/v1/tenant/{tenant_id}/staff/grading/{class}/{subject}?term=
+  *  - Bundle mode: ?tenant_id=&class_name=&subject_name=&term=Term 1 — forwards to
+  *    /api/v1/tenant/{tenant_id}/staff/grading/{class}/{subject}?term=
  * POST { tenant_id, term, subject_name, class_name, assessment_key, scores }
  */
 
@@ -34,21 +35,20 @@ function getBackendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
-interface StaffSession {
-  staff?: { id?: string; staff_id?: string };
-  tenant_id?: string;
-}
-
-async function getSessionDetails(): Promise<{ tenant: string; staffId: string } | null> {
+/**
+ * Verify the signed staff session for `expectedTenant`.
+ *
+ * Previously this did `JSON.parse` on the raw cookie with no signature check,
+ * so any hand-written value granted a staff identity (LEGAL_REMEDIATION.md
+ * P0-0). Verification now happens in lib/staffAuth.ts.
+ */
+async function getSessionDetails(
+  expectedTenant: string,
+): Promise<{ tenant: string; staffId: string } | null> {
   try {
-    const cookieStore = await cookies();
-    const raw = cookieStore.get("staff_session")?.value;
-    if (!raw) return null;
-    const session = JSON.parse(raw) as StaffSession;
-    const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-    const staffId = String(session?.staff?.staff_id || session?.staff?.id || "").trim();
-    if (!tenant || !staffId || !session?.staff) return null;
-    return { tenant, staffId };
+    const identity = await readStaffSession(expectedTenant);
+    if (!identity) return null;
+    return { tenant: identity.tenantId, staffId: identity.staffId };
   } catch {
     return null;
   }
