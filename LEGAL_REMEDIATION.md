@@ -384,4 +384,11 @@ content in `support_tickets.payload` (JSONB, tenant-scoped).
   and `photoUrl` on the `Student` interface. **No column behind them exists.**
   The type declarations are unused and should either be implemented or deleted,
   because a future developer could reasonably read them as evidence the
-  platform collects that data.
+  platform collects that data. Likewise `SchoolRegistrationPayload` at
+  `types/school.ts:46-59` (including its `acceptTerms: boolean`) is imported
+  nowhere; real consent now lives in the `tenant_consents` table.
+- **Testing note.** `python` on this workstation resolves to the Microsoft
+  Store alias stub, which makes `python -m py_compile ... | ...` silently
+  unreliable. The real interpreter is at
+  `%LOCALAPPDATA%\Programs\Python\Python311\python.exe`. Backend syntax checks
+  must use that path.
