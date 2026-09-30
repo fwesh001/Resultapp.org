@@ -121,7 +121,9 @@ interface RegisterSchoolBody {
   txRef?: string;
   // Consent record — required. Persisted in tenant_consents alongside the
   // tenant row. See LEGAL_REMEDIATION.md P0 item 4.
+  acceptTerms?: boolean;
   accepted_terms?: boolean;
+  accept_terms?: boolean;
   terms_version?: string;
   privacy_version?: string;
 }
