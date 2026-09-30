@@ -606,6 +606,15 @@ async def provision_school(payload: ProvisionRequest, request: Request):
 
         logger.info(f"[PROVISION] SUCCESS for '{subdomain}' in {elapsed_ms}ms -> {login_url}")
 
+        # Registry + consent. Both writes are atomic and consent is mandatory:
+        # a school row cannot be created without a matching consent record, so
+        # a failure here means neither landed.
+        #
+        # This cannot be swallowed silently. The site is already deployed at
+        # this point, so we surface the failure in the response for the caller
+        # and log it at ERROR — an operator must reconcile it, because an
+        # unevidenced portal is a compliance exposure, not a cosmetic one.
+        registry_error = None
         try:
             register_school(
                 subdomain=subdomain,
@@ -616,10 +625,24 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 admin_password_hash=str(payload.admin_password).strip()
                 if payload.admin_password and str(payload.admin_password).strip()
                 else None,
+                terms_version=payload.terms_version,
+                privacy_version=payload.privacy_version,
+                accepted_by=admin_email,
+                consent_ip=payload.consent_ip,
             )
-            logger.info(f"[PROVISION] School registered in registry for '{subdomain}'")
+            logger.info(
+                "[PROVISION] School registered in registry for '%s' with consent "
+                "terms=%s privacy=%s",
+                subdomain, payload.terms_version, payload.privacy_version,
+            )
         except Exception as e:
-            logger.warning(f"[PROVISION] Failed to register school '{subdomain}' in registry: {e}")
+            registry_error = str(e)
+            logger.error(
+                "[PROVISION] FAILED to register school '%s' in registry: %s "
+                "— portal is live but unevidenced; reconcile before serving real data",
+                subdomain, e,
+                exc_info=True,
+            )
 
         # Credit & Command: trial grant (best-effort, idempotent — never blocks provision)
         try:
