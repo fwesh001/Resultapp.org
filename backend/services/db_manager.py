@@ -597,6 +597,150 @@ def init_schools_registry() -> None:
             conn.close()
 
 
+def record_tenant_consent(
+    subdomain: str,
+    terms_version: str,
+    privacy_version: str,
+    accepted_by: str,
+    ip_address: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record affirmative acceptance of a Terms/Privacy version pair.
+
+    Append-only and idempotent on (subdomain, terms_version, privacy_version),
+    so replaying a registration cannot manufacture a second acceptance record
+    for the same text, and re-accepting a genuinely new version is retained as
+    a new row.
+
+    Called from register_school() inside the same transaction as the schools
+    INSERT: a portal must not come into existence with no consent record
+    behind it.
+    """
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {TENANT_CONSENTS_TABLE}
+                (subdomain, terms_version, privacy_version, accepted_at, accepted_by, ip_address)
+            VALUES (%s, %s, %s, NOW(), %s, %s)
+            ON CONFLICT (subdomain, terms_version, privacy_version) DO NOTHING
+            RETURNING id, subdomain, terms_version, privacy_version, accepted_at,
+                      accepted_by, ip_address;
+            """,
+            (subdomain, str(terms_version), str(privacy_version), accepted_by, ip_address),
+        )
+        row = cur.fetchone()
+        if row is None:
+            # Replay against an existing acceptance — return the original.
+            cur.execute(
+                f"""
+                SELECT id, subdomain, terms_version, privacy_version, accepted_at,
+                       accepted_by, ip_address
+                FROM {TENANT_CONSENTS_TABLE}
+                WHERE subdomain = %s AND terms_version = %s AND privacy_version = %s;
+                """,
+                (subdomain, str(terms_version), str(privacy_version)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        d = _row_to_dict(row, cur) if row is not None else {}
+        if isinstance(d.get("accepted_at"), datetime):
+            d["accepted_at"] = d["accepted_at"].isoformat()
+        return d
+    except Exception as e:
+        logger.error(f"[DB] Failed to record consent for '{subdomain}': {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_tenant_consents(subdomain: str) -> list:
+    """All recorded acceptances for a school, newest first."""
+    subdomain = _sanitize_subdomain(subdomain)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, subdomain, terms_version, privacy_version, accepted_at,
+                   accepted_by, ip_address
+            FROM {TENANT_CONSENTS_TABLE}
+            WHERE subdomain = %s
+            ORDER BY accepted_at DESC;
+            """,
+            (subdomain,),
+        )
+        rows = cur.fetchall()
+        out = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            if isinstance(d.get("accepted_at"), datetime):
+                d["accepted_at"] = d["accepted_at"].isoformat()
+            out.append(d)
+        return out
+    except Exception as e:
+        logger.error(f"[DB] Failed to read consents for '{subdomain}': {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def init_consent_tables() -> None:
+    """Create the tenant_consents table. Idempotent."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TENANT_CONSENTS_TABLE} (
+                id               SERIAL PRIMARY KEY,
+                subdomain        VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                terms_version    VARCHAR(16) NOT NULL,
+                privacy_version  VARCHAR(16) NOT NULL,
+                accepted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                accepted_by      VARCHAR(255) NOT NULL,
+                ip_address       TEXT,
+                UNIQUE(subdomain, terms_version, privacy_version)
+            );
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_tenant_consents_lookup
+            ON {TENANT_CONSENTS_TABLE} (subdomain, accepted_at DESC);
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"[DB] Consent table init failed: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any]:
     """Register a newly provisioned school in the central registry."""
     conn = None
