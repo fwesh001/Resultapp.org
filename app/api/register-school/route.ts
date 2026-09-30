@@ -84,7 +84,7 @@ function clientIp(req: NextRequest): string | undefined {
       const first = fwd.split(",")[0]?.trim();
       if (first) return first.slice(0, 64);
     }
-    return req.ip?.slice(0, 64);
+    return req.headers.get("x-real-ip")?.slice(0, 64) || undefined;
   } catch {
     return undefined;
   }
@@ -234,8 +234,8 @@ export async function POST(req: NextRequest) {
   // lib/legal/constants.ts so the persisted record can never drift from the
   // published document.
   const acceptedTerms =
+    body.acceptTerms === true ||
     body.accepted_terms === true ||
-    body.acceptedTerms === true ||
     body.accept_terms === true;
   if (!acceptedTerms) {
     fieldErrors.acceptTerms =
