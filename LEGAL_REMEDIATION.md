@@ -1,21 +1,33 @@
 # Legal & Data Protection Remediation Backlog
 
-**Status:** open
+**Status:** P0 closed (1 October 2026). P1 and P2 open.
 **Raised:** 1 October 2026
+**P0 closed:** 1 October 2026
 **Owner:** engineering
 **Context:** discovered while drafting `/privacy`, `/terms` and `/refund-policy`.
 
 The legal pages shipped in a deliberately clean form: they describe what the
 platform does, and they are worded the way a production policy is worded. That
-choice is only safe while the items below are closed. Each item is a place
-where the code does not yet do what a reader of the published policy would
-reasonably assume it does.
+choice is only safe while the P0 items below are closed. They now are, and each
+entry records what actually changed — including two places where the original
+write-up about the code was wrong.
 
 The NDPA 2023 / NDPR 2023 exposure is real: the Nigeria Data Protection
 Commission can levy penalties up to **₦10,000,000 or 2% of annual turnover**
 for serious breaches, and up to ₦10,000,000 for a data breach that is not
 notified. The Terms of Service carve the school out for its own unlawful
 processing (ToS §12.2), but nothing can carve us out for ours.
+
+### Outstanding before the policy is fully accurate
+
+- **P1 remains open.** Privacy Policy §9 and §10 still describe controls the
+  code does not yet implement: no field-level encryption at rest (item 5) and
+  no retention enforcement (item 9). Both are in the published text. They are
+  not P0 because neither creates a disclosure path on its own, but the policy
+  currently overstates the posture in those two sections.
+- **`purge_orphan_students.py` has never been run.** The P0-2 cascade only
+  covers deletions made after it shipped. Existing orphans remain in
+  production and need a point-in-time snapshot before `--execute`.
 
 ---
 
