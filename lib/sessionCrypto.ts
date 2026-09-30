@@ -78,7 +78,7 @@ export function sessionSecret(): string {
     }
     if (isProd()) {
       throw new Error(
-        `SESSION_SECRET must be at least ${SESSION_SECRET_SECRET_MIN_LENGTH} characters; ` +
+        `SESSION_SECRET must be at least ${SESSION_SECRET_MIN_LENGTH} characters; ` +
           `got ${configured.length}. Refusing to issue sessions.`,
       );
     }
