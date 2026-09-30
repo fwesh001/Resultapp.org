@@ -37,6 +37,85 @@ All four P0 items were remediated in a single pass. Each is marked below with
 what actually changed, because two of the original write-ups were wrong about
 the code and the correction matters if anyone re-investigates.
 
+### 0. Session cookies are unsigned — anyone can forge superadmin — **OPEN, HIGHEST PRIORITY**
+
+**Found while verifying the P0-1 fix. Discovered after the four approved items
+were completed, so it is not remediated. It outranks everything else here.**
+
+All three session cookies are **raw JSON with no signature and no server-side
+validation**:
+
+| Cookie | Written at | Validated at | Mechanism |
+|---|---|---|---|
+| `admin_session` | `app/api/admin/login/route.ts:92-99` | `lib/adminAuth.ts:42-57` | `JSON.parse` + field compare |
+| `staff_session` | `app/api/staff/login/route.ts:76-83` | `lib/staffAuth.ts` | `JSON.parse` + field compare |
+| `superadmin_session` | `app/api/superadmin/login/route.ts:35-42` | `lib/superadminAuth.ts:24-31` | `JSON.parse(raw).superadmin === true` |
+
+`lib/superadminAuth.ts:8` states the design in its own docstring: *"Value is an
+opaque JSON blob; validity = presence + well-formed + not expired (maxAge
+enforced by cookie)."* The `timingSafeEqual` at
+`app/api/superadmin/login/route.ts:112` compares the `SUPERADMIN_PASSWORD` env
+value during login — it does **not** sign the cookie. There is no
+`createHmac`, no JWT, and no session table anywhere in the repository.
+
+**Consequence: setting a cookie value is sufficient to authenticate.**
+
+```bash
+# Platform superadmin, no credentials, no password.
+curl -H 'Cookie: superadmin_session={"superadmin":true,"admin_id":"x","email":"a@b.c","role":"owner","created_at":"2026-01-01"}' \
+     'https://resultapp.org/api/superadmin/tenants'
+```
+
+The 12-hour `maxAge` is enforced by the **browser**, not the server, so a
+forged cookie carries no expiry and stays valid indefinitely.
+
+**Verified bypasses** (no cookie → 401; forged cookie → request reaches the
+backend), tested against a stub backend:
+
+| Route | No cookie | Forged | Result |
+|---|---|---|---|
+| `GET /api/superadmin/tenants` | 401 | 500 (reached backend) | **bypass** |
+| `GET /api/superadmin/stats` | 401 | 500 | **bypass** |
+| `GET /api/superadmin/audit-logs` | 401 | 500 | **bypass** |
+| `DELETE /api/admin/allocations` | 401 | 501 (reached backend) | **bypass** |
+| `GET /api/billing/ledger` | 401 | 500 | **bypass** |
+| `POST /api/staff/grading` | 401 | 400 (past guard, failed body validation) | **bypass** |
+
+`/api/superadmin/*` also includes tenant soft-delete and restore, free credit
+and slot grants, the credit price, password resets, and the global ledger. The
+impact is full platform control plus arbitrary score write, without any
+credential.
+
+**This also undermines the P0-1 fix.** The publication gate's admin branch is
+selected by `hasAdminSession`, so a forged `admin_session` reaches
+`include_draft=true` and reads unpublished report bundles. The gate is only as
+strong as this cookie.
+
+**Policy exposure:** Privacy Policy §9 claims records are protected by session
+cookies bound to a tenant. The cookies are `httpOnly`, `Secure` and host-only
+as written, but they are *unauthenticated*, so §9's assurance is not currently
+met. ToS §15.3 assumes a superadmin role boundary that does not exist.
+
+**Fix (needs a decision, not a patch).** Minimum viable, in order:
+
+1. Sign all three cookies with an HMAC over the payload using a new
+   `SESSION_SECRET` env var, and verify with `timingSafeEqual` in a single
+   shared helper used by `lib/adminAuth.ts`, `lib/superadminAuth.ts` and
+   `lib/staffAuth.ts`. This is the minimum that closes the bypass. It does not
+   give revocation.
+2. Prefer a server-side session store (a `sessions` table with an opaque
+   random id as the cookie value, looked up per request). This additionally
+   gives revocation, which §5.5 of the Terms promises ("notify us if it
+   suspects unauthorised access to an account") and which a stateless signed
+   cookie cannot deliver.
+3. Rotate `SESSION_SECRET` deployment procedure, and invalidate all existing
+   cookies on deploy (a version claim in the payload achieves this).
+
+Until then, treat every authenticated route in the application as
+unauthenticated.
+
+---
+
 ### 1. `/api/report` had no publication gate — CLOSED
 
 **Original claim (wrong in its fix):** add `requireAdminSession` to
