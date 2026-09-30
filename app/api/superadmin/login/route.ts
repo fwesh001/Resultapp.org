@@ -92,13 +92,17 @@ export async function POST(req: NextRequest) {
       );
     }
     const admin = (data as { admin?: { id?: string; email?: string; role?: string } }).admin ?? {};
-    await setSessionCookie({
-      superadmin: true,
-      admin_id: admin.id ?? null,
-      email: admin.email ?? email,
-      role: admin.role ?? "admin",
-      created_at: new Date().toISOString(),
-    });
+    try {
+      await mintSuperadminSession({
+        superadmin: true,
+        admin_id: admin.id ?? null,
+        email: admin.email ?? email,
+        role: admin.role ?? "admin",
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      return signingFailed(e);
+    }
     return NextResponse.json({ success: true }, { status: 200 });
   }
 
@@ -124,6 +128,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Invalid password" }, { status: 401 });
   }
 
-  await setSessionCookie({ superadmin: true, created_at: new Date().toISOString() });
+  try {
+    await mintSuperadminSession({ superadmin: true, created_at: new Date().toISOString() });
+  } catch (e) {
+    return signingFailed(e);
+  }
   return NextResponse.json({ success: true }, { status: 200 });
 }
