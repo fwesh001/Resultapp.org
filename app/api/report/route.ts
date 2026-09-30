@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasAdminSession } from "@/lib/adminAuth";
 
 /**
  * Report Proxy — GET /api/report?tenant_id=&student_id=&term=Term 1
  * Forwards securely to FastAPI GET /api/v1/tenant/{tenant_id}/report/{student_id}?term=
  * Injects X-API-SECRET-KEY server-side. cache: no-store.
+ *
+ * Access scope (LEGAL_REMEDIATION.md P0 item 1)
+ * ---------------------------------------------
+ * This route backs the *public* result checker, so it must stay callable
+ * without a session. It is therefore NOT guarded with requireAdminSession.
+ *
+ * Instead it computes a scope and lets the backend enforce it:
+ *   - signed-in admin of THIS tenant -> include_draft=true (full draft bundle)
+ *   - anyone else                   -> include_draft omitted
+ *
+ * The backend then returns 404 for an unpublished result to the public scope,
+ * byte-identical to the 404 for an unknown student, so this endpoint cannot be
+ * used to enumerate admission numbers. The proxy is trusted (server-side, it
+ * injects the shared secret), so the flag is safe to send; the backend still
+ * verifies publication itself rather than trusting the flag.
+ *
+ * This is a scope decision, never a client-supplied one: the flag is derived
+ * from the httpOnly session cookie, never from a query parameter.
  */
 
 function getSecret(): string {
@@ -23,6 +42,9 @@ function getBackendBase(): string {
     "http://159.223.178.34:8000";
   return raw.replace(/\/$/, "");
 }
+
+/** Admission numbers are prefix+number, e.g. vhs/005 or JSS1B12. */
+const STUDENT_ID_RE = /^[A-Za-z0-9-]{1,30}\/?[A-Za-z0-9-]{0,30}$/;
 
 export async function GET(req: NextRequest) {
   const secret = getSecret();
@@ -61,10 +83,25 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Reject malformed admission numbers before they reach the backend so a
+  // junk id cannot be used to probe query behaviour.
+  if (!STUDENT_ID_RE.test(studentId)) {
+    return NextResponse.json(
+      { success: false, error: "Report not found" },
+      { status: 404 },
+    );
+  }
+
+  // Scope: admin of this tenant gets the draft; everyone else gets the
+  // published-only view. Falls back to public scope on any error.
+  const isAdmin = await hasAdminSession(tenantId);
+
   const base = getBackendBase();
   // Preserve slash for backend :path param — encode segments individually so vhs/004 stays vhs/004 not vhs%2F004
   const encodedStudentPath = studentId.split("/").map((seg) => encodeURIComponent(seg)).join("/");
-  const url = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/report/${encodedStudentPath}?term=${encodeURIComponent(term)}`;
+  const params = new URLSearchParams({ term });
+  if (isAdmin) params.set("include_draft", "true");
+  const url = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/report/${encodedStudentPath}?${params.toString()}`;
 
   try {
     const r = await fetch(url, {
