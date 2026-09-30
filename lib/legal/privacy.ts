@@ -280,6 +280,14 @@ export const privacyPolicy: LegalDocumentData = {
           kind: "p",
           text: "All three share the same technical characteristics: they are first-party, they are **host-only** — a session created on a school's portal subdomain is never transmitted to resultapp.org or to any other subdomain, so it cannot be used to link a visitor's activity across schools — they are set as **HTTP-only** so that client-side scripts cannot read them, they are marked **Secure** in production, they carry **SameSite=Lax**, and they are deleted on sign-out.",
         },
+        {
+          kind: "p",
+          text: "Each of the three is **cryptographically signed**. The value we set is a signed token rather than readable session data, and it is verified on every request before any identity is read from it. The signature covers the session's contents and its expiry, so a session cannot be edited, extended, or fabricated by anyone who does not hold our signing key — including by a visitor, and including where a session is read on a school subdomain rather than on resultapp.org. A token that is unsigned, altered, or past its stated expiry is rejected and removed. Because the signing key is held only by our application server and is never transmitted to any third party, a school cannot forge a session for another school.",
+        },
+        {
+          kind: "p",
+          text: "A session is valid for up to 12 hours from the moment it is created, and that limit is enforced by us rather than only by your browser. It is not extended by activity. Signing a session makes it tamper-proof but does not give it a separate off-switch: if a session is copied by someone else, it remains usable until it expires. We therefore ask that Authorised Users sign out when they finish on a shared or public device, and we recommend that Step 1 of a new version of the Terms of Service and this Policy be treated as a re-sign-in point.",
+        },
         { kind: "h3", text: "5.2 Payment checkout" },
         {
           kind: "p",
