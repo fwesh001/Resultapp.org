@@ -78,7 +78,7 @@ function backendError(data: unknown, text: string, status: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getSessionDetails();
+  const session = await getSessionDetails(tenantId);
   if (!session) return unauthorized();
 
   const params = req.nextUrl.searchParams;
@@ -297,7 +297,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSessionDetails();
+  const session = await getSessionDetails(tenantId);
   if (!session) return unauthorized();
 
   let body: Record<string, unknown>;
@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   // Scheme save: PUT /api/staff/grading?tenant_id=&class_name= { bands }
   // Forwards staff identity server-side; backend enforces form-teacher auth.
-  const session = await getSessionDetails();
+  const session = await getSessionDetails(tenantId);
   if (!session) return unauthorized();
 
   const params = req.nextUrl.searchParams;
