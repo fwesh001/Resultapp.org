@@ -1,22 +1,25 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant";
+import { hasAdminSession } from "@/lib/adminAuth";
 import AdminShell from "@/components/admin/AdminShell";
 
 export const dynamic = "force-dynamic";
 
-interface AdminSession {
-  admin?: { email?: string };
-  tenant_id?: string;
-}
-
 /**
  * Guarded admin dashboard layout — mirrors `staff/(dashboard)/layout.tsx`.
  *
- * Requires a valid `admin_session` cookie (set by POST /api/admin/login).
- * Legacy schools with NULL `admin_password_hash` can never mint a session,
- * so they always land on `/admin/login?setup=required`, which shows the
- * friendly "set up your admin password" banner instead of a bare 401.
+ * Requires a valid SIGNED `admin_session` for this tenant (set by
+ * POST /api/admin/login, verified in lib/session.ts). This used to re-implement
+ * the guard inline with `JSON.parse`; it now calls the shared helper so there
+ * is one implementation of the rule and no copy that can drift out of sync
+ * (LEGAL_REMEDIATION.md P0-0).
+ *
+ * Server Components cannot delete cookies, so an invalid session redirects to
+ * login rather than clearing the cookie here — the login page overwrites it.
+ *
+ * Legacy schools with NULL `admin_password_hash` can never mint a session, so
+ * they always land on `/admin/login?setup=required`, which shows the friendly
+ * "set up your admin password" banner instead of a bare 401.
  */
 export default async function AdminDashboardLayout({
   children,
@@ -28,21 +31,7 @@ export default async function AdminDashboardLayout({
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
 
-  const cookieStore = await cookies();
-  const sessionRaw = cookieStore.get("admin_session")?.value;
-
-  if (!sessionRaw) {
-    redirect(`/${subdomain}/admin/login`);
-  }
-
-  try {
-    const session = JSON.parse(sessionRaw) as AdminSession;
-    const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-    const email = String(session?.admin?.email || "").trim();
-    if (!tenant || tenant !== subdomain || !email || !session?.admin) {
-      redirect(`/${subdomain}/admin/login`);
-    }
-  } catch {
+  if (!(await hasAdminSession(subdomain))) {
     redirect(`/${subdomain}/admin/login`);
   }
 
