@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /**
  * POST /api/staff/login
  * Body: { tenantId, identifier, password }
  * Forwards to FastAPI POST /api/v1/tenant/{tenantId}/staff/login
- * On success sets httpOnly secure cookie staff_session
+ * On success sets a signed httpOnly secure cookie `staff_session`
  */
 
 function getSecret(): string {
@@ -71,18 +71,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: msg }, { status: backendRes.status });
   }
 
-  // On success, set httpOnly secure cookie
+  // Sign the session. `data` is passed by reference and the signer adds
+  // iat/exp only to its own copy, so the response body below cannot leak the
+  // signed token to client-side JavaScript.
   try {
-    const cookieStore = await cookies();
-    cookieStore.set("staff_session", JSON.stringify(data), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12, // 12h
-    });
+    await setSessionCookie(SESSION_COOKIES.staff, data as Record<string, unknown>);
   } catch (e) {
-    console.warn("[staff login proxy] cookie set failed", e);
+    console.error("[staff login proxy] session signing failed", e);
+    return NextResponse.json(
+      { success: false, error: "Could not establish a secure session" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ success: true, ...data }, { status: 200 });
