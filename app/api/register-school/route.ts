@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/flutterwave";
 import { calculateTieredTotal } from "@/lib/pricing";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 
 /**
  * Phase 1 – Tenant Onboarding Proxy
@@ -221,8 +222,9 @@ export async function POST(req: NextRequest) {
       "You must accept the Terms of Service and Privacy Policy to register";
   }
 
-  const termsVersion = String(body.terms_version ?? PRIVACY_VERSION === undefined ? "" : "")
-    .trim();
+  // Default to the currently published versions rather than trusting a
+  // client-supplied number, so a stale client cannot record a version that
+  // was never shown to the registrant.
   const resolvedTermsVersion = String(body.terms_version || TERMS_VERSION).trim();
   const resolvedPrivacyVersion = String(body.privacy_version || PRIVACY_VERSION).trim();
 
