@@ -279,11 +279,20 @@ export function RegisterSchoolForm() {
             description: `${orderCount} slots × ${formatNaira(orderTier.pricePerStudent)} = ${formatNaira(orderTotal)}`,
             logo: "https://resultapp.org/logo.png",
           },
+          // Transactional identifiers only. The admin password is
+          // deliberately NOT here: `meta` is transmitted to Flutterwave and
+          // retained in their transaction metadata, so anything placed in it
+          // is disclosed to a third-party payment provider and the school
+          // never authorised that disclosure.
+          //
+          // The password reaches the backend on the server-to-server
+          // provisioning call instead — it is sent to /api/register-school in
+          // the POST body, forwarded as admin_password, and stored as a
+          // pgcrypto bcrypt hash. See LEGAL_REMEDIATION.md P0 item 3.
           meta: {
             schoolName: values.schoolName.trim(),
             subdomain: values.subdomain.trim(),
             adminEmail: customerEmail,
-            adminPassword: values.adminPassword,
             studentCount: orderCount,
             source: "registration_wizard",
           },
