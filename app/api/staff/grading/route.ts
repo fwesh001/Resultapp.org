@@ -36,17 +36,22 @@ function getBackendBase(): string {
 }
 
 /**
- * Verify the signed staff session for `expectedTenant`.
+ * Verify the signed staff session.
+ *
+ * `expectedTenant` is optional: in hub mode the requested tenant is not known
+ * until after the session is read (it may fall back to the session's own
+ * tenant), so this returns the session tenant and the caller cross-checks it
+ * below. Passing a tenant here binds the session to it.
  *
  * Previously this did `JSON.parse` on the raw cookie with no signature check,
  * so any hand-written value granted a staff identity (LEGAL_REMEDIATION.md
  * P0-0). Verification now happens in lib/staffAuth.ts.
  */
 async function getSessionDetails(
-  expectedTenant: string,
+  expectedTenant?: string,
 ): Promise<{ tenant: string; staffId: string } | null> {
   try {
-    const identity = await readStaffSession(expectedTenant);
+    const identity = await readStaffSession(expectedTenant ?? null);
     if (!identity) return null;
     return { tenant: identity.tenantId, staffId: identity.staffId };
   } catch {
@@ -78,7 +83,7 @@ function backendError(data: unknown, text: string, status: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getSessionDetails(tenantId);
+  const session = await getSessionDetails();
   if (!session) return unauthorized();
 
   const params = req.nextUrl.searchParams;
@@ -297,7 +302,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSessionDetails(tenantId);
+  const session = await getSessionDetails();
   if (!session) return unauthorized();
 
   let body: Record<string, unknown>;
@@ -373,7 +378,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   // Scheme save: PUT /api/staff/grading?tenant_id=&class_name= { bands }
   // Forwards staff identity server-side; backend enforces form-teacher auth.
-  const session = await getSessionDetails(tenantId);
+  const session = await getSessionDetails();
   if (!session) return unauthorized();
 
   const params = req.nextUrl.searchParams;
