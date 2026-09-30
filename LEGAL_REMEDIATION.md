@@ -20,10 +20,10 @@ processing (ToS §12.2), but nothing can carve us out for ours.
 
 ### Outstanding before the policy is fully accurate
 
-- **P0-0 is open and it is the most serious item in this document.** Session
-  cookies are unsigned JSON, so authentication can be forged outright. Until it
-  is fixed, treat every authenticated route as unauthenticated, and note that
-  it also undermines the P0-1 publication gate.
+- **P0-0 is closed.** Session cookies are HMAC-signed and verified on every
+  request, with server-enforced expiry. One residual is accepted and documented
+  rather than hidden: sessions are stateless, so a copied session stays valid
+  until its 12-hour expiry. ToS §5.5 was amended to state this plainly.
 - **P1 remains open.** Privacy Policy §9 and §10 still describe controls the
   code does not yet implement: no field-level encryption at rest (item 5) and
   no retention enforcement (item 9). Both are in the published text. They are
@@ -32,6 +32,10 @@ processing (ToS §12.2), but nothing can carve us out for ours.
 - **`purge_orphan_students.py` has never been run.** The P0-2 cascade only
   covers deletions made after it shipped. Existing orphans remain in
   production and need a point-in-time snapshot before `--execute`.
+- **Deploying the session signing logs out everyone.** Unsigned cookies carry
+  no `v1.` prefix, so every existing session fails verification and is cleared.
+  That is the intended fail-closed migration. Rotating `SESSION_SECRET` has the
+  same effect and is the emergency kill switch.
 
 ---
 
@@ -41,82 +45,105 @@ All four P0 items were remediated in a single pass. Each is marked below with
 what actually changed, because two of the original write-ups were wrong about
 the code and the correction matters if anyone re-investigates.
 
-### 0. Session cookies are unsigned — anyone can forge superadmin — **OPEN, HIGHEST PRIORITY**
+### 0. Session cookies were unsigned — anyone could forge superadmin — **CLOSED 1 October 2026**
 
-**Found while verifying the P0-1 fix. Discovered after the four approved items
-were completed, so it is not remediated. It outranks everything else here.**
+**Found while verifying the P0-1 fix. It outranked everything else here.**
 
-All three session cookies are **raw JSON with no signature and no server-side
+All three session cookies were **raw JSON with no signature and no server-side
 validation**:
 
 | Cookie | Written at | Validated at | Mechanism |
 |---|---|---|---|
-| `admin_session` | `app/api/admin/login/route.ts:92-99` | `lib/adminAuth.ts:42-57` | `JSON.parse` + field compare |
-| `staff_session` | `app/api/staff/login/route.ts:76-83` | `lib/staffAuth.ts` | `JSON.parse` + field compare |
-| `superadmin_session` | `app/api/superadmin/login/route.ts:35-42` | `lib/superadminAuth.ts:24-31` | `JSON.parse(raw).superadmin === true` |
+| `admin_session` | `app/api/admin/login/route.ts` | `lib/adminAuth.ts` | `JSON.parse` + field compare |
+| `staff_session` | `app/api/staff/login/route.ts` | *7 inline copies* | `JSON.parse` + field compare |
+| `superadmin_session` | `app/api/superadmin/login/route.ts` | `lib/superadminAuth.ts` | `JSON.parse(raw).superadmin === true` |
 
-`lib/superadminAuth.ts:8` states the design in its own docstring: *"Value is an
-opaque JSON blob; validity = presence + well-formed + not expired (maxAge
-enforced by cookie)."* The `timingSafeEqual` at
-`app/api/superadmin/login/route.ts:112` compares the `SUPERADMIN_PASSWORD` env
-value during login — it does **not** sign the cookie. There is no
-`createHmac`, no JWT, and no session table anywhere in the repository.
-
-**Consequence: setting a cookie value is sufficient to authenticate.**
+The old `lib/superadminAuth.ts` docstring stated the design outright: *"Value is
+an opaque JSON blob; validity = presence + well-formed + not expired (maxAge
+enforced by cookie)."* There was no `createHmac`, no JWT, and no session table
+anywhere. **Setting a cookie value was sufficient to authenticate.**
 
 ```bash
-# Platform superadmin, no credentials, no password.
-curl -H 'Cookie: superadmin_session={"superadmin":true,"admin_id":"x","email":"a@b.c","role":"owner","created_at":"2026-01-01"}' \
+# Platform superadmin, no credentials.
+curl -H 'Cookie: superadmin_session={"superadmin":true,"admin_id":"x","email":"a@b.c","role":"owner"}' \
      'https://resultapp.org/api/superadmin/tenants'
 ```
 
-The 12-hour `maxAge` is enforced by the **browser**, not the server, so a
-forged cookie carries no expiry and stays valid indefinitely.
+The 12-hour `maxAge` was enforced by the **browser**, so a forged cookie never
+expired. Verified bypasses before the fix: `superadmin/tenants`,
+`superadmin/stats`, `superadmin/audit-logs`, `admin/allocations` DELETE,
+`billing/ledger`, `staff/grading` POST — all 401 without a cookie and accepted
+with a forged one.
 
-**Verified bypasses** (no cookie → 401; forged cookie → request reaches the
-backend), tested against a stub backend:
+**Structural problem found while fixing it.** There were **17 physical read
+sites and only 3 used a shared helper.** Staff session parsing was
+reimplemented inline in **seven** independent places, and `lib/staffAuth.ts`
+— cited in the original version of this document — **did not exist**. Two of
+the staff dashboard guards never checked `tenant_id` at all, so a valid session
+for one school would have rendered another school's dashboard. Patching only
+the shared helpers would have left seven forgeable paths.
 
-| Route | No cookie | Forged | Result |
-|---|---|---|---|
-| `GET /api/superadmin/tenants` | 401 | 500 (reached backend) | **bypass** |
-| `GET /api/superadmin/stats` | 401 | 500 | **bypass** |
-| `GET /api/superadmin/audit-logs` | 401 | 500 | **bypass** |
-| `DELETE /api/admin/allocations` | 401 | 501 (reached backend) | **bypass** |
-| `GET /api/billing/ledger` | 401 | 500 | **bypass** |
-| `POST /api/staff/grading` | 401 | 400 (past guard, failed body validation) | **bypass** |
+#### What was done
 
-`/api/superadmin/*` also includes tenant soft-delete and restore, free credit
-and slot grants, the credit price, password resets, and the global ledger. The
-impact is full platform control plus arbitrary score write, without any
-credential.
+- **`lib/sessionCrypto.ts`** (new) — pure HMAC-SHA-256 sign/verify, no
+  `next/headers`, so the crypto is testable in plain Node. Wire format
+  `v1.<base64url(payload)>.<base64url(mac)>`, MAC over `v1.<payload>`. Adds
+  `iat`/`exp` **inside the signed material**, so expiry is now enforced
+  server-side rather than by the browser. Verification is fail-closed and
+  returns `null` for every failure mode; there is no code path returning claims
+  without passing a `timingSafeEqual` comparison.
+- **`lib/session.ts`** (new) — the single cookie chokepoint:
+  `setSessionCookie` / `readSessionCookie` / `clearSessionCookie`. All 17 read
+  sites now route through it.
+- **`lib/staffAuth.ts`** (new) — staff guard, with **mandatory** tenant
+  binding. Carries both `staff_id` and the row UUID so the profile route's
+  self-edit rule keeps working.
+- **`SESSION_SECRET`** — dedicated, ≥32 random bytes, **Next.js only**. The
+  backend never reads a cookie, so it never receives the key. `BACKEND_API_SECRET`
+  was deliberately not reused: it is already attached to every `X-API-SECRET-KEY`
+  request and sits outside the Next.js trust boundary. Fatal in production if
+  missing or short; ephemeral per-process in dev with an error log.
+- **All 17 read sites refactored.** 4 layouts/pages and 3 staff API routes that
+  duplicated parsing inline now call the shared guards. `adminAuth`,
+  `superadminAuth`, `supportAuth` and `notifications/_lib` were rewritten
+  against the chokepoint.
+- **Rejection clears the cookie** and returns 401 in every route handler.
+  Server Components cannot mutate cookies, so the layouts redirect to login
+  instead and the login page overwrites the stale value.
+- **Adjacent defects fixed in the same pass:** added the missing
+  `app/api/staff/logout/route.ts` (staff had no sign-out path at all, so Privacy
+  Policy §5's "deleted on sign-out" was false for them); all three logout routes
+  now pass an explicit `path` and report failure instead of returning
+  `{success:true}` while leaving a live credential in the browser; the two staff
+  dashboard guards now enforce `tenant_id`, and the dashboard page no longer
+  falls back to the URL subdomain when the session has none.
+- **Signature never reaches client JS.** `admin/login` and `staff/login` sign a
+  copy of the upstream payload and return the original, so the `{success:true,
+  ...data}` spread cannot leak a valid session token past `httpOnly`.
+- **`scripts/verify-session-signing.mjs`** (new) — 25 assertions, all
+  negative-path. Rejects legacy unsigned JSON, flipped payload bytes, zeroed and
+  truncated MACs, a transplanted MAC, a MAC from a different key, an unknown
+  format version, non-base64url junk, array payloads, missing/non-numeric `exp`,
+  and validly-signed-but-expired tokens. Never throws on degenerate input.
+  Run with `node scripts/verify-session-signing.mjs`.
+- **End-to-end verified** against a live server: 12 forged-cookie attempts
+  across all three cookie types, each returning 401 with a deleting
+  `Set-Cookie`, including a cross-tenant replay and a payload with no tenant.
 
-**This also undermines the P0-1 fix.** The publication gate's admin branch is
-selected by `hasAdminSession`, so a forged `admin_session` reaches
-`include_draft=true` and reads unpublished report bundles. The gate is only as
-strong as this cookie.
+**Residual, accepted:** sessions are stateless, so a session copied by someone
+else stays valid until its 12-hour expiry — there is no per-session off-switch.
+ToS §5.5 was **amended** to say exactly this rather than promise an intervention
+capability we do not have, and now places the burden of sign-out on the School.
+A `sid` denylist or a server-side session store would close that gap; neither
+was in scope for the patch.
 
-**Policy exposure:** Privacy Policy §9 claims records are protected by session
-cookies bound to a tenant. The cookies are `httpOnly`, `Secure` and host-only
-as written, but they are *unauthenticated*, so §9's assurance is not currently
-met. ToS §15.3 assumes a superadmin role boundary that does not exist.
+**Policy corrections in the same pass:** Privacy Policy §5.1 now describes the
+signed tokens and the server-enforced expiry (and adds it to the summary);
+ToS §5.5 no longer claims 12 hours "of inactivity" (it is 12 hours from
+creation) and no longer implies we can revoke a session.
 
-**Fix (needs a decision, not a patch).** Minimum viable, in order:
-
-1. Sign all three cookies with an HMAC over the payload using a new
-   `SESSION_SECRET` env var, and verify with `timingSafeEqual` in a single
-   shared helper used by `lib/adminAuth.ts`, `lib/superadminAuth.ts` and
-   `lib/staffAuth.ts`. This is the minimum that closes the bypass. It does not
-   give revocation.
-2. Prefer a server-side session store (a `sessions` table with an opaque
-   random id as the cookie value, looked up per request). This additionally
-   gives revocation, which §5.5 of the Terms promises ("notify us if it
-   suspects unauthorised access to an account") and which a stateless signed
-   cookie cannot deliver.
-3. Rotate `SESSION_SECRET` deployment procedure, and invalidate all existing
-   cookies on deploy (a version claim in the payload achieves this).
-
-Until then, treat every authenticated route in the application as
-unauthenticated.
+**This document previously listed `lib/staffAuth.ts` as an existing validation
+site. It did not exist and never had. Corrected.**
 
 ---
 
