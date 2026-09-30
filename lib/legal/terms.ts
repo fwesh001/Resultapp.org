@@ -1,5 +1,6 @@
 import type { LegalDocumentData } from "./types";
 import {
+  CONTROLLER_LOCATION,
   CONTROLLER_NAME,
   EFFECTIVE_DATE,
   GOVERNING_LAW,
