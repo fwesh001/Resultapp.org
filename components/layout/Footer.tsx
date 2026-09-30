@@ -29,9 +29,9 @@ export function Footer() {
           <div>
             <p className="text-sm font-semibold tracking-wide text-purple-100">Legal</p>
             <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
-              <li><span title="Coming soon">Privacy</span></li>
-              <li><span title="Coming soon">Terms</span></li>
-              <li><span title="Coming soon">Refund Policy</span></li>
+              <li><Link href="/privacy" className="transition-colors hover:text-white">Privacy</Link></li>
+              <li><Link href="/terms" className="transition-colors hover:text-white">Terms</Link></li>
+              <li><Link href="/refund-policy" className="transition-colors hover:text-white">Refund Policy</Link></li>
             </ul>
           </div>
         </div>
