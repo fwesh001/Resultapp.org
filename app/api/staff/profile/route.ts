@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest) {
 
   const tenant = identity.tenantId;
   // Both session identifiers (staff_id and row UUID) are accepted targets.
-  const sessionIds = [identity.staffId.toLowerCase()].filter(Boolean);
+  const sessionIds = identity.staffIds;
 
   let body: Record<string, unknown>;
   try {
