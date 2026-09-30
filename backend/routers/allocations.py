@@ -1259,7 +1259,7 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
                 raise HTTPException(status_code=404, detail=f"{record_type} not found")
 
             # ---- Cascade to every table that references the student -------
-            # LEGAl_REMEDIATION.md P0 item 2.
+            # LEGal_REMEDIATION.md P0 item 2.
             #
             # tenant_grades / student_academic_records /
             # student_behavioral_records / result_publications all key on the
