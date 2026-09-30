@@ -100,6 +100,11 @@ interface RegisterSchoolBody {
   transactionId?: number | string;
   tx_ref?: string;
   txRef?: string;
+  // Consent record — required. Persisted in tenant_consents alongside the
+  // tenant row. See LEGAL_REMEDIATION.md P0 item 4.
+  accepted_terms?: boolean;
+  terms_version?: string;
+  privacy_version?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,8 +203,34 @@ export async function POST(req: NextRequest) {
     fieldErrors.studentCount = "Student count must be a whole number";
   } else if (studentCount <= 0) {
     fieldErrors.studentCount = "Student count must be greater than 0";
-  } else if (studentCount > 10000) {
+  } else   if (studentCount > 10000) {
     fieldErrors.studentCount = "Maximum 10,000 students";
+  }
+
+  // ---- Consent (hard requirement, not a warning) ----
+  // The registrant must have affirmatively accepted, and we must be able to
+  // record which text they accepted. The version strings come from
+  // lib/legal/constants.ts so the persisted record can never drift from the
+  // published document.
+  const acceptedTerms =
+    body.accepted_terms === true ||
+    body.acceptedTerms === true ||
+    body.accept_terms === true;
+  if (!acceptedTerms) {
+    fieldErrors.acceptTerms =
+      "You must accept the Terms of Service and Privacy Policy to register";
+  }
+
+  const termsVersion = String(body.terms_version ?? PRIVACY_VERSION === undefined ? "" : "")
+    .trim();
+  const resolvedTermsVersion = String(body.terms_version || TERMS_VERSION).trim();
+  const resolvedPrivacyVersion = String(body.privacy_version || PRIVACY_VERSION).trim();
+
+  if (!/^\d+(\.\d+)*$/.test(resolvedTermsVersion)) {
+    fieldErrors.termsVersion = "Malformed Terms version";
+  }
+  if (!/^\d+(\.\d+)*$/.test(resolvedPrivacyVersion)) {
+    fieldErrors.privacyVersion = "Malformed Privacy version";
   }
 
   if (Object.keys(fieldErrors).length > 0) {
