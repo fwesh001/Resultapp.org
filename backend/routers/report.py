@@ -630,21 +630,17 @@ def get_report_bundle(
             except Exception:
                 class_student_ids = [sid]
 
-            # Publication timestamp for the Date lines (exact session first,
-            # then latest across sessions for pre-migration rows).
+            # Publication timestamp for the Date lines. Scoped to the same
+            # session the gate used — the previous session-agnostic fallback
+            # is gone because it returned a timestamp for a publication made
+            # in a different academic session, which read as "released" on a
+            # result that had not been released for this session.
             try:
-                _sess = _academic_session()
                 cur.execute(
                     "SELECT published_at FROM result_publications WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s AND academic_session = %s LIMIT 1",
-                    (tid, sid, term, _sess),
+                    (tid, sid, term, _session),
                 )
                 _prow = cur.fetchone()
-                if _prow is None:
-                    cur.execute(
-                        "SELECT published_at FROM result_publications WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY published_at DESC LIMIT 1",
-                        (tid, sid, term),
-                    )
-                    _prow = cur.fetchone()
                 if _prow is not None and _prow[0] is not None:
                     published_at_out = _prow[0].isoformat() if hasattr(_prow[0], "isoformat") else str(_prow[0])
             except Exception:
