@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readStaffSession } from "@/lib/staffAuth";
+import { clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /**
  * Staff Grading Proxy — /api/staff/grading (GET + POST)
@@ -92,7 +93,7 @@ function backendError(data: unknown, text: string, status: number) {
 
 export async function GET(req: NextRequest) {
   const session = await getSessionDetails();
-  if (!session) return unauthorized();
+  if (!session) return await unauthorized();
 
   const params = req.nextUrl.searchParams;
   // Hub mode may omit tenant_id -> fallback to session tenant
@@ -311,7 +312,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getSessionDetails();
-  if (!session) return unauthorized();
+  if (!session) return await unauthorized();
 
   let body: Record<string, unknown>;
   try {
@@ -387,7 +388,7 @@ export async function PUT(req: NextRequest) {
   // Scheme save: PUT /api/staff/grading?tenant_id=&class_name= { bands }
   // Forwards staff identity server-side; backend enforces form-teacher auth.
   const session = await getSessionDetails();
-  if (!session) return unauthorized();
+  if (!session) return await unauthorized();
 
   const params = req.nextUrl.searchParams;
   const tenantId = String(params.get("tenant_id") ?? params.get("tenantId") ?? "")
