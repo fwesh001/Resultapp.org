@@ -597,6 +597,46 @@ def init_schools_registry() -> None:
             conn.close()
 
 
+def _insert_tenant_consent(
+    cur,
+    subdomain: str,
+    terms_version: str,
+    privacy_version: str,
+    accepted_by: str,
+    ip_address: Optional[str] = None,
+):
+    """Write a consent row on an EXISTING cursor.
+
+    Split out so register_school() can place the consent record in the same
+    transaction as the schools INSERT, using a single connection.
+    """
+    cur.execute(
+        f"""
+        INSERT INTO {TENANT_CONSENTS_TABLE}
+            (subdomain, terms_version, privacy_version, accepted_at, accepted_by, ip_address)
+        VALUES (%s, %s, %s, NOW(), %s, %s)
+        ON CONFLICT (subdomain, terms_version, privacy_version) DO NOTHING
+        RETURNING id, subdomain, terms_version, privacy_version, accepted_at,
+                  accepted_by, ip_address;
+        """,
+        (subdomain, str(terms_version), str(privacy_version), accepted_by, ip_address),
+    )
+    row = cur.fetchone()
+    if row is None:
+        # Replay against an existing acceptance — return the original.
+        cur.execute(
+            f"""
+            SELECT id, subdomain, terms_version, privacy_version, accepted_at,
+                   accepted_by, ip_address
+            FROM {TENANT_CONSENTS_TABLE}
+            WHERE subdomain = %s AND terms_version = %s AND privacy_version = %s;
+            """,
+            (subdomain, str(terms_version), str(privacy_version)),
+        )
+        row = cur.fetchone()
+    return _row_to_dict(row, cur) if row is not None else {}
+
+
 def record_tenant_consent(
     subdomain: str,
     terms_version: str,
@@ -620,32 +660,10 @@ def record_tenant_consent(
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        cur.execute(
-            f"""
-            INSERT INTO {TENANT_CONSENTS_TABLE}
-                (subdomain, terms_version, privacy_version, accepted_at, accepted_by, ip_address)
-            VALUES (%s, %s, %s, NOW(), %s, %s)
-            ON CONFLICT (subdomain, terms_version, privacy_version) DO NOTHING
-            RETURNING id, subdomain, terms_version, privacy_version, accepted_at,
-                      accepted_by, ip_address;
-            """,
-            (subdomain, str(terms_version), str(privacy_version), accepted_by, ip_address),
+        d = _insert_tenant_consent(
+            cur, subdomain, terms_version, privacy_version, accepted_by, ip_address
         )
-        row = cur.fetchone()
-        if row is None:
-            # Replay against an existing acceptance — return the original.
-            cur.execute(
-                f"""
-                SELECT id, subdomain, terms_version, privacy_version, accepted_at,
-                       accepted_by, ip_address
-                FROM {TENANT_CONSENTS_TABLE}
-                WHERE subdomain = %s AND terms_version = %s AND privacy_version = %s;
-                """,
-                (subdomain, str(terms_version), str(privacy_version)),
-            )
-            row = cur.fetchone()
         conn.commit()
-        d = _row_to_dict(row, cur) if row is not None else {}
         if isinstance(d.get("accepted_at"), datetime):
             d["accepted_at"] = d["accepted_at"].isoformat()
         return d
