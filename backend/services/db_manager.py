@@ -760,11 +760,23 @@ def init_consent_tables() -> None:
 
 
 def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any]:
-    """Register a newly provisioned school in the central registry."""
+    """Register a newly provisioned school in the central registry.
+
+    The schools INSERT and the consent INSERT share one explicit transaction.
+    Previously the connection was left in autocommit and a failure here was
+    swallowed by the caller, which could leave a live portal with no
+    `schools` row. A portal must not exist without the registry row, and it
+    must not exist without a consent record behind it — so both writes are
+    atomic, and a failure rolls the whole thing back.
+    """
     conn = None
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+        try:
+            cur.execute("BEGIN;")
+        except Exception:
+            pass
         admin_password_hash = kwargs.get("admin_password_hash")
         if admin_password_hash:
             cur.execute(
