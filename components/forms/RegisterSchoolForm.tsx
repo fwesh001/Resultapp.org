@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   Loader2,
   CheckCircle2,
@@ -905,7 +906,28 @@ export function RegisterSchoolForm() {
       )}
 
       <p className="text-center text-xs leading-5 text-purple-300/40">
-        By continuing, you agree to our Terms and Privacy Policy. Your portal at{" "}
+        By continuing, you agree to our{" "}
+        <Link
+          href="/terms"
+          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
+        >
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link
+          href="/privacy"
+          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
+        >
+          Privacy Policy
+        </Link>
+        . Payments are final sale &mdash; see our{" "}
+        <Link
+          href="/refund-policy"
+          className="underline decoration-purple-500/30 underline-offset-4 transition hover:text-purple-200"
+        >
+          Refund Policy
+        </Link>
+        . Your portal at{" "}
         <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be created securely.
       </p>
     </form>
