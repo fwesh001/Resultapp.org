@@ -46,6 +46,20 @@ function getBackendBase(): string {
 /** Admission numbers are prefix+number, e.g. vhs/005 or JSS1B12. */
 const STUDENT_ID_RE = /^[A-Za-z0-9-]{1,30}\/?[A-Za-z0-9-]{0,30}$/;
 
+/**
+ * The single 404 shape for "not available to you".
+ *
+ * Unknown student, unpublished result and malformed admission number must be
+ * indistinguishable, so they all render this exact body. Any divergence here
+ * re-opens the enumeration oracle the backend gate closes.
+ */
+function notFound() {
+  return NextResponse.json(
+    { success: false, error: "Report not found", raw: { detail: "Report not found" } },
+    { status: 404 },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const secret = getSecret();
   if (!secret) {
