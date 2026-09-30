@@ -217,13 +217,10 @@ export function RegisterSchoolForm() {
   // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
-  function handleChange<K extends keyof FormValues>(
-    field: K,
-    value: FormValues[K] extends boolean ? boolean : string,
-  ) {
-    if (field === "subdomain") value = sanitizeSlug(value as string) as FormValues[K];
-    if (field === "studentCount") value = (value as string).replace(/[^0-9]/g, "") as FormValues[K];
-    setValues((prev) => ({ ...prev, [field]: value }));
+  function handleChange<K extends keyof FormValues>(field: K, value: string | boolean) {
+    if (field === "subdomain") value = sanitizeSlug(String(value));
+    if (field === "studentCount") value = String(value).replace(/[^0-9]/g, "");
+    setValues((prev) => ({ ...prev, [field]: value }) as FormValues);
     if (errors[field]) {
       setErrors((prev) => {
         const c = { ...prev };
