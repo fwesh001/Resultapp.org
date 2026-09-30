@@ -19,67 +19,169 @@ processing (ToS §12.2), but nothing can carve us out for ours.
 
 ---
 
-## P0 — the policy currently makes a statement the code cannot support
+## P0 — CLOSED 1 October 2026
 
-### 1. `/api/report` has no session guard
+All four P0 items were remediated in a single pass. Each is marked below with
+what actually changed, because two of the original write-ups were wrong about
+the code and the correction matters if anyone re-investigates.
 
-`app/api/report/route.ts` reads no cookie and applies no `requireAdminSession`.
-Anyone who can reach the deployment and knows a `tenant_id` and a `student_id`
-can fetch a full report bundle: name, class, gender, every score, every
-behavioural rating, all remarks, and class rankings. Same for `/api/records`
-and `/api/records/academic`.
+### 1. `/api/report` had no publication gate — CLOSED
 
-- Backend fan-out: `backend/routers/report.py:497-700`
-- Privilege argument to close: Privacy Policy §4.4 and §4.5 say academic and
-  publication records sit behind Authorised Users; §9 says tenant isolation is
-  enforced on every request.
-- **Fix:** add `requireAdminSession(tenantId)` plus the tenant-binding check
-  used in `lib/adminAuth.ts:44-51`, and repeat for the records routes.
+**Original claim (wrong in its fix):** add `requireAdminSession` to
+`app/api/report/route.ts`.
 
-### 2. Deleting a student orphans their grades and remarks
+**Why that was wrong:** `/api/report` is not an admin route. Its only caller is
+`components/report-card/StudentReportCard.tsx:184`, which renders the *public*
+result checker. Adding an auth wall would have broken a marketed feature
+rather than secured it. The real defect was different in kind: the publication
+gate existed only as a React prop computed in a server component
+(`app/[subdomain]/report/[...studentId]/page.tsx`), while the data arrived
+independently from an unguarded route. The client-side `blur-[3px]` overlay was
+cosmetic — the bytes were already in React state and in devtools.
 
-`backend/routers/allocations.py:1240-1290` hard-deletes the `tenant_students`
-row. `tenant_grades` links to a student by `student_id` as a **logical
-reference, deliberately not a foreign key** (`backend/services/db_manager.py:1882-1883`).
-The consequence is that `tenant_grades`, `student_academic_records`,
-`student_behavioral_records` and `result_publications` rows survive the
-deletion, taking with them free-text teacher, form-master, and principal
-remarks about a child who no longer exists as a record.
+**What was done:**
 
-- **Fix:** transactionally delete or anonymise the dependent grade and
-  publication rows in the same transaction, and have the caller choose between
-  deletion and anonymisation.
-- **Blocker for:** Privacy Policy §11.1 (erasure) cannot be honestly true
-  until this is closed. Erasure of a deleted pupil's data is currently not
-  achievable end to end.
+- **Backend enforcement** (`backend/routers/report.py`) — the bundle may only
+  be released when a `result_publications` row exists for
+  `(tenant, student_id, term, academic_session)`. Added an `include_draft`
+  query parameter, defaulting to `false`, set only by the trusted proxy when
+  the caller holds an `admin_session` for that tenant. Deleted the
+  session-agnostic `published_at` fallback that returned a timestamp for a
+  publication made in a *different* academic session, which defeated the gate.
+  Added an explicit `is_published` field so consumers stop inferring status.
+- **Scope split in the proxy** (`app/api/report/route.ts`) — uses
+  `hasAdminSession` (boolean) rather than `requireAdminSession` (error
+  response), so an anonymous caller is *degraded* to public scope rather than
+  rejected. The flag is derived from the httpOnly cookie, never from a query
+  parameter.
+- **Enumeration oracle closed.** "Unpublished" and "unknown student" return
+  the **same** 404 with a byte-identical body
+  (`{success:false, error:"Report not found", raw:{detail:"Report not found"}}`),
+  via a single `notFound()` helper used by all three paths — unknown student,
+  unpublished, and malformed admission number. The report page's amber "Draft
+  preview" pill is now gated on `isAdminPreview` as well, because for the
+  public it would otherwise sit above a "Student Not Found" card.
+- **Session drift fixed.** The gate uses `schools.current_session` first, then
+  the derived session, matching the report page. Previously the page used the
+  tenant's configured session while the backend used a private naive-local-time
+  `_academic_session()`, so the two could disagree near the September rollover.
+  The duplicated inline cookie parsing was replaced with `hasAdminSession`.
+- **Throttle.** Sliding-window rate limit, 30 requests per 60s per
+  (client IP, tenant), applied to both scopes. Generous enough that a family
+  checking several children is never throttled, far too low to walk a roster.
+- **Dead routes deleted.** `app/api/records/route.ts` and
+  `app/api/records/academic/route.ts` had zero callers. The second was worse
+  than a read leak: it forwarded an arbitrary attacker-supplied JSON body to
+  `create_academic_record`, an **unauthenticated score-write primitive**.
 
-### 3. The admin password is sent to the payment processor
+### 2. Deleting a student orphaned their grades and remarks — CLOSED
 
-`components/forms/RegisterSchoolForm.tsx:285` places `adminPassword` into the
-Flutterwave `meta` object. `app/api/provision/route.ts:281-287` reads it back.
-The password is therefore transmitted in cleartext to a third-party payment
-provider and retained in their transaction metadata.
+`backend/routers/allocations.py` `delete_roster_record` now cascades, in the
+same transaction as the `tenant_students` delete and the slot refund, to all
+four dependent tables: `tenant_grades`, `student_academic_records`,
+`student_behavioral_records`, `result_publications` (each matched on
+`LOWER(student_id)`). Returns the per-table row counts as `cascaded_rows`.
 
-- **Fix:** delete the field from the checkout payload. Provisioning should
-  happen after payment, server to server, or the password should be set in a
-  separate step after the portal exists.
-- **Blocker for:** Privacy Policy §7.2 (sub-processor table) and §2.2
-  (processor confined to documented instructions). This is a disclosure of a
-  credential to a sub-processor that the school never authorised.
+**The deciding factor was not privacy.** `tenant_students` is
+`UNIQUE(subdomain, student_id)`, so a re-enrolment reusing a withdrawn
+admission number inherited the previous child's grades, remarks, behavioural
+ratings and published state — and was treated as already published, costing
+zero credits to publish. The orphan was the mechanism of a live correctness
+bug.
 
-### 4. No record of what was accepted
+This **reverses a deliberate design decision**, recorded at the old
+`db_manager.py:1882-1883`: *"not enforced as FK so roster edits never
+cascade-delete grades."* That comment has been rewritten to explain the
+reversal and to instruct that any future table referencing a student be added
+to the cascade. There is no database-level FK available to do this for us —
+all four tables key on the admission-number *string*, and none references
+`tenant_students`.
 
-`acceptTerms` is declared in `types/school.ts:58` and collected by
-`components/forms/RegisterSchoolForm.tsx`, but it is **never transmitted to or
-persisted by any backend endpoint**. There is no consent table, no
-`consent_at`, no policy-version column, and no marketing opt-in field anywhere
-in the schema.
+**Consequences accepted:**
 
-- **Fix:** add a `tenant_consents` table keyed by subdomain, capturing document
-  slug, version, effective date, timestamp, and the admin email that accepted.
-  Write on successful registration and on any later re-acceptance.
-- **Blocker for:** ToS §1 (acceptance) and Privacy Policy §14. We cannot prove
-  which version of the Terms a given school agreed to.
+- Deleting a student is now irreversible beyond the roster row. The
+  confirmation dialog previously had an **empty description** and only the
+  default "This action cannot be undone." It now spells out exactly what is
+  destroyed: the pupil's identifying fields, all scores and behavioural
+  assessments, every teacher and principal remark written about them, and the
+  publication record. Also warns that one slot is returned but consumed credits
+  are not — consistent with Refund Policy §5.
+- Each purge writes an `audit_logs` entry (`roster.student_purged`, actor
+  `tenant_admin`). Student deletion was previously invisible.
+- **Ledger carve-out (approved, P1 exception).** `billing_ledger.description`
+  still embeds the admission number (`"Slot refund for deleted student
+  vhs/005"`). The ledger is an immutable financial audit record and that
+  string is the audit trail for the slot refund, so it is deliberately **not**
+  scrubbed. Tracked as P1 item 16.
+- **Pre-existing orphans** are not reachable by new code. A reaper was written:
+  `backend/scripts/purge_orphan_students.py` — **dry run by default**,
+  `--execute` to write, plus `--collisions-only` to audit admission-number
+  reuse. It deliberately never resolves a *collision* (where the number has
+  been re-enrolled and now belongs to a different child): nothing in the
+  schema records which pupil a grade row belonged to, so those are reported
+  for manual review only. **It has not been run. It requires a
+  point-in-time PostgreSQL snapshot first.**
+
+### 3. The admin password was sent to the payment processor — CLOSED
+
+**Original claim (wrong in its details):** `app/api/provision/route.ts:281-287`
+reads the password back from Flutterwave `meta`, implying a live read-back
+path.
+
+**Correction:** that route had **zero callers anywhere in the repository** and
+`app/api/register-school/route.ts` never reads `meta` at all — only
+`vData.status` and `vData.amount`. The Flutterwave `meta` path was already
+dead. The real channel was always the browser POST body →
+`fastApiPayload.admin_password` → `ProvisionRequest.admin_password` →
+`register_school(admin_password_hash=…)` → `crypt(...)`.
+
+So the fix was a **one-line deletion**, not a re-plumb: `adminPassword` is no
+longer in the Flutterwave `meta` object. The password now travels only on the
+server-to-server provisioning call. `app/api/provision/route.ts` was deleted
+entirely, removing the dead duplicate of `/api/register-school`.
+
+**Residual risk that code cannot fix:** Flutterwave retains `meta` on
+*historical* transactions already captured. Removing the field stops future
+disclosure, not past copies. If that matters it requires action on Flutterwave's
+side, not ours.
+
+### 4. No record of what was accepted — CLOSED
+
+**Original claim (factually wrong):** that `acceptTerms` is "collected by
+`components/forms/RegisterSchoolForm.tsx`". It was not. There was **no checkbox
+anywhere in the registration funnel** — only a passive "By continuing, you
+agree" paragraph. The sole declaration was `types/school.ts:58` on a
+`SchoolRegistrationPayload` interface imported nowhere in the codebase. This
+was built from scratch.
+
+- **Schema** — new `tenant_consents` table in
+  `backend/services/db_manager.py` (`init_consent_tables()`, wired into the
+  `main.py` lifespan and logged at ERROR on failure, unlike the other inits,
+  because registration now hard-requires it):
+  `subdomain` (FK, cascade), `terms_version`, `privacy_version`, `accepted_at`,
+  `accepted_by`, `ip_address`, unique on
+  `(subdomain, terms_version, privacy_version)`. Append-only, so re-acceptance
+  of a genuinely new version is retained as a new row while a replayed
+  registration cannot manufacture a duplicate acceptance.
+- **Atomicity** — `register_school()` now opens an explicit transaction and
+  writes the `schools` row and the consent row together. It **refuses to
+  register at all** if the consent fields are absent. Previously the connection
+  was left in autocommit and the caller swallowed failures, which could leave a
+  live portal with no registry row.
+- **Loud failure** — a registry write failure is now logged at ERROR and
+  surfaced as `registry_error` on the provisioning response, instead of a
+  swallowed `logger.warning`.
+- **Source of truth** — version strings are imported from
+  `lib/legal/constants.ts` (`TERMS_VERSION`, `PRIVACY_VERSION`) on the client
+  and re-defaulted server-side, so the persisted record cannot drift from the
+  published text.
+- **Enforcement** — a required checkbox blocks submission client-side, and
+  `/api/register-school` independently returns 400 with
+  `fieldErrors.acceptTerms` when absent. `ProvisionRequest` declares the three
+  consent fields as **required**, so FastAPI rejects at 422 before any
+  provisioning begins.
+- `ip_address` is retained as evidence of acceptance under NDPR s.41(3),
+  best-effort from `X-Forwarded-For`.
 
 ---
 
