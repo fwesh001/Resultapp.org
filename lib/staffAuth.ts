@@ -34,7 +34,14 @@ export interface StaffSessionPayload {
 
 export interface StaffIdentity {
   tenantId: string;
+  /** Preferred identifier: `staff_id` when present, else the row UUID. */
   staffId: string;
+  /**
+   * Every identifier this session carries, lowercased. A staff row can expose
+   * both a human `staff_id` ("STAFF/001") and a UUID, and the profile route
+   * accepts either as an edit target, so both must survive verification.
+   */
+  staffIds: string[];
   email: string | null;
   fullName: string | null;
   role: string;
@@ -72,9 +79,15 @@ export async function readStaffSession(
   const staffId = String(session.staff?.staff_id || session.staff?.id || "").trim();
   if (!staffId || !session.staff) return null;
 
+  // Both identifiers, so callers accepting either still work post-verification.
+  const staffIds = [session.staff?.staff_id, session.staff?.id]
+    .map((v) => String(v || "").trim().toLowerCase())
+    .filter(Boolean);
+
   return {
     tenantId,
     staffId,
+    staffIds,
     email: String(session.staff?.email ?? "").trim().toLowerCase() || null,
     fullName: String(session.staff?.full_name ?? "").trim() || null,
     role: String(session.staff?.role ?? "").trim() || "Teacher",
