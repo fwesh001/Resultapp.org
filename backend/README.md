@@ -173,7 +173,7 @@ curl -X POST http://droplet-ip:8000/api/v1/provision \
 `lib/flutterwave.ts` already validates payment on Next.js. After `FlutterwaveCheckout` callback confirms `transaction_id`, Next.js should **server-side** call the Droplet:
 
 ```ts
-// app/api/provision/route.ts (Next.js, runs server-side so secret not exposed)
+// app/api/register-school/route.ts (Next.js, runs server-side so secret not exposed)
 const res = await fetch(`${process.env.PROVISION_API_URL}/api/v1/provision`, {
   method: 'POST',
   headers: {
