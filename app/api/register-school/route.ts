@@ -72,6 +72,24 @@ function buildTargetUrl(raw: string): string {
   return `${url}/api/v1/provision`;
 }
 
+/**
+ * Registrant IP, retained as evidence of acceptance (NDPR s.41(3)).
+ * Best-effort — the first entry of X-Forwarded-For, which is the client as
+ * seen by the edge, or the socket peer behind it.
+ */
+function clientIp(req: NextRequest): string | undefined {
+  try {
+    const fwd = req.headers.get("x-forwarded-for");
+    if (fwd) {
+      const first = fwd.split(",")[0]?.trim();
+      if (first) return first.slice(0, 64);
+    }
+    return req.ip?.slice(0, 64);
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -249,6 +267,12 @@ export async function POST(req: NextRequest) {
     admin_email: adminEmail,
     admin_password: adminPassword,
     student_count: studentCount,
+    // Consent — the backend requires all four and stores them in
+    // tenant_consents in the same transaction as the tenant row.
+    accepted_terms: true,
+    terms_version: resolvedTermsVersion,
+    privacy_version: resolvedPrivacyVersion,
+    consent_ip: clientIp(req),
   };
   // Include optional only if present (backend treats as optional)
   if (adminName) fastApiPayload.admin_name = adminName;
