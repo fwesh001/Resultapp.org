@@ -137,6 +137,37 @@ export default function Footer({ school, subdomain }: FooterProps) {
             </a>
           </p>
         </div>
+
+        {/* Legal links — platform-wide policies, not school-specific */}
+        <nav
+          aria-label="Legal"
+          className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-purple-500/15 px-8 py-4 text-xs text-purple-200/60"
+        >
+          <Link
+            href="/privacy"
+            className="transition-colors hover:text-white"
+          >
+            Privacy Policy
+          </Link>
+          <span aria-hidden="true" className="text-purple-500/30">
+            &middot;
+          </span>
+          <Link
+            href="/terms"
+            className="transition-colors hover:text-white"
+          >
+            Terms of Service
+          </Link>
+          <span aria-hidden="true" className="text-purple-500/30">
+            &middot;
+          </span>
+          <Link
+            href="/refund-policy"
+            className="transition-colors hover:text-white"
+          >
+            Refund Policy
+          </Link>
+        </nav>
       </div>
     </footer>
   );
