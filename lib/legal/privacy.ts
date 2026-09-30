@@ -38,6 +38,7 @@ export const privacyPolicy: LegalDocumentData = {
     `We are a **data controller** for our own operations: billing and payment records, staff and administrator accounts, support requests, and security audit logs.`,
     "We use **only strictly necessary session cookies**. No advertising, analytics, or cross-site tracking cookies are set, and no cookie banner is required.",
     "**Every school is isolated** to its own tenant. Data belonging to one school is never visible to another school on the platform.",
+    "Session cookies are **cryptographically signed** and verified on every request, and expire after 12 hours enforced by us. A forged or edited session is rejected and deleted.",
     `We never sell data, and we never use student data for advertising, profiling, or our own commercial purposes.`,
     "Schools and their staff can request access to, correction of, or deletion of the data we hold. Contact us and we will assist.",
   ],
