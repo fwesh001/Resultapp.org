@@ -739,6 +739,7 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             total_amount_ngn=total_amount,
             timestamp=timestamp,
             provisioning_ms=elapsed_ms,
+            registry_error=registry_error,
             database={
                 "db_name": db_info["db_name"],
                 "db_user": db_info["db_user"],
