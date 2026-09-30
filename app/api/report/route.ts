@@ -127,6 +127,11 @@ export async function GET(req: NextRequest) {
       data = { raw: text };
     }
     if (!r.ok) {
+      // Collapse every 404 from the backend to one indistinguishable body, so
+      // an unpublished result cannot be told apart from an unknown student.
+      if (r.status === 404) {
+        return notFound();
+      }
       const detail =
         (data as { detail?: unknown })?.detail ??
         (data as { error?: unknown })?.error ??
