@@ -14,7 +14,7 @@
  * that is not ours is rejected — not that the happy path signs correctly.
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -124,12 +124,13 @@ check("REJECTS a truncated MAC", () => {
 
 check("REJECTS a valid MAC transplanted onto a different payload", () => {
   const good = signSession({ tenant_id: "vhs", admin: { email: "a@b.c" } });
-  const [, pGood, mGood] = good.split(".");
+  // Reuse the victim's real MAC, but attach it to an attacker-chosen payload.
+  const macGood = good.split(".")[2];
   const other = Buffer.from(
     JSON.stringify({ tenant_id: "vhs", admin: { email: "attacker@evil.test" }, iat: 1, exp: 9e9 }),
     "utf8",
   ).toString("base64url");
-  return verifySession(`${SESSION_VERSION}.${other}.${mGood}`) === null;
+  return verifySession(`${SESSION_VERSION}.${other}.${macGood}`) === null;
 });
 
 check("REJECTS a payload with no MAC at all", () => {
