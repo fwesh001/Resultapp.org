@@ -107,6 +107,13 @@ async def lifespan(app: FastAPI):
         init_support_tables()
     except Exception as e:
         logger.warning(f"Support tables init warning (may be DB unreachable in dev): {e}")
+    try:
+        from services.db_manager import init_consent_tables
+
+        init_consent_tables()
+    except Exception as e:
+        # Loud, unlike the others: registration now hard-requires this table.
+        logger.error(f"Consent tables init FAILED: {e}")
     yield
     # Shutdown: no-op
 
@@ -253,6 +260,12 @@ class ProvisionRequest(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
     student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each)")
     initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="Trial credit grant at registration (Credit & Command). Defaults to 30.")
+    # Consent record — REQUIRED. Stored in tenant_consents in the same
+    # transaction as the schools INSERT; registration fails without it.
+    terms_version: str = Field(..., min_length=1, max_length=16, examples=["1.0"], description="Version of the Terms of Service the registrant accepted")
+    privacy_version: str = Field(..., min_length=1, max_length=16, examples=["1.0"], description="Version of the Privacy Policy the registrant accepted")
+    accepted_terms: bool = Field(..., description="Must be true — the registrant ticked the acceptance box")
+    consent_ip: Optional[str] = Field(None, max_length=64, description="Registrant IP, retained as evidence of acceptance under NDPR s.41(3)")
 
     @field_validator("subdomain")
     @classmethod
