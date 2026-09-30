@@ -303,6 +303,10 @@ class ProvisionResponse(BaseModel):
     timestamp: str
     provisioning_ms: int
     database: Dict[str, str]  # without password
+    #: Set when the schools/consent registry write failed after the site was
+    #: already deployed. Non-null means the portal is live but unevidenced and
+    #: an operator must reconcile it.
+    registry_error: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # Health / root
