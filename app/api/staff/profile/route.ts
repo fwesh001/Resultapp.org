@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { readStaffSession, type StaffIdentity } from "@/lib/staffAuth";
+import { clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /**
  * Staff self-service profile — PATCH /api/staff/profile
@@ -9,6 +10,9 @@ import { cookies } from "next/headers";
  * to the session identity and any explicit staff_id must match a session
  * identifier (staff_id or UUID, case-insensitive); otherwise 403.
  * Forwards to FastAPI PATCH /api/v1/tenant/{id}/staff/{identifier}/profile.
+ *
+ * The session is HMAC-verified by readStaffSession (LEGAL_REMEDIATION.md
+ * P0-0); this route previously did `JSON.parse` on the raw cookie.
  */
 
 function getSecret(): string {
@@ -35,24 +39,28 @@ interface StaffSession {
 }
 
 export async function PATCH(req: NextRequest) {
-  let session: StaffSession | null = null;
-  try {
-    const raw = (await cookies()).get("staff_session")?.value;
-    if (!raw) {
-      return NextResponse.json({ success: false, error: "Unauthorized — please sign in again" }, { status: 401 });
-    }
-    session = JSON.parse(raw) as StaffSession;
-  } catch {
-    return NextResponse.json({ success: false, error: "Unauthorized — please sign in again" }, { status: 401 });
-  }
+  const unauthorized = async () => {
+    // Drop a rejected cookie so the browser stops resending it.
+    await clearSessionCookie(SESSION_COOKIES.staff);
+    return NextResponse.json(
+      { success: false, error: "Unauthorized — please sign in again" },
+      { status: 401 },
+    );
+  };
 
-  const tenant = String(session?.tenant_id || "").toLowerCase().trim();
-  const sessionIds = [session?.staff?.staff_id, session?.staff?.id]
-    .map((v) => String(v || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (!tenant || sessionIds.length === 0 || !session?.staff) {
-    return NextResponse.json({ success: false, error: "Unauthorized — please sign in again" }, { status: 401 });
+  // Tenant is not known from the URL here, so read the session first, then
+  // bind it. The body tenant is checked against the session below.
+  let identity: StaffIdentity | null = null;
+  try {
+    identity = await readStaffSession();
+  } catch {
+    identity = null;
   }
+  if (!identity) return await unauthorized();
+
+  const tenant = identity.tenantId;
+  // Both session identifiers (staff_id and row UUID) are accepted targets.
+  const sessionIds = [identity.staffId.toLowerCase()].filter(Boolean);
 
   let body: Record<string, unknown>;
   try {
