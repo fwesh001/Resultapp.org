@@ -25,6 +25,7 @@ import {
   calculateTieredTotal,
   formatNaira,
 } from "@/lib/pricing";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 
 // ---------------------------------------------------------------------------
 // Phase 1 – RegisterSchoolForm (4 fields, direct provision, no Flutterwave)
@@ -370,6 +371,11 @@ export function RegisterSchoolForm() {
       adminPassword: values.adminPassword,
       studentCount: parseInt(values.studentCount.trim(), 10),
       initial_credits: 30,
+      // Consent — the server re-validates this and refuses to provision
+      // without it, then persists the versions from lib/legal/constants.ts.
+      acceptTerms: values.acceptTerms,
+      terms_version: TERMS_VERSION,
+      privacy_version: PRIVACY_VERSION,
       transaction_id: transactionId,
       tx_ref: txRef,
     };
@@ -407,6 +413,7 @@ export function RegisterSchoolForm() {
             if (data.fieldErrors.adminEmail) mapped.adminEmail = data.fieldErrors.adminEmail;
             if (data.fieldErrors.adminPassword) mapped.adminPassword = data.fieldErrors.adminPassword;
             if (data.fieldErrors.studentCount) mapped.studentCount = data.fieldErrors.studentCount;
+            if (data.fieldErrors.acceptTerms) mapped.acceptTerms = data.fieldErrors.acceptTerms;
             if (Object.keys(mapped).length > 0) setErrors((prev) => ({ ...prev, ...mapped }));
           }
 
