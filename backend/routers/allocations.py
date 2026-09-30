@@ -1257,6 +1257,59 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
             if cur.rowcount == 0:
                 cur.execute("ROLLBACK;")
                 raise HTTPException(status_code=404, detail=f"{record_type} not found")
+
+            # ---- Cascade to every table that references the student -------
+            # LEGAl_REMEDIATION.md P0 item 2.
+            #
+            # tenant_grades / student_academic_records /
+            # student_behavioral_records / result_publications all key on the
+            # admission-number *string*, not the row UUID, and none carries an
+            # FK to tenant_students. Two consequences, both fixed here:
+            #
+            #   1. Privacy — free-text teacher/form-master/principal remarks
+            #      about a child survived the child being erased from the
+            #      roster, with no remaining record to attribute them to.
+            #   2. Correctness — tenant_students is UNIQUE(subdomain,
+            #      student_id), so a re-enrolment that reuses a withdrawn
+            #      admission number would INHERIT the previous pupil's grades,
+            #      remarks, behavioural ratings and published state (and be
+            #      published for free, as already-published).
+            #
+            # All four tables live in the same database and schema as the
+            # connection above, so this single transaction covers both the
+            # raw-psycopg2 and SQLAlchemy-created ones. _connect_as_superuser
+            # sets ISOLATION_LEVEL_AUTOCOMMIT, so the BEGIN above is a real
+            # server-side transaction.
+            #
+            # Note: billing_ledger is deliberately NOT touched. Its
+            # description embeds the admission number as the audit trail for
+            # the slot refund, and the ledger is an immutable financial
+            # record. Documented carve-out.
+            cascaded = {}
+            for _cascade_table, _tenant_col in (
+                ("tenant_grades", "subdomain"),
+                ("student_academic_records", "tenant_id"),
+                ("student_behavioral_records", "tenant_id"),
+                ("result_publications", "subdomain"),
+            ):
+                try:
+                    cur.execute(
+                        f"DELETE FROM {_cascade_table} "
+                        f"WHERE {_tenant_col} = %s AND LOWER(student_id) = LOWER(%s);",
+                        (tid, sid),
+                    )
+                    cascaded[_cascade_table] = cur.rowcount
+                except Exception as _e:
+                    # A missing optional table must not abort the delete, but
+                    # it must be loud — silent partial erasure is worse than
+                    # a loud failure.
+                    cascaded[_cascade_table] = None
+                    logger.error(
+                        "[roster] cascade delete failed for %s (%s/%s): %s",
+                        _cascade_table, tid, sid, _e,
+                        exc_info=True,
+                    )
+
             # Refund slot
             from services.db_manager import SCHOOLS_REGISTRY_TABLE, BILLING_LEDGER_TABLE
 
@@ -1281,12 +1334,35 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
                 (tid, ref, f"Slot refund for deleted student {sid}"),
             )
             cur.execute("COMMIT;")
+
+            # Audit trail — a destructive, irreversible operation on a minor's
+            # records must be visible to the platform operator.
+            try:
+                from services.db_manager import log_admin_action
+
+                log_admin_action(
+                    "roster.student_purged",
+                    subdomain=tid,
+                    details={
+                        "student_id": sid,
+                        "record_id": record_id,
+                        "cascaded_rows": cascaded,
+                        "slots_refunded": 1,
+                    },
+                )
+            except Exception as _audit_err:
+                logger.warning(
+                    "[roster] audit log failed for student purge %s/%s: %s",
+                    tid, sid, _audit_err,
+                )
+
             return {
                 "success": True,
                 "deleted": record_id,
                 "type": record_type,
                 "slots_refunded": 1,
                 "slots_balance": int(new_slots_row[0] or 0) if new_slots_row else None,
+                "cascaded_rows": cascaded,
             }
         # Non-student deletes (no slot refund)
         cur.execute(
