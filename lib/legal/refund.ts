@@ -111,7 +111,7 @@ export const refundPolicy: LegalDocumentData = {
         },
         {
           kind: "p",
-          text: "**3.3 Discretionary goodwill.**At our sole and absolute discretion we may issue free Credits or Slots as a goodwill gesture, or refund a payment where the circumstances in section 4 apply. **Nothing in this policy creates an entitlement to a refund, and we are not obliged to issue one in any circumstance.** A goodwill credit is a gesture, carries no cash value, and is not transferable or redeemable.",
+          text: "**3.3 Discretionary goodwill.** At our sole and absolute discretion we may issue free Credits or Slots as a goodwill gesture, or refund a payment where the circumstances in section 4 apply. **Nothing in this policy creates an entitlement to a refund, and we are not obliged to issue one in any circumstance.** A goodwill credit is a gesture, carries no cash value, and is not transferable or redeemable.",
         },
       ],
     },
