@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
 /**
  * POST /api/superadmin/login
  *
- * Dual path (multi-user superadmin, opaque cookies — no JWT):
+ * Dual path (multi-user superadmin, signed cookies — no JWT):
  * 1. Per-user: Body { email, password } → FastAPI POST /api/v1/platform/login.
- *    Cookie: { superadmin: true, admin_id, email, role }.
+ *    Cookie claims: { superadmin: true, admin_id, email, role }.
  * 2. Legacy fallback: Body { password } → SUPERADMIN_PASSWORD env check.
- *    Cookie: { superadmin: true } (no identity — accepted by guards).
+ *    Cookie claims: { superadmin: true } (no identity — accepted by guards).
+ *
+ * Both paths mint an HMAC-signed cookie. Before P0-0 this value was unsigned
+ * JSON, so `superadmin_session={"superadmin":true}` was a complete platform
+ * takeover with no credential.
  */
 
 function getSecret(): string {
@@ -30,17 +34,16 @@ function getBackendBase(): string {
 }
 
 async function setSessionCookie(value: Record<string, unknown>) {
+  await setSignedSession(value);
+}
+
+async function setSignedSession(value: Record<string, unknown>) {
   try {
-    const cookieStore = await cookies();
-    cookieStore.set("superadmin_session", JSON.stringify(value), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+    await setSessionCookie(SESSION_COOKIES.superadmin, value);
   } catch (e) {
-    console.warn("[superadmin login] cookie set failed", e);
+    // Fail closed: a signing failure must not report a successful login.
+    console.error("[superadmin login] session signing failed", e);
+    throw e;
   }
 }
 
