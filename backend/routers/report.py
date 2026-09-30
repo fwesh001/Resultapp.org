@@ -520,6 +520,36 @@ def get_report_bundle(
 ):
     tid = _validate_tenant_id(tenant_id)
     _raw_sid = (student_id or "").strip()
+
+    # Enumeration brake — anonymous and admin scopes share the bucket so a
+    # single client cannot bypass it by holding a session.
+    try:
+        from services.rate_limit import check as _rl_check
+
+        _client = "unknown"
+        if request is not None:
+            try:
+                _fwd = request.headers.get("x-forwarded-for") or ""
+                _client = (_fwd.split(",")[0].strip() if _fwd else "") or (
+                    (request.client.host if request.client else "unknown")
+                )
+            except Exception:
+                _client = "unknown"
+        _allowed, _retry = _rl_check(
+            f"report:{_client}:{tid.lower()}", max_hits=REPORT_MAX_HITS, window_s=REPORT_WINDOW_S
+        )
+        if not _allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please wait a moment and try again.",
+                headers={"Retry-After": str(_retry)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # Throttle must never take the report checker down.
+        logger.warning("[report] rate limit unavailable; continuing unthrottled", exc_info=True)
+
     # Normalize prefix to lower case (vhs/005) — keep number as-is
     if "/" in _raw_sid:
         _pfx, _rest = _raw_sid.split("/", 1)
