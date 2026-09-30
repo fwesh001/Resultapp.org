@@ -84,6 +84,7 @@ export function RegisterSchoolForm() {
     adminPassword: "",
     adminPasswordConfirm: "",
     studentCount: "",
+    acceptTerms: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
