@@ -1,28 +1,27 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { requireSuperadmin } from "@/lib/superadminAuth";
 import SuperadminShell from "@/components/superadmin/SuperadminShell";
 
 export const dynamic = "force-dynamic";
 
-/** Guarded superadmin section — requires the session cookie set at login. */
+/**
+ * Guarded superadmin section.
+ *
+ * Calls the shared `requireSuperadmin` guard, which verifies the HMAC
+ * signature before reading any claim. The previous inline version did
+ * `JSON.parse` on the raw cookie, so `{"superadmin":true}` was a complete
+ * platform takeover with no credential (LEGAL_REMEDIATION.md P0-0).
+ *
+ * `requireSuperadmin` also issues a deleting Set-Cookie on rejection, but a
+ * Server Component cannot apply it — that response header is dropped here, so
+ * we redirect to login and the login page overwrites the stale cookie.
+ */
 export default async function SuperadminDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("superadmin_session")?.value;
-
-  let valid = false;
-  if (raw) {
-    try {
-      const session = JSON.parse(raw) as { superadmin?: boolean };
-      valid = session?.superadmin === true;
-    } catch {
-      valid = false;
-    }
-  }
-  if (!valid) {
+  if (await requireSuperadmin()) {
     redirect("/superadmin/login");
   }
 
