@@ -317,7 +317,8 @@ export const termsOfService: LegalDocumentData = {
             "all Fees due at the date of termination remain payable;",
             "no pro-rata refund of Fees arises from termination, and any refund is governed solely by the Refund Policy; and",
             "sections 9 (as it relates to disclaimers), 10, 11, 12, 13, 15, 16, 17, and 20 survive termination.",
-        ],
+          ],
+        },
         {
           kind: "p",
           text: "**8.7 Reinstatement.** Where a portal is suspended and the underlying issue is resolved, the School may request reinstatement and we will reinstate promptly. Reinstatement is at our discretion and does not guarantee restoration of a terminated portal.",
