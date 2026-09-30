@@ -1243,6 +1243,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         open={pendingDelete !== null}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         title={pendingDelete ? `Delete this ${pendingDelete.type}?` : "Delete?"}
+        message={pendingDelete ? deleteWarning(pendingDelete.type) : undefined}
         confirmLabel="Delete"
         loading={deleting}
         onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete.type, pendingDelete.id); }}
