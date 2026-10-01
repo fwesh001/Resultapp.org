@@ -48,7 +48,11 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
   const [isPaying, setIsPaying] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ studentCount: number; total: number } | null>(null);
+  const [success, setSuccess] = useState<{
+    studentCount: number;
+    total: number;
+    restoredFromSuspension?: boolean;
+  } | null>(null);
 
   const countNum = useMemo(() => {
     const n = parseInt(studentCount, 10);
@@ -215,11 +219,21 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
                 (isCredit ? `Top-up failed (${upgradeRes.status})` : `Upgrade failed (${upgradeRes.status})`);
               throw new Error(msg);
             }
-            setSuccess({ studentCount: n, total: amount });
+            // A verified payment lifts a NON-PAYMENT suspension inside the same
+            // backend transaction as the grant. The backend reports whether it
+            // did, so the admin is told plainly — otherwise they pay, land back
+            // on a suspended portal, and think the top-up failed.
+            const restored = (data as { restored_from_suspension?: boolean })
+              .restored_from_suspension === true;
+            setSuccess({
+              studentCount: n,
+              total: amount,
+              restoredFromSuspension: restored,
+            });
             // 5. On success: credit/slot top-ups stay on billing to show new balance; legacy upgrade goes to sample report.
             setTimeout(() => {
               window.location.href = isCredit || isSlot
-                ? `/${tenantId}/admin/billing`
+                ? `/${tenantId}/admin/billing${restored ? "?restored=1" : ""}`
                 : `/${tenantId}/report/STU001?term=Term%201`;
             }, 1500);
           } catch (e) {
@@ -253,11 +267,21 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
           <CheckCircle2 className="h-8 w-8 text-emerald-400" />
         </div>
         <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">
-          {isCredit ? "Credits Added!" : isSlot ? "Slots Added!" : "Subscription Active!"}
+          {success.restoredFromSuspension
+            ? "Portal Restored!"
+            : isCredit
+              ? "Credits Added!"
+              : isSlot
+                ? "Slots Added!"
+                : "Subscription Active!"}
         </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
           Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> {isCredit ? "credits" : isSlot ? "slots" : "students"} (
-          {formatNaira(success.total)}). {isCredit ? (
+          {formatNaira(success.total)}). {success.restoredFromSuspension ? (
+            <>
+              Your portal is active again — public, staff, and report access have resumed.
+            </>
+          ) : isCredit ? (
             <>Your new credit balance will show on this page in a moment.</>
           ) : isSlot ? (
             <>Your new slot capacity will show on this page in a moment. You can now add more students.</>
