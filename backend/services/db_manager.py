@@ -1264,11 +1264,25 @@ RESULT_PUBLICATIONS_TABLE = "result_publications"
 BILLING_LEDGER_TABLE = "billing_ledger"
 APP_SETTINGS_TABLE = "app_settings"
 
+#: Why a tenant was suspended. Persisted on the tenant row (not just the audit
+#: log) because the billing restore hook has to be able to tell a payment
+#: problem from an abuse ban — otherwise a school suspended for abuse could
+#: restore itself by paying. See LEGAL_REMEDIATION.md item 11.
+#:
+#: `None` and 'nonpayment' mean a verified payment lifts the suspension.
+#: The rest are payment-locked and only a superadmin can clear them.
+#:
+#: Defined here, not in the routers, so the validation set (admin.py) and the
+#: restore guard (credits.py) cannot drift apart.
+SUSPENSION_REASONS = ("nonpayment", "abuse", "legal", "security")
+
+#: Suspension causes a payment must NOT clear.
+PAYMENT_LOCKED_SUSPENSIONS = tuple(r for r in SUSPENSION_REASONS if r != "nonpayment")
+
 #: Append-only record of which version of the Terms of Service and Privacy
 #: Policy a school accepted, when, and by whom (LEGAL_REMEDIATION.md P0 item 4).
 #: A school may accept new versions over time, so this is history, not state.
 TENANT_CONSENTS_TABLE = "tenant_consents"
-
 #: Free trial credits granted on registration (frictionless onboarding).
 TRIAL_CREDITS = 30
 TRIAL_SLOTS = 0  # slots are purchased via student_count; credits are the trial gift
