@@ -24,11 +24,15 @@ processing (ToS §12.2), but nothing can carve us out for ours.
   request, with server-enforced expiry. One residual is accepted and documented
   rather than hidden: sessions are stateless, so a copied session stays valid
   until its 12-hour expiry. ToS §5.5 was amended to state this plainly.
-- **P1 remains open.** Privacy Policy §9 and §10 still describe controls the
-  code does not yet implement: no field-level encryption at rest (item 5) and
-  no retention enforcement (item 9). Both are in the published text. They are
-  not P0 because neither creates a disclosure path on its own, but the policy
-  currently overstates the posture in those two sections.
+- **P1 remains open.** Privacy Policy §9 and §10 were corrected on
+  1 October 2026 (v1.1) so the published text now matches the code — the policy
+  no longer overstates encryption-at-rest or claims unenforced retention
+  periods. **Items 5 and 9 stay on the roadmap as engineering work:**
+  amending the policy limits misstatement risk, not the underlying risk, and
+  NDPR s.44 applies regardless of what the policy says. New P1 items 18–22
+  track the follow-ups that surfaced, including the missing automated backup
+  schedule and the fact that our data residency and transfer mechanism are
+  outside Nigeria.
 - **`purge_orphan_students.py` ran clean — there is nothing to purge.** See
   item 2; verified against production on 1 October 2026 with a positive
   control. No snapshot or export was needed.
