@@ -126,7 +126,7 @@ export default function RegisterPage() {
 
               <p className="mt-6 text-center text-xs text-purple-200/50">
                 Already have a portal?{" "}
-                <Link href="/dashboard" className="font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white">
+                <Link href="/login" className="font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white">
                   Sign in
                 </Link>
               </p>
