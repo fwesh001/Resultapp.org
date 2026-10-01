@@ -385,7 +385,6 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   if (!isAdmin && state === "adminDraft") state = isPublished ? "published" : "notAvailable";
 
   const isAdminDraft = state === "adminDraft";
-  const showDraftOverlay = isAdminDraft;
 
   if (loading) {
     return (
@@ -546,7 +545,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
 
   return (
     <div className="relative mx-auto max-w-4xl">
-      <div className={showDraftOverlay ? "blur-[3px] select-none pointer-events-none opacity-60 print:blur-none print:opacity-100" : ""}>
+      <div className={isAdminDraft ? "blur-[3px] select-none pointer-events-none opacity-60 print:blur-none print:opacity-100" : ""}>
         <div
           id="report-card"
           className="relative mx-auto max-w-4xl rounded-2xl bg-white p-4 md:p-6 text-slate-950 shadow-2xl print:rounded-none print:p-0 print:shadow-none print:border-none"
@@ -564,7 +563,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           )}
           <div className="relative z-10">
           {/* Print-only draft stamp — unpublished cards can never pass as official */}
-          {showDraftOverlay && (
+          {isAdminDraft && (
             <div className="mb-2 hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-800 print:block">
               Draft — Pending Publication • Not an official result
             </div>
