@@ -505,6 +505,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     );
   }
 
+  const displayName = student?.full_name ?? "— Unknown Student —";
   const displayClass = student?.class_name ?? "—";
   const displayGender = student?.gender ? student.gender.charAt(0).toUpperCase() + student.gender.slice(1).toLowerCase() : "—";
   const noInClass = summary.noInClass ?? 0;
