@@ -1141,20 +1141,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 No staff yet. Add staff in the Staff tab.
               </div>
             ) : (
-              <select
-                value={allocForm.staff_name}
-                onChange={(e) => setAllocForm((p) => ({ ...p, staff_name: e.target.value }))}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-              >
-                <option value="" className="bg-[#0B0514]">
-                  Select staff
-                </option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.full_name} className="bg-[#0B0514]">
-                    {s.full_name} — {s.role}
-                  </option>
-                ))}
-              </select>
+              <Select aria-label="Staff" value={allocForm.staff_name} onChange={(v) => setAllocForm((p) => ({ ...p, staff_name: v }))} placeholder="Select staff"
+                options={[
+                  { value: "", label: "Select staff" },
+                  ...staff.map((s): SelectOption => ({ value: s.full_name, label: `${s.full_name} — ${s.role}` })),
+                ]}
+              />
             )}
           </div>
 
@@ -1182,20 +1174,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 Register students first to generate classes. Classes are derived from the Students roster.
               </div>
             ) : (
-              <select
-                value={formAssignForm.class_name}
-                onChange={(e) => setFormAssignForm((p) => ({ ...p, class_name: e.target.value }))}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-              >
-                <option value="" className="bg-[#0B0514]">
-                  Select class
-                </option>
-                {availableClasses.map((c) => (
-                  <option key={c} value={c} className="bg-[#0B0514]">
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <Select aria-label="Class" value={formAssignForm.class_name} onChange={(v) => setFormAssignForm((p) => ({ ...p, class_name: v }))} placeholder="Select class"
+                options={[
+                  { value: "", label: "Select class" },
+                  ...availableClasses.map((c): SelectOption => ({ value: c, label: c })),
+                ]}
+              />
             )}
           </div>
 
@@ -1206,20 +1190,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 No staff yet. Add staff in the Staff tab.
               </div>
             ) : (
-              <select
-                value={formAssignForm.staff_id}
-                onChange={(e) => setFormAssignForm((p) => ({ ...p, staff_id: e.target.value }))}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-              >
-                <option value="" className="bg-[#0B0514]">
-                  Select staff
-                </option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.staff_id} className="bg-[#0B0514]">
-                    {s.full_name} — {s.role}
-                  </option>
-                ))}
-              </select>
+              <Select aria-label="Staff" value={formAssignForm.staff_id} onChange={(v) => setFormAssignForm((p) => ({ ...p, staff_id: v }))} placeholder="Select staff"
+                options={[
+                  { value: "", label: "Select staff" },
+                  ...staff.map((s): SelectOption => ({ value: s.staff_id, label: `${s.full_name} — ${s.role}` })),
+                ]}
+              />
             )}
           </div>
 
