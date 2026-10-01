@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import { BulkUploadModal, type BulkEntity } from "@/components/admin/BulkUploadModal";
 
 // Types mirrors backend tables
@@ -556,20 +557,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           />
         </div>
         {activeTab === "Students" && (
-          <select
+          <Select
+            aria-label="Filter by class"
             value={studentClassFilter}
-            onChange={(e) => setStudentClassFilter(e.target.value)}
-            className="flex h-10 w-full sm:w-40 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-          >
-            <option value="All" className="bg-[#0B0514]">
-              All Classes
-            </option>
-            {availableClasses.map((c) => (
-              <option key={c} value={c} className="bg-[#0B0514]">
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setStudentClassFilter}
+            className="sm:w-40"
+            options={[
+              { value: "All", label: "All Classes" },
+              ...availableClasses.map((c): SelectOption => ({ value: c, label: c })),
+            ]}
+          />
         )}
       </div>
 
