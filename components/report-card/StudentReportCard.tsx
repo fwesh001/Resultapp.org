@@ -347,6 +347,47 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     return undefined;
   }
 
+  // ---- Discriminated state resolution -------------------------------------
+  // Evaluated before ANY branch. Precedence is deliberate:
+  //   1. transport  — the request itself failed (no authorization meaning)
+  //   2. notFound   — 404 for this viewer; never an admin signal
+  //   3. adminDraft — admin scope + unpublished (the ONLY admin-draft path)
+  //   4. published  — official card
+  //   5. noTerm     — public, default term, unpublished, no explicit term
+  //   6. notAvailable— public, unpublished for the requested term
+  //
+  // The public scope can only ever land on published/notFound/noTerm/
+  // notAvailable/transport. `adminDraft` requires viewer === "admin", which is
+  // resolved server-side from the httpOnly session cookie.
+  const gradesCount = data?.grades?.length ?? 0;
+  const studentKnown = Boolean(data?.student);
+  const hasGrades = gradesCount > 0;
+
+  let state: ReportState;
+  if (error) {
+    state = isAdmin ? "adminDraft" : "transport";
+  } else if (notFoundResponse) {
+    // An admin scope never receives a 404 (include_draft returns the draft),
+    // so this is a public-only outcome. Treat it as "not found" rather than
+    // inventing a distinction the backend deliberately erased.
+    state = "notFound";
+  } else if (isAdmin && isLocked) {
+    state = "adminDraft";
+  } else if (isPublished) {
+    state = "published";
+  } else if (!termWasExplicit) {
+    state = "noTerm";
+  } else {
+    state = "notAvailable";
+  }
+
+  // Guards against a logic slip regressing the leak: a non-admin viewer must
+  // never be in the draft state, whatever the inputs say.
+  if (!isAdmin && state === "adminDraft") state = isPublished ? "published" : "notAvailable";
+
+  const isAdminDraft = state === "adminDraft";
+  const showDraftOverlay = isAdminDraft;
+
   if (loading) {
     return (
       <div
@@ -371,34 +412,97 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     );
   }
 
-  if (error) {
+  // ---- Public terminal states ---------------------------------------------
+  // These are returned BEFORE any report markup, so a public viewer can never
+  // reach the card body, the draft overlay, or the Command Center UI.
+  if (state === "notFound") {
     return (
-      <div className="mx-auto max-w-4xl space-y-4">
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 print:hidden">
-          <span className="inline-flex gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-          </span>
-        </div>
-        {isLocked && (
-          <div className="w-full rounded-2xl border border-amber-500/40 bg-zinc-900 p-6 text-center shadow-2xl print:hidden">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
-              <Lock className="h-6 w-6 text-amber-400" />
-            </div>
-            <h3 className="mt-4 text-lg font-bold text-white">Draft — Pending Publication</h3>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
-              This preview is free. Publish this report card from the Result Command Center to unlock official printing for {term} (1 credit).
-            </p>
-            <Button
-              onClick={() => (window.location.href = `/${tenantId}/admin/results`)}
-              className="mt-5 w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
-              size="lg"
-            >
-              <CreditCard className="h-4 w-4" /> Open Command Center
-            </Button>
-            <p className="mt-3 text-xs text-zinc-500">Need help? contact@resultapp.org</p>
-          </div>
-        )}
-      </div>
+      <ReportErrorState
+        title="Student Not Found"
+        description={
+          <>
+            No published result was found for{" "}
+            <span className="font-mono font-semibold text-amber-900">{studentId}</span> in{" "}
+            <span className="font-semibold">{schoolName || tenantId}</span>. Check the admission number format (
+            <span className="font-mono">e.g. VHS/001</span>).
+          </>
+        }
+        icon="not-found"
+        actions={[
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+          { label: "Contact Admin", href: mailtoHref },
+        ]}
+        footnote={<>Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</>}
+      />
+    );
+  }
+
+  if (state === "noTerm") {
+    return (
+      <ReportErrorState
+        title="Result Not Available"
+        description={
+          <>
+            Results for <span className="font-semibold">{term}</span> are not available for{" "}
+            <span className="font-mono font-semibold text-amber-900">{studentId}</span> yet. Select another term to
+            check for a published result.
+          </>
+        }
+        icon="not-available"
+        termSelector={termSelector}
+        actions={[
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+          { label: "Contact Admin", href: mailtoHref },
+        ]}
+      />
+    );
+  }
+
+  if (state === "notAvailable") {
+    return (
+      <ReportErrorState
+        title="Result Not Available"
+        description={
+          <>
+            This result has not been published yet. If you believe this is an error, or to resolve pending clearances,
+            please contact the school administration.
+            {(schoolEmail || schoolPhone) && (
+              <>
+                <br />
+                {schoolEmail && <span className="font-medium">{schoolEmail}</span>}
+                {schoolEmail && schoolPhone && " • "}
+                {schoolPhone && <span className="font-medium">{schoolPhone}</span>}
+              </>
+            )}
+          </>
+        }
+        icon="not-available"
+        termSelector={termSelector}
+        actions={[
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+          { label: "Contact Admin", href: mailtoHref },
+        ]}
+      />
+    );
+  }
+
+  if (state === "transport") {
+    // Deliberately admin-free: a transport failure is not an authorization
+    // signal, so it must not advertise publication tooling to the public.
+    return (
+      <ReportErrorState
+        title="Temporarily Unavailable"
+        description={
+          <>
+            We could not load this result right now. This is usually temporary — please try again in a moment.
+          </>
+        }
+        icon="transport"
+        actions={[
+          { label: "Try Again", onClick: () => window.location.reload() },
+          { label: "Contact Admin", href: mailtoHref, variant: "outline" },
+        ]}
+      />
     );
   }
 
@@ -410,14 +514,9 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
 
-  // State matrix (evaluated in order):
-  // 1. No student -> Not Found. 2. Unpublished + no grades -> Term Not
-  // Available. 3. Unpublished + grades + parent -> Result Not Published.
-  // 4. Unpublished + grades + admin -> normal card + draft overlay.
-  // 5. Published -> normal card (even with empty grades: official Absent).
-  const hasGrades = grades.length > 0;
-  const isEmptyTerm = !isNotFound && !isPublished && !hasGrades;
-  const isWithheld = !isNotFound && !isPublished && hasGrades && !isAdminPreview;
+  // `studentKnown`/`hasGrades` remain for admin-draft copy below.
+  void studentKnown;
+  void hasGrades;
   // Draft overlay only for admin previews (or legacy no-grade drafts for admins);
   // parents never see blurred cards — they get full-page states instead.
   const showDraftOverlay = isLocked && !isNotFound && !isEmptyTerm && !isWithheld;
