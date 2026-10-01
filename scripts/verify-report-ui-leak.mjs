@@ -203,6 +203,110 @@ check("404 is captured as `notFoundResponse`, not thrown as an error", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 1b. ENUMERATION CONTRACT: public copy must stay true for BOTH 404 cases.
+// ---------------------------------------------------------------------------
+
+console.log("\nEnumeration: public copy must not assert which 404 case occurred");
+
+/**
+ * The backend collapses "unknown student" and "unpublished for this term" into
+ * one byte-identical 404. Public-facing copy must therefore be true for either,
+ * and must never claim the student does (or does not) exist.
+ */
+const ASSERTING_PHRASES = [
+  "student not found",
+  "no student record",
+  "does not exist",
+  "unknown student",
+  "isn't in our records",
+  "no such student",
+];
+
+/**
+ * Scoped to the public error surface: every <ReportErrorState> element that is
+ * NOT admin-guarded. Walking the AST (rather than grepping the file) skips
+ * comments and lets admin-scoped copy exist legitimately, which is correct —
+ * admins are inside the trusted boundary and get precise diagnostics.
+ */
+function collectPublicErrorCopy(file) {
+  const sf = parse(file);
+  const findings = [];
+  const visit = (node) => {
+    if (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) {
+      const tag = node.tagName ? node.tagName.getText(sf) : "";
+      if (tag === "ReportErrorState" && !isAdminGuarded(guardContext(node, sf))) {
+        // Scan this element's own attributes and all descendants. The tag name is
+        // an Identifier, not a string literal, so it is naturally ignored.
+        const scan = (n) => {
+          let value = null;
+          if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) value = n.text;
+          else if (ts.isJsxText(n)) value = n.text;
+          if (value) {
+            const low = value.toLowerCase();
+            for (const p of ASSERTING_PHRASES) {
+              if (low.includes(p)) {
+                findings.push(
+                  `${file}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1} "${value.trim().slice(0, 70)}"`,
+                );
+              }
+            }
+          }
+          ts.forEachChild(n, scan);
+        };
+        scan(node);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return findings;
+}
+
+check("public error copy never asserts whether the student exists", () => {
+  const findings = [
+    ...collectPublicErrorCopy(CARD),
+    ...collectPublicErrorCopy(path.join("components", "report-card", "ReportErrorState.tsx")),
+  ];
+  return findings.length
+    ? `existence-asserting public copy (re-opens the P0 enumeration oracle): ${findings.join("; ")}`
+    : true;
+});
+
+check("public 404 card carries the term picker", () => {
+  const src = fs.readFileSync(path.join(root, CARD), "utf8");
+  // The 404 branch must offer termSelector so a student on the wrong term can
+  // self-serve instead of contacting the school.
+  const branch = src.slice(src.indexOf('if (state === "notFound")'));
+  const end = branch.indexOf('if (state === "noTerm")');
+  const body = end > 0 ? branch.slice(0, end) : branch;
+  if (!/termSelector=\{termSelector\}/.test(body)) return "the notFound card does not render termSelector";
+  return true;
+});
+
+check("the proxy still collapses all 404s to one indistinguishable body", () => {
+  const src = fs.readFileSync(path.join(root, "app", "api", "report", "route.ts"), "utf8");
+  if (/reason\s*[:=]\s*["']student_not_found/.test(src)) {
+    return "proxy emits a student_not_found reason — re-opens the enumeration oracle";
+  }
+  if (/reason\s*[:=]\s*["']report_not_found/.test(src)) {
+    return "proxy emits a report_not_found reason — re-opens the enumeration oracle";
+  }
+  if (!/function notFound\(\)/.test(src)) return "single notFound() helper is missing";
+  return true;
+});
+
+check("backend still returns one identical 404 for both cases", () => {
+  const src = fs.readFileSync(path.join(root, "backend", "routers", "report.py"), "utf8");
+  if (/reason\s*[:=]\s*["']student_not_found/.test(src) || /reason\s*[:=]\s*["']report_not_found/.test(src)) {
+    return "backend distinguishes student_not_found vs report_not_found — re-opens the enumeration oracle";
+  }
+  if (!/if not include_draft and \(student is None or not is_published\)/.test(src)) {
+    return "the combined 404 gate was changed; the two cases are no longer collapsed";
+  }
+  return true;
+});
+
+// ---------------------------------------------------------------------------
 // 2. BEHAVIOURAL: extract and execute the pure state resolver.
 // ---------------------------------------------------------------------------
 
