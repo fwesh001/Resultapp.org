@@ -188,14 +188,19 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isPublished = false, isAdminPreview = false, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, isPublished = false, viewer, termWasExplicit = true, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone }: StudentReportCardProps) {
   // Draft gate: anything not confirmed in result_publications renders as a
   // free preview (blurred, watermarked, unprintable). Re-prints cost 0
   // because the gate is the publication row, not a subscription flag.
   const isLocked = !isPublished;
+  const isAdmin = viewer === "admin";
   const [data, setData] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Distinguishes "the backend deliberately withheld this result" (404) from
+  // "the request genuinely failed" (network/5xx). A 404 is an expected,
+  // authorization-shaped outcome; it must NEVER reach the admin UI.
+  const [notFoundResponse, setNotFoundResponse] = useState(false);
   // Broken/dead logo URLs collapse to the text-only header (no broken icon).
   const [imgError, setImgError] = useState(false);
 
@@ -208,10 +213,21 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     async function load() {
       setLoading(true);
       setError(null);
+      setNotFoundResponse(false);
       try {
         const url = `/api/report?tenant_id=${encodeURIComponent(tenantId)}&student_id=${encodeURIComponent(studentId)}&term=${encodeURIComponent(term)}`;
         const res = await fetch(url, { cache: "no-store" });
         const json = (await res.json().catch(() => ({}))) as ReportResponse & { error?: string; success?: boolean };
+        if (res.status === 404) {
+          // Expected: unknown student, or a result the viewer is not cleared to
+          // see. Recorded as its own state so it can never fall through to the
+          // transport-error branch, which is the historical leak path.
+          if (!cancelled) {
+            setNotFoundResponse(true);
+            announceReportReady(false);
+          }
+          return;
+        }
         if (!res.ok) {
           throw new Error((json as { error?: string }).error || `Failed to load report (${res.status})`);
         }
