@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Calculator, Users, ArrowRight, Coins } from "lucide-react";
-import { getPricingTier, calculateTieredTotal, getSliderPct } from "@/lib/pricing";
+import { getPricingTier, calculateTieredTotal, getSliderPct, CREDIT_PRICE } from "@/lib/pricing";
 
 export function PricingCalculator() {
   const [students, setStudents] = useState(350);
@@ -55,14 +55,14 @@ export function PricingCalculator() {
           </div>
 
           <div className="shrink-0 rounded-2xl border border-purple-500/20 bg-[#0B0514]/60 p-5 backdrop-blur md:min-w-[280px] md:text-center">
-            <div className="text-xs font-medium tracking-widest text-purple-300">TOTAL COST PER TERM (NGN)</div>
-            <div className="mt-2 text-4xl font-bold tracking-tight text-purple-400 md:text-5xl">{formattedTotal}</div>
-            <div className="mt-1 text-xs text-purple-200/60">
-              {formattedStudents} × ₦{unitPrice} • one-time per term
-            </div>
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-purple-600/15 px-3 py-1 text-xs font-medium text-purple-200">
-              <Coins className="h-3.5 w-3.5" /> Credit Wallet
-            </div>
+<div className="text-xs font-medium tracking-widest text-purple-300">SLOTS COST (ONE-TIME, NGN)</div>
+              <div className="mt-2 text-4xl font-bold tracking-tight text-purple-400 md:text-5xl">{formattedTotal}</div>
+              <div className="mt-1 text-xs text-purple-200/60">
+                {formattedStudents} × ₦{unitPrice} • permanent slots
+              </div>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-purple-600/15 px-3 py-1 text-xs font-medium text-purple-200">
+                <Coins className="h-3.5 w-3.5" /> Roster Slots
+              </div>
           </div>
         </div>
 
@@ -126,7 +126,7 @@ export function PricingCalculator() {
 
         <p className="mt-6 flex items-start gap-2 border-t border-purple-500/10 pt-5 text-sm leading-6 text-purple-200/60">
           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
-          Example: {formattedStudents} students at ₦{unitPrice} = {formattedTotal} per term. Add more students anytime — wallet deducts automatically. Unused not lost.
+          Example: {formattedStudents} students at ₦{unitPrice} = {formattedTotal} for permanent roster slots. Publishing each term&apos;s results draws from a separate credit wallet at ₦{CREDIT_PRICE} per credit. Neither slots nor credits expire.
         </p>
 
         {/* only show CTA when used standalone? Keep for both pages - pricing page will have separate CTA, but component includes register link for landing */}
