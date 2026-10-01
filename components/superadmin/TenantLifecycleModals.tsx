@@ -6,7 +6,38 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import type { TenantMenuTarget } from "@/components/superadmin/TenantRowMenu";
 
-/* Suspend modal — low friction confirm + optional reason (audited). */
+/* Suspend modal — a required CAUSE plus an optional free-text note.
+
+   The cause is required, not cosmetic. It is persisted on the tenant row as
+   `suspension_reason` and is what decides whether a payment can restore the
+   portal: non-payment suspensions lift automatically, abuse/legal/security ones
+   must be lifted by a human. An operator who leaves this unset on an abuse
+   suspension silently re-enables paying your way out of the ban, so the select
+   blocks the confirm button until it is chosen. */
+
+/** Must match SUSPENSION_REASONS in backend/routers/admin.py. */
+const SUSPENSION_REASONS = [
+  {
+    value: "nonpayment",
+    label: "Non-payment",
+    hint: "A verified payment restores access automatically.",
+  },
+  {
+    value: "abuse",
+    label: "Abuse",
+    hint: "Abuse of the service. A payment will NOT restore access.",
+  },
+  {
+    value: "legal",
+    label: "Legal or regulatory",
+    hint: "A payment will NOT restore access.",
+  },
+  {
+    value: "security",
+    label: "Security or data risk",
+    hint: "A payment will NOT restore access.",
+  },
+] as const;
 
 export function SuspendTenantModal({
   tenant,
@@ -17,16 +48,20 @@ export function SuspendTenantModal({
   tenant: TenantMenuTarget | null;
   busy: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string, suspensionReason: string | null) => void;
 }) {
   const [reason, setReason] = useState("");
+  const [cause, setCause] = useState<string>("");
   const suspending = tenant ? !tenant.suspended : true;
+  const causeHint = SUSPENSION_REASONS.find((r) => r.value === cause)?.hint;
+  const canSubmit = !busy && (!suspending || cause !== "");
   return (
     <Modal
       open={tenant !== null}
       onOpenChange={(v) => {
         if (!v) {
           setReason("");
+          setCause("");
           onClose();
         }
       }}
@@ -42,9 +77,34 @@ export function SuspendTenantModal({
       className="border-purple-500/20 bg-[#0B0514] text-white"
     >
       <div className="space-y-3">
+        {suspending && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="lifecycle-suspend-cause" className="text-sm font-medium text-purple-100">
+              Cause <span className="font-normal text-amber-300/70">(required)</span>
+            </label>
+            <select
+              id="lifecycle-suspend-cause"
+              value={cause}
+              onChange={(e) => setCause(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            >
+              <option value="">Select a cause…</option>
+              {SUSPENSION_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            {causeHint && <p className="text-xs text-purple-300/60">{causeHint}</p>}
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="lifecycle-suspend-reason" className="text-sm font-medium text-purple-100">
-            Reason <span className="font-normal text-purple-300/50">(optional, recorded in audit log)</span>
+            Note{" "}
+            <span className="font-normal text-purple-300/50">
+              (optional, free text — recorded in the audit log)
+            </span>
           </label>
           <textarea
             id="lifecycle-suspend-reason"
@@ -62,8 +122,10 @@ export function SuspendTenantModal({
           </Button>
           <Button
             type="button"
-            onClick={() => tenant && onConfirm(reason.trim())}
-            disabled={busy}
+            onClick={() =>
+              tenant && canSubmit && onConfirm(reason.trim(), suspending ? cause : null)
+            }
+            disabled={!canSubmit}
             className="gap-1.5 rounded-full bg-amber-600 font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
