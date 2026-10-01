@@ -52,10 +52,20 @@ const STUDENT_ID_RE = /^[A-Za-z0-9-]{1,30}\/?[A-Za-z0-9-]{0,30}$/;
  * Unknown student, unpublished result and malformed admission number must be
  * indistinguishable, so they all render this exact body. Any divergence here
  * re-opens the enumeration oracle the backend gate closes.
+ *
+ * The `not_found` marker is a UI routing hint, not extra information: it says
+ * "treat this as a withheld/absent result", letting the report card show a
+ * public 'Not Available' state instead of falling through to its transport
+ * error branch. It carries no signal about whether the student exists.
  */
 function notFound() {
   return NextResponse.json(
-    { success: false, error: "Report not found", raw: { detail: "Report not found" } },
+    {
+      success: false,
+      error: "Report not found",
+      not_found: true,
+      raw: { detail: "Report not found" },
+    },
     { status: 404 },
   );
 }
