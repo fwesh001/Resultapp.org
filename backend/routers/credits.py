@@ -103,7 +103,10 @@ def _ensure_tenant(tid: str) -> None:
 #: A tenant suspended for abuse, legal process or security risk has to stay
 #: down until a human lifts it — otherwise paying ₦100 would buy your way out
 #: of a ban, on a platform holding children's assessment data.
-PAYMENT_LOCKED_SUSPENSIONS = ("abuse", "legal", "security")
+#:
+#: Derived from db_manager.SUSPENSION_REASONS so this set and the validation set
+#: in admin.py cannot drift apart if a cause is ever added.
+from services.db_manager import PAYMENT_LOCKED_SUSPENSIONS  # noqa: E402
 
 
 def _restore_if_payment_clears_suspension(cur, tid: str) -> bool:
