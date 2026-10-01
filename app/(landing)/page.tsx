@@ -191,7 +191,10 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {["SSL included", "Custom domain support", "99.9% uptime"].map((tag) => (
+                  {/* "target" not a bare figure: Terms §9.1 states 99.9% is an
+                      operational objective with no SLA and no service credits,
+                      so marketing must not present it as a commitment. */}
+                  {["SSL included", "Custom domain support", "99.9% uptime target"].map((tag) => (
                     <span key={tag} className="rounded-full border border-purple-500/15 bg-purple-500/5 px-3 py-1 text-xs text-purple-200/70">
                       {tag}
                     </span>
