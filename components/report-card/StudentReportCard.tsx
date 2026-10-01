@@ -870,7 +870,10 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
         </div>
       </div>
 
-      {showDraftOverlay && (
+      {isAdminDraft && (
+        // Admin-only Result Command Center affordance. `isAdminDraft` is only
+        // reachable when viewer === "admin", which the page resolves server-side
+        // from the httpOnly session cookie. Never rendered for the public scope.
         <div className="absolute inset-0 flex items-center justify-center p-4 print:hidden">
           <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-zinc-900 p-6 text-center shadow-2xl">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/30">
@@ -887,7 +890,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
             >
               <CreditCard className="h-4 w-4" /> Open Command Center
             </Button>
-            <p className="mt-3 text-xs text-zinc-500">Need help? contact@resultapp.org</p>
+            <p className="mt-3 text-xs text-zinc-500">Need help? {SUPPORT_EMAIL}</p>
           </div>
         </div>
       )}
