@@ -48,7 +48,20 @@ export const EFFECTIVE_DATE = "1 October 2026";
  * Per-document version tokens. Bump independently so a Refund Policy edit
  * does not invalidate an accepted Terms version.
  */
-export const PRIVACY_VERSION = "1.0";
+/**
+ * Privacy Policy version.
+ *
+ * 1.1 — 1 Oct 2026. Corrects four false statements in 1.0: data residency
+ *      (not Africa), an unenforced daily-backup schedule, two retention
+ *      periods we do not enforce, and an implied level of at-rest protection
+ *      we do not provide. Adds an express statement of what we do NOT do.
+ *      No School's rights reduced. See Privacy Policy section 14.
+ * 1.0 — 1 Oct 2026. Initial publication.
+ *
+ * Kept deliberately separate from TERMS_VERSION so a Terms edit does not
+ * invalidate a School's recorded consent to a Privacy Policy version.
+ */
+export const PRIVACY_VERSION = "1.1";
 
 export const TERMS_VERSION = "1.0";
 
