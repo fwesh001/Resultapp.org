@@ -506,88 +506,14 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     );
   }
 
-  const showMissingStudent = !student;
-  const isNotFound = showMissingStudent && !loading && !error;
-  const displayName = student?.full_name ?? "— Unknown Student —";
   const displayClass = student?.class_name ?? "—";
   const displayGender = student?.gender ? student.gender.charAt(0).toUpperCase() + student.gender.slice(1).toLowerCase() : "—";
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
 
-  // `studentKnown`/`hasGrades` remain for admin-draft copy below.
+  // `studentKnown`/`hasGrades` describe the payload for the admin draft copy.
   void studentKnown;
   void hasGrades;
-  // Draft overlay only for admin previews (or legacy no-grade drafts for admins);
-  // parents never see blurred cards — they get full-page states instead.
-  const showDraftOverlay = isLocked && !isNotFound && !isEmptyTerm && !isWithheld;
-
-  // Not-found guide-rail: hard error with portal actions only (no history back —
-  // direct links from email/WhatsApp have no browser history).
-  if (isNotFound) {
-    return (
-      <ReportErrorState
-        title="Student Not Found"
-        description={
-          <>
-            No student record found for{" "}
-            <span className="font-mono font-semibold text-amber-900">{studentId}</span> in{" "}
-            <span className="font-semibold">{schoolName || tenantId}</span>. Check the admission number format (
-            <span className="font-mono">e.g. VHS/001</span>) or contact the school admin.
-          </>
-        }
-        icon="not-found"
-        actions={[
-          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
-          { label: "Contact Admin", href: `mailto:${contactEmail}?subject=${contactSubject}` },
-        ]}
-        footnote={
-          <>Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</>
-        }
-      />
-    );
-  }
-
-  // Future/empty term: student exists but nothing recorded for this term.
-  if (isEmptyTerm) {
-    return (
-      <ReportErrorState
-        title="Term Not Available"
-        description={
-          <>
-            Results for <span className="font-semibold">{term}</span> are not yet available for{" "}
-            <span className="font-semibold">{displayName}</span>.
-          </>
-        }
-        icon="term"
-        actions={[{ label: "Back to Portal", href: `/${tenantId}`, variant: "outline" }]}
-      />
-    );
-  }
-
-  // Withheld from parents: grades exist but nothing published (admins keep overlay).
-  if (isWithheld) {
-    return (
-      <ReportErrorState
-        title="Result Not Published"
-        description={
-          <>
-            This result has not been published yet. If you believe this is an error, or to resolve
-            pending clearances, please contact the school administration.
-            {(schoolEmail || schoolPhone) && (
-              <>
-                <br />
-                {schoolEmail && <span className="font-medium">{schoolEmail}</span>}
-                {schoolEmail && schoolPhone && " • "}
-                {schoolPhone && <span className="font-medium">{schoolPhone}</span>}
-              </>
-            )}
-          </>
-        }
-        icon="unpublished"
-        actions={[{ label: "Contact Admin", href: `mailto:${contactEmail}?subject=${contactSubject}` }]}
-      />
-    );
-  }
 
   return (
     <div className="relative mx-auto max-w-4xl">
