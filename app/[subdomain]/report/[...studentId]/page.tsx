@@ -28,16 +28,20 @@ function getProxySecret(): string {
  * Report page — Credit & Command publication gate.
  *
  * A report card is fully unlocked ONLY when the backend confirms a row in
- * result_publications for (tenant, student, term, session). Everything else
- * renders as a free "Draft — Pending Publication" preview (blurred, no print).
+ * result_publications for (tenant, student, term, session).
  *
  * Since P0-1 the *data* is gated server-side too, not just this banner:
  * /api/report asks the backend for include_draft only when this page's
  * viewer is a signed-in admin of the tenant. For everyone else the backend
- * returns 404 for an unpublished result, so an anonymous visitor cannot
- * distinguish "not published" from "no such admission number". That is why
- * the draft pill below is admin-only — for the public it would sit above a
- * "Student Not Found" card, which is both confusing and a telling signal.
+ * returns 404 for an unpublished result, byte-identical to the 404 for an
+ * unknown student, so an anonymous visitor cannot distinguish the two.
+ *
+ * VIEWER SCOPE (UI leak fix): this page resolves `viewer` from the httpOnly
+ * session cookie and passes it down as the single authority. The Result
+ * Command Center / draft-pill UI renders for viewer === "admin" and nothing
+ * else. Previously a public 404 fell through an error branch that was gated on
+ * `!isPublished` alone, which leaked the admin draft UI to students. The card
+ * now derives one discriminated state and defaults to "public" on any failure.
  */
 function normalizeStudentId(raw: string | string[]): string {
   let s: string;
