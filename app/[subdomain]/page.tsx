@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
 import { hasAdminSession } from "@/lib/adminAuth";
 import { toTitleCase } from "@/lib/format";
@@ -6,16 +5,11 @@ import ResultLookupWidget from "@/components/landing/ResultLookupWidget";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
-import {
-  ShieldCheck,
-  GraduationCap,
-  Users,
-  Settings,
-} from "lucide-react";
+import { ShieldCheck, GraduationCap } from "lucide-react";
 
 /**
- * Tenant landing page — public-facing portal for parents
- * and quick-access hub for school staff.
+ * Tenant landing page — public-facing result checker for the school community.
+ * Staff and admin entry points live in the Navbar and Footer.
  */
 export default async function TenantPage({
   params,
@@ -127,45 +121,12 @@ export default async function TenantPage({
           >
             <h2 className="text-2xl font-semibold">Check Results Online</h2>
             <p className="mt-2 text-sm text-purple-200/70">
-              Parents — enter your child&apos;s Student ID and select a term
-              to view the report card.
+              Enter a Student ID and select a term to view the report card.
             </p>
             <div className="mt-6 flex w-full justify-center">
               <ResultLookupWidget subdomain={subdomain} />
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Section 2 — Staff Portals */}
-      <section className="mx-auto max-w-5xl px-6 py-14">
-        <h2 className="text-center text-2xl font-semibold">Staff Portals</h2>
-        <p className="mt-2 text-center text-sm text-purple-200/70">
-          Quick access for staff and administrators.
-        </p>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Link
-            href={`/${subdomain}/staff`}
-            className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
-          >
-            <Users className="h-8 w-8 text-purple-300" />
-            <h3 className="mt-3 text-lg font-semibold">Staff Portal</h3>
-            <p className="mt-1 text-sm text-purple-200/70">
-              Enter scores and grade student results.
-            </p>
-          </Link>
-
-          <Link
-            href={`/${subdomain}/admin`}
-            className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 transition hover:bg-purple-900/10"
-          >
-            <Settings className="h-8 w-8 text-purple-300" />
-            <h3 className="mt-3 text-lg font-semibold">Admin Templates</h3>
-            <p className="mt-1 text-sm text-purple-200/70">
-              Manage report templates and branding.
-            </p>
-          </Link>
         </div>
       </section>
 
