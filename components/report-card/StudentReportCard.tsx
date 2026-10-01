@@ -105,17 +105,44 @@ interface StudentReportCardProps {
    */
   isPublished?: boolean;
   /**
-   * True when the viewer holds a valid admin_session for THIS tenant
-   * (resolved server-side in the report page). Admins keep the draft
-   * overlay workflow; parents get the Not Published full-page state.
+   * Viewer scope, resolved SERVER-SIDE in the report page from the httpOnly
+   * session cookie. This is the single authority for who is viewing: the
+   * admin-only Result Command Center UI renders for the "admin" scope and
+   * for nothing else. It is never derived from client input.
    */
-  isAdminPreview?: boolean;
+  viewer: "admin" | "public";
+  /**
+   * True when the visitor arrived without an explicit `?term=`, i.e. the page
+   * fell back to the tenant's configured default term. Used only to offer a
+   * term picker on the public "Result Not Available" card.
+   */
+  termWasExplicit?: boolean;
   schoolName?: string | null;
   schoolLogoUrl?: string | null;
   schoolMotto?: string | null;
   schoolEmail?: string | null;
   schoolPhone?: string | null;
 }
+
+/**
+ * Discriminated render state. Resolved exactly once per render, before any
+ * branch, so no code path can reach the admin UI without passing through
+ * `adminDraft`.
+ *
+ *   published   — official report card (public + admin)
+ *   notFound    — no such student / no published result for this term (public)
+ *   notAvailable— student known, result not published (public)
+ *   noTerm      — default term not published, no explicit term chosen (public)
+ *   transport   — network/5xx failure, NOT an authorization signal (both)
+ *   adminDraft  — blurred draft + Result Command Center (ADMIN ONLY)
+ */
+type ReportState =
+  | "published"
+  | "notFound"
+  | "notAvailable"
+  | "noTerm"
+  | "transport"
+  | "adminDraft";
 
 function gradeFromTotal(total: number): string {
   if (total >= 70) return "A";
