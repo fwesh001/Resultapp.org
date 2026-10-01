@@ -452,6 +452,24 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
         """)
+        # Why a tenant was suspended. Before this existed, a suspension carried
+        # no cause anywhere in the database: the superadmin "reason" field was
+        # optional free text written only to audit_logs.details, and nothing
+        # ever read it back. That made it impossible to distinguish "suspended
+        # for non-payment" from "suspended for abuse" — so a school suspended
+        # for abuse could restore itself by paying. See LEGAL_REMEDIATION.md
+        # P1 item 11.
+        #
+        #   NULL / 'nonpayment' -> a verified payment restores access
+        #   'abuse' | 'legal' | 'security' -> only a superadmin can lift it
+        #
+        # Existing suspended tenants default to NULL, which behaves as
+        # non-payment from day one. No backfill needed, and the migration is
+        # idempotent so it is safe to run on every boot.
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS suspension_reason VARCHAR(24) DEFAULT NULL;
+        """)
         cur.execute(f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
             SET current_term = 'Term 1' WHERE current_term IS NULL OR current_term = '';
