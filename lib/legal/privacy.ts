@@ -470,16 +470,21 @@ export const privacyPolicy: LegalDocumentData = {
           items: [
             "**Encrypted password storage.** Passwords and PINs are stored only as one-way cryptographic hashes using a modern, salted algorithm. They cannot be recovered, read, or transmitted by us in any form.",
             "**HTTP-only, host-only session cookies.** Session tokens are inaccessible to client-side scripts and are scoped to a single host, so a session cannot be read or used on any other school portal or on the public site.",
+            "**Signed session cookies.** Each session cookie carries a keyed cryptographic signature over its contents and its expiry, which is verified on every request before any identity is read from it. A session cannot be edited, extended or fabricated, expiry is enforced by us rather than by your browser, and a rejected session is deleted rather than reused. This is also what prevents one School from reaching another's portal by presenting a modified cookie.",
             "**Tenant isolation on every request.** Each portal is isolated by tenant. Every request is validated against the tenant bound to the session and against the tenant being addressed, and all database access is filtered by that tenant. Data belonging to one school is not reachable from another school's portal.",
             "**No direct database access from the browser.** The browser never talks to the database. All data access is mediated by authenticated server-side request handlers that validate the caller and the tenant before returning anything.",
             "**Shared-secret internal API authentication.** Calls between the public-facing application and the data services are authenticated with a server-side secret compared in constant time, and the secret is never exposed to a browser.",
             "**Input validation.** Tenant identifiers, subdomains, role assignments, and uploaded file types and sizes are validated server-side before use.",
             "**Rate limiting.** Repeated or abusive requests are throttled and logged.",
             "**Append-only audit logging.** Administrative actions by our personnel are recorded with the actor, the action, the affected school, and the time.",
-            "**Backups.** Our database is backed up on a recurring daily cycle so that School Data is recoverable following loss or corruption.",
-            "**Data residency.** Platform data is hosted on infrastructure located in Africa.",
+            "**Backups.** Our database is backed up periodically so that School Data is recoverable following loss or corruption. Backups are currently taken on a manual and ad hoc basis rather than on a fixed automated schedule. **We have identified this as a gap and are working to close it.**",
+            "**Data residency.** Platform data, including the database, is hosted on infrastructure operated by DigitalOcean in the **United States**. School Data and Student Data are therefore transferred outside Nigeria. Section 13 describes the transfer mechanism and the safeguards we rely on, and identifies the sub-processors that receive data.",
             "**Restricted upload formats.** Uploads are limited to a defined set of image and document formats with enforced size limits, reducing the risk of a harmful file being stored or served.",
           ],
+        },
+        {
+          kind: "note",
+          text: "**What we do not do.** We want to be precise about the limits of the measures above, because a security statement is only useful if it is accurate. **We do not encrypt individual database fields.** Protection for data at rest depends on the controls applied by our hosting provider and its underlying storage, which we have not independently verified and do not control; we apply no additional application-level encryption on top of that. **We do not currently operate a fixed automated schedule for deleting School Data** — see section 10. Taken together, this means that a party who obtains our database or its backups would be able to read the contents. We consider these controls proportionate to a service whose records are school-entered academic data, but a School should weigh this when deciding what to enter, and should tell us if it needs a stronger commitment for particular data.",
         },
         {
           kind: "p",
@@ -493,7 +498,7 @@ export const privacyPolicy: LegalDocumentData = {
       blocks: [
         {
           kind: "p",
-          text: "We keep personal data only for as long as we need it for the purpose it was collected, or for longer where Nigerian law requires it. The periods below apply unless a School instructs us otherwise in writing, or a longer period is required by law.",
+          text: "**In general we do not delete School Data automatically.** We retain School Data for as long as the School's account is provisioned with us, and we act on a School's verified written instruction to delete it. Where Nigerian law requires us to keep a record for a fixed period, that period governs and we will not delete it early even on instruction. The position for each category is set out below.",
         },
         {
           kind: "table",
@@ -501,45 +506,49 @@ export const privacyPolicy: LegalDocumentData = {
           rows: [
             [
               "Session cookies",
-              "12 hours, or until you sign out",
+              "12 hours from creation, enforced by us. Deleted on sign-out.",
             ],
             [
               "Network addresses used for rate limiting",
-              "Held in memory only; discarded on restart. Not stored in customer records",
+              "Held in memory only; discarded when the process restarts. Not stored in customer records.",
             ],
             [
               "Server and application error logs",
-              "A short rolling cycle, reviewed regularly",
+              "Retained for as long as the School's account is provisioned. Not deleted on a fixed schedule.",
             ],
             [
               "Billing, ledger, and transaction records",
-              "Retained for the period required by Nigerian tax, accounting, and corporate law (a minimum of 7 years)",
+              "Retained for the period required by Nigerian tax, accounting, and corporate law (a minimum of 7 years). These sit in an append-only financial audit ledger that we do not amend, so we will not delete them early even on a School's instruction.",
             ],
             [
               "Platform administrative audit logs",
-              "Retained for 5 years",
+              "Retained for as long as the School's account is provisioned, or until deleted on instruction. Not deleted on a fixed schedule.",
             ],
             [
               "Support tickets and feedback",
-              "2 years from resolution, unless needed longer to handle a recurring issue",
+              "Retained for as long as the School's account is provisioned, or until deleted on instruction. Not deleted on a fixed schedule.",
             ],
             [
               "Staff and administrator account data",
-              "For the life of the account, and for 90 days afterwards. A School may direct us to delete a staff account at any time",
+              "For the life of the account. A School may direct us to delete a staff account at any time and we action that instruction within 30 days.",
             ],
             [
               "Student academic records, assessments, and remarks",
-              "Retained on the School's instruction for as long as the School requires. As controller, the School decides the applicable academic record-keeping period; we do not unilaterally delete or anonymise a School's academic records",
+              "Retained on the School's instruction for as long as the School requires. As controller, the School decides the applicable academic record-keeping period; we do not unilaterally delete or anonymise a School's academic records.",
             ],
             [
               "Grading drafts held in your browser",
-              "Until you clear your browser storage",
+              "Until you clear your browser storage.",
             ],
             [
               "Published results",
-              "Retained on the School's instruction. A School may remove a published result; reprints of a result already published are free",
+              "Retained on the School's instruction. A School may remove a published result; reprints of a result already published are free.",
             ],
           ],
+        },
+        {
+          kind: "note",
+          text: "**A School that wants its data deleted before its account is closed should write to us and we action the instruction within 30 days**, subject only to the categories we are legally required to keep. We have identified the absence of an automated retention schedule as a gap and are working to address it; we are telling you plainly rather than describing a schedule we do not yet run.",
         },
         {
           kind: "p",
