@@ -427,7 +427,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     // wrong term can switch immediately instead of contacting the school.
     return (
       <ReportErrorState
-        title="Student Not Found"
+        title="No Published Result"
         description={
           <>
             We could not find a published result for{" "}
