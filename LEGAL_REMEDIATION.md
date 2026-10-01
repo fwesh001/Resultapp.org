@@ -235,14 +235,46 @@ all four tables key on the admission-number *string*, and none references
   vhs/005"`). The ledger is an immutable financial audit record and that
   string is the audit trail for the slot refund, so it is deliberately **not**
   scrubbed. Tracked as P1 item 16.
-- **Pre-existing orphans** are not reachable by new code. A reaper was written:
-  `backend/scripts/purge_orphan_students.py` — **dry run by default**,
-  `--execute` to write, plus `--collisions-only` to audit admission-number
-  reuse. It deliberately never resolves a *collision* (where the number has
-  been re-enrolled and now belongs to a different child): nothing in the
-  schema records which pupil a grade row belonged to, so those are reported
-  for manual review only. **It has not been run. It requires a
-  point-in-time PostgreSQL snapshot first.**
+- **Pre-existing orphans: none.** A reaper was written:
+  `backend/scripts/purge_orphan_students.py` — dry run by default, `--execute`
+  requires `--export <dir>`, plus `--collisions-only` to audit
+  admission-number reuse and `--tenant <slug>` to scope to one school. It
+  deliberately never resolves a *collision* (where the number has been
+  re-enrolled and now belongs to a different child): nothing in the schema
+  records which pupil a grade row belonged to, so those are reported for
+  manual review only.
+
+  **Run against production 1 October 2026. Result: 0 orphans in all four
+  tables, 0 collisions. Nothing was deleted; no export or snapshot was needed.**
+
+  Verified with a positive control, because a zero from a query that cannot
+  match rows is indistinguishable from a zero from a working one:
+
+  | Table | Total rows | Orphans |
+  |---|---|---|
+  | `tenant_students` | 16 | 0 |
+  | `tenant_grades` | 7 | **0** |
+  | `result_publications` | 6 | **0** |
+  | `student_academic_records` | 0 | 0 |
+  | `student_behavioral_records` | 0 | 0 |
+
+  `tenant_grades` and `result_publications` both hold real rows, so the
+  predicate demonstrably executed against data and found no orphans.
+
+  **Why it is clean, and what that does not prove.** The production dataset is
+  small — 16 pupils. The result means *no pupil had ever been deleted from a
+  roster before the cascade shipped*, not that the reaper is thorough. **The
+  reaper has still never deleted a real orphan, so its DELETE path is
+  unexercised.** If orphans ever appear, test it against a synthetic orphan in
+  a scratch database before pointing it at production.
+
+  **Incidental finding:** `student_academic_records` and
+  `student_behavioral_records` are both empty in production. The SQLAlchemy
+  grading engine (`backend/models.py`, `backend/routers/grading.py`) is
+  provisioned and wired but unused — real grading goes through
+  `tenant_grades` via `backend/routers/staff_grading.py`. That halves the
+  reaper's surface, and means the P0-2 cascade's four-table sweep is really
+  operating on two tables in practice.
 
 ### 3. The admin password was sent to the payment processor — CLOSED
 
