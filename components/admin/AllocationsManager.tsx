@@ -1068,13 +1068,9 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <Input label="Phone" value={staffForm.phone} onChange={(e) => setStaffForm((p) => ({ ...p, phone: e.target.value }))} placeholder="080..." />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Role</label>
-            <select value={staffForm.role} onChange={(e) => setStaffForm((p) => ({ ...p, role: e.target.value }))} className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
-              {STAFF_ROLES.map((r) => (
-                <option key={r} value={r} className="bg-[#0B0514]">
-                  {r}
-                </option>
-              ))}
-            </select>
+<Select aria-label="Role" value={staffForm.role} onChange={(v) => setStaffForm((p) => ({ ...p, role: v }))}
+                options={STAFF_ROLES.map((r): SelectOption => ({ value: r, label: r }))}
+              />
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
           <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
@@ -1113,20 +1109,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 Register students first to generate classes. Classes are derived from the Students roster.
               </div>
             ) : (
-              <select
-                value={allocForm.class_name}
-                onChange={(e) => setAllocForm((p) => ({ ...p, class_name: e.target.value }))}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-              >
-                <option value="" className="bg-[#0B0514]">
-                  Select class
-                </option>
-                {availableClasses.map((c) => (
-                  <option key={c} value={c} className="bg-[#0B0514]">
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <Select aria-label="Class" value={allocForm.class_name} onChange={(v) => setAllocForm((p) => ({ ...p, class_name: v }))} placeholder="Select class"
+                options={[
+                  { value: "", label: "Select class" },
+                  ...availableClasses.map((c): SelectOption => ({ value: c, label: c })),
+                ]}
+              />
             )}
           </div>
 
