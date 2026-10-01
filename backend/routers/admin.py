@@ -397,6 +397,8 @@ class TenantStatusUpdate(BaseModel):
 
 #: Values accepted for TenantStatusUpdate.suspension_reason. Single source of
 #: truth in db_manager so the billing restore guard in credits.py stays in step.
+from services.db_manager import SUSPENSION_REASONS as _SUSPENSION_REASONS  # noqa: E402
+
 SUSPENSION_REASONS = _SUSPENSION_REASONS
 
 
