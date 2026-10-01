@@ -388,6 +388,15 @@ class TenantStatusUpdate(BaseModel):
     is_active: Optional[bool] = None
     subscription_status: Optional[str] = None
     reason: Optional[str] = None
+    #: Why the tenant is being suspended. Persisted on the tenant row, not just
+    #: the audit log, because the billing restore hook has to be able to tell a
+    #: payment problem from an abuse ban. NULL/'nonpayment' means a verified
+    #: payment restores access; the others do not.
+    suspension_reason: Optional[str] = None
+
+
+#: Values accepted for TenantStatusUpdate.suspension_reason.
+SUSPENSION_REASONS = ("nonpayment", "abuse", "legal", "security")
 
 
 @router.patch("/tenants/{subdomain}/status", summary="Suspend / reactivate a tenant (superadmin)")
@@ -401,6 +410,14 @@ def set_tenant_status(subdomain: str, payload: TenantStatusUpdate):
     updates: dict = {}
     if payload.is_active is not None:
         updates["is_active"] = bool(payload.is_active)
+    if payload.suspension_reason is not None:
+        s_rsn = payload.suspension_reason.strip().lower()
+        if s_rsn not in SUSPENSION_REASONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"suspension_reason must be one of {', '.join(SUSPENSION_REASONS)}",
+            )
+        updates["suspension_reason"] = s_rsn
     if payload.subscription_status is not None:
         s = payload.subscription_status.strip().lower()
         if s not in ("active", "unpaid", "suspended"):
@@ -411,7 +428,11 @@ def set_tenant_status(subdomain: str, payload: TenantStatusUpdate):
         if s == "active":
             updates["is_active"] = True
     if not updates:
-        raise HTTPException(status_code=400, detail="Nothing to update (is_active, subscription_status)")
+        raise HTTPException(status_code=400, detail="Nothing to update (is_active, subscription_status, suspension_reason)")
+    # Reactivating clears the recorded cause. A stale reason would keep blocking
+    # future payment-restore attempts on a tenant someone has already restored.
+    if updates.get("is_active") is True:
+        updates["suspension_reason"] = None
     reason = (payload.reason or "").strip() or None
     conn = None
     try:
