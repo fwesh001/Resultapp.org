@@ -29,9 +29,9 @@ processing (ToS §12.2), but nothing can carve us out for ours.
   no retention enforcement (item 9). Both are in the published text. They are
   not P0 because neither creates a disclosure path on its own, but the policy
   currently overstates the posture in those two sections.
-- **`purge_orphan_students.py` has never been run.** The P0-2 cascade only
-  covers deletions made after it shipped. Existing orphans remain in
-  production and need a point-in-time snapshot before `--execute`.
+- **`purge_orphan_students.py` ran clean — there is nothing to purge.** See
+  item 2; verified against production on 1 October 2026 with a positive
+  control. No snapshot or export was needed.
 - **Deploying the session signing logs out everyone.** Unsigned cookies carry
   no `v1.` prefix, so every existing session fails verification and is cleared.
   That is the intended fail-closed migration. Rotating `SESSION_SECRET` has the
