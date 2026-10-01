@@ -97,22 +97,25 @@ export default function TenantsDirectoryPage() {
     }
   }
 
-  async function handleSuspendConfirm(reason: string) {
-    if (!suspendTarget) return;
-    const suspending = !suspendTarget.suspended;
-    const data = await callLifecycle(
-      `/api/superadmin/tenants/${encodeURIComponent(suspendTarget.subdomain)}/status`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          suspending
-            ? { is_active: false, subscription_status: "suspended", reason }
-            : { is_active: true, subscription_status: "active", reason },
-        ),
-      },
-      "suspend",
-    );
+async function handleSuspendConfirm(reason: string, suspensionReason: string | null) {
+  if (!suspendTarget) return;
+  const suspending = !suspendTarget.suspended;
+  // `suspension_reason` is the persisted cause that decides whether a payment
+  // can restore the portal. It is only meaningful while suspending — the
+  // backend clears it on reactivation.
+  const data = await callLifecycle(
+    `/api/superadmin/tenants/${encodeURIComponent(suspendTarget.subdomain)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        suspending
+          ? { is_active: false, subscription_status: "suspended", reason, suspension_reason: suspensionReason }
+          : { is_active: true, subscription_status: "active", reason },
+      ),
+    },
+    "suspend",
+  );
     if (data) {
       setSuspendTarget(null);
       toast.success(suspending ? "Tenant suspended." : "Tenant reactivated.");
@@ -309,7 +312,7 @@ export default function TenantsDirectoryPage() {
         tenant={suspendTarget}
         busy={acting === "suspend"}
         onClose={() => setSuspendTarget(null)}
-        onConfirm={(reason) => void handleSuspendConfirm(reason)}
+        onConfirm={(reason, suspensionReason) => void handleSuspendConfirm(reason, suspensionReason)}
       />
       <DeleteTenantModal
         tenant={deleteTarget}
