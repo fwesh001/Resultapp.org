@@ -512,9 +512,36 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
 
   // Admin scopes that carry no renderable card body (unknown student, or a
   // transport failure) still need the Command Center to stay reachable, so they
-  // fall through to the shared admin draft panel instead of a public message.
+  // get an admin-flavoured error card instead of the blurred body. Gated on
+  // `isAdmin`, so the public can never reach this branch.
   void gradesCount;
   void studentKnown;
+
+  if (isAdmin && !student) {
+    return (
+      <ReportErrorState
+        title={error ? "Draft Unavailable" : "Student Not Found"}
+        description={
+          error ? (
+            <>
+              The draft bundle could not be loaded: <span className="font-medium">{error}</span>
+            </>
+          ) : (
+            <>
+              No student matches{" "}
+              <span className="font-mono font-semibold text-amber-900">{studentId}</span> on this tenant. Verify the
+              admission number, or publish from the Result Command Center.
+            </>
+          )
+        }
+        icon={error ? "transport" : "not-found"}
+        actions={[
+          { label: "Open Command Center", href: `/${tenantId}/admin/results` },
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+        ]}
+      />
+    );
+  }
 
   return (
     <div className="relative mx-auto max-w-4xl">
