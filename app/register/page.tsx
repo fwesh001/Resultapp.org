@@ -7,7 +7,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Register Your School — ResultApp",
   description:
-    "Onboard your school to ResultApp in under 3 minutes. Pay per student at 100 NGN and get your automated portal at subdomain.resultapp.org.",
+    "Onboard your school to ResultApp in under 3 minutes. Buy permanent roster slots from ₦100 each and get your automated portal at subdomain.resultapp.org.",
 };
 
 export default function RegisterPage() {
