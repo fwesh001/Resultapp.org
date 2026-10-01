@@ -341,19 +341,36 @@ was built from scratch.
 
 ## P1 — discrepancies the clean policy papers over
 
-### 5. No field-level encryption at rest
+### 5. No field-level encryption at rest — **POLICY AMENDED; engineering work still open**
 
-Zero occurrences of `encrypt`, `decrypt`, `Fernet`, `AES`, or any KMS across
-the repository. Every PII field — names, emails, phones, addresses, student
-IDs, scores, behavioural traits, remarks — is stored as plaintext. The only
-hashing is bcrypt via `pgcrypto`, applied to credentials alone.
+**Status: the published statement is now accurate. The gap is not closed.**
 
-- **Options:** (a) add column-level encryption for the highest-value columns
-  (student names, remarks, signature URLs) with a KMS-managed key; or (b) amend
-  Privacy Policy §9 to describe the actual posture — encryption in transit,
-  hashed credentials, infrastructure-level disk encryption — rather than the
-  current inference that records are protected beyond that.
-- Schema to work from: `backend/services/db_manager.py:297-588, 1799-1931`.
+Zero occurrences of `encrypt`, `decrypt`, `Fernet`, `AES`, or any KMS across the
+repository. Every PII field — names, emails, phones, addresses, student IDs,
+scores, behavioural traits, remarks — is stored as plaintext. The only hashing is
+bcrypt via `pgcrypto`, applied to credentials alone.
+
+**What changed (1 October 2026, Privacy Policy v1.1):** §9 no longer leaves the
+posture to inference. It now adds a **"What we do not do"** notice stating
+expressly that we do not encrypt individual database fields, that protection at
+rest depends on controls applied by the hosting provider which we have not
+independently verified and do not control, and that a party obtaining the
+database or its backups would be able to read it. §9 also gained an accurate
+**signed session cookies** entry, which is a real control we do have.
+
+Deliberately **not** claimed: infrastructure or volume encryption at rest. We
+could not verify DigitalOcean's posture for the droplet from application
+evidence, and a security claim we cannot stand behind is worse than an honest
+gap. See new P1 item 19.
+
+**Why this stays on the roadmap.** Amending the policy limits *misstatement*
+risk. It does not change NDPR s.44, which requires appropriate technical and
+organisational measures irrespective of what the policy says. A named School
+that needs stronger protection for particular data will ask for it.
+
+- **Option still available:** column-level encryption for the highest-value
+  columns (student names, remarks, signature URLs) with a KMS-managed key.
+  Schema to work from: `backend/services/db_manager.py:297-588, 1799-1931`.
 
 ### 6. PII written to application logs in cleartext
 
@@ -390,15 +407,40 @@ with `crypt('123456', gen_salt('bf'))`. No forced rotation, no expiry.
   the platform currently makes compliance with that obligation impossible to
   verify.
 
-### 9. No retention enforcement
+### 9. No retention enforcement — **POLICY AMENDED; engineering work still open**
+
+**Status: the published schedule is now accurate. The gap is not closed.**
 
 No `expires_at`, no TTL column, no purge job, no anonymisation-on-delete
 anywhere. All grades, remarks, notifications, ledgers, and audit logs persist
 indefinitely. The only time-bound artefact in the whole system is the 12-hour
 session cookie.
 
-- Privacy Policy §10 commits to a retention schedule. **Fix:** implement the
-  table in §10 as an actual job, or reduce §10 to what the system enforces.
+Worse than "unenforced": version 1.0 of the Privacy Policy stated fixed periods
+we did not enforce, and in practice held the data **longer** than stated —
+audit logs "5 years" and support tickets "2 years" are both kept indefinitely,
+and server logs had no rotation. Under NDPR s.41(2) storage limitation,
+retaining beyond what you told people is the wrong direction, so this was a real
+over-collection claim rather than a cosmetic one.
+
+**What changed (1 October 2026, Privacy Policy v1.1):** §10 replaced the false
+precision with the actual position — School Data is retained for as long as the
+account is provisioned, and we act on a School's verified written instruction
+within 30 days, except categories Nigerian law requires us to keep (the
+append-only financial ledger). The three unsupported periods were removed. The
+lead-in now states plainly that **we do not delete School Data by default**, and
+a closing note commits to the 30-day instruction turnaround. The billing row
+kept its 7-year statutory period, which is genuine.
+
+Note the drafted phrasing was corrected before publication: it originally
+proposed tying retention to "the school's subscription". There is no
+subscription — `schools.subscription_plan` is always `NULL` and Refund Policy
+§2.1 says so explicitly — so that wording would have repeated the same error as
+item 10.
+
+**Why this stays on the roadmap.** By default we now delete nothing, which is
+honest but weak against NDPR s.41(2) ("no longer than is necessary"). Building
+real enforcement remains the fix.
 
 ### 10. Marketing copy does not match the billing model
 
