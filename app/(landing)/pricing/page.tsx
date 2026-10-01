@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Sparkles, Check, Calendar, Wallet, RotateCcw, Users, ArrowRight } from "lucide-react";
 import { PricingCalculator } from "@/components/ui/PricingCalculator";
+import { CREDIT_PRICE } from "@/lib/pricing";
 
 export default function PricingPage() {
   return (
@@ -19,10 +20,11 @@ export default function PricingPage() {
       <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-16">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-white md:text-5xl">
-            Buy credits.
+            Slots and credits.
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-purple-200/60 md:text-base">
-            No lock-in. Buy credits upfront, use them as you add students. Unused slots roll over forever.
+            Two separate things. <strong className="font-semibold text-purple-100">Slots</strong> are the students you can add to your roster — buy them once at a volume-discounted rate.
+            <strong className="font-semibold text-purple-100"> Credits</strong> are what you spend to publish a term&apos;s results. No subscription, no renewal, and nothing expires.
           </p>
         </div>
 
@@ -34,18 +36,18 @@ export default function PricingPage() {
           {[
             {
               icon: Calendar,
-              title: "Pay Per Term",
-              desc: "No lock-in contracts. Pay only when you compile results. Ideal for small schools and seasonal intake.",
+              title: "Slots, Bought Once",
+              desc: "Roster capacity is permanent, not a subscription. Pay per student at checkout and keep those slots for as long as you operate.",
             },
             {
               icon: Wallet,
-              title: "Credit Wallet System",
-              desc: "Buy credits upfront, use them as you add students. Wallet auto-debits on publish — transparent ledger.",
+              title: "Credits Per Publish",
+              desc: `Publishing a term's results draws ₦${CREDIT_PRICE} per credit from your credit wallet. Top up only when you run low.`,
             },
             {
               icon: RotateCcw,
-              title: "Rollover Credits",
-              desc: "Unused student slots roll over to the next term forever. Never pay twice for the same slot.",
+              title: "Nothing Expires",
+              desc: "Unused slots stay on your roster and unused credits stay in your wallet. No expiry, no renewal fees, no lock-in.",
             },
           ].map((c) => (
             <div
