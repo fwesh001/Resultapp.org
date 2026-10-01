@@ -395,8 +395,9 @@ class TenantStatusUpdate(BaseModel):
     suspension_reason: Optional[str] = None
 
 
-#: Values accepted for TenantStatusUpdate.suspension_reason.
-SUSPENSION_REASONS = ("nonpayment", "abuse", "legal", "security")
+#: Values accepted for TenantStatusUpdate.suspension_reason. Single source of
+#: truth in db_manager so the billing restore guard in credits.py stays in step.
+SUSPENSION_REASONS = _SUSPENSION_REASONS
 
 
 @router.patch("/tenants/{subdomain}/status", summary="Suspend / reactivate a tenant (superadmin)")
