@@ -103,6 +103,17 @@ export default async function ReportPage({
   // can never disagree.
   const isAdminPreview = await hasAdminSession(tenantId);
 
+  // Single viewer scope handed to the card. This is the ONLY authority for
+  // admin-only UI (the Result Command Center): it comes from the httpOnly
+  // session cookie, resolved here server-side, and the client re-decides
+  // nothing. Defaulting to "public" on any failure keeps the leak closed.
+  const viewer: "admin" | "public" = isAdminPreview ? "admin" : "public";
+
+  // Whether the visitor actually chose a term. When they did not, the page
+  // fell back to the tenant's configured default term, which lets the public
+  // "Result Not Available" card offer a term picker (Option 3).
+  const termWasExplicit = requestedTerm.length > 0;
+
   // Publication check (server-side — no hydration flash, no client cost).
   let isPublished = false;
   try {
