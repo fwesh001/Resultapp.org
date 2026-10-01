@@ -266,6 +266,29 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const contactSubject = encodeURIComponent(
     `Result query — ${studentId} (${term})`
   );
+  const mailtoHref = `mailto:${contactEmail}?subject=${contactSubject}`;
+  // Public-only inline term chooser (Option 3). Rendered solely on the
+  // "Result Not Available" card so a visitor who landed on the tenant's
+  // default term can move to another one themselves. Adds no backend endpoint
+  // and no new enumeration surface.
+  const termSelector = (
+    <select
+      aria-label="Choose a term"
+      value={term}
+      onChange={(e) => {
+        const params = new URLSearchParams(window.location.search);
+        params.set("term", e.target.value);
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+      }}
+      className="min-h-[44px] rounded-full border border-amber-500/30 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+    >
+      {["Term 1", "Term 2", "Term 3"].map((t) => (
+        <option key={t} value={t} className="bg-white text-amber-900">
+          {t}
+        </option>
+      ))}
+    </select>
+  );
   const summary = data?.summary ?? {
     totalScore: 0,
     average: 0,
