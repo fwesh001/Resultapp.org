@@ -99,6 +99,66 @@ def _ensure_tenant(tid: str) -> None:
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
 
 
+#: Suspension causes that a payment MUST NOT clear.
+#: A tenant suspended for abuse, legal process or security risk has to stay
+#: down until a human lifts it — otherwise paying ₦100 would buy your way out
+#: of a ban, on a platform holding children's assessment data.
+PAYMENT_LOCKED_SUSPENSIONS = ("abuse", "legal", "security")
+
+
+def _restore_if_payment_clears_suspension(cur, tid: str) -> bool:
+    """Reactivate a tenant whose suspension was for non-payment.
+
+    Called on a verified payment, on the SAME cursor as the credit/slot grant
+    and BEFORE its COMMIT, so the grant and the reactivation are one atomic
+    unit. A retry cannot double-apply, and a crash cannot leave a paid tenant
+    still suspended.
+
+    Returns True if this call reactivated the tenant, so the API can tell the
+    caller why their portal came back. Returns False (a no-op) when the tenant
+    is not suspended, or is suspended for a reason a payment must not clear.
+    """
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE
+
+    cur.execute(
+        f"""
+        UPDATE {SCHOOLS_REGISTRY_TABLE}
+        SET is_active = TRUE,
+            subscription_status = 'active',
+            suspension_reason = NULL,
+            updated_at = NOW()
+        WHERE subdomain = %s
+          AND is_active = FALSE
+          AND (
+                suspension_reason IS NULL
+                OR suspension_reason = ''
+                OR suspension_reason = 'nonpayment'
+              )
+        RETURNING subdomain;
+        """,
+        (tid,),
+    )
+    restored = cur.rowcount > 0
+    if restored:
+        _logger.info(
+            "[billing] Payment restored tenant '%s' from a non-payment suspension", tid
+        )
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                "billing.payment_restore",
+                subdomain=tid,
+                details={"restored_by": "verified payment"},
+                actor="payment",
+                actor_type="system",
+            )
+        except Exception as _e:
+            # Best-effort: never fail a paid top-up over an audit write.
+            _logger.warning("[billing] audit write failed for restore of '%s': %s", tid, _e)
+    return restored
+
+
 def _validate_term(term: str) -> str:
     from services.db_manager import VALID_TERMS
 
@@ -298,6 +358,10 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
             """,
             (tid, int(count), f"billing:{reference_id}", f"Credit top-up: {count} credits via Flutterwave {tx_id}", amount_ngn),
         )
+        # Non-payment suspensions lift here, inside the grant's transaction and
+        # before COMMIT. The replay branch above returns before reaching this
+        # point, so a repeated transaction_id can never re-trigger a restore.
+        restored = _restore_if_payment_clears_suspension(cur, tid)
         cur.execute("COMMIT;")
         entry = _row_to_dict(row, cur)
         try:
@@ -332,6 +396,7 @@ def topup_credits(tenant_id: str, payload: TopUpRequest):
             "subdomain": tid,
             "credited": int(count),
             "credit_balance": new_balance,
+            "restored_from_suspension": restored,
             "entry": entry,
         }
     except HTTPException:
@@ -412,6 +477,10 @@ def topup_slots_endpoint(tenant_id: str, payload: SlotTopUpRequest):
             (int(count), int(count), tid),
         )
         new_balance = int(cur.fetchone()[0] or 0)
+        # Same rule as the credit top-up: a payment clears a non-payment
+        # suspension only. Inside the transaction, before COMMIT; the replay
+        # branch above returns earlier so it cannot double-apply.
+        restored = _restore_if_payment_clears_suspension(cur, tid)
         cur.execute("COMMIT;")
         _logger.info(f"[slots] Top-up {count} slots for '{tid}' via {tx_id} (balance {new_balance})")
         return {
@@ -420,6 +489,7 @@ def topup_slots_endpoint(tenant_id: str, payload: SlotTopUpRequest):
             "subdomain": tid,
             "credited": int(count),
             "slots_balance": new_balance,
+            "restored_from_suspension": restored,
             "entry": _row_to_dict(row, cur) if row is not None else {},
         }
     except HTTPException:
