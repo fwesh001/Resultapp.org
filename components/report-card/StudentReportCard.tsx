@@ -6,6 +6,7 @@ import { AlertCircle, Lock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
 import { ReportErrorState } from "@/components/report-card/ReportErrorState";
+import { SUPPORT_EMAIL } from "@/lib/legal/constants";
 
 function announceReportReady(canPrint: boolean) {
   if (typeof window !== "undefined") {
@@ -215,6 +216,13 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const publishedDisplay = data?.published_at ? formatTermDate(data.published_at) : "";
   const formTeacherName = (data?.form_teacher_name || "").trim();
   const formTeacherSig = (data?.form_teacher_signature_url || "").trim();
+  // "Contact Admin" must actually reach someone. Prefer the school's own
+  // contact, then fall back to platform support so the button is never a
+  // dead link back to the portal it was meant to leave.
+  const contactEmail = (schoolEmail || "").trim() || SUPPORT_EMAIL;
+  const contactSubject = encodeURIComponent(
+    `Result query — ${studentId} (${term})`
+  );
   const summary = data?.summary ?? {
     totalScore: 0,
     average: 0,
@@ -365,7 +373,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
         icon="not-found"
         actions={[
           { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
-          { label: "Contact Admin", href: `/${tenantId}` },
+          { label: "Contact Admin", href: `mailto:${contactEmail}?subject=${contactSubject}` },
         ]}
         footnote={
           <>Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</>
@@ -411,7 +419,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           </>
         }
         icon="unpublished"
-        actions={[{ label: "Contact Admin", href: `/${tenantId}` }]}
+        actions={[{ label: "Contact Admin", href: `mailto:${contactEmail}?subject=${contactSubject}` }]}
       />
     );
   }
