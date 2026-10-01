@@ -366,18 +366,18 @@ export default function HomePage() {
           <div className="mb-8 text-center md:mb-10">
             <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">Simple pricing, brutal clarity</h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-purple-200/60 md:text-base">
-              Use the calculator. See your exact term cost instantly. No demos, no calls.
+              Use the calculator. See your exact slot cost instantly. No demos, no calls.
             </p>
           </div>
 
           <PricingCalculator />
 
           <p className="mx-auto mt-6 max-w-2xl text-center text-xs leading-5 text-purple-200/40">
-            Prices in NGN. One credit = one student result for one term. Need 2000+?{" "}
+            Prices in NGN. Slots are your permanent roster capacity and are bought once. Publishing results is a separate credit top-up — nothing expires. Need 2000+?{" "}
             <Link href="/pricing" className="font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200">
               See volume discounts
             </Link>{" "}
-            and enterprise plans.
+            on slot pricing.
           </p>
         </section>
 
