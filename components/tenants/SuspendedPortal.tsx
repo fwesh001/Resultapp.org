@@ -24,15 +24,26 @@ export default function SuspendedPortal({ schoolName, subdomain, showBillingLink
         <h1 className="mt-4 text-xl font-bold tracking-tight text-white">Portal Suspended</h1>
         <p className="mt-2 text-sm leading-6 text-purple-200/70">
           {schoolName ? `${toTitleCase(schoolName)}’s portal` : "This school portal"} is temporarily
-          suspended. Please contact the school administration to restore access.
+          suspended. Public, staff, and report access are paused.
         </p>
-        {showBillingLink && (
-          <Link
-            href={`/${subdomain}/admin/billing`}
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
-          >
-            <CreditCard className="h-4 w-4" /> Top up to restore access
-          </Link>
+        {showBillingLink ? (
+          <>
+            <Link
+              href={`/${subdomain}/admin/billing`}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+            >
+              <CreditCard className="h-4 w-4" /> Top up to restore access
+            </Link>
+            <p className="mt-2 text-xs leading-5 text-purple-300/50">
+              A top-up restores access straight away if this suspension was for non-payment. If it was
+              for abuse, a legal matter, or a security concern, a payment will not lift it — contact
+              support and we will review it.
+            </p>
+          </>
+        ) : (
+          <p className="mt-6 text-xs leading-5 text-purple-300/50">
+            Please contact the school administration, or ResultApp support, to restore access.
+          </p>
         )}
         <p className="mt-4 text-xs text-purple-300/30">
           ResultApp • <span className="font-mono">{subdomain}</span>
