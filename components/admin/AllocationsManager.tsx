@@ -1125,20 +1125,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 No subjects yet. Add subjects in the Subjects tab or Quick Add.
               </div>
             ) : (
-              <select
-                value={allocForm.subject_name}
-                onChange={(e) => setAllocForm((p) => ({ ...p, subject_name: e.target.value }))}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-              >
-                <option value="" className="bg-[#0B0514]">
-                  Select subject
-                </option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.subject_name} className="bg-[#0B0514]">
-                    {s.subject_name}
-                  </option>
-                ))}
-              </select>
+              <Select aria-label="Subject" value={allocForm.subject_name} onChange={(v) => setAllocForm((p) => ({ ...p, subject_name: v }))} placeholder="Select subject"
+                options={[
+                  { value: "", label: "Select subject" },
+                  ...subjects.map((s): SelectOption => ({ value: s.subject_name, label: s.subject_name })),
+                ]}
+              />
             )}
           </div>
 
