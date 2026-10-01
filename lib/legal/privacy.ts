@@ -670,6 +670,24 @@ export const privacyPolicy: LegalDocumentData = {
           kind: "p",
           text: "Continuing to use the Service after a change takes effect constitutes acceptance of the updated policy. The version of this policy in force at the time a School registered is the version that governs that School's engagement unless the School agrees otherwise.",
         },
+        { kind: "h3", text: "Version 1.1 — what changed and why" },
+        {
+          kind: "p",
+          text: "This version corrects four statements made in version 1.0, which was published on the same date. We are setting them out here rather than quietly editing them.",
+        },
+        {
+          kind: "ul",
+          items: [
+            "**Data residency.** Version 1.0 said platform data was hosted on infrastructure located in Africa. That was incorrect. It is hosted in the United States, as section 9 now states.",
+            "**Backups.** Version 1.0 described a recurring daily backup cycle. Backups are currently taken on a manual and ad hoc basis. Section 9 now says so, and flags it as a gap we are addressing.",
+            "**Retention periods.** Version 1.0 gave fixed periods for administrative audit logs (5 years), support tickets (2 years) and server logs (a short rolling cycle). We enforce none of them, and in practice those records were kept for longer than stated. Section 10 now describes what we actually do: retain while the account is provisioned, and act on a School's written instruction.",
+            "**Security measures we do not apply.** Section 9 now states expressly that we do not encrypt individual database fields and do not operate an automated deletion schedule.",
+          ],
+        },
+        {
+          kind: "p",
+          text: "These corrections reduce what this policy claims about us. They do not reduce any School's rights, and they do not change how we use School Data. We would rather publish a weaker but accurate description than a stronger one we cannot stand behind.",
+        },
         {
           kind: "note",
           text: "**Questions.** For any privacy question, or to make a request under section 11, contact " + SUPPORT_EMAIL + `, or write to ${CONTROLLER_NAME}, ${CONTROLLER_LOCATION}. Our forum for disputes arising under these terms is ${JURISDICTION}.`,
