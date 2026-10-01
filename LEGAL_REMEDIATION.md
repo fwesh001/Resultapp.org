@@ -559,6 +559,92 @@ NOTHING` makes the rows non-editable by design anyway.
   ledger on the `tenant_students` row UUID (which is already in `reference_id`
   as `{record_id}`) rather than the admission number, for *future* rows only.
 
+### 18. No automated backup schedule (surfaced by the item-5 amendment)
+
+Confirmed 1 October 2026: **there is no automated daily backup job on the
+droplet**, and DigitalOcean automated backups are not enabled. Snapshots have
+been taken by hand (e.g. `uresultapp-engine-1790852051531`, 4.79 GB, NYC1).
+
+Privacy Policy v1.0 claimed a *"recurring daily cycle"* of database backups.
+§9 now says backups are *"taken on a manual and ad hoc basis rather than on a
+fixed automated schedule"* and flags it as a gap.
+
+- **Impact:** a disk-level failure between manual snapshots loses everything
+  since the last one. The Refund Policy and ToS make no recovery promise, so
+  this is not a contractual breach — but "we'll restore your data" is the first
+  thing a school asks after an incident, and today the honest answer is "from
+  the most recent manual snapshot".
+- **Fix:** enable DigitalOcean automated Droplet backups (weekly + on-demand
+  daily before release) **and** add a logical `pg_dump` on a schedule, because
+  a full-disk image is a slow restore path (new droplet, new IP) for a targeted
+  recovery. Retain at least one snapshot off the production droplet.
+- **Also verify:** the §9 claim of *"periodic"* backups now needs at least one
+  real schedule behind it, or it drifts back into being a soft claim.
+
+### 19. Data residency is outside Nigeria — verified as a statement
+
+Superseded the false §9 claim (Privacy Policy v1.1 now names the United States
+and cross-references §13). Recorded here because it is an ongoing compliance
+fact, not a closed item:
+
+- The database and every per-tenant database live on a DigitalOcean Droplet in
+  **NYC1**, outside Nigeria. Under NDPR s.49–51 this is a cross-border transfer
+  and we are the exporter.
+- §13 discloses it and names the safeguards we rely on. **Those safeguards have
+  not been independently verified** — we rely on the processing addendum with
+  DigitalOcean, and we have not confirmed an SCC or adequacy basis exists. If
+  one does not, the transfer mechanism is asserted rather than established.
+- **Fix:** confirm the DPA and transfer mechanism with DigitalOcean in writing,
+  and record the date of confirmation next to §13.
+- **Option:** move the data region to Africa if customer expectations require
+  local residency. This is the change that would let §9 claim local hosting, and
+  is a commercial decision rather than a technical one.
+
+### 20. `upgrade_tenant` can grant unearned capacity and produces a contradictory row
+
+`backend/main.py:403-494` `POST /api/v1/tenant/{id}/upgrade` sets
+`subscription_status = 'active'` and overwrites `student_count` — but **never
+touches `is_active`**, so it cannot unsuspend a suspended tenant. It then
+leaves the row in `is_active = FALSE, subscription_status = 'active'`, a state
+that both the "Active" directory filter (`admin.py:146`) and the
+`active_schools` KPI (`admin.py:1043`) exclude, so a tenant can be paying and
+invisible in reporting.
+
+Worse: it writes **no `billing_ledger` row**, so capacity is granted with no
+financial record, and it is reachable by any tenant admin via a hand-crafted
+POST — `app/api/billing/upgrade/route.ts` is mounted and guarded only by
+`requireAdminSession`. It is unreachable from the UI (`BillingCheckout`'s
+`mode="subscription"` default has no caller), but the endpoint is live.
+
+- **Fix:** either delete the route, or make it call the same audited,
+  ledger-writing path as the top-ups. Do not leave a second, weaker way to
+  change billing state.
+
+### 21. No role separation on tenant lifecycle actions
+
+`lib/superadminAuth.ts` checks only that `superadmin === true`. It never reads
+`role`, even though `platform_admins.role` is constrained to
+`owner | admin | support` (`db_manager.py:410`). A **`support`-role** platform
+admin can therefore suspend, unsuspend, soft-delete, restore, reset a tenant's
+password, grant credits, and change the credit price — the same powers as an
+owner.
+
+This matters more after the item-11 fix, because choosing a suspension cause is
+now the control that decides whether abuse suspensions are liftable by payment.
+
+- **Fix:** enforce role checks in `requireSuperadmin` callers — read-only roles
+  must not reach lifecycle or financial endpoints. Role is already in the signed
+  session payload, so no re-fetch is needed.
+
+### 22. `restore_tenant` does not clear `is_active`
+
+`admin.py:589-627` soft-restore clears `deleted_at` only. A tenant that was
+soft-deleted *and* suspended comes back still suspended, with the portal 404ing
+on every surface. `suspension_reason` is also left stale.
+
+- **Fix:** clear `is_active` and `suspension_reason` alongside `deleted_at`, or
+  state in the UI that restore does not reactivate.
+
 ---
 
 ## P2 — hardening
