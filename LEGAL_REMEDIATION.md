@@ -456,17 +456,67 @@ charge.
   agree, or a school that read `/pricing` will have a legitimate expectation
   problem.
 
-### 11. "Top up to restore access" does not restore access
+### 11. "Top up to restore access" does not restore access — CLOSED
 
-A suspended tenant sees a call to action in
-`app/[subdomain]/admin/(dashboard)/layout.tsx:52-65` telling them to top up in
-order to restore access. Suspension is lifted only by a superadmin
-`PATCH /tenants/{subdomain}/status` (`backend/routers/admin.py:389-449`); a
-top-up changes no status column.
+The suspended-tenant banner told schools to top up, and `credits.py` top-ups
+only ever wrote `credit_balance` / `slots_balance`. Suspension was lifted solely
+by superadmin `PATCH /tenants/{subdomain}/status` (`admin.py:393`), so a paying
+school stayed suspended and the CTA was a dead end.
 
-- **Fix:** make the action honest, or wire the CTA to a request rather than to
-  billing. ToS §8.5 promises prompt restoration once the risk is resolved.
+**A safety blocker surfaced before the fix could be built.** There was **no**
+`schools.suspension_reason` column — the superadmin "reason" field was optional
+free text written only to `audit_logs.details` and never read back. Nothing could
+distinguish "suspended for non-payment" from "suspended for abuse or legal risk"
+(ToS 8.3, 8.5). Wiring the payment hook naively would have let anyone banned for
+abuse restore themselves by paying N100 — a pay-to-escape-a-ban path on a
+platform holding children's assessment data.
 
+**What was done:**
+
+- **`suspension_reason VARCHAR(24)`** added to `schools` (`db_manager.py`,
+  `init_schools_registry()`, existing `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+  idiom, so idempotent and run on every boot). Values: `nonpayment`, `abuse`,
+  `legal`, `security`, or NULL. Existing suspended tenants default to NULL,
+  which behaves as non-payment from day one — no backfill required.
+- **Persisted, not just audited.** `TenantStatusUpdate` in `admin.py` accepts
+  and validates `suspension_reason`, writes it to the tenant row, and clears it
+  on reactivation so a stale cause cannot keep blocking future restores.
+- **Restore hook** — `_restore_if_payment_clears_suspension()` in
+  `backend/routers/credits.py`, called from **both** top-ups on the same cursor,
+  after the ledger write and **before `COMMIT`**, so the grant and the
+  reactivation are one atomic unit. Guarded by
+  `is_active = FALSE AND (suspension_reason IS NULL OR = 'nonpayment')`, so
+  `abuse` / `legal` / `security` are never cleared by money. The idempotent
+  replay branch returns before reaching it, so a repeated `transaction_id`
+  cannot re-trigger a restore.
+- **Audit attribution.** Writes `billing.payment_restore` with
+  `actor="payment"` / `actor_type="system"`, so a payment is not misattributed
+  to `superadmin` as it would have been via the superadmin endpoint.
+- **Required cause in the UI.** `TenantLifecycleModals.tsx` — the optional
+  free-text reason is now a **required** category select (free text kept as a
+  supplementary note), and the confirm button is blocked until a cause is
+  chosen. Deliberate: an operator who leaves it unset on an abuse suspension
+  silently re-enables pay-to-escape.
+- **Tenant-facing copy corrected** on the admin dashboard banner and
+  `SuspendedPortal.tsx`, both now stating that a top-up restores access only for
+  non-payment suspensions. `SuspendedPortal` previously said "contact the school
+  administration" beside an admin-only button saying "top up"; the two branches
+  are now distinct.
+- **Fail-open closed** at
+  `app/[subdomain]/admin/(dashboard)/layout.tsx:43`. It read
+  `school != null && school.isActive === false`, so an unreachable backend
+  (`school === null`) hid the banner and rendered the whole dashboard as if
+  nothing were wrong. Now fails closed.
+- **Feedback loop** — the top-up response carries `restored_from_suspension`,
+  which `BillingCheckout` surfaces as a "Portal Restored!" confirmation instead
+  of bouncing the admin back to a still-suspended portal.
+
+**Residual, accepted:** the guard depends on a human picking the right category.
+That is human-in-the-loop, not a guarantee — a mis-categorised abuse suspension
+becomes liftable by payment. Proper mitigation means scoping who may suspend
+(see P1 item 21).
+
+---
 ### 16. Two publication-status predicates disagree (surfaced by the P0-1 fix)
 
 Now that the backend report gate is the control, its definition of "published"
