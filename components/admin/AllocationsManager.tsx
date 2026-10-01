@@ -1007,11 +1007,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Gender (optional)</label>
-            <select value={studentForm.gender} onChange={(e) => setStudentForm((p) => ({ ...p, gender: e.target.value }))} className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
-              <option value="">Select gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
+<Select aria-label="Gender (optional)" value={studentForm.gender} onChange={(v) => setStudentForm((p) => ({ ...p, gender: v }))} placeholder="Select gender"
+                options={[
+                  { value: "", label: "Select gender" },
+                  { value: "Male", label: "Male" },
+                  { value: "Female", label: "Female" },
+                ]}
+              />
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
           <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
