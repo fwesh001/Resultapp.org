@@ -686,6 +686,42 @@ content in `support_tickets.payload` (JSONB, tenant-scoped).
 
 - **Fix:** invert to an allowlist of permitted keys and types.
 
+### 23. Dead SQLAlchemy grading tables (surfaced by the orphan-reaper run)
+
+Confirmed empty in production on 1 October 2026:
+
+| Table | Rows |
+|---|---|
+| `tenant_students` | 16 |
+| `tenant_grades` | 7 |
+| `result_publications` | 6 |
+| **`student_academic_records`** | **0** |
+| **`student_behavioral_records`** | **0** |
+
+The SQLAlchemy grading engine — `backend/models.py` (`GradingTemplate`,
+`StudentAcademicRecord`, `StudentBehavioralRecord`) and
+`backend/routers/grading.py` — is **provisioned on every boot via
+`init_grading_tables()` and entirely unused**. Real grading runs through
+`backend/services/db_manager.py` into `tenant_grades`, driven by
+`backend/routers/staff_grading.py`.
+
+Two consequences:
+
+- **Blast radius is smaller than believed.** The P0-2 delete cascade sweeps four
+  tables but is really operating on two, and the orphan reaper's
+  `--execute` path has half its intended surface. That is good news for risk,
+  not a reason to stop sweeping them.
+- **Maintenance and attack surface.** A second, unused schema for the most
+  sensitive data in the system is created, migrated and served with no consumer.
+  Its endpoints are live and reachable (`app/api/records/**`, deleted during
+  the P0 pass as unauthenticated; `POST /api/v1/records/academic` behind the
+  shared secret), so a future caller could write to tables nothing reads.
+
+- **Decide:** either finish the migration to the new grading engine, or delete
+  `backend/models.py`, `backend/routers/grading.py`,
+  `backend/schemas.py`'s grading models and `init_grading_tables()`, plus the
+  two tables. Do not leave it provisioned and inert.
+
 ---
 
 ## Verification notes
