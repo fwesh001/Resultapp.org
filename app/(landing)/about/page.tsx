@@ -1,5 +1,6 @@
 import { PageHero } from "@/components/ui/PageHero";
 import Image from "next/image";
+import Link from "next/link";
 import { Target, Shield } from "lucide-react";
 
 export default function AboutPage() {
@@ -56,12 +57,13 @@ export default function AboutPage() {
             <div className="order-2 md:order-1 md:pr-6 md:text-right">
               <h2 className="text-2xl font-bold tracking-tight text-white">Our Values</h2>
               <p className="mt-3 text-sm leading-7 text-purple-200/60">
-                Affordability, reliability, and human support. Credits never expire, data stays in Africa with daily backups and 99.9% uptime, and real people answer on WhatsApp 8am–8pm WAT.
+                Affordability, reliability, and human support. Credits never expire, portal sessions are cryptographically signed and expire after 12 hours, and real people answer on WhatsApp 8am–8pm WAT.
               </p>
               <ul className="mt-4 space-y-2 text-sm text-purple-200/70">
                 <li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500" /> Affordability: Pay per student, not per month.</li>
-                <li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500" /> Reliability: 99.9% uptime, daily backups.</li>
+                <li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500" /> Reliability: signed sessions, tenant-isolated portals, regular backups.</li>
                 <li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500" /> Human support: 8am–8pm WAT.</li>
+                <li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500" /> Straight answers: what we store, and where, is set out in our <Link href="/privacy" className="underline decoration-purple-500/40 underline-offset-4 hover:text-white">Privacy Policy</Link>.</li>
               </ul>
             </div>
 
