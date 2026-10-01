@@ -118,7 +118,7 @@ export default function RegisterPage() {
             <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6 md:p-7">
               <div className="mb-6">
                 <h2 className="text-base font-semibold tracking-tight text-white">School registration</h2>
-                <p className="mt-1 text-sm text-purple-200/60">Enter your school details. Your portal at subdomain.resultapp.org will be provisioned securely.</p>
+                <p className="mt-1 text-sm text-purple-200/60">Enter your school details to continue to checkout.</p>
               </div>
 
               <RegisterSchoolForm />
@@ -134,7 +134,6 @@ export default function RegisterPage() {
 
             <ul className="mt-5 space-y-2.5 text-sm">
               {[
-                "Instant subdomain provisioning after registration",
                 "Secure provisioning with instant SSL and admin onboarding",
                 "Admin account + student slots credited automatically",
               ].map((item) => (
