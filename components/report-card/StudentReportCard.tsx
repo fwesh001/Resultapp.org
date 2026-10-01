@@ -361,7 +361,6 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // resolved server-side from the httpOnly session cookie.
   const gradesCount = data?.grades?.length ?? 0;
   const studentKnown = Boolean(data?.student);
-  const hasGrades = gradesCount > 0;
 
   let state: ReportState;
   if (error) {
@@ -511,9 +510,11 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const noInClass = summary.noInClass ?? 0;
   const overallPos = summary.overallPositionOrdinal ?? (summary.overallPosition ? `${summary.overallPosition}` : "—");
 
-  // `studentKnown`/`hasGrades` describe the payload for the admin draft copy.
+  // Admin scopes that carry no renderable card body (unknown student, or a
+  // transport failure) still need the Command Center to stay reachable, so they
+  // fall through to the shared admin draft panel instead of a public message.
+  void gradesCount;
   void studentKnown;
-  void hasGrades;
 
   return (
     <div className="relative mx-auto max-w-4xl">
