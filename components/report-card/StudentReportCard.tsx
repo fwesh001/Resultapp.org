@@ -414,23 +414,35 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // These are returned BEFORE any report markup, so a public viewer can never
   // reach the card body, the draft overlay, or the Command Center UI.
   if (state === "notFound") {
+    // ENUMERATION CONTRACT (LEGAL_REMEDIATION.md P0 item 1).
+    //
+    // The backend returns one byte-identical 404 for BOTH "no such admission
+    // number" and "student exists but this term is not published yet", precisely
+    // so this endpoint cannot be used to map a school's roster. This copy must
+    // therefore stay true for either case and must never assert which one it is.
+    // It is deliberately NOT titled "Student Not Found": a real student querying
+    // an unpublished term used to be told their record did not exist.
+    //
+    // The term picker is the actionable half of the fix — a student who is on the
+    // wrong term can switch immediately instead of contacting the school.
     return (
       <ReportErrorState
         title="Student Not Found"
         description={
           <>
-            No published result was found for{" "}
+            We could not find a published result for{" "}
             <span className="font-mono font-semibold text-amber-900">{studentId}</span> in{" "}
-            <span className="font-semibold">{schoolName || tenantId}</span>. Check the admission number format (
-            <span className="font-mono">e.g. VHS/001</span>).
+            <span className="font-semibold">{term}</span>. Check the admission number and term — admission numbers use the
+            school prefix (e.g. <span className="font-mono">VHS/001</span>) — try another term, or contact the school if you
+            believe the result should be available.
           </>
         }
-        icon="not-found"
+        icon="not-available"
+        termSelector={termSelector}
         actions={[
           { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
           { label: "Contact Admin", href: mailtoHref },
         ]}
-        footnote={<>Tip: Admission Nos use the school prefix, e.g. VHS/001, VHS/002 …</>}
       />
     );
   }
@@ -457,13 +469,16 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   }
 
   if (state === "notAvailable") {
+    // Same enumeration contract as the 404 above: neutral wording, term picker,
+    // and the school's own contact details when known.
     return (
       <ReportErrorState
         title="Result Not Available"
         description={
           <>
-            This result has not been published yet. If you believe this is an error, or to resolve pending clearances,
-            please contact the school administration.
+            A published result for <span className="font-semibold">{term}</span> is not available for{" "}
+            <span className="font-mono font-semibold text-amber-900">{studentId}</span> right now. Try another term, or
+            contact the school administration if you believe it should be available.
             {(schoolEmail || schoolPhone) && (
               <>
                 <br />
