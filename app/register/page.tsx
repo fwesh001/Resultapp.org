@@ -50,7 +50,7 @@ export default function RegisterPage() {
             <div className="mt-8 grid gap-3">
               {[
                 { icon: Users, text: "Custom subdomain + SSL" },
-                { icon: Zap, text: "100 NGN per student — credits never expire" },
+                { icon: Zap, text: "₦100 per roster slot — buy once, never expires" },
                 { icon: ShieldCheck, text: "Flutterwave secured checkout" },
               ].map((r) => (
                 <div key={r.text} className="flex items-center gap-3 rounded-xl border border-purple-500/10 bg-white/5 px-4 py-3 backdrop-blur">
