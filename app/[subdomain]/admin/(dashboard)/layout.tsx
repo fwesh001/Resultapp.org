@@ -40,7 +40,13 @@ export default async function AdminDashboardLayout({
   const slug = school?.slug || subdomain;
   // Billing escape hatch: suspended tenants keep FULL admin access so the
   // admin can self-serve top-ups at /admin/billing — with a banner nudge.
-  const suspended = school != null && school.isActive === false;
+  //
+  // Fail CLOSED. This used to read `school != null && school.isActive === false`,
+  // which meant an unreachable backend (school === null) silently hid the
+  // banner and rendered the whole dashboard as if nothing were wrong. Absence of
+  // evidence is not evidence of a good standing, so an unknown state shows the
+  // notice rather than silently granting a clean view.
+  const suspended = school == null || school.isActive === false;
 
   return (
     <AdminShell subdomain={slug} schoolName={schoolName}>
@@ -49,7 +55,12 @@ export default async function AdminDashboardLayout({
           Portal suspended — public, staff, and report access is paused.{" "}
           <a href={`/${slug}/admin/billing`} className="font-semibold underline underline-offset-4 hover:text-white">
             Top up to restore access →
-          </a>
+          </a>{" "}
+          <span className="text-amber-200/70">
+            (A top-up restores access immediately if this suspension was for non-payment. If it was
+            for abuse, a legal matter, or a security concern, a payment will not lift it — contact
+            support.)
+          </span>
         </div>
       )}
       {children}
