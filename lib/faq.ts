@@ -7,12 +7,12 @@ export const faqs: Array<{ question: string; answer: string }> = [
   {
     question: "How does the pricing work?",
     answer:
-      "We use a flexible pay-as-you-go credit system. You only use credits when publishing final results. There are no monthly subscriptions or holiday overhead costs.",
+      "There are two separate things. Slots are the students you can add to your roster — you buy them once at a volume-discounted rate (₦100, ₦90 at 500+ students, or ₦80 at 1000+), and they are permanent. Credits are what you spend to publish a term's results. There are no subscriptions, no renewals, and neither slots nor credits expire.",
   },
   {
     question: "How long does it take to set up my school?",
     answer:
-      "Setup is instant. You receive a dedicated portal (e.g., yourschool.resultapp.org) immediately upon registration, complete with free trial credits.",
+      "Setup is instant. You receive a dedicated portal (e.g., yourschool.resultapp.org) immediately upon registration, complete with your purchased roster slots credited to your account.",
   },
   {
     question: "Can teachers enter grades using their mobile phones?",
