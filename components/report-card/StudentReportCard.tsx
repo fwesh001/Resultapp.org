@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useEffect, useState } from "react";
-import { AlertCircle, Lock, CreditCard } from "lucide-react";
+import { Lock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
 import { ReportErrorState } from "@/components/report-card/ReportErrorState";
