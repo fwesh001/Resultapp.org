@@ -563,7 +563,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           )}
           <div className="relative z-10">
           {/* Print-only draft stamp — unpublished cards can never pass as official */}
-          {!isPublished && (
+          {isAdminDraft && (
             <div className="mb-2 hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-800 print:block">
               Draft — Pending Publication • Not an official result
             </div>
