@@ -258,8 +258,12 @@ class ProvisionRequest(BaseModel):
     transaction_id: Optional[str] = Field(None, min_length=1, max_length=100, description="Verified Flutterwave transaction_id (anti-replay: rejected if already redeemed)")
     amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably on the provision ledger row)")
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
-    student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each)")
-    initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="Trial credit grant at registration (Credit & Command). Defaults to 30.")
+    student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each). Also gates the free-credit grant at >= 500 (inclusive).")
+    # DEPRECATED and IGNORED. Retained only so older clients keep validating.
+    # The backend is strictly authoritative: the free-credit grant is decided by
+    # the superadmin toggle AND the >= FREE_CREDITS_MIN_STUDENTS threshold, never
+    # by anything a caller sends. See resolve_initial_credit_grant().
+    initial_credits: Optional[int] = Field(None, ge=0, le=10000, examples=[30], description="DEPRECATED/IGNORED — the server decides the free-credit grant from the superadmin toggle and the >= 500 student threshold.")
     # Consent record — REQUIRED. Stored in tenant_consents in the same
     # transaction as the schools INSERT; registration fails without it.
     terms_version: str = Field(..., min_length=1, max_length=16, examples=["1.0"], description="Version of the Terms of Service the registrant accepted")
@@ -648,26 +652,42 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 exc_info=True,
             )
 
-        # Credit & Command: trial grant (best-effort, idempotent — never blocks provision)
+        # Credit & Command: conditional free-credit grant.
+        #
+        # The backend is strictly authoritative: `initial_credits` from the
+        # request body is ignored entirely. The grant is TRIAL_CREDITS only when
+        # the superadmin toggle is ON *and* the school's initial capacity is at
+        # least FREE_CREDITS_MIN_STUDENTS (inclusive). Otherwise 0, which makes
+        # grant_initial_credits a no-op that leaves `init:<subdomain>` unclaimed.
+        _credit_grant = 0
         try:
-            from services.db_manager import grant_initial_credits, TRIAL_CREDITS
+            from services.db_manager import grant_initial_credits, resolve_initial_credit_grant
 
-            grant = int(payload.initial_credits) if payload.initial_credits is not None else TRIAL_CREDITS
-            grant_initial_credits(subdomain, grant)
-            logger.info(f"[PROVISION] Trial grant of {grant} credits for '{subdomain}'")
+            _credit_grant = int(resolve_initial_credit_grant(student_count))
+            grant_result = grant_initial_credits(subdomain, _credit_grant)
+            if _credit_grant > 0:
+                logger.info(
+                    f"[PROVISION] Free-credit grant of {_credit_grant} credits for "
+                    f"'{subdomain}' (capacity {student_count} >= threshold)"
+                )
+            else:
+                logger.info(
+                    f"[PROVISION] No free credits for '{subdomain}' "
+                    f"(toggle off or capacity {student_count} below threshold); "
+                    f"init idempotency key left unclaimed"
+                )
         except Exception as e:
-            logger.warning(f"[PROVISION] Failed to grant trial credits for '{subdomain}': {e}")
+            logger.warning(f"[PROVISION] Failed to grant initial credits for '{subdomain}': {e}")
 
         # Notification Engine: onboarding welcome (best-effort — never blocks provision)
         try:
-            from services.db_manager import TRIAL_CREDITS as _TRIAL_DEFAULT
             from services.notifications import dispatch_event as _dispatch_onboarding
 
-            _grant_ctx = int(payload.initial_credits) if payload.initial_credits is not None else _TRIAL_DEFAULT
+            # Report the credits actually granted (0 when the policy withheld them).
             _dispatch_onboarding(
                 "ONBOARDING_WELCOME",
                 subdomain,
-                {"school_name": school_name, "subdomain": subdomain, "credits": _grant_ctx},
+                {"school_name": school_name, "subdomain": subdomain, "credits": _credit_grant},
             )
         except Exception as e:
             logger.warning(f"[PROVISION] Onboarding notification failed for '{subdomain}': {e}")
