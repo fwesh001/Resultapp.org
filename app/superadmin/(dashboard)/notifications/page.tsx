@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, Loader2, Pencil, Send, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Select, type SelectOption } from "@/components/ui/Select";
 
 interface NotificationTemplate {
   event_type: string;
@@ -255,12 +256,9 @@ export default function NotificationsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="b-category" className="mb-1 block text-sm font-medium text-zinc-200">Category</label>
-                <select
-                  id="b-category" value={bCategory} onChange={(e) => setBCategory(e.target.value as typeof bCategory)}
-                  className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
-                >
-                  {CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
-                </select>
+<Select id="b-category" aria-label="Category" value={bCategory} onChange={(v) => setBCategory(v as typeof bCategory)}
+                    options={CATEGORIES.map((c): SelectOption => ({ value: c, label: c }))}
+                  />
               </div>
               <div>
                 <label htmlFor="b-cta" className="mb-1 block text-sm font-medium text-zinc-200">CTA link <span className="font-normal text-zinc-500">(optional)</span></label>
@@ -377,13 +375,10 @@ export default function NotificationsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="e-category" className="mb-1 block text-sm font-medium text-zinc-200">Category</label>
-                <select
-                  id="e-category" value={editing.category}
-                  onChange={(e) => setEditing({ ...editing, category: e.target.value as NotificationTemplate["category"] })}
-                  className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
-                >
-                  {CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
-                </select>
+<Select id="e-category" aria-label="Category" value={editing.category}
+                    onChange={(v) => setEditing({ ...editing, category: v as NotificationTemplate["category"] })}
+                    options={CATEGORIES.map((c): SelectOption => ({ value: c, label: c }))}
+                  />
               </div>
               <div>
                 <label htmlFor="e-color" className="mb-1 block text-sm font-medium text-zinc-200">Default color</label>
