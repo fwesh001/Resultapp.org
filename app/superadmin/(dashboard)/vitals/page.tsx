@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -157,17 +157,29 @@ export default function PlatformVitalsPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    // Kick the first read off in a microtask rather than synchronously in the
+    // effect body, so mounting does not trigger a cascading render.
+    const kick = Promise.resolve().then(() => load());
     const id = setInterval(() => void load(), POLL_MS);
     return () => {
       clearInterval(id);
       requestSeq.current += 1;
+      void kick;
     };
   }, [load]);
 
   const lastUpdated = data?.collected_at
     ? new Date(data.collected_at).toLocaleTimeString(undefined, { hour12: false })
     : null;
+
+  // Boot time derived from the server's own collection timestamp, not Date.now()
+  // at render — deterministic, and accurate to when the reading was taken.
+  const bootedAtLabel = useMemo(() => {
+    if (!data?.collected_at || typeof data.uptime_seconds !== "number") return "unavailable";
+    const collected = new Date(data.collected_at).getTime();
+    if (Number.isNaN(collected)) return "unavailable";
+    return `since ${new Date(collected - data.uptime_seconds * 1000).toLocaleString()}`;
+  }, [data?.collected_at, data?.uptime_seconds]);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -234,9 +246,7 @@ export default function PlatformVitalsPage() {
               {formatUptime(data?.uptime_seconds)}
             </div>
             <p className="mt-1 text-xs text-purple-300/50">
-              {data?.uptime_seconds
-                ? `since ${new Date(Date.now() - data.uptime_seconds * 1000).toLocaleString()}`
-                : "unavailable"}
+              {bootedAtLabel}
             </p>
           </Card>
 
