@@ -1004,6 +1004,20 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Support router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Platform Vitals — server telemetry for the superadmin Command Center.
+# Secret-gated here; the browser only ever reaches it through the session-
+# guarded Next.js proxy at app/api/admin/vitals/route.ts.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.vitals import router as vitals_router
+
+    app.include_router(vitals_router)
+    logger.info("[App] Vitals router mounted (GET /api/v1/admin/vitals)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Vitals router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
