@@ -12,6 +12,7 @@ import {
   Send,
   Users,
 } from "lucide-react";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import { toast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
@@ -276,17 +277,13 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
         </div>
         <label className="flex min-h-[44px] items-center gap-2 text-sm text-purple-200/70">
           Term
-          <select
-            id="cc-term"
-            name="term"
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            className="rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-          >
-            {TERMS.map((t) => (
-              <option key={t} value={t} className="bg-[#0B0514]">{t}</option>
-            ))}
-          </select>
+<Select
+              id="cc-term"
+              aria-label="Term"
+              value={term}
+              onChange={setTerm}
+              options={TERMS.map((t): SelectOption => ({ value: t, label: t }))}
+            />
         </label>
       </div>
 
