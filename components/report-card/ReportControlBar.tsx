@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Printer, ArrowLeft } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import { Select, type SelectOption } from "@/components/ui/Select";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
 
@@ -57,22 +58,17 @@ export function ReportControlBar({ tenantId, studentId, term, schoolName, canPri
       </Link>
 
       <div className="flex items-center gap-2">
-        <label htmlFor="report-term-select" className="flex min-h-[44px] items-center gap-2 text-xs text-purple-200/70">
-          Term
-          <select
-            id="report-term-select"
-            name="term"
-            value={term}
-            onChange={(e) => onTermChange(e.target.value)}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white backdrop-blur focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-          >
-            {TERMS.map((t) => (
-              <option key={t} value={t} className="bg-[#0B0514] text-white">
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label htmlFor="report-term-select" className="flex min-h-[44px] items-center gap-2 text-xs text-purple-200/70">
+            Term
+            <Select
+              id="report-term-select"
+              triggerClassName="h-11 rounded-full bg-white/5 px-3 font-medium"
+              aria-label="Term"
+              value={term}
+              onChange={onTermChange}
+              options={TERMS.map((t): SelectOption => ({ value: t, label: t }))}
+            />
+          </label>
 
         <button
           type="button"
