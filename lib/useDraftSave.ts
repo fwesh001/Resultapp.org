@@ -318,7 +318,7 @@ export function useDraftSave<T extends Record<string, string>>({
 
   const consumeRestore = useCallback(() => setPendingRestore(null), []);
 
-  const read = useCallback(() => (key ? readDraft<T>(key, scope) : null), [key, scope]); // eslint-disable-line react-hooks/exhaustive-deps
+  const read = useCallback(() => (key ? readDraft<T>(key, scope) : null), [key, scope]);
 
   const clear = useCallback(() => {
     cancelTimers();
