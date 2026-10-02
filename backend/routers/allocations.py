@@ -1092,14 +1092,18 @@ class RosterPatch(BaseModel):
     phone: Opt[str] = None
     role: Opt[str] = None
     signature_url: Opt[str] = None
+    # form_assignment (Form Classes tab) reassigns the form teacher for a class.
+    staff_id: Opt[str] = None
 
 
 @router.patch("/{record_type}/{record_id}", summary="Update a roster record (partial)")
 def update_roster_record(tenant_id: str, record_type: str, record_id: str, payload: RosterPatch):
     tid = _validate_tenant_id(tenant_id)
 
-    if record_type not in ("student", "staff"):
-        raise HTTPException(status_code=400, detail="record_type must be student or staff for PATCH")
+    if record_type not in ("student", "staff", "form_assignment"):
+        raise HTTPException(
+            status_code=400, detail="record_type must be student, staff or form_assignment for PATCH"
+        )
 
     # Validate UUID
     import uuid
@@ -1111,6 +1115,101 @@ def update_roster_record(tenant_id: str, record_type: str, record_id: str, paylo
 
     # Build dynamic SET clause — sparse updates only provided fields
     updates: dict[str, object] = {}
+
+    if record_type == "form_assignment":
+        # Reassign the form teacher for a class. Validates exactly like the
+        # create path (class must exist via the student roster, staff_id must
+        # resolve) so an edit cannot create a dangling assignment.
+        if payload.staff_id is None:
+            raise HTTPException(status_code=400, detail="No updatable fields provided (staff_id)")
+        new_staff_id = payload.staff_id.strip()
+        if not new_staff_id:
+            raise HTTPException(status_code=400, detail="staff_id cannot be empty")
+
+        from services.db_manager import (
+            _connect_as_superuser,
+            _row_to_dict,
+            TENANT_FORM_ASSIGNMENTS_TABLE,
+            TENANT_STAFF_TABLE,
+        )
+        from datetime import datetime as _dt
+
+        conn = None
+        try:
+            conn = _connect_as_superuser()
+            cur = conn.cursor()
+            # Load the existing row (also validates tenant ownership).
+            cur.execute(
+                f"SELECT class_name FROM {TENANT_FORM_ASSIGNMENTS_TABLE} WHERE id = %s AND subdomain = %s;",
+                (record_id, tid),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="form_assignment not found")
+            target_class = str(row[0])
+
+            # class_name may be changed, but the target class must be real.
+            if payload.class_name is not None:
+                new_class = payload.class_name.strip()
+                if not new_class:
+                    raise HTTPException(status_code=400, detail="class_name cannot be empty")
+                cur.execute(
+                    "SELECT 1 FROM tenant_students WHERE subdomain = %s AND class_name = %s LIMIT 1;",
+                    (tid, new_class),
+                )
+                if cur.fetchone() is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Unknown class '{new_class}' - no students registered in it",
+                    )
+                target_class = new_class
+                updates["class_name"] = new_class
+
+            # staff_id must resolve to a real staff member on this tenant.
+            cur.execute(
+                f"SELECT staff_id, full_name FROM {TENANT_STAFF_TABLE} "
+                f"WHERE subdomain = %s AND LOWER(staff_id) = LOWER(%s) LIMIT 1;",
+                (tid, new_staff_id),
+            )
+            srow = cur.fetchone()
+            if srow is None:
+                raise HTTPException(status_code=422, detail=f"Unknown staff_id '{new_staff_id}'")
+            updates["staff_id"] = str(srow[0])
+
+            set_clause = ", ".join(f"{col} = %s" for col in updates)
+            values = list(updates.values()) + ["NOW()", record_id, tid]
+            cur.execute(
+                f"UPDATE {TENANT_FORM_ASSIGNMENTS_TABLE} SET {set_clause}, updated_at = %s "
+                f"WHERE id = %s AND subdomain = %s "
+                f"RETURNING id, subdomain, class_name, staff_id, created_at;",
+                tuple(values),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="form_assignment not found")
+            updated = cur.fetchone()
+            conn.commit()
+            d = _row_to_dict(updated, cur)
+            if isinstance(d.get("created_at"), _dt):
+                d["created_at"] = d["created_at"].isoformat()
+            d["id"] = str(d["id"])
+            d["staff_name"] = str(srow[1])
+            return {"type": record_type, "record": d}
+        except HTTPException:
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            raise
+        except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            logger.exception(f"[roster] form_assignment patch failed {tid}/{record_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to update form_assignment: {e}")
+
     if record_type == "student":
         if payload.full_name is not None:
             v = payload.full_name.strip()
@@ -1163,6 +1262,7 @@ def update_roster_record(tenant_id: str, record_type: str, record_id: str, paylo
         returning = "id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at"
 
     # Do NOT allow updating student_id / staff_id per spec (ID immutable)
+    # (for form_assignment, staff_id IS the assignable field and is handled above)
     set_clause = ", ".join(f"{col} = %s" for col in updates)
     values = list(updates.values()) + [record_id, tid]
 
