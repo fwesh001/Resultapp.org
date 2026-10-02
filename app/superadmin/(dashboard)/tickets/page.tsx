@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { LifeBuoy, Loader2, AlertCircle, Search, ChevronDown, ChevronUp, Paperclip, Star, RefreshCw } from "lucide-react";
+import { Select, type SelectOption } from "@/components/ui/Select";
 
 type TicketStatus = "open" | "in_progress" | "resolved";
 type TicketType = "bug" | "feedback";
@@ -183,31 +184,25 @@ export default function TicketsPage() {
           <label htmlFor="f-status" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
             Status
           </label>
-          <select
-            id="f-status"
-            value={status}
-            onChange={(e) => { setStatus(e.target.value as typeof status); resetToFirstPage(); }}
-            className="rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{s === "all" ? "All statuses" : s.replace("_", " ")}</option>
-            ))}
-          </select>
+<Select
+              id="f-status"
+              aria-label="Status"
+              value={status}
+              onChange={(v) => { setStatus(v as typeof status); resetToFirstPage(); }}
+              options={STATUSES.map((s): SelectOption => ({ value: s, label: s === "all" ? "All statuses" : s.replace("_", " ") }))}
+            />
         </div>
         <div>
           <label htmlFor="f-type" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
             Type
           </label>
-          <select
+          <Select
             id="f-type"
+            aria-label="Type"
             value={type}
-            onChange={(e) => { setType(e.target.value as typeof type); resetToFirstPage(); }}
-            className="rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>{t === "all" ? "All types" : t}</option>
-            ))}
-          </select>
+            onChange={(v) => { setType(v as typeof type); resetToFirstPage(); }}
+            options={TYPES.map((t): SelectOption => ({ value: t, label: t === "all" ? "All types" : t }))}
+          />
         </div>
         <form
           className="flex-1"
