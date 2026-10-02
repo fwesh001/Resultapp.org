@@ -51,14 +51,20 @@ export interface SelectProps {
   "aria-describedby"?: string;
 }
 
-let idCounter = 0;
-function useStableId(explicit?: string): string {
-  const ref = React.useRef<string | null>(null);
-  if (ref.current === null) {
-    idCounter += 1;
-    ref.current = explicit || `select-${idCounter}`;
-  }
-  return ref.current;
+/**
+ * Stable DOM ids for wiring the trigger to its listbox. Uses React's own
+ * useId so ids stay unique across SSR and hydration without a module-level
+ * counter (which is unsafe under concurrent rendering).
+ */
+function useSelectIds(explicit?: string) {
+  const reactId = React.useId();
+  const baseId = explicit || `select-${reactId}`;
+  return {
+    baseId,
+    triggerId: `${baseId}-trigger`,
+    listboxId: `${baseId}-listbox`,
+    errorId: `${baseId}-error`,
+  };
 }
 
 /**
