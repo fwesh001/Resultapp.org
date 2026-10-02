@@ -24,6 +24,8 @@ import {
   getPricingTier,
   calculateTieredTotal,
   formatNaira,
+  FREE_CREDIT_MIN_STUDENTS,
+  FREE_CREDIT_GRANT,
 } from "@/lib/pricing";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 
@@ -270,6 +272,10 @@ export function RegisterSchoolForm() {
   }, [values.studentCount]);
   const orderTier = useMemo(() => getPricingTier(orderCount), [orderCount]);
   const orderTotal = useMemo(() => calculateTieredTotal(orderCount), [orderCount]);
+  // Copy-only mirror of the server's free-credit policy. The server remains the
+  // sole authority — this just keeps the registration copy honest instead of
+  // promising credits that may be withheld.
+  const qualifiesFreeCredits = orderCount >= FREE_CREDIT_MIN_STUDENTS;
 
   function startFlutterwaveCheckout() {
     setGlobalError(null);
@@ -370,7 +376,9 @@ export function RegisterSchoolForm() {
       adminEmail: values.adminEmail.trim().toLowerCase(),
       adminPassword: values.adminPassword,
       studentCount: parseInt(values.studentCount.trim(), 10),
-      initial_credits: 30,
+      // No initial_credits: the backend is strictly authoritative. It grants the
+      // free credits only when the superadmin toggle is ON *and* the initial
+      // capacity is >= 500 (inclusive). Sending a value here would be ignored.
       // Consent — the server re-validates this and refuses to provision
       // without it, then persists the versions from lib/legal/constants.ts.
       acceptTerms: values.acceptTerms,
@@ -683,7 +691,11 @@ export function RegisterSchoolForm() {
             <span>Total due</span>
             <span>{formatNaira(orderTotal)}</span>
           </div>
-          <p className="mt-1 text-xs text-purple-300/50">Includes 30 free publishing credits at launch.</p>
+          <p className="mt-1 text-xs text-purple-300/50">
+            {qualifiesFreeCredits
+              ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch.`
+              : "Publishing credits are topped up separately from your portal."}
+          </p>
         </div>
 
         {globalError && (
@@ -869,14 +881,37 @@ export function RegisterSchoolForm() {
         disabled={isSubmitting}
       />
 
-      {/* Trial grant notice — 30 free credits included with every paid portal */}
-      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-        <p className="flex items-center gap-2 text-xs font-medium text-emerald-200">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-          Includes 30 free trial credits at launch
+      {/* Free-credit notice — conditional: only schools at/above the volume
+          threshold receive the grant, and the server decides regardless. */}
+      <div
+        className={
+          qualifiesFreeCredits
+            ? "rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
+            : "rounded-xl border border-purple-500/10 bg-purple-950/10 p-3"
+        }
+      >
+        <p
+          className={
+            qualifiesFreeCredits
+              ? "flex items-center gap-2 text-xs font-medium text-emerald-200"
+              : "flex items-center gap-2 text-xs font-medium text-purple-200/80"
+          }
+        >
+          <Sparkles className={qualifiesFreeCredits ? "h-3.5 w-3.5 text-emerald-400" : "h-3.5 w-3.5 text-purple-300/60"} />
+          {qualifiesFreeCredits
+            ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch`
+            : "Publishing credits are not included at this size"}
         </p>
-        <p className="mt-1 text-xs leading-5 text-emerald-100/60">
-          Enough to publish a full class. You pay once for student slots now — top up publishing credits anytime from your portal.
+        <p
+          className={
+            qualifiesFreeCredits
+              ? "mt-1 text-xs leading-5 text-emerald-100/60"
+              : "mt-1 text-xs leading-5 text-purple-300/50"
+          }
+        >
+          {qualifiesFreeCredits
+            ? "Enough to publish a full class. You pay once for student slots now — top up publishing credits anytime from your portal."
+            : `Free publishing credits start at ${FREE_CREDIT_MIN_STUDENTS} students. Top up anytime from your portal — credits never expire.`}
         </p>
       </div>
 
