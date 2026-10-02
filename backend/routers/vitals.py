@@ -241,17 +241,19 @@ def _collect_pg() -> Dict[str, Any]:
     return out
 
 
+#: Captured at import so the non-/proc uptime fallback reports real elapsed
+#: wall-clock time. (Subtracting process_time from time.time() would mix the
+#: epoch with CPU time and yield a nonsense multi-decade value.)
+_PROCESS_START_WALL = time.time()
+
+
 def _collect_uptime() -> Optional[float]:
     try:
         with open("/proc/uptime", "r", encoding="utf-8") as fh:
             return round(float(fh.read().split()[0]), 1)
     except Exception:
-        # Fallback to process-relative uptime if /proc is unavailable.
-        try:
-            return round(time.time() - time.process_time(), 1)
-        except Exception as e:
-            logger.warning(f"[vitals] uptime unavailable: {e}")
-            return None
+        # Non-Linux (or unreadable /proc): report how long this process has run.
+        return round(max(0.0, time.time() - _PROCESS_START_WALL), 1)
 
 
 def _collect_hostname() -> Optional[str]:
