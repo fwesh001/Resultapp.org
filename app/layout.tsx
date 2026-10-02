@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Yesteryear } from "next/font/google";
 import { Toaster } from "@/components/ui/toast";
 import "./globals.css";
 
@@ -11,6 +11,14 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Script face for report-card signature fallbacks (no uploaded image).
+// Yesteryear stays legible at the small sizes a signature block uses.
+const yesteryear = Yesteryear({
+  variable: "--font-signature",
+  subsets: ["latin"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
