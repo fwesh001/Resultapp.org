@@ -8,6 +8,7 @@ import {
   ReceiptText,
   Bell,
   LifeBuoy,
+  Activity,
   Settings,
   ShieldCheck,
   LogOut,
@@ -23,6 +24,7 @@ const nav = [
   { label: "Tickets", href: "/superadmin/tickets", icon: LifeBuoy },
   { label: "Ledger & Audit", href: "/superadmin/ledger", icon: ReceiptText },
   { label: "Notifications", href: "/superadmin/notifications", icon: Bell },
+  { label: "Platform Vitals", href: "/superadmin/vitals", icon: Activity },
   { label: "Settings", href: "/superadmin/settings", icon: Settings },
 ];
 
