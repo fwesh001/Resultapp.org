@@ -167,6 +167,16 @@ export default function Footer({ school, subdomain }: FooterProps) {
           >
             Refund Policy
           </Link>
+          <span aria-hidden="true" className="text-purple-500/30">
+            &middot;
+          </span>
+          {/* Platform support desk — apex route, not tenant-scoped. */}
+          <Link
+            href="/support"
+            className="transition-colors hover:text-white"
+          >
+            Support
+          </Link>
         </nav>
       </div>
     </footer>
