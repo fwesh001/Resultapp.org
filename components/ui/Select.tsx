@@ -25,9 +25,28 @@ export interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   error?: string;
+  /** Applied to the outer wrapper (the flex column containing the label). */
   className?: string;
+  /** Applied to the trigger button itself — use for width/sizing overrides. */
+  triggerClassName?: string;
   /** Applied to the portalled listbox. Useful for forcing a light surface. */
   listboxClassName?: string;
+  /**
+   * Submits the current value as a hidden input, so the control works inside
+   * `new FormData(form)`. Required wherever a native <select name=...> was
+   * previously read from FormData.
+   */
+  name?: string;
+  /**
+   * Compact sizing for inline controls (e.g. per-student grade cells in a
+   * table row). The default "md" matches the house style at h-10.
+   */
+  size?: "sm" | "md";
+  /**
+   * Trigger/listbox surface. "dark" is the portal default; "light" is for the
+   * amber public error cards, where the dark trigger would clash.
+   */
+  surface?: "dark" | "light";
   "aria-label"?: string;
   "aria-describedby"?: string;
 }
@@ -73,7 +92,11 @@ export function Select({
   disabled = false,
   error,
   className,
+  triggerClassName,
   listboxClassName,
+  name,
+  size = "md",
+  surface = "dark",
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
 }: SelectProps) {
@@ -254,6 +277,9 @@ export function Select({
       {labelNode}
 
       <div className="relative">
+        {/* A button control is not form-associated, so mirror the value into a
+            hidden input for `new FormData(form)` consumers. */}
+        {name ? <input type="hidden" name={name} value={value} /> : null}
         <button
           id={triggerId}
           ref={triggerRef}
@@ -270,15 +296,24 @@ export function Select({
           onClick={() => (open ? close() : openMenu())}
           onKeyDown={handleKeyDown}
           className={cn(
-            "flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-purple-950/30 px-3 py-2 text-left text-sm text-purple-50 ring-offset-[#0B0514] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50",
-            error ? "border-red-500/60 focus-visible:ring-red-500" : "border-purple-800/50 focus-visible:border-purple-500",
-            !error && "hover:border-purple-700/70",
-            !selected && !open && "text-purple-300/50"
+            "flex w-full items-center justify-between gap-2 rounded-xl border text-left text-sm ring-offset-[#0B0514] transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
+            size === "sm" ? "h-9 px-2" : "h-10 px-3 py-2",
+            surface === "light"
+              ? "border-amber-500/30 bg-white text-amber-900 focus-visible:border-amber-500 focus-visible:ring-amber-500/30 hover:border-amber-500/50"
+              : "bg-purple-950/30 text-purple-50 focus-visible:ring-purple-500 focus-visible:border-purple-500 hover:border-purple-700/70",
+            error ? "border-red-500/60 focus-visible:ring-red-500" : undefined,
+            !selected && !open && (surface === "light" ? "text-amber-900/50" : "text-purple-300/50"),
+            triggerClassName
           )}
         >
           <span className="truncate">{selected ? (children ? children(selected) : selected.label) : placeholder}</span>
           <ChevronDown
-            className={cn("h-4 w-4 shrink-0 text-purple-300 transition-transform duration-150", open && "rotate-180")}
+            className={cn(
+              "shrink-0 transition-transform duration-150",
+              surface === "light" ? "text-amber-700" : "text-purple-300",
+              size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4",
+              open && "rotate-180"
+            )}
             aria-hidden="true"
           />
         </button>
@@ -307,12 +342,22 @@ export function Select({
               minWidth: coords.width,
             }}
             className={cn(
-              "fixed z-[9999] max-h-72 overflow-y-auto rounded-xl border border-purple-700/50 bg-[#150C28] p-1 shadow-2xl shadow-black/50",
+              "fixed z-[9999] max-h-72 overflow-y-auto rounded-xl border p-1 shadow-2xl shadow-black/50",
+              surface === "light"
+                ? "border-amber-500/30 bg-white"
+                : "border-purple-700/50 bg-[#150C28]",
               listboxClassName
             )}
           >
             {items.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-purple-300/60">No options</div>
+              <div
+                className={cn(
+                  "px-3 py-2 text-sm",
+                  surface === "light" ? "text-amber-900/60" : "text-purple-300/60"
+                )}
+              >
+                No options
+              </div>
             ) : (
               items.map((opt, i) => {
                 const isSelected = opt.value === value;
@@ -330,12 +375,22 @@ export function Select({
                     className={cn(
                       "flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
                       opt.disabled && "cursor-not-allowed opacity-40",
-                      !opt.disabled && isActive && "bg-purple-600/25 text-white",
-                      !opt.disabled && !isActive && "text-purple-100 hover:bg-purple-600/10"
+                      surface === "light"
+                        ? isActive
+                          ? "bg-amber-500/20 text-amber-950"
+                          : "text-amber-900 hover:bg-amber-500/10"
+                        : isActive
+                          ? "bg-purple-600/25 text-white"
+                          : "text-purple-100 hover:bg-purple-600/10"
                     )}
                   >
                     <span className="truncate">{children ? children(opt) : opt.label}</span>
-                    {isSelected && <Check className="h-4 w-4 shrink-0 text-purple-300" aria-hidden="true" />}
+                    {isSelected && (
+                      <Check
+                        className={cn("h-4 w-4 shrink-0", surface === "light" ? "text-amber-700" : "text-purple-300")}
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
                 );
               })
