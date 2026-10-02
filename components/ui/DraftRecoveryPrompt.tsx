@@ -1,7 +1,7 @@
 "use client";
 
 import { CloudOff, Save, Trash2 } from "lucide-react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -54,22 +54,48 @@ export function DraftRecoveryPrompt({
 }: DraftRecoveryPromptProps) {
   const count = Math.max(0, entryCount);
 
+  // ConfirmDialog maps "confirm" to the primary action. We override its footer
+  // semantics here by rendering our own two buttons instead, so Discard is a
+  // first-class action rather than the implicit "cancel".
   return (
-    <ConfirmDialog
+    <Modal
       open={open}
       onOpenChange={onOpenChange}
       title="Unsaved draft found"
-      variant="default"
-      confirmLabel={`Restore ${count} ${count === 1 ? "entry" : "entries"}`}
-      cancelLabel="Discard draft"
-      onConfirm={onRestore}
-      message={`An unsaved draft with ${count} ${count === 1 ? "entry" : "entries"} was found on this device${savedAt ? `, saved ${relativeTime(savedAt)}` : ""}. Restore it, or keep the values already stored on the server.`}
-      note={
-        legacy
-          ? "This draft was saved by an earlier version of the app and has no timestamp or term recorded. Restoring is safe — it only fills the fields you see."
-          : `Restoring replaces the values shown for ${term} on this device only. Nothing is published to the server until you press Save.`
-      }
-    />
+      description={`An unsaved draft with ${count} ${count === 1 ? "entry" : "entries"} was found on this device${savedAt ? `, saved ${relativeTime(savedAt)}` : ""}. Restore it, or keep the values already stored on the server.`}
+      size="sm"
+    >
+      <div className="space-y-4">
+        <div className="flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+          <Save className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+          <p className="text-xs leading-5 text-amber-100/80">
+            {legacy
+              ? "This draft was saved by an earlier version of the app and has no timestamp or term recorded. Restoring is safe — it only fills the fields you can see."
+              : `Restoring replaces the values shown for ${term} on this device only. Nothing is sent to the server until you press Save.`}
+          </p>
+        </div>
+
+        {/* Restore first and solid — it is the relieving action for the
+            "tab just closed" case. Discard stays equally visible. */}
+        <div className="flex flex-col gap-2 sm:flex-row-reverse">
+          <Button
+            type="button"
+            onClick={onRestore}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-amber-600 px-5 text-sm font-semibold text-white hover:bg-amber-500 sm:w-auto"
+          >
+            <Save className="h-4 w-4" /> Restore {count} {count === 1 ? "entry" : "entries"}
+          </Button>
+          <Button
+            type="button"
+            onClick={onDiscard}
+            variant="outline"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border-amber-500/25 bg-transparent px-5 text-sm text-amber-200 hover:bg-amber-500/10 sm:w-auto"
+          >
+            <Trash2 className="h-4 w-4" /> Discard draft
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
