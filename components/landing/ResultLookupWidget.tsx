@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
+import { Select } from "@/components/ui/Select";
 
 interface ResultLookupWidgetProps {
   subdomain: string;
@@ -78,19 +79,22 @@ export default function ResultLookupWidget({
       >
         Term
       </label>
-      <select
+      <Select
         id="term"
+        className="mt-2"
+        triggerClassName="h-12 px-4"
+        aria-label="Term"
         value={term}
-        onChange={(e) => {
+        onChange={(v) => {
           setTermTouched(true);
-          setTerm(e.target.value);
+          setTerm(v);
         }}
-        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-      >
-        <option>Term 1</option>
-        <option>Term 2</option>
-        <option>Term 3</option>
-      </select>
+        options={[
+          { value: "Term 1", label: "Term 1" },
+          { value: "Term 2", label: "Term 2" },
+          { value: "Term 3", label: "Term 3" },
+        ]}
+      />
 
       <button
         type="submit"
