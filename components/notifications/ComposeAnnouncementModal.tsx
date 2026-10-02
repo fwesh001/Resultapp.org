@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { Select, type SelectOption } from "@/components/ui/Select";
 
 export const ANNOUNCEMENT_TYPES = ["Meeting", "Urgent", "Reminder", "General"] as const;
 export type AnnouncementType = (typeof ANNOUNCEMENT_TYPES)[number];
@@ -50,18 +51,13 @@ export default function ComposeAnnouncementModal({
           <label htmlFor="ann-type" className="mb-1 block text-sm font-medium text-zinc-200">
             Type
           </label>
-          <select
+          <Select
             id="ann-type"
+            aria-label="Type"
             value={messageType}
-            onChange={(e) => setMessageType(e.target.value as AnnouncementType)}
-            className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            {ANNOUNCEMENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setMessageType(v as AnnouncementType)}
+            options={ANNOUNCEMENT_TYPES.map((t): SelectOption => ({ value: t, label: t }))}
+          />
         </div>
         <div>
           <label htmlFor="ann-title" className="mb-1 block text-sm font-medium text-zinc-200">
