@@ -40,6 +40,18 @@ export function getSliderPct(studentCount: number): number {
 /** Flat price per publishing credit (NGN) — superadmin tunable via backend app_settings. */
 export const CREDIT_PRICE = 200;
 
+/**
+ * Free registration credits — display/marketing mirror of the backend policy.
+ *
+ * The backend (`resolve_initial_credit_grant`) is the ONLY authority: it grants
+ * `FREE_CREDIT_GRANT` credits when the superadmin toggle is on AND the school's
+ * initial capacity is >= `FREE_CREDIT_MIN_STUDENTS` (inclusive). These constants
+ * exist purely so registration copy matches the server rule and never promises
+ * credits that would be withheld.
+ */
+export const FREE_CREDIT_MIN_STUDENTS = 500;
+export const FREE_CREDIT_GRANT = 30;
+
 export function calculateCreditTotal(creditCount: number, unitPrice: number = CREDIT_PRICE): number {
   const n = Math.max(0, Math.floor(Number(creditCount) || 0));
   const price = Math.max(1, Math.floor(Number(unitPrice) || CREDIT_PRICE));
