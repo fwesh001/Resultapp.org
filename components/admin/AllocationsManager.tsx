@@ -121,7 +121,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [searchTerm, setSearchTerm] = useState("");
   const [studentClassFilter, setStudentClassFilter] = useState<string>("All");
   const [allocateClassFilter, setAllocateClassFilter] = useState<string>("All");
-  const [editingRecord, setEditingRecord] = useState<Student | Staff | null>(null);
+  const [editingRecord, setEditingRecord] = useState<Student | Staff | FormAssignment | null>(null);
 
   // modals
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -332,10 +332,65 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }
 
+  /** Form Classes tab — open the assign/edit modal pre-filled for edit. */
+  function openEditForm(f: FormAssignment) {
+    setEditingRecord(f);
+    setFormAssignForm({ class_name: f.class_name, staff_id: f.staff_id });
+    setShowFormModal(true);
+  }
+
+  function openAddForm() {
+    setEditingRecord(null);
+    setFormAssignForm({ class_name: "", staff_id: "" });
+    setShowFormModal(true);
+  }
+
+  function closeFormModal(open: boolean) {
+    setShowFormModal(open);
+    if (!open) {
+      setEditingRecord(null);
+      setFormAssignForm({ class_name: "", staff_id: "" });
+    }
+  }
+
   async function handleCreate(type: "student" | "staff" | "allocation" | "subject" | "bulk_subjects" | "form_assignment") {
     // If editing, delegate to PATCH
     const isEditingStudent = type === "student" && editingRecord && "student_id" in editingRecord;
     const isEditingStaff = type === "staff" && editingRecord && "staff_id" in editingRecord;
+    const isEditingForm = type === "form_assignment" && editingRecord && "class_name" in editingRecord;
+
+    if (isEditingForm) {
+      // Form Classes edit — reassign the form teacher. class_name is locked in
+      // the UI (one assignment row per class), so only staff_id is sent.
+      if (!formAssignForm.staff_id) {
+        setError("Staff is required");
+        return;
+      }
+      setSubmitting(true);
+      setError(null);
+      try {
+        const recId = (editingRecord as FormAssignment).id;
+        const res = await fetch(
+          `/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}&type=form_assignment&id=${encodeURIComponent(recId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ staff_id: formAssignForm.staff_id }),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed ${res.status}`);
+        toast.success("Form teacher updated");
+        closeFormModal(false);
+        setEditingRecord(null);
+        await fetchAll();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Update failed");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
 
     if (isEditingStudent || isEditingStaff) {
       const recordType = type as "student" | "staff";
@@ -519,6 +574,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   const isEditingStudent = !!(editingRecord && activeTab === "Students" && "student_id" in editingRecord);
   const isEditingStaff = !!(editingRecord && activeTab === "Staff" && "staff_id" in editingRecord);
+  const isEditingForm = !!(editingRecord && activeTab === "Forms" && "class_name" in editingRecord);
 
   return (
     <div className="space-y-6">
@@ -894,7 +950,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Form Classes ({filteredForms.length} of {totals.Forms} • page {page})</h3>
-                <Button onClick={() => setShowFormModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                <Button onClick={openAddForm} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
                   <Plus className="h-4 w-4" /> Assign Form Teacher
                 </Button>
               </div>
@@ -923,13 +979,22 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                           <td className="px-4 py-3">{f.full_name || "—"}</td>
                           <td className="px-4 py-3 font-mono text-xs">{f.staff_id}</td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => setPendingDelete({ type: "form_assignment", id: f.id })}
-                              className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                              aria-label="Remove form assignment"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openEditForm(f)}
+                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-500/5 p-2 text-purple-300 hover:bg-purple-500/15"
+                                aria-label={`Edit form teacher for ${f.class_name}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => setPendingDelete({ type: "form_assignment", id: f.id })}
+                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
+                                aria-label="Remove form assignment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1165,7 +1230,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       </Modal>
 
       {/* Assign Form Teacher Modal — class + staff (exactly one per class) */}
-      <Modal open={showFormModal} onOpenChange={setShowFormModal} title="Assign Form Teacher" description="Select a class and the staff member responsible for its behavioural traits and remarks" className="border-purple-500/20 bg-[#0B0514] text-white">
+      <Modal open={showFormModal} onOpenChange={closeFormModal} title={isEditingForm ? "Edit Form Teacher" : "Assign Form Teacher"} description={isEditingForm ? "Reassign the staff member responsible for this class's behavioural traits and remarks" : "Select a class and the staff member responsible for its behavioural traits and remarks"} className="border-purple-500/20 bg-[#0B0514] text-white">
         <div className="space-y-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Class</label>
@@ -1204,10 +1269,11 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("form_assignment")}
-              disabled={submitting || availableClasses.length === 0 || staff.length === 0}
+              disabled={submitting || staff.length === 0 || (!isEditingForm && availableClasses.length === 0)}
               className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
             >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingForm ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {isEditingForm ? "Save Changes" : "Assign"}
             </Button>
           </div>
         </div>
