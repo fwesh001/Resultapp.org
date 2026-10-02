@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-
+import { requireSuperadmin } from "@/lib/superadminAuth";
 
 /**
  * Platform Vitals proxy — GET /api/admin/vitals
@@ -41,6 +41,8 @@ function getBackendBase(): string {
 }
 
 export async function GET() {
+  const guard = await requireSuperadmin();
+  if (guard) return guard;
 
   const secret = getProxySecret();
   if (!secret) {
