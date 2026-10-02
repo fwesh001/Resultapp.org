@@ -55,6 +55,8 @@ export function useOnlineStatus(): OnlineStatus {
 export function useIsOffline(): () => boolean {
   const status = useOnlineStatus();
   const ref = useRef(status);
-  ref.current = status;
+  useEffect(() => {
+    ref.current = status;
+  }, [status]);
   return useCallback(() => ref.current.isOnline === false, []);
 }
