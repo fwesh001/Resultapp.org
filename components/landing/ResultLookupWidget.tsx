@@ -23,7 +23,6 @@ export default function ResultLookupWidget({
     if (!termTouched && globalTerm && term !== globalTerm.term) {
       setTerm(globalTerm.term);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [globalTerm, termTouched]);
 
   function normalizePrefixLower(raw: string): string {
