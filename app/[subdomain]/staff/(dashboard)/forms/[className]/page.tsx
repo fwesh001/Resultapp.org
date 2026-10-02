@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, HeartHandshake, Loader2, MessageSquareText, Save, ShieldAlert, Sparkles } from "lucide-react";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import { toast } from "@/components/ui/toast";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
 import type { RemarkBand } from "@/types/school";
@@ -445,24 +446,23 @@ export default function FormGridPage() {
                     {grid.allowed_traits.map((t) => (
                       <div key={t} className="flex items-center gap-3">
                         <span className="min-w-0 flex-1 truncate text-xs text-purple-200/80">{t}</span>
-                        <select
-                          value={traitDrafts[`${s.student_id}::${t}`] ?? ""}
-                          onChange={(e) =>
-                            setTraitDrafts((prev) => ({
-                              ...prev,
-                              [`${s.student_id}::${t}`]: e.target.value,
-                            }))
-                          }
-                          aria-label={`${t} grade for ${s.full_name}`}
-                          className="h-9 w-24 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                        >
-                          <option value="">–</option>
-                          {grid.scale.map((g) => (
-                            <option key={g} value={g}>
-                              {g}
-                            </option>
-                          ))}
-                        </select>
+<Select
+                            size="sm"
+                            triggerClassName="w-24"
+                            value={traitDrafts[`${s.student_id}::${t}`] ?? ""}
+                            onChange={(v) =>
+                              setTraitDrafts((prev) => ({
+                                ...prev,
+                                [`${s.student_id}::${t}`]: v,
+                              }))
+                            }
+                            aria-label={`${t} grade for ${s.full_name}`}
+                            placeholder="-"
+                            options={[
+                              { value: "", label: "-" },
+                              ...grid.scale.map((g): SelectOption => ({ value: g, label: g })),
+                            ]}
+                          />
                       </div>
                     ))}
                     {autoSaveStatus[s.student_id] === "saving" && (
