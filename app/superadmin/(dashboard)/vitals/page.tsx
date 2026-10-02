@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -174,12 +174,15 @@ export default function PlatformVitalsPage() {
 
   // Boot time derived from the server's own collection timestamp, not Date.now()
   // at render — deterministic, and accurate to when the reading was taken.
-  const bootedAtLabel = useMemo(() => {
-    if (!data?.collected_at || typeof data.uptime_seconds !== "number") return "unavailable";
+  // Plain derivation (no useMemo): it runs off two fields and the React
+  // compiler rejects a memo here anyway.
+  let bootedAtLabel = "unavailable";
+  if (data?.collected_at && typeof data.uptime_seconds === "number") {
     const collected = new Date(data.collected_at).getTime();
-    if (Number.isNaN(collected)) return "unavailable";
-    return `since ${new Date(collected - data.uptime_seconds * 1000).toLocaleString()}`;
-  }, [data?.collected_at, data?.uptime_seconds]);
+    if (!Number.isNaN(collected)) {
+      bootedAtLabel = `since ${new Date(collected - data.uptime_seconds * 1000).toLocaleString()}`;
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
