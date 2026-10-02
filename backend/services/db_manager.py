@@ -530,6 +530,14 @@ def init_schools_registry() -> None:
             VALUES ('credit_price', '200')
             ON CONFLICT (key) DO NOTHING;
         """)
+        # Conditional free credits at registration: superadmin toggle, but only
+        # ever applied to tenants whose initial capacity clears
+        # FREE_CREDITS_MIN_STUDENTS. Defaults to ON (the historical behaviour).
+        cur.execute("""
+            INSERT INTO app_settings (key, value)
+            VALUES ('free_credits_enabled', 'true')
+            ON CONFLICT (key) DO NOTHING;
+        """)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS credit_ledger (
                 id               SERIAL PRIMARY KEY,
@@ -1290,6 +1298,16 @@ TRIAL_SLOTS = 0  # slots are purchased via student_count; credits are the trial 
 #: Default flat price per publishing credit (NGN) — superadmin tunable via app_settings.
 DEFAULT_CREDIT_PRICE = 200
 
+#: Minimum initial capacity for a school to earn the free registration credits.
+#: Inclusive: exactly FREE_CREDITS_MIN_STUDENTS students qualifies. 500 is also
+#: the ₦90/student volume tier boundary, so the threshold is a real commercial
+#: line rather than an arbitrary number.
+FREE_CREDITS_MIN_STUDENTS = 500
+
+#: Superadmin toggle key in app_settings. Kept next to the threshold so the
+#: pairing ("enabled" AND "large enough") is defined in exactly one place.
+FREE_CREDITS_ENABLED_KEY = "free_credits_enabled"
+
 
 def current_academic_session(now: Optional[datetime] = None) -> str:
     """Derive the academic session label dynamically (YYYY/YYYY+1).
@@ -1535,11 +1553,24 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
     Sets schools.credit_balance and writes the ledger row atomically.
     Dual-writes to billing_ledger (token_type=CREDIT) for zero-downtime parity.
     Safe to call once per tenant — reference_id makes replays idempotent.
+
+    Zero-credit semantics: when `amount` is 0 this returns WITHOUT touching the
+    ledger. That matters because the reference_id is the idempotency key — a
+    zero-value row would consume `init:<subdomain>` permanently, so a school that
+    was under the volume threshold (or provisioned while the toggle was off)
+    could never be granted credits later via this path. Skipping keeps the key
+    unused and the decision entirely with the caller's current policy.
     """
     subdomain = _sanitize_subdomain(subdomain)
     amount = max(0, int(amount or 0))
     reference_id = f"init:{subdomain}"
     billing_ref = f"billing:init:{subdomain}"
+    if amount == 0:
+        logger.info(
+            f"[DB] Skipping initial credit grant for '{subdomain}' (amount=0); "
+            f"idempotency key {reference_id} left unclaimed"
+        )
+        return {"subdomain": subdomain, "granted": 0, "new_grant": False, "skipped": True}
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -1662,6 +1693,90 @@ def set_credit_price(price: int) -> int:
     finally:
         if conn:
             conn.close()
+
+
+def _get_setting_bool(key: str, default: bool) -> bool:
+    """Read a boolean-ish app_settings value, falling back to `default`."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {APP_SETTINGS_TABLE} WHERE key = %s LIMIT 1;", (key,))
+        row = cur.fetchone()
+        if row is None:
+            return default
+        raw = str(row[0]).strip().lower()
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        if raw in ("0", "false", "no", "off"):
+            return False
+        return default
+    except Exception as e:
+        logger.warning(f"[DB] Failed to fetch {key}, using default {default}: {e}")
+        return default
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_free_credits_enabled() -> bool:
+    """Global toggle for free registration credits. Defaults to True."""
+    return _get_setting_bool(FREE_CREDITS_ENABLED_KEY, True)
+
+
+def set_free_credits_enabled(enabled: bool) -> bool:
+    """Superadmin toggle for free registration credits. Returns the new value."""
+    value = "true" if enabled else "false"
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {APP_SETTINGS_TABLE} (key, value, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+            RETURNING value;
+            """,
+            (FREE_CREDITS_ENABLED_KEY, value),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        logger.info(f"[DB] free_credits_enabled set to {value}")
+        return str(row[0]).strip().lower() in ("1", "true", "yes", "on") if row else enabled
+    except Exception as e:
+        logger.error(f"[DB] Failed to set free_credits_enabled to {value}: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def resolve_initial_credit_grant(student_count: int) -> int:
+    """Authoritative decision for the registration credit grant.
+
+    The backend is the only authority: the client's `initial_credits` payload is
+    never consulted. Returns the number of credits to grant, which is 0 when
+    either the toggle is off or the tenant's initial capacity is below the
+    inclusive threshold.
+
+    Note this intentionally re-reads the toggle at call time rather than
+    caching it, so a superadmin toggle takes effect on the next registration.
+    """
+    try:
+        count = max(0, int(student_count or 0))
+    except (TypeError, ValueError):
+        count = 0
+    if not get_free_credits_enabled():
+        return 0
+    if count < FREE_CREDITS_MIN_STUDENTS:
+        return 0
+    return TRIAL_CREDITS
 
 
 def get_billing_ledger(
