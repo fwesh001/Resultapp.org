@@ -106,10 +106,7 @@ export function Select({
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
 }: SelectProps) {
-  const baseId = useStableId(id);
-  const listboxId = `${baseId}-listbox`;
-  const triggerId = `${baseId}-trigger`;
-  const errorId = `${baseId}-error`;
+  const { triggerId, listboxId, errorId } = useSelectIds(id);
 
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(0);
