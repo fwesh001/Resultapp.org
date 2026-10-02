@@ -293,10 +293,14 @@ export function useDraftSave<T extends Record<string, string>>({
     };
   }, [value, key, flush, cancelTimers]);
 
+  // Keep the latest callback in a ref without writing it during render.
+  const onRestoreCandidateRef = useRef(onRestoreCandidate);
+  useEffect(() => {
+    onRestoreCandidateRef.current = onRestoreCandidate;
+  }, [onRestoreCandidate]);
+
   // Offer an existing draft exactly once per scope opening. Deferred to a
   // microtask so this is not a synchronous setState inside the effect body.
-  const onRestoreCandidateRef = useRef(onRestoreCandidate);
-  onRestoreCandidateRef.current = onRestoreCandidate;
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
@@ -304,7 +308,6 @@ export function useDraftSave<T extends Record<string, string>>({
       if (cancelled) return;
       const found = readDraft<T>(key, scope);
       if (cancelled) return;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingRestore(found);
       if (found) onRestoreCandidateRef.current?.(found);
     });
