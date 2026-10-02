@@ -33,12 +33,18 @@ export function useOnlineStatus(): OnlineStatus {
   }, []);
 
   useEffect(() => {
-    read();
+    // Deferred a microtask so the initial read is not a synchronous setState
+    // inside the effect body (which cascades an extra render on mount).
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) read();
+    });
     const goOnline = () => setStatus({ isOnline: true, since: Date.now() });
     const goOffline = () => setStatus({ isOnline: false, since: Date.now() });
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
+      cancelled = true;
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
