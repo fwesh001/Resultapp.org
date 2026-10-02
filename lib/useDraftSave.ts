@@ -226,8 +226,7 @@ export function useDraftSave<T extends Record<string, string>>({
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef<T>(value);
-  latest.current = value;
+  const failsafe = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // A stable string key so effects don't re-run on object identity changes.
   const key = useMemo(() => {
@@ -239,84 +238,87 @@ export function useDraftSave<T extends Record<string, string>>({
     }
   }, [enabled, scope.tenantId, scope.term, scope.className, scope.subjectName, scope.assessmentKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const flush = useCallback(() => {
-    if (!key) return;
+  const cancelTimers = useCallback(() => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    try {
-      const envelope: DraftEnvelope<T> = {
-        v: DRAFT_SCHEMA_VERSION,
-        term: scope.term,
-        className: scope.className,
-        subjectName: scope.subjectName,
-        assessmentKey: scope.assessmentKey,
-        savedAt: Date.now(),
-        values: latest.current,
-      };
-      window.localStorage.setItem(key, JSON.stringify(envelope));
-      setPersistenceAvailable(true);
-      setLastSavedAt(envelope.savedAt);
-    } catch {
-      // Quota or private mode. Persistence is best-effort: keep the UI working.
-      setPersistenceAvailable(false);
-    } finally {
-      setIsPendingWrite(false);
+    if (failsafe.current) {
+      clearTimeout(failsafe.current);
+      failsafe.current = null;
     }
-  }, [key, scope.term, scope.className, scope.subjectName, scope.assessmentKey]);
+  }, []);
+
+  const flush = useCallback(
+    (values: T) => {
+      if (!key) return;
+      cancelTimers();
+      try {
+        const savedAt = Date.now();
+        const envelope: DraftEnvelope<T> = {
+          v: DRAFT_SCHEMA_VERSION,
+          term: scope.term,
+          className: scope.className,
+          subjectName: scope.subjectName,
+          assessmentKey: scope.assessmentKey,
+          savedAt,
+          values,
+        };
+        window.localStorage.setItem(key, JSON.stringify(envelope));
+        setPersistenceAvailable(true);
+        setLastSavedAt(savedAt);
+      } catch {
+        // Quota or private mode. Persistence is best-effort: keep the UI working.
+        setPersistenceAvailable(false);
+      } finally {
+        setIsPendingWrite(false);
+      }
+    },
+    [key, cancelTimers, scope.term, scope.className, scope.subjectName, scope.assessmentKey],
+  );
 
   // Persist on every change (debounced). The fast timer is the battery/typing
-  // path; the long one guarantees a write even if the tab is throttled.
+  // path; the failsafe guarantees a write even if the tab is throttled, and the
+  // cleanup flushes synchronously so unmount/navigation cannot lose the tail.
   useEffect(() => {
     if (!key) return;
+    cancelTimers();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPendingWrite(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, WRITE_DEBOUNCE_MS);
-    const failsafe = setTimeout(flush, FLUSH_DEBOUNCE_MS);
+    timer.current = setTimeout(() => flush(value), WRITE_DEBOUNCE_MS);
+    failsafe.current = setTimeout(() => flush(value), FLUSH_DEBOUNCE_MS);
     return () => {
-      clearTimeout(failsafe);
+      // Flush synchronously rather than dropping the pending write.
+      flush(value);
     };
-  }, [value, key, flush]);
+  }, [value, key, flush, cancelTimers]);
 
-  // Flush anything pending when the scope changes or the component unmounts, so
-  // the last keystrokes before a navigation are not lost.
+  // Offer an existing draft exactly once per scope opening. Deferred to a
+  // microtask so this is not a synchronous setState inside the effect body.
+  const onRestoreCandidateRef = useRef(onRestoreCandidate);
+  onRestoreCandidateRef.current = onRestoreCandidate;
   useEffect(() => {
-    return () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-      }
-      // Only write if we were mid-edit.
-      if (key) flush();
-    };
-  }, [key, flush]);
-
-  // Offer an existing draft exactly once per scope opening.
-  useEffect(() => {
-    if (!key) {
-      setPendingRestore(null);
-      return;
-    }
-    const found = readDraft<T>(key, scope);
-    if (found) {
+    if (!key) return;
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      const found = readDraft<T>(key, scope);
+      if (cancelled) return;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingRestore(found);
-      onRestoreCandidate?.(found);
-    } else {
-      setPendingRestore(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+      if (found) onRestoreCandidateRef.current?.(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const consumeRestore = useCallback(() => setPendingRestore(null), []);
 
   const read = useCallback(() => (key ? readDraft<T>(key, scope) : null), [key, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clear = useCallback(() => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
+    cancelTimers();
     if (!key) return;
     try {
       window.localStorage.removeItem(key);
@@ -326,7 +328,7 @@ export function useDraftSave<T extends Record<string, string>>({
     setPendingRestore(null);
     setLastSavedAt(null);
     setIsPendingWrite(false);
-  }, [key]);
+  }, [key, cancelTimers]);
 
   return {
     pendingRestore,
