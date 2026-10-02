@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import type { TenantMenuTarget } from "@/components/superadmin/TenantRowMenu";
 
 /* Suspend modal — a required CAUSE plus an optional free-text note.
@@ -82,20 +83,18 @@ export function SuspendTenantModal({
             <label htmlFor="lifecycle-suspend-cause" className="text-sm font-medium text-purple-100">
               Cause <span className="font-normal text-amber-300/70">(required)</span>
             </label>
-            <select
+            <Select
               id="lifecycle-suspend-cause"
+              aria-label="Cause (required)"
               value={cause}
-              onChange={(e) => setCause(e.target.value)}
+              onChange={setCause}
               disabled={busy}
-              className="w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-            >
-              <option value="">Select a cause…</option>
-              {SUSPENSION_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+              placeholder="Select a cause…"
+              options={[
+                { value: "", label: "Select a cause…" },
+                ...SUSPENSION_REASONS.map((r): SelectOption => ({ value: r.value, label: r.label })),
+              ]}
+            />
             {causeHint && <p className="text-xs text-purple-300/60">{causeHint}</p>}
           </div>
         )}
