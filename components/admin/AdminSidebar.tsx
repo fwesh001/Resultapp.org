@@ -11,6 +11,7 @@ import {
   GraduationCap,
   ClipboardCheck,
   Bell,
+  LifeBuoy,
   LogOut,
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
@@ -75,6 +76,13 @@ export default function AdminSidebar({
       label: "Billing",
       href: `/${subdomain}/admin/billing`,
       icon: CreditCard,
+    },
+    // Support lives on the apex domain, so this is an absolute href rather
+    // than a tenant-scoped route.
+    {
+      label: "Support",
+      href: "/support",
+      icon: LifeBuoy,
     },
   ];
 
