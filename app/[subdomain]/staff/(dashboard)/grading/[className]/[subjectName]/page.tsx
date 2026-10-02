@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import {
   ArrowLeft,
   BookOpen,
@@ -413,20 +414,16 @@ export default function FocusedGradingPage() {
           </div>
           <label className="flex items-center gap-2 text-sm text-purple-200/70">
             Term
-            <select
-              value={term}
-              onChange={(e) => {
-                setTermTouched(true);
-                setTerm(e.target.value);
-              }}
-              className="rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-            >
-              {TERMS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+<Select
+                aria-label="Term"
+                value={term}
+                onChange={(v) => {
+                  setTermTouched(true);
+                  setTerm(v);
+                }}
+                triggerClassName="w-44"
+                options={TERMS.map((t): SelectOption => ({ value: t, label: t }))}
+              />
           </label>
         </div>
       </div>
@@ -633,24 +630,23 @@ export default function FocusedGradingPage() {
                       {traits.map((t) => (
                         <div key={t} className="flex items-center gap-3">
                           <span className="min-w-0 flex-1 truncate text-xs text-purple-200/80">{t}</span>
-                          <select
-                            value={traitDrafts[`${s.student_id}::${t}`] ?? ""}
-                            onChange={(e) =>
-                              setTraitDrafts((prev) => ({
-                                ...prev,
-                                [`${s.student_id}::${t}`]: e.target.value,
-                              }))
-                            }
-                            aria-label={`${t} grade for ${s.full_name}`}
-                            className="h-9 w-24 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                          >
-                            <option value="">–</option>
-                            {scale.map((g) => (
-                              <option key={g} value={g}>
-                                {g}
-                              </option>
-                            ))}
-                          </select>
+<Select
+                              size="sm"
+                              triggerClassName="w-24"
+                              value={traitDrafts[`${s.student_id}::${t}`] ?? ""}
+                              onChange={(v) =>
+                                setTraitDrafts((prev) => ({
+                                  ...prev,
+                                  [`${s.student_id}::${t}`]: v,
+                                }))
+                              }
+                              aria-label={`${t} grade for ${s.full_name}`}
+                              placeholder="-"
+                              options={[
+                                { value: "", label: "-" },
+                                ...traits.map((g): SelectOption => ({ value: g, label: g })),
+                              ]}
+                            />
                         </div>
                       ))}
                       <button
