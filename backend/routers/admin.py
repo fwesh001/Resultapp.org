@@ -380,6 +380,72 @@ def set_credit_price_config(payload: dict):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/config/free-credits", summary="Get the free-credit toggle and volume threshold (superadmin)")
+def get_free_credits_config():
+    from services.db_manager import (
+        FREE_CREDITS_MIN_STUDENTS,
+        TRIAL_CREDITS,
+        get_free_credits_enabled,
+    )
+
+    return {
+        "enabled": get_free_credits_enabled(),
+        "min_students": FREE_CREDITS_MIN_STUDENTS,
+        "grant_amount": TRIAL_CREDITS,
+    }
+
+
+@router.put("/config/free-credits", summary="Toggle free registration credits (superadmin)")
+def set_free_credits_config(payload: dict):
+    """Enable/disable the free registration credit grant.
+
+    The toggle only ever *permits* the grant — it never grants by itself. The
+    grant still requires the school's initial capacity to be at least
+    FREE_CREDITS_MIN_STUDENTS (inclusive). Changes apply to future
+    registrations only; tenants already provisioned keep whatever they were
+    granted, and the `init:<subdomain>` idempotency key stays unclaimed for
+    anyone who was previously withheld, so they remain eligible later.
+    """
+    if not isinstance(payload, dict) or "enabled" not in payload:
+        raise HTTPException(status_code=400, detail="enabled is required (boolean)")
+    raw = payload.get("enabled")
+    if isinstance(raw, str):
+        lowered = raw.strip().lower()
+        if lowered in ("true", "1", "yes", "on"):
+            enabled = True
+        elif lowered in ("false", "0", "no", "off"):
+            enabled = False
+        else:
+            raise HTTPException(status_code=400, detail="enabled must be a boolean")
+    elif isinstance(raw, bool):
+        enabled = raw
+    else:
+        raise HTTPException(status_code=400, detail="enabled must be a boolean")
+
+    from services.db_manager import (
+        FREE_CREDITS_MIN_STUDENTS,
+        TRIAL_CREDITS,
+        log_admin_action,
+        set_free_credits_enabled,
+    )
+
+    try:
+        new_value = set_free_credits_enabled(enabled)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update free-credit toggle: {e}")
+    log_admin_action(
+        "free_credits.set",
+        None,
+        {"enabled": new_value, "min_students": FREE_CREDITS_MIN_STUDENTS, "grant": TRIAL_CREDITS},
+    )
+    return {
+        "success": True,
+        "enabled": new_value,
+        "min_students": FREE_CREDITS_MIN_STUDENTS,
+        "grant_amount": TRIAL_CREDITS,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Command Center CRM — status, grants, password reset, ledger, stats, audit
 # ---------------------------------------------------------------------------
