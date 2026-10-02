@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import {
   Loader2,
   AlertCircle,
@@ -442,20 +443,16 @@ export default function SmartStaffHubPage() {
             </div>
             <label className="flex items-center gap-2 text-sm text-purple-200/70">
               Term
-              <select
-                value={term}
-                onChange={(e) => {
-                  setTermTouched(true);
-                  setTerm(e.target.value);
-                }}
-                className="rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-              >
-                {TERMS.map((t) => (
-                  <option key={t} value={t} className="bg-[#0B0514]">
-                    {t}
-                  </option>
-                ))}
-              </select>
+<Select
+                  aria-label="Term"
+                  value={term}
+                  onChange={(v) => {
+                    setTermTouched(true);
+                    setTerm(v);
+                  }}
+                  triggerClassName="w-44"
+                  options={TERMS.map((t): SelectOption => ({ value: t, label: t }))}
+                />
             </label>
           </div>
         </div>
