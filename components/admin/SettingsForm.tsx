@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import UploadField from "@/components/ui/UploadField";
+import { Select } from "@/components/ui/Select";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
 import { toast } from "@/components/ui/toast";
 import type { RemarkBand, School } from "@/types/school";
@@ -21,6 +22,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const [activeTab, setActiveTab] = useState<"profile" | "branding">("profile");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The custom Select is controlled, so the active term is held in state and
+  // mirrored into the form by its hidden `name="current_term"` input.
+  const [currentTerm, setCurrentTerm] = useState(school?.currentTerm ?? "Term 1");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -315,16 +319,18 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           <label htmlFor="current-term" className="block text-sm font-medium text-purple-200">
             Active Term
           </label>
-          <select
+          <Select
             id="current-term"
             name="current_term"
-            defaultValue={school?.currentTerm ?? "Term 1"}
-            className={inputClassName}
-          >
-            <option value="Term 1">Term 1</option>
-            <option value="Term 2">Term 2</option>
-            <option value="Term 3">Term 3</option>
-          </select>
+            aria-label="Active Term"
+            value={currentTerm}
+            onChange={setCurrentTerm}
+            options={[
+              { value: "Term 1", label: "Term 1" },
+              { value: "Term 2", label: "Term 2" },
+              { value: "Term 3", label: "Term 3" },
+            ]}
+          />
           <p className="mt-1 text-xs text-purple-300/40">Dashboard and reports default to this term.</p>
         </div>
         <div>
