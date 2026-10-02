@@ -111,7 +111,8 @@ interface RegisterSchoolBody {
   admin_password?: string;
   phoneNumber?: string;
   phone_number?: string;
-  // Credit & Command: trial grant size (defaults to 30 server-side)
+  // Credit & Command: accepted for backward compatibility but IGNORED. The
+  // server decides the grant from the superadmin toggle + the >= 500 threshold.
   initial_credits?: number | string;
   initialCredits?: number | string;
   // Pay-first: verified Flutterwave payment (required except localhost mock)
@@ -278,14 +279,10 @@ export async function POST(req: NextRequest) {
   };
   // Include optional only if present (backend treats as optional)
   if (adminName) fastApiPayload.admin_name = adminName;
-  // Credit & Command: trial grant size (backend defaults to 30)
-  const initialCreditsRaw = body.initial_credits ?? body.initialCredits;
-  if (initialCreditsRaw !== undefined && initialCreditsRaw !== null && String(initialCreditsRaw).trim() !== "") {
-    const grant = Number(String(initialCreditsRaw).trim());
-    if (Number.isFinite(grant) && Number.isInteger(grant) && grant >= 0 && grant <= 10000) {
-      fastApiPayload.initial_credits = grant;
-    }
-  }
+  // Credit & Command: the free-credit grant is decided SERVER-SIDE only.
+  // A client-supplied initial_credits (initialCredits) is deliberately dropped —
+  // forwarding it would imply the caller can influence the grant. The backend
+  // applies the superadmin toggle AND the >= 500 student threshold (inclusive).
   // phone not in Phase 1; omit
 
   // ---- Pay-first verification (no payment → no provisioning) ----
