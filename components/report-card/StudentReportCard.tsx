@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
 import { ReportErrorState } from "@/components/report-card/ReportErrorState";
 import { SUPPORT_EMAIL } from "@/lib/legal/constants";
+import { Select } from "@/components/ui/Select";
 
 function announceReportReady(canPrint: boolean) {
   if (typeof window !== "undefined") {
@@ -203,9 +204,15 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const [notFoundResponse, setNotFoundResponse] = useState(false);
   // Broken/dead logo URLs collapse to the text-only header (no broken icon).
   const [imgError, setImgError] = useState(false);
+  // Signature images fail independently of the logo: a dead signature URL must
+  // fall back to the script font rather than leaving a blank rule.
+  const [teacherSigError, setTeacherSigError] = useState(false);
+  const [principalSigError, setPrincipalSigError] = useState(false);
 
   useEffect(() => {
     setImgError(false);
+    setTeacherSigError(false);
+    setPrincipalSigError(false);
   }, [tenantId, studentId]);
 
   useEffect(() => {
@@ -272,22 +279,22 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // default term can move to another one themselves. Adds no backend endpoint
   // and no new enumeration surface.
   const termSelector = (
-    <select
+    <Select
       aria-label="Choose a term"
+      surface="light"
+      className="w-40"
       value={term}
-      onChange={(e) => {
+      onChange={(v) => {
         const params = new URLSearchParams(window.location.search);
-        params.set("term", e.target.value);
+        params.set("term", v);
         window.location.href = `${window.location.pathname}?${params.toString()}`;
       }}
-      className="min-h-[44px] rounded-full border border-amber-500/30 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-    >
-      {["Term 1", "Term 2", "Term 3"].map((t) => (
-        <option key={t} value={t} className="bg-white text-amber-900">
-          {t}
-        </option>
-      ))}
-    </select>
+      options={[
+        { value: "Term 1", label: "Term 1" },
+        { value: "Term 2", label: "Term 2" },
+        { value: "Term 3", label: "Term 3" },
+      ]}
+    />
   );
   const summary = data?.summary ?? {
     totalScore: 0,
@@ -839,18 +846,20 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
-                      {formTeacherSig ? (
+                      {formTeacherSig && !teacherSigError ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={formTeacherSig}
                           alt="Class teacher signature"
                           className="h-6 object-contain object-left"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
+                          onError={() => setTeacherSigError(true)}
                         />
                       ) : formTeacherName ? (
-                        <p className="font-serif text-sm italic text-slate-900">{formTeacherName}</p>
+                        // Default signature: script face (Yesteryear) so a teacher
+                        // with no uploaded image still signs the card legibly.
+                        <p className="font-[family-name:var(--font-signature)] text-[17px] leading-tight text-slate-900">
+                          {formTeacherName}
+                        </p>
                       ) : (
                         <div className="h-6 border-b border-slate-400" />
                       )}
@@ -872,18 +881,21 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div className="flex-1">
-                      {principalSig ? (
+                      {principalSig && !principalSigError ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={principalSig}
                           alt="Principal signature"
                           className="h-6 object-contain object-left"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
+                          onError={() => setPrincipalSigError(true)}
                         />
                       ) : (
-                        <div className="h-6 border-b border-slate-400" />
+                        // No uploaded signature. The report payload carries no
+                        // principal name (only the signature URL), so fall back to
+                        // the role in the script face rather than a blank rule.
+                        <p className="font-[family-name:var(--font-signature)] text-[17px] leading-tight text-slate-900">
+                          Principal
+                        </p>
                       )}
                       <p className="mt-0.5 text-[10px] font-medium leading-none text-slate-700">Principal&apos;s Signature</p>
                     </div>
