@@ -416,6 +416,44 @@ def init_schools_registry() -> None:
             CREATE INDEX IF NOT EXISTS ix_platform_admins_email
             ON platform_admins (LOWER(email));
         """)
+        # ---- Email verification + password recovery (Phase: auth flow) ----
+        # Tokens are stored as SHA-256 HASHES, never plaintext. The raw token
+        # exists only in the emailed link, so a database read (or a leaked dump)
+        # cannot yield a working verification/reset link.
+        #
+        # Scoped deliberately to schools_registry + platform_admins. Staff
+        # accounts are untouched: they can authenticate by Staff ID with a
+        # shared default PIN and frequently carry no email at all.
+        # (Literal used for platform_admins to match the CREATE TABLE above;
+        # PLATFORM_ADMINS_TABLE is defined further down this module.)
+        for _tbl in (SCHOOLS_REGISTRY_TABLE, "platform_admins"):
+            cur.execute(f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE;")
+            cur.execute(f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS verification_token_hash TEXT;")
+            cur.execute(f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMPTZ;")
+            cur.execute(f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT;")
+            cur.execute(f"ALTER TABLE {_tbl} ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;")
+            # Existing accounts predate verification and are trusted. Without
+            # this backfill every current production login would break at once,
+            # because the column defaults to FALSE.
+            cur.execute(f"UPDATE {_tbl} SET is_email_verified = TRUE WHERE is_email_verified IS NULL;")
+            # Only rows that predate this migration may be backfilled. Rows added
+            # after it keep FALSE via the column default.
+            cur.execute(
+                f"""
+                UPDATE {_tbl}
+                SET is_email_verified = TRUE
+                WHERE is_email_verified = FALSE AND created_at < NOW() - INTERVAL '1 day';
+                """
+            )
+            # One live token per account: the newest issued link wins.
+            cur.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{_tbl}_verify_token ON {_tbl} (verification_token_hash) "
+                f"WHERE verification_token_hash IS NOT NULL;"
+            )
+            cur.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{_tbl}_reset_token ON {_tbl} (reset_password_token_hash) "
+                f"WHERE reset_password_token_hash IS NOT NULL;"
+            )
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS slots_balance INTEGER DEFAULT 0;
