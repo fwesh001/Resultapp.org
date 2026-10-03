@@ -23,6 +23,12 @@ export interface SignInFormProps {
   /** When the backend reports PASSWORD_NOT_SET, show a setup link to this href. */
   setupHref?: string;
   setupLinkLabel?: string;
+  /**
+   * Show the soft-login verification wall when the login response reports
+   * `email_verified: false`. Leave undefined to disable (staff sign-in, where
+   * accounts have no email requirement).
+   */
+  showVerifyWall?: boolean;
 }
 
 /**
