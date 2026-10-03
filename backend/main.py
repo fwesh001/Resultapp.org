@@ -1018,6 +1018,19 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Vitals router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Auth flow — email verification + password recovery (Brevo transactional).
+# Secret-gated; the browser reaches it only through app/api/auth/* proxies.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.auth_flow import router as auth_flow_router
+
+    app.include_router(auth_flow_router)
+    logger.info("[App] Auth flow router mounted (POST /api/v1/auth/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Auth flow router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 
