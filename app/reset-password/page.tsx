@@ -29,12 +29,15 @@ export default function ResetPasswordPage() {
     if (checked.current) return;
     checked.current = true;
 
-    if (!token || !email) {
-      setLinkState("invalid");
-      return;
-    }
     let cancelled = false;
-    (async () => {
+    // Deferred a microtask so the malformed-link branch is not a synchronous
+    // setState inside the effect body.
+    Promise.resolve().then(async () => {
+      if (cancelled) return;
+      if (!token || !email) {
+        setLinkState("invalid");
+        return;
+      }
       try {
         const res = await fetch("/api/auth/check-reset-token", {
           method: "POST",
@@ -47,7 +50,7 @@ export default function ResetPasswordPage() {
       } catch {
         if (!cancelled) setLinkState("invalid");
       }
-    })();
+    });
     return () => {
       cancelled = true;
     };
