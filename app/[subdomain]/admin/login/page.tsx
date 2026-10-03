@@ -70,6 +70,7 @@ export default async function AdminLoginPage({
               footerHint="Admin sign-in: Admin ID or Email + Password"
               setupHref={`/${subdomain}/admin/setup`}
               setupLinkLabel="Set up your admin password"
+              showVerifyWall
             />
           </div>
 
