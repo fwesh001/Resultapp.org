@@ -68,7 +68,6 @@ export async function postAuth(
     }
 
     if (opts.allowDevLog) {
-      // eslint-disable-next-line no-console
       console.log("[auth-flow] backend response", path, data);
     }
     return NextResponse.json(data, { status: 200 });
