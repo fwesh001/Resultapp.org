@@ -104,9 +104,13 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
             )
 
         # Verify password via pgcrypto crypt (same pattern as staff_auth).
+        # is_email_verified is returned so the frontend can decide whether to
+        # show the verification interstitial. It is disclosed ONLY after valid
+        # credentials are presented, which is why there is no public
+        # "is this address registered?" endpoint to probe.
         cur.execute(
             f"""
-            SELECT subdomain, school_name, email
+            SELECT subdomain, school_name, email, is_email_verified
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s AND LOWER(email) = LOWER(%s)
               AND admin_password_hash = crypt(%s, admin_password_hash)
@@ -117,10 +121,16 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
         if ok_row is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         ok = _row_to_dict(ok_row, cur)
-        logger.info(f"[admin_auth] login success {tid}/{identifier}")
+        verified = bool(ok.get("is_email_verified"))
+        logger.info(f"[admin_auth] login success {tid}/{identifier} (email_verified={verified})")
         return {
-            "admin": {"email": ok.get("email"), "school_name": ok.get("school_name")},
+            "admin": {
+                "email": ok.get("email"),
+                "school_name": ok.get("school_name"),
+                "email_verified": verified,
+            },
             "tenant_id": tid,
+            "email_verified": verified,
         }
     except HTTPException:
         raise
