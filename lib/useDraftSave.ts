@@ -118,6 +118,12 @@ export interface UseDraftSaveOptions<T> {
   /** When false, nothing is read or written (e.g. no modal open). */
   enabled?: boolean;
   /**
+   * Pre-v1 storage keys to consider for this scope. If one holds a draft it is
+   * offered like any other, flagged `legacy: true`, and left in place until
+   * the user chooses (so a decline still loses nothing).
+   */
+  legacyKeys?: string[];
+  /**
    * Called when a draft exists on open. The caller owns the prompt; this hook
    * deliberately does not decide policy.
    */
@@ -133,6 +139,13 @@ export interface UseDraftSaveResult<T> {
   readDraft: () => DraftInfo<T> | null;
   /** Delete this scope's draft (Discard, or after a successful save). */
   clearDraft: () => void;
+  /**
+   * Remove only the entries belonging to one subject from the stored draft.
+   * Used by per-student saves on surfaces where one student is saved at a time:
+   * their confirmed data is no longer needed locally, but anyone else's
+   * in-flight work must survive.
+   */
+  clearDraftEntries?: (matchKey: string) => void;
   /** False when localStorage is unavailable (private mode / quota). */
   persistenceAvailable: boolean;
   /** true while a debounced write is queued — drives a "saved" affordance. */
@@ -218,6 +231,7 @@ export function useDraftSave<T extends Record<string, string>>({
   scope,
   value,
   enabled = true,
+  legacyKeys = [],
   onRestoreCandidate,
 }: UseDraftSaveOptions<T>): UseDraftSaveResult<T> {
   const [pendingRestore, setPendingRestore] = useState<DraftInfo<T> | null>(null);
@@ -299,6 +313,21 @@ export function useDraftSave<T extends Record<string, string>>({
     onRestoreCandidateRef.current = onRestoreCandidate;
   }, [onRestoreCandidate]);
 
+  /**
+   * Find a draft for this scope: the v1 key first, then any legacy keys.
+   * Returns null when nothing usable is found.
+   */
+  const findDraft = useCallback((): DraftInfo<T> | null => {
+    if (!key) return null;
+    const primary = readDraft<T>(key, scope);
+    if (primary) return primary;
+    for (const lk of legacyKeys) {
+      const found = readDraft<T>(lk, scope);
+      if (found) return { ...found, key: lk, legacy: true };
+    }
+    return null;
+  }, [key, scope, legacyKeys]);
+
   // Offer an existing draft exactly once per scope opening. Deferred to a
   // microtask so this is not a synchronous setState inside the effect body.
   useEffect(() => {
@@ -306,7 +335,7 @@ export function useDraftSave<T extends Record<string, string>>({
     let cancelled = false;
     Promise.resolve().then(() => {
       if (cancelled) return;
-      const found = readDraft<T>(key, scope);
+      const found = findDraft();
       if (cancelled) return;
       setPendingRestore(found);
       if (found) onRestoreCandidateRef.current?.(found);
@@ -314,30 +343,67 @@ export function useDraftSave<T extends Record<string, string>>({
     return () => {
       cancelled = true;
     };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, findDraft]);
 
   const consumeRestore = useCallback(() => setPendingRestore(null), []);
 
-  const read = useCallback(() => (key ? readDraft<T>(key, scope) : null), [key, scope]);
+  const read = useCallback(() => findDraft(), [findDraft]);
 
   const clear = useCallback(() => {
     cancelTimers();
     if (!key) return;
     try {
+      // Remove both formats so a legacy draft cannot resurface next time.
       window.localStorage.removeItem(key);
+      for (const lk of legacyKeys) window.localStorage.removeItem(lk);
     } catch {
       /* best effort */
     }
     setPendingRestore(null);
     setLastSavedAt(null);
     setIsPendingWrite(false);
-  }, [key, cancelTimers]);
+  }, [key, cancelTimers, legacyKeys]);
+
+  const clearEntries = useCallback(
+    (matchKey: string) => {
+      if (!key) return;
+      const found = findDraft();
+      if (!found) return;
+      const kept: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(found.values as Record<string, unknown>)) {
+        // Keys are namespaced per subject, e.g. "t::<studentId>::<trait>".
+        const subject = k.startsWith("r::") ? k.slice(3) : k.replace(/^[tr]::/, "");
+        if (subject.split("::")[0] === matchKey) continue;
+        kept[k] = v;
+      }
+      // Persist the pruned set immediately so a later unmount flush of the full
+      // in-memory value cannot resurrect the cleared entries.
+      try {
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({
+            v: DRAFT_SCHEMA_VERSION,
+            term: scope.term,
+            className: scope.className,
+            subjectName: scope.subjectName,
+            assessmentKey: scope.assessmentKey,
+            savedAt: Date.now(),
+            values: kept,
+          } satisfies DraftEnvelope<unknown>),
+        );
+      } catch {
+        /* best effort */
+      }
+    },
+    [key, findDraft, scope.term, scope.className, scope.subjectName, scope.assessmentKey],
+  );
 
   return {
     pendingRestore,
     consumeRestore,
     readDraft: read,
     clearDraft: clear,
+    clearDraftEntries: clearEntries,
     persistenceAvailable,
     isPendingWrite,
     lastSavedAt,
