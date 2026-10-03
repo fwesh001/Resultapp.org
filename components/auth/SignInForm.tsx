@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, Lock, User } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { VerifyEmailWall } from "@/components/auth/VerifyEmailWall";
 
 export interface SignInFormProps {
   tenantId: string;
