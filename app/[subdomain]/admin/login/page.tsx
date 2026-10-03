@@ -75,7 +75,10 @@ export default async function AdminLoginPage({
           </div>
 
           <p className="mt-4 text-center text-xs text-purple-300/30">
-            ResultApp • Admin Authentication • <span className="font-mono">{subdomain}</span>
+            ResultApp • Admin Authentication • <span className="font-mono">{subdomain}</span> •{" "}
+            <Link href="/forgot-password" className="underline underline-offset-4 hover:text-white">
+              Forgot password?
+            </Link>
           </p>
         </div>
       </div>
