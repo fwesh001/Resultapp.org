@@ -235,3 +235,182 @@ def send_failure_alert(admin_email: str, subdomain: str, error_detail: str) -> N
         )
     except Exception as e:
         logger.error(f"[EMAIL-ALERT] Failed to send alert: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Transactional auth email (verification + password reset)
+#
+# Reuses the same Brevo v3 endpoint/sender as the welcome mail. Deliberately
+# NOT using a template id here: Brevo templating renders the sender identity
+# from the template, and we need the link built at call time from
+# PUBLIC_BASE_URL (no resultapp.org domain yet, so the host varies).
+# ---------------------------------------------------------------------------
+
+
+def public_base_url() -> str:
+    """Public origin used to build emailed links.
+
+    No resultapp.org domain is purchased yet, so this must point at whatever
+    host the tester is actually serving (localhost, droplet IP, etc). Falls
+    back to the droplet so a link is never silently built against a dead host.
+    """
+    return (
+        os.getenv("PUBLIC_BASE_URL", "")
+        or os.getenv("NEXT_PUBLIC_BASE_DOMAIN", "")
+        or "http://159.223.178.34:8000"
+    ).rstrip("/")
+
+
+def _auth_email_shell(heading: str, body_html: str, footer_note: str) -> str:
+    """Shared inline-CSS shell. Email clients need table/inline styles."""
+    return f"""
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#0B0514;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
+    <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+      <div style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #2a1f3d;">
+        <div style="background:#0B0514;color:#ffffff;padding:22px 24px;">
+          <h1 style="margin:0;font-size:20px;font-weight:700;">{heading}</h1>
+        </div>
+        <div style="padding:24px;">
+          {body_html}
+          <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0;" />
+          <p style="margin:0;font-size:12px;line-height:18px;color:#71717a;">
+            {footer_note}<br/>
+            Sent by ResultApp. If you did not request this email you can safely ignore it.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+""".strip()
+
+
+def send_auth_email(to_email: str, subject: str, html: str, text: str) -> bool:
+    """Low-level Brevo transactional send.
+
+    Returns True only when Brevo accepted the message.
+
+    DEV-MODE CONTRACT: with no BREVO_API_KEY this logs the rendered link and
+    returns False. That is deliberately different from send_welcome_email
+    (which returns True) — telling a user "check your email" when nothing was
+    sent is the worst outcome for a verification flow. Returning False lets the
+    caller surface a real "we couldn't send it" instead of a silent no-op.
+    """
+    cfg = _brevo_config()
+    if not cfg["api_key"]:
+        logger.warning(
+            f"[EMAIL-AUTH] BREVO_API_KEY not set — NOT sending \"{subject}\" to {to_email}. "
+            f"Configure BREVO_API_KEY to enable auth email."
+        )
+        return False
+
+    payload = {
+        "sender": {"email": cfg["sender_email"], "name": cfg["sender_name"]},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html,
+        "textContent": text,
+    }
+    headers = {
+        "accept": "application/json",
+        "api-key": cfg["api_key"],
+        "content-type": "application/json",
+    }
+    try:
+        resp = requests.post(BREVO_API_URL, json=payload, headers=headers, timeout=15)
+        if resp.status_code in (200, 201):
+            data = resp.json() if resp.content else {}
+            logger.info(
+                f"[EMAIL-AUTH] Sent \"{subject}\" to {to_email} "
+                f"(msgId={data.get('messageId') or 'unknown'})"
+            )
+            return True
+        # 401/403 almost always means a wrong/expired API key — loud, because
+        # it is a config bug that silently disables the whole auth flow.
+        if resp.status_code in (401, 403):
+            logger.error(
+                f"[EMAIL-AUTH] Brevo rejected the API key ({resp.status_code}) — "
+                f"verification/reset email is DISABLED until BREVO_API_KEY is fixed."
+            )
+        else:
+            logger.error(f"[EMAIL-AUTH] Brevo error {resp.status_code} for {to_email}: {resp.text[:500]}")
+        return False
+    except requests.Timeout:
+        logger.error(f"[EMAIL-AUTH] Timeout sending \"{subject}\" to {to_email}")
+        return False
+    except Exception as e:
+        logger.exception(f"[EMAIL-AUTH] Unexpected error sending \"{subject}\": {e}")
+        return False
+
+
+def send_verification_email(to_email: str, to_name: str, raw_token: str, tenant: str = "") -> bool:
+    """Email an inbox-ownership link. Never logs the raw token at INFO."""
+    link = f"{public_base_url()}/verify-email?token={raw_token}&email={to_email.strip().lower()}"
+    who = f" for {tenant}" if tenant else ""
+    greeting = to_name.strip() or "there"
+    body = f"""
+        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Hi {greeting},</p>
+        <p style="margin:0 0 16px;font-size:15px;line-height:22px;color:#3f3f46;">
+          Please confirm your email address to finish setting up your ResultApp account{who}.
+        </p>
+        <a href="{link}"
+           style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-weight:600;font-size:14px;">
+          Verify my email
+        </a>
+        <p style="margin:20px 0 0;font-size:12px;line-height:18px;color:#71717a;">
+          This link expires in 24 hours. If it expires, request a new one from the sign-in page.
+        </p>
+        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#71717a;word-break:break-all;">
+          Button not working? Copy this link:<br/>{link}
+        </p>
+    """
+    text = (
+        f"Hi {greeting},\n\n"
+        f"Please confirm your email address to finish setting up your ResultApp account{who}.\n\n"
+        f"Verify: {link}\n\n"
+        f"This link expires in 24 hours."
+    )
+    ok = send_auth_email(to_email.strip().lower(), "Verify your ResultApp email", _auth_email_shell("Confirm your email", body, "Verification email."), text)
+    if not ok:
+        # Never print the token — a log line is not a secure channel.
+        logger.warning(f"[EMAIL-AUTH] Verification email NOT delivered to {to_email} (link not logged)")
+    return ok
+
+
+def send_password_reset_email(to_email: str, to_name: str, raw_token: str, tenant: str = "") -> bool:
+    """Email a password-reset link. Never logs the raw token at INFO."""
+    link = f"{public_base_url()}/reset-password?token={raw_token}&email={to_email.strip().lower()}"
+    who = f" for {tenant}" if tenant else ""
+    greeting = to_name.strip() or "there"
+    body = f"""
+        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Hi {greeting},</p>
+        <p style="margin:0 0 16px;font-size:15px;line-height:22px;color:#3f3f46;">
+          We received a request to reset the password for your ResultApp account{who}.
+        </p>
+        <a href="{link}"
+           style="display:inline-block;background:#0B0514;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-weight:600;font-size:14px;">
+            Choose a new password
+        </a>
+        <p style="margin:20px 0 0;font-size:12px;line-height:18px;color:#71717a;">
+          This link expires in 1 hour and can only be used once.
+        </p>
+        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#b91c1c;">
+          If you did not request this, no action is needed — your password stays unchanged.
+        </p>
+        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#71717a;word-break:break-all;">
+          Button not working? Copy this link:<br/>{link}
+        </p>
+    """
+    text = (
+        f"Hi {greeting},\n\n"
+        f"We received a request to reset the password for your ResultApp account{who}.\n\n"
+        f"Reset here: {link}\n\n"
+        f"This link expires in 1 hour and can only be used once.\n"
+        f"If you did not request this, no action is needed."
+    )
+    ok = send_auth_email(to_email.strip().lower(), "Reset your ResultApp password", _auth_email_shell("Reset your password", body, "Password reset email."), text)
+    if not ok:
+        logger.warning(f"[EMAIL-AUTH] Reset email NOT delivered to {to_email} (link not logged)")
+    return ok
