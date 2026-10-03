@@ -652,6 +652,39 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 exc_info=True,
             )
 
+        # Email verification for the new admin. Placed AFTER register_school so
+        # the row (and therefore the token column) actually exists.
+        #
+        # Non-fatal, same as the welcome mail: provisioning has already
+        # succeeded and must not be rolled back over a mail hiccup. Because
+        # login is a SOFT login the admin can still use the portal unverified,
+        # and can request a new link from the sign-in page.
+        if registry_error is None:
+            try:
+                from services.db_manager import issue_verification_token
+                from services.notifier import send_verification_email
+
+                _issued = issue_verification_token(admin_email, table="schools")
+                if _issued is None:
+                    logger.warning(
+                        f"[PROVISION] No registry row matched {admin_email} for verification (non-fatal)"
+                    )
+                elif not send_verification_email(
+                    _issued["email"],
+                    _issued.get("name") or admin_name or "",
+                    _issued["raw_token"],
+                    tenant=school_name,
+                ):
+                    logger.warning(
+                        f"[PROVISION] Verification email not delivered to {admin_email} (non-fatal)"
+                    )
+                else:
+                    logger.info(f"[PROVISION] Verification email queued for {admin_email}")
+            except Exception as e:
+                logger.warning(
+                    f"[PROVISION] Verification email step failed for '{admin_email}': {e} (non-fatal)"
+                )
+
         # Credit & Command: conditional free-credit grant.
         #
         # The backend is strictly authoritative: `initial_credits` from the
