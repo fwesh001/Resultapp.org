@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, HeartHandshake, Loader2, MessageSquareText, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import { toast } from "@/components/ui/toast";
+import { useDraftSave } from "@/lib/useDraftSave";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { DraftRecoveryPrompt } from "@/components/ui/DraftRecoveryPrompt";
+import { NetworkIndicator } from "@/components/ui/NetworkIndicator";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
 import type { RemarkBand } from "@/types/school";
 
@@ -89,6 +93,89 @@ export default function FormGridPage() {
   // synchronously before the first await — no effect loop can double-fire).
   const autoSaveGuard = useRef<Set<string>>(new Set());
   const [autoSaveStatus, setAutoSaveStatus] = useState<Record<string, "saving" | "saved" | "failed">>({});
+  const [dismissedRestoreKey, setDismissedRestoreKey] = useState<string | null>(null);
+
+  const { isOnline } = useOnlineStatus();
+
+  /**
+   * One device draft for the whole form, holding traits and remarks under
+   * namespaced keys ("t::…" / "r::…"). A single scope means a single restore
+   * prompt instead of two competing ones, and one key to clear on save.
+   */
+  const formDraftValue = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(traitDrafts)) out[`t::${k}`] = v;
+    for (const [k, v] of Object.entries(remarkDrafts)) out[`r::${k}`] = v;
+    return out;
+  }, [traitDrafts, remarkDrafts]);
+
+  const formDraft = useDraftSave<Record<string, string>>({
+    scope: {
+      tenantId,
+      term,
+      className: decodedClassName,
+      subjectName: "behavioural",
+      assessmentKey: "form",
+    },
+    value: formDraftValue,
+    enabled: Boolean(grid),
+  });
+
+  function splitFormDraft(values: Record<string, string>) {
+    const traits: Record<string, string> = {};
+    const remarks: Record<string, string> = {};
+    for (const [k, v] of Object.entries(values)) {
+      if (typeof v !== "string") continue;
+      if (k.startsWith("t::")) traits[k.slice(3)] = v;
+      else if (k.startsWith("r::")) remarks[k.slice(3)] = v;
+    }
+    return { traits, remarks };
+  }
+
+  function handleRestore() {
+    const found = formDraft.readDraft();
+    if (restoreKey) setDismissedRestoreKey(restoreKey);
+    if (!found) return;
+    const { traits, remarks } = splitFormDraft(found.values);
+    const known = new Set((grid?.students ?? []).map((s) => s.student_id));
+    setTraitDrafts((prev) => applyKnownRoster(prev, traits, known));
+    setRemarkDrafts((prev) => applyKnownRoster(prev, remarks, known));
+    // A restored remark is an intentional change, so it must be marked
+    // touched — otherwise Save would silently skip it.
+    setRemarkTouched((prev) => new Set([...prev, ...Object.keys(remarks)]));
+    formDraft.consumeRestore();
+    toast.success("Draft restored", {
+      description: "Your unsaved traits and remarks are back. Press Save to publish them.",
+    });
+  }
+
+  /** Ignore entries for students no longer on the roster. */
+  function applyKnownRoster(
+    base: Record<string, string>,
+    incoming: Record<string, string>,
+    known: Set<string>,
+  ): Record<string, string> {
+    const next = { ...base };
+    for (const [key, val] of Object.entries(incoming)) {
+      if (typeof val !== "string") continue;
+      const sid = key.split("::")[0];
+      if (known.size > 0 && !known.has(sid)) continue;
+      next[key] = val;
+    }
+    return next;
+  }
+
+  function handleDiscardDraft() {
+    formDraft.clearDraft();
+    if (restoreKey) setDismissedRestoreKey(restoreKey);
+    formDraft.consumeRestore();
+    toast.info("Draft discarded", { description: "Keeping the values stored on the server." });
+  }
+
+  // The prompt's open state is derived, not set from an effect: dismissing
+  // records the specific draft key so a different draft can still prompt later.
+  const restoreKey = formDraft.pendingRestore?.key ?? null;
+  const showRestorePrompt = Boolean(grid && restoreKey && restoreKey !== dismissedRestoreKey);
 
   const fetchGrid = useCallback(async () => {
     if (!tenantId || !decodedClassName) return;
@@ -255,9 +342,26 @@ export default function FormGridPage() {
     const remarkText = remarkTouched.has(studentId) ? (remarkDrafts[studentId] || "").trim() : null;
     if (items.length === 0 && remarkText === null) return;
 
+    // Fast pre-check only. `navigator.onLine` is link-layer: a captive portal or
+    // a WiFi connection with no upstream still reports true, so the catch block
+    // below remains the real safety net and must keep the draft either way.
+    if (isOnline === false) {
+      toast.warning("You're offline", {
+        description:
+          "This student is saved on your device. Reconnect and press Save to publish.",
+      });
+      return;
+    }
+
     setSavingSid(studentId);
     try {
       await persistBehavioural(grid, studentId, items, remarkText);
+
+      // Confirmed success (persistBehavioural throws otherwise): drop just this
+      // student's entries from the device draft. Everyone else's in-flight work
+      // stays protected.
+      formDraft.clearDraftEntries?.(studentId);
+
       setRemarkTouched((prev) => {
         const next = new Set(prev);
         next.delete(studentId);
@@ -524,6 +628,34 @@ export default function FormGridPage() {
           })}
         </div>
       ) : null}
+
+      {/* Offline-first affordances: connection state + draft recovery. */}
+      <div className="mx-auto mt-4 max-w-5xl">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.03] px-3 py-2">
+          <p className="text-xs text-purple-300/40">
+            Traits and remarks auto-save to this device for{" "}
+            <span className="font-semibold text-purple-200/60">{term}</span>.
+          </p>
+          <NetworkIndicator
+            isOnline={isOnline}
+            isPendingWrite={formDraft.isPendingWrite}
+            persistenceAvailable={formDraft.persistenceAvailable}
+          />
+        </div>
+      </div>
+
+      <DraftRecoveryPrompt
+        open={showRestorePrompt}
+        onOpenChange={(o) => { if (!o && restoreKey) setDismissedRestoreKey(restoreKey); }}
+        entryCount={Object.values(formDraft.pendingRestore?.values ?? {}).filter(
+          (v) => String(v).trim() !== "",
+        ).length}
+        savedAt={formDraft.pendingRestore?.savedAt ?? null}
+        term={formDraft.pendingRestore?.term ?? term}
+        legacy={formDraft.pendingRestore?.legacy}
+        onRestore={handleRestore}
+        onDiscard={handleDiscardDraft}
+      />
     </div>
   );
 }
