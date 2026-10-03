@@ -46,8 +46,9 @@ export default function SignInForm({
   signingInLabel = "Signing in…",
   footerHint = "Dual-login: Staff ID or Email + PIN",
   requiredErrorMessage = "Staff ID or Email and PIN are required",
-  setupHref,
-  setupLinkLabel = "Set up your admin password",
+setupHref,
+  setupLinkLabel,
+  showVerifyWall = false,
 }: SignInFormProps) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
@@ -55,11 +56,20 @@ export default function SignInForm({
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Soft-login gate: when the backend reports an unverified email we hold the
+  // user here rather than pushing them straight to the portal.
+  const [unverified, setUnverified] = useState<string | null>(null);
+
+  function enterPortal() {
+    router.push(redirectTo ?? `/${tenantId}/staff`);
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setErrorCode(null);
+    setUnverified(null);
 
     if (!identifier.trim() || !password.trim()) {
       setError(requiredErrorMessage);
@@ -78,13 +88,31 @@ export default function SignInForm({
         setErrorCode((data as { code?: string })?.code ?? null);
         throw new Error((data as { error?: string })?.error || `Login failed (${res.status})`);
       }
-      router.push(redirectTo ?? `/${tenantId}/staff`);
-      router.refresh();
+      // The session cookie is already set by the proxy. Only the *navigation*
+      // is held back, which is what makes this a soft login rather than a block.
+      const verified = (data as { email_verified?: boolean })?.email_verified;
+      if (showVerifyWall && verified === false) {
+        const adminEmail =
+          (data as { admin?: { email?: string } })?.admin?.email || identifier.trim();
+        setUnverified(adminEmail);
+        return;
+      }
+      enterPortal();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (unverified !== null) {
+    return (
+      <VerifyEmailWall
+        email={unverified}
+        scope="schools"
+        onContinue={enterPortal}
+      />
+    );
   }
 
   return (
