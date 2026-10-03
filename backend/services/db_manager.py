@@ -13,7 +13,9 @@ import logging
 import secrets
 import string
 import os
-from datetime import datetime, timezone
+import hmac
+import hashlib
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 
 import psycopg2
@@ -1130,6 +1132,331 @@ def log_admin_action(
                 conn.rollback()
         except Exception:
             pass
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Email verification + password recovery
+#
+# Tokens are generated with `secrets` (CSPRNG) and only ever PERSISTED as a
+# SHA-256 hash. The plaintext token exists solely inside the emailed link, so
+# a database dump cannot be replayed as a working reset URL.
+#
+# Accounts are addressed by (table, email). A person may hold accounts on
+# several tenants, so a reset is scoped to ONE matched row — never applied
+# across tenants.
+# ---------------------------------------------------------------------------
+
+#: Verification links stay valid for 24h; reset links for 1h.
+VERIFICATION_TOKEN_TTL_MINUTES = 24 * 60
+RESET_TOKEN_TTL_MINUTES = 60
+
+#: Column names are identical on both tables, so one statement serves each.
+_AUTH_TABLES = ("schools", "platform_admins")
+
+
+def _resolve_auth_table(table: str) -> Optional[str]:
+    """Whitelist table names — these identifiers cannot be parameterised."""
+    if table in _AUTH_TABLES:
+        return table
+    return None
+
+
+def generate_auth_token() -> str:
+    """Cryptographically secure, URL-safe single-use token (secrets = CSPRNG)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_auth_token(raw_token: str) -> str:
+    """Hash a token for storage/lookup. Never store the raw value."""
+    return hashlib.sha256(str(raw_token or "").encode("utf-8")).hexdigest()
+
+
+def issue_verification_token(email: str, table: str = "schools") -> Optional[Dict[str, Any]]:
+    """Mint and store a verification token, returning the RAW token for emailing.
+
+    Any previously issued token is overwritten, so the newest email is always
+    the only working link. Returns None when the address has no account.
+    """
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email:
+        return None
+
+    raw = generate_auth_token()
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=VERIFICATION_TOKEN_TTL_MINUTES)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        # Case-insensitive match, matching every other login path in this file.
+        cur.execute(
+            f"""
+            UPDATE {table}
+               SET verification_token_hash = %s,
+                   verification_token_expires = %s,
+                   -- An already-verified address stays verified; this branch
+                   -- only re-arms the link for an unverified one.
+                   updated_at = NOW()
+             WHERE LOWER(email) = %s
+            RETURNING email, school_name, is_email_verified;
+            """,
+            (hash_auth_token(raw), expires, email),
+        )
+        row = cur.fetchone()
+        if row is None:
+            conn.rollback()
+            return None
+        conn.commit()
+        return {
+            "raw_token": raw,
+            "email": row[0],
+            "name": row[1] if len(row) > 1 else None,
+            "already_verified": bool(row[2]) if len(row) > 2 else False,
+            "expires_at": expires.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"[DB] issue_verification_token failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def consume_verification_token(email: str, raw_token: str, table: str = "schools") -> bool:
+    """Verify an address if the token matches its hash and is unexpired.
+
+    Single use: the hash is nulled by the same UPDATE that flips the flag, so a
+    replayed link fails.
+    """
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email or not raw_token:
+        return False
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {table}
+               SET is_email_verified = TRUE,
+                   verification_token_hash = NULL,
+                   verification_token_expires = NULL,
+                   updated_at = NOW()
+             WHERE LOWER(email) = %s
+               AND verification_token_hash = %s
+               AND verification_token_expires > NOW()
+            RETURNING id;
+            """,
+            (email, hash_auth_token(raw_token)),
+        )
+        ok = cur.fetchone() is not None
+        conn.commit()
+        return ok
+    except Exception as e:
+        logger.error(f"[DB] consume_verification_token failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def is_email_verified(email: str, table: str = "schools") -> Optional[bool]:
+    """Verified flag, or None when no account matches. Used by the login gates."""
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email:
+        return None
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT is_email_verified FROM {table} WHERE LOWER(email) = %s LIMIT 1;",
+            (email,),
+        )
+        row = cur.fetchone()
+        return None if row is None else bool(row[0])
+    except Exception as e:
+        logger.warning(f"[DB] is_email_verified lookup failed for {email}: {e}")
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def issue_reset_token(email: str, table: str = "schools") -> Optional[Dict[str, Any]]:
+    """Mint a password-reset token, returning the RAW token for emailing."""
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email:
+        return None
+
+    raw = generate_auth_token()
+    expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {table}
+               SET reset_password_token_hash = %s,
+                   reset_password_expires = %s,
+                   updated_at = NOW()
+             WHERE LOWER(email) = %s
+            RETURNING email, school_name, role;
+            """,
+            (hash_auth_token(raw), expires, email),
+        )
+        row = cur.fetchone()
+        if row is None:
+            conn.rollback()
+            return None
+        conn.commit()
+        return {
+            "raw_token": raw,
+            "email": row[0],
+            "name": row[1] if len(row) > 1 else None,
+            "role": row[2] if len(row) > 2 else None,
+            "expires_at": expires.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"[DB] issue_reset_token failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def check_reset_token(email: str, raw_token: str, table: str = "schools") -> Dict[str, Any]:
+    """Read-only pre-flight so the UI can reject an expired link before typing.
+
+    Returns {ok, expired, email}. Deliberately does NOT consume the token.
+    """
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email or not raw_token:
+        return {"ok": False, "expired": False, "email": email}
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT reset_password_token_hash, reset_password_expires
+              FROM {table} WHERE LOWER(email) = %s LIMIT 1;
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        if row is None or not row[0] or not row[1]:
+            return {"ok": False, "expired": False, "email": email}
+        if not hmac.compare_digest(str(row[0]), hash_auth_token(raw_token)):
+            return {"ok": False, "expired": False, "email": email}
+        expired = row[1] <= datetime.now(timezone.utc)
+        return {"ok": True, "expired": expired, "email": email}
+    except Exception as e:
+        logger.warning(f"[DB] check_reset_token failed for {email}: {e}")
+        return {"ok": False, "expired": False, "email": email}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def consume_reset_token_set_password(
+    email: str, raw_token: str, new_password: str, table: str = "schools"
+) -> bool:
+    """Consume a valid reset token and write the new bcrypt password, atomically.
+
+    The token is cleared by the same UPDATE that writes the password, so a
+    replayed link cannot reset twice. Also marks the email verified: proving
+    inbox control is the same evidence a verification link provides.
+    """
+    table = _resolve_auth_table(table)
+    email = (email or "").strip().lower()
+    if table is None or not email or not raw_token or not new_password:
+        return False
+    if len(new_password) < 8:
+        return False
+
+    # schools_registry keeps the admin password in admin_password_hash;
+    # platform_admins in password_hash.
+    pw_col = "admin_password_hash" if table == "schools" else "password_hash"
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {table}
+               SET {pw_col} = crypt(%s, gen_salt('bf')),
+                   reset_password_token_hash = NULL,
+                   reset_password_expires = NULL,
+                   is_email_verified = TRUE,
+                   updated_at = NOW()
+             WHERE LOWER(email) = %s
+               AND reset_password_token_hash = %s
+               AND reset_password_expires > NOW()
+            RETURNING id;
+            """,
+            (new_password, email, hash_auth_token(raw_token)),
+        )
+        ok = cur.fetchone() is not None
+        conn.commit()
+        if ok:
+            logger.info(f"[DB] password reset completed for {email} ({table})")
+        return ok
+    except Exception as e:
+        logger.error(f"[DB] consume_reset_token_set_password failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return False
     finally:
         if conn:
             try:
