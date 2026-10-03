@@ -59,8 +59,16 @@ def platform_login(payload: PlatformLoginRequest):
     admin = verify_platform_admin(email, payload.password)
     if admin is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    logger.info(f"[platform_auth] login success {email} ({admin.get('role')})")
-    return {"admin": admin}
+
+    # Returned so the frontend can decide whether to show the verification
+    # interstitial. Disclosed only after valid credentials, which is why there
+    # is no public "is this address registered?" endpoint to probe.
+    from services.db_manager import is_email_verified
+
+    verified = bool(is_email_verified(email, table="platform_admins"))
+    admin = {**admin, "email_verified": verified}
+    logger.info(f"[platform_auth] login success {email} ({admin.get('role')}, email_verified={verified})")
+    return {"admin": admin, "email_verified": verified}
 
 
 @router.get("/me", summary="Validate a platform admin session")
