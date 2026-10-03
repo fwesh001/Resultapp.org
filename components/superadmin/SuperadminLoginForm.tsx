@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, Lock } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { VerifyEmailWall } from "@/components/auth/VerifyEmailWall";
 
 /** Platform sign-in — per-user email+password, or legacy env password when email is blank. */
 export default function SuperadminLoginForm() {
@@ -14,6 +15,9 @@ export default function SuperadminLoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Soft-login gate. Only applies to the per-user path — the legacy env
+  // password has no account row behind it, so there is nothing to verify.
+  const [unverified, setUnverified] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +41,13 @@ export default function SuperadminLoginForm() {
       if (!res.ok) {
         throw new Error((data as { error?: string })?.error || `Login failed (${res.status})`);
       }
+      // Session cookie is already set by the proxy; only navigation is held
+      // back, so this is a soft login rather than a block.
+      const verified = (data as { email_verified?: boolean })?.email_verified;
+      if (email.trim() && verified === false) {
+        setUnverified(email.trim().toLowerCase());
+        return;
+      }
       router.push("/superadmin");
       router.refresh();
     } catch (err) {
@@ -44,6 +55,19 @@ export default function SuperadminLoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (unverified !== null) {
+    return (
+      <VerifyEmailWall
+        email={unverified}
+        scope="platform_admins"
+        onContinue={() => {
+          router.push("/superadmin");
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (
