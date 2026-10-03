@@ -18,6 +18,10 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
+import { useDraftSave } from "@/lib/useDraftSave";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { DraftRecoveryPrompt } from "@/components/ui/DraftRecoveryPrompt";
+import { NetworkIndicator } from "@/components/ui/NetworkIndicator";
 
 const TERMS = ["Term 1", "Term 2", "Term 3"] as const;
 
@@ -81,7 +85,12 @@ function sanitize(value: string): string {
   return value.replace(/\s+/g, "_");
 }
 
-function buildDraftKey(
+/**
+ * Pre-v1 draft key, kept so existing in-progress work is still recoverable.
+ * v1 moved to a term-scoped `resultapp|draft|v1|…` key because the old one
+ * omitted term and so let one term's draft overwrite another's.
+ */
+function legacyDraftKey(
   tenantId: string,
   className: string,
   subjectName: string,
@@ -152,6 +161,74 @@ export default function SmartStaffHubPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [saving, setSaving] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [dismissedRestoreKey, setDismissedRestoreKey] = useState<string | null>(null);
+
+  const { isOnline } = useOnlineStatus();
+
+  // Offline-first draft persistence. Term is part of the scope, so a Term 1
+  // draft can never be restored over Term 2 marks.
+  const decodedActiveClass = activeClass ? safeDecode(activeClass) : "";
+  const decodedActiveSubject = activeSubject ? safeDecode(activeSubject) : "";
+  const draftScope = useMemo(
+    () => ({
+      tenantId,
+      term,
+      className: decodedActiveClass,
+      subjectName: decodedActiveSubject,
+      assessmentKey: activeAssessment?.key ?? "",
+    }),
+    [tenantId, term, decodedActiveClass, decodedActiveSubject, activeAssessment?.key],
+  );
+  const legacyKeys = useMemo(
+    () =>
+      activeClass && activeSubject && activeAssessment
+        ? [legacyDraftKey(tenantId, safeDecode(activeClass), safeDecode(activeSubject), activeAssessment.key)]
+        : [],
+    [tenantId, activeClass, activeSubject, activeAssessment],
+  );
+  const draft = useDraftSave<Record<string, string>>({
+    scope: draftScope,
+    value: drafts,
+    enabled: Boolean(activeClass && activeSubject && activeAssessment),
+    legacyKeys,
+  });
+
+  function applyDraft(base: Record<string, string>, incoming: Record<string, string>) {
+    const known = new Set((bundle?.students ?? []).map((s) => s.student_id));
+    const next: Record<string, string> = { ...base };
+    for (const [sid, val] of Object.entries(incoming)) {
+      // Ignore students no longer on the roster so a stale draft cannot
+      // reintroduce (or submit) someone who has been removed.
+      if (known.size > 0 && !known.has(sid)) continue;
+      if (typeof val === "string") next[sid] = val;
+    }
+    return next;
+  }
+
+  function handleRestore() {
+    const found = draft.readDraft();
+    if (restoreKey) setDismissedRestoreKey(restoreKey);
+    if (!found) return;
+    setDrafts((prev) => applyDraft(prev, found.values));
+    draft.consumeRestore();
+    toast.success("Draft restored", {
+      description: found.legacy
+        ? "Recovered from an earlier version of the app."
+        : "Your unsaved scores are back. Press Save to publish them.",
+    });
+  }
+
+  function handleDiscardDraft() {
+    draft.clearDraft();
+    if (restoreKey) setDismissedRestoreKey(restoreKey);
+    draft.consumeRestore();
+    toast.info("Draft discarded", { description: "Keeping the values stored on the server." });
+  }
+
+  // The prompt's open state is derived, not set from an effect: dismissing
+  // records the specific draft key so a different draft can still prompt later.
+  const restoreKey = draft.pendingRestore?.key ?? null;
+  const showRestorePrompt = Boolean(activeAssessment && restoreKey && restoreKey !== dismissedRestoreKey);
 
   const assessments = useMemo(() => parseAssessments(template), [template]);
 
@@ -230,28 +307,14 @@ export default function SmartStaffHubPage() {
       const data = (await res.json()) as Bundle & { error?: string };
       if (!res.ok) throw new Error(data.error || `Failed to load students (${res.status})`);
       setBundle(data);
-      // Restore drafts: merge existing grades + localStorage draft
+      // Seed from server grades only. Any device draft is offered separately via
+      // the DraftRecoveryPrompt — never silently merged, which could overwrite
+      // a colleague's marks with this device's stale copy.
       const existing = data.grades || {};
       const baseDrafts: Record<string, string> = {};
       for (const s of data.students || []) {
         const v = existing[s.student_id]?.[activeAssessment.key];
         if (v !== undefined && v !== null) baseDrafts[s.student_id] = String(v);
-      }
-      // Restore from localStorage if draft exists
-      if (typeof window !== "undefined") {
-        const key = buildDraftKey(tenantId, decodedClass, decodedSubject, activeAssessment.key);
-        const raw = window.localStorage.getItem(key);
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw) as Record<string, string>;
-            // Merge parsed over base (draft wins)
-            for (const [k, v] of Object.entries(parsed)) {
-              if (typeof v === "string") baseDrafts[k] = v;
-            }
-          } catch {
-            // ignore corrupt draft
-          }
-        }
       }
       setDrafts(baseDrafts);
       setFieldErrors({});
@@ -270,19 +333,8 @@ export default function SmartStaffHubPage() {
     }
   }, [activeAssessment, activeClass, activeSubject, fetchBundleForActive]);
 
-  // Auto-save failsafe: on every keystroke save draft to localStorage
-  useEffect(() => {
-    if (!activeAssessment || !activeClass || !activeSubject) return;
-    if (typeof window === "undefined") return;
-    const decodedClass = safeDecode(activeClass);
-    const decodedSubject = safeDecode(activeSubject);
-    const key = buildDraftKey(tenantId, decodedClass, decodedSubject, activeAssessment.key);
-    try {
-      window.localStorage.setItem(key, JSON.stringify(drafts));
-    } catch {
-      // storage quota or private mode — non-fatal
-    }
-  }, [drafts, activeAssessment, activeClass, activeSubject, tenantId]);
+  // Autosave to the device is handled by `useDraftSave` (debounced, term-scoped,
+  // private-mode tolerant) — no manual localStorage effect here.
 
   function openAssessment(
     className: string,
@@ -303,45 +355,14 @@ export default function SmartStaffHubPage() {
       setActiveSubject(null);
       return;
     }
-    // Dirty state failsafe: if localStorage has unsaved changes, confirm
-    const decodedClass = safeDecode(activeClass);
-    const decodedSubject = safeDecode(activeSubject);
-    const key = buildDraftKey(tenantId, decodedClass, decodedSubject, activeAssessment.key);
-    let hasUnsaved = false;
-    if (typeof window !== "undefined") {
-      const raw = window.localStorage.getItem(key);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as Record<string, string>;
-          const entered = Object.values(parsed).some((v) => String(v).trim() !== "");
-          // Compare against bundle grades to detect true dirtiness — if any draft differs from saved, treat as unsaved
-          if (entered) {
-            // Check if any draft is not equal to saved grade or is new
-            const saved = bundle?.grades || {};
-            for (const [sid, rawVal] of Object.entries(parsed)) {
-              if (rawVal.trim() === "") continue;
-              const savedVal = saved[sid]?.[activeAssessment.key];
-              if (savedVal === undefined || String(savedVal) !== String(rawVal).trim()) {
-                hasUnsaved = true;
-                break;
-              }
-            }
-            // Also if no saved comparison but entered, it's unsaved
-            if (!hasUnsaved && Object.values(parsed).some((v) => v.trim() !== "")) {
-              // Double-check: if bundle had no grades yet, any entry is unsaved
-              const anySaved = Object.keys(saved).length > 0;
-              if (!anySaved) hasUnsaved = true;
-            }
-          }
-        } catch {
-          hasUnsaved = false;
-        }
-      } else {
-        // Check drafts state directly (in-memory unsaved)
-        const entered = Object.values(drafts).some((v) => String(v).trim() !== "");
-        if (entered) hasUnsaved = true;
-      }
-    }
+    // Dirty state check against in-memory state (what the hook persists).
+    const saved = bundle?.grades || {};
+    const hasUnsaved = Object.entries(drafts).some(([sid, raw]) => {
+      const trimmed = String(raw).trim();
+      if (trimmed === "") return false;
+      const savedVal = saved[sid]?.[activeAssessment.key];
+      return savedVal === undefined || String(savedVal) !== trimmed;
+    });
     if (hasUnsaved) {
       setShowDiscardConfirm(true);
       return;
@@ -370,6 +391,17 @@ export default function SmartStaffHubPage() {
 
     if (scores.length === 0) return;
 
+    // Fast pre-check only. `navigator.onLine` is link-layer: a captive portal or
+    // a WiFi connection with no upstream still reports true, so the catch block
+    // below remains the real safety net and must keep the draft either way.
+    if (isOnline === false) {
+      toast.warning("You're offline", {
+        description:
+          "Your scores are saved on this device. Reconnect and press Save to publish them.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch("/api/staff/grading", {
@@ -386,11 +418,9 @@ export default function SmartStaffHubPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
-      // Clear draft on successful save
-      if (typeof window !== "undefined") {
-        const key = buildDraftKey(tenantId, decodedClass, decodedSubject, activeAssessment.key);
-        window.localStorage.removeItem(key);
-      }
+      // Only now is the draft redundant: a confirmed 200 from the backend.
+      // Also clears any legacy key so it cannot resurface later.
+      draft.clearDraft();
       toast.success(`Saved ${activeAssessment.key} for ${scores.length} student${scores.length === 1 ? "" : "s"}`);
       // Close modal and refetch hub? Keep closed
       setActiveAssessment(null);
@@ -401,8 +431,13 @@ export default function SmartStaffHubPage() {
       setFieldErrors({});
       // Optional: refetch bundle cache for that class would show updated counts next open
     } catch (err) {
+      // Draft deliberately NOT cleared. If navigator.onLine lied (captive
+      // portal, dead upstream) this is the only thing standing between the
+      // teacher and lost work.
       toast.error("Could not save scores", {
-        description: err instanceof Error ? err.message : "Please try again",
+        description:
+          (err instanceof Error ? err.message : "Please try again") +
+          " — your work is still saved on this device.",
       });
     } finally {
       setSaving(false);
@@ -412,8 +447,6 @@ export default function SmartStaffHubPage() {
   const hasFieldError = Object.values(fieldErrors).some(Boolean);
   const enteredCount = Object.values(drafts).filter((v) => String(v).trim() !== "").length;
   const modalOpen = activeAssessment !== null && activeClass !== null && activeSubject !== null;
-  const decodedActiveClass = activeClass ? safeDecode(activeClass) : "";
-  const decodedActiveSubject = activeSubject ? safeDecode(activeSubject) : "";
 
   return (
     <div className="min-h-screen bg-[#0B0514] px-4 py-8 sm:px-6 lg:px-8">
@@ -643,9 +676,21 @@ export default function SmartStaffHubPage() {
                     <AlertCircle className="h-3.5 w-3.5" /> Some scores exceed the maximum — fix the red fields to save.
                   </p>
                 )}
-                <p className="text-xs text-purple-300/40">
-                  Drafts auto-save on every keystroke to <span className="font-mono text-purple-200/60">{buildDraftKey(tenantId, decodedActiveClass, decodedActiveSubject, activeAssessment.key)}</span>. Close will prompt if unsaved.
-                </p>
+<p className="text-xs text-purple-300/40">
+                    Drafts auto-save to this device for{" "}
+                    <span className="font-semibold text-purple-200/60">{term}</span>. Closing will prompt if unsaved.
+                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-purple-300/30">
+                    Draft auto-saves to this device for{" "}
+                    <span className="font-semibold text-purple-200/60">{term}</span>
+                  </p>
+                  <NetworkIndicator
+                    isOnline={isOnline}
+                    isPendingWrite={draft.isPendingWrite}
+                    persistenceAvailable={draft.persistenceAvailable}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => void handleSave()}
@@ -676,6 +721,18 @@ export default function SmartStaffHubPage() {
         variant="default"
         confirmLabel="Discard"
         onConfirm={discardAndClose}
+      />
+
+      {/* Draft recovery — offered instead of silently merging over server marks. */}
+      <DraftRecoveryPrompt
+        open={showRestorePrompt}
+        onOpenChange={(o) => { if (!o && restoreKey) setDismissedRestoreKey(restoreKey); }}
+        entryCount={Object.values(draft.pendingRestore?.values ?? {}).filter((v) => String(v).trim() !== "").length}
+        savedAt={draft.pendingRestore?.savedAt ?? null}
+        term={draft.pendingRestore?.term ?? term}
+        legacy={draft.pendingRestore?.legacy}
+        onRestore={handleRestore}
+        onDiscard={handleDiscardDraft}
       />
     </div>
   );
