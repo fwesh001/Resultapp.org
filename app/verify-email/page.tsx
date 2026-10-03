@@ -26,15 +26,19 @@ export default function VerifyEmailPage() {
     if (fired.current) return;
     fired.current = true;
 
-    if (!token || !email) {
-      setPhase("invalid");
-      setMessage("This link is missing its verification details. Request a new one below.");
-      setCanResend(true);
-      return;
-    }
-
     let cancelled = false;
-    (async () => {
+    // Deferred a microtask so even the malformed-link branch is not a
+    // synchronous setState inside the effect body.
+    Promise.resolve().then(async () => {
+      if (cancelled) return;
+
+      if (!token || !email) {
+        setPhase("invalid");
+        setMessage("This link is missing its verification details. Request a new one below.");
+        setCanResend(true);
+        return;
+      }
+
       try {
         const res = await fetch("/api/auth/verify-email", {
           method: "POST",
@@ -59,7 +63,7 @@ export default function VerifyEmailPage() {
         setMessage("We could not reach the verification service. Try again shortly.");
         setCanResend(true);
       }
-    })();
+    });
 
     return () => {
       cancelled = true;
