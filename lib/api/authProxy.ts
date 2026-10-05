@@ -85,6 +85,7 @@ export function resolveBackendBase(): BackendBaseResult {
 
 /** Log a rejected BACKEND_URL. Safe to log: it is a hostname, never a secret. */
 export function logBadBackendUrl(scope: string, result: BackendBaseResult): void {
+  if (result.ok) return;
   const raw = (process.env.BACKEND_URL || "").trim();
   console.error(
     `[${scope}] ${result.reason} — received: ${JSON.stringify(raw.slice(0, 120))}`
