@@ -555,10 +555,8 @@ def send_otp_email(to_email: str, raw_code: str, expires_minutes: int = 10) -> b
               </table>
               <!--[if mso]></td></tr></table><![endif]-->
             </td>
-            <td width="14" style="width:14px;font-size:0;line-height:0;">&nbsp;</td>
-            <td valign="middle" style="valign:middle;">
-              <img src="{_EMAIL_CLIP_URI}" width="15" height="15" alt="" style="display:block;width:15px;height:15px;border:0;outline:none;text-decoration:none;" />
-            </td>
+            <td width="12" style="width:12px;font-size:0;line-height:0;">&nbsp;</td>
+            <td valign="middle" align="center" style="valign:middle;text-align:center;font-family:{_EMAIL_FONT};font-size:15px;line-height:20px;color:{_EMAIL_ACCENT};">{_EMAIL_COPY_GLYPH}</td>
           </tr>
         </table>
         <p style="margin:0 0 20px 0;font-family:{_EMAIL_FONT};font-size:13px;line-height:20px;color:{_EMAIL_MUTED};text-align:center;">
