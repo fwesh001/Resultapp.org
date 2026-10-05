@@ -1302,7 +1302,7 @@ export function RegisterSchoolForm() {
 
         {/* Student Count — capacity estimate + quick packages */}
         <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Quick capacity packages">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Quick capacity packages">
           {[100, 250, 500, 1000].map((n) => (
             <button
               key={n}
