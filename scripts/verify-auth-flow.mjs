@@ -848,12 +848,16 @@ check("the OTP pill is copy-ready and high-contrast", () => {
   );
   if (!send) return "cannot locate send_otp_email";
   const has = (needle, msg) => (send.includes(needle) ? true : msg);
+  // Sentinels first (so body text is dropped), then search the whole file.
+  const pillBg = /_EMAIL_PILL_BG\s*=\s*"([^"]+)"/.exec(notifier);
+  const mono = /_EMAIL_MONO\s*=\s*"([^"]+)"/.exec(notifier);
   return [
-    has("{_EMAIL_PILL_BG}", "the pill does not use the elevated pill background"),
+    pillBg ? true : "no _EMAIL_PILL_BG constant",
+    pillBg ? has(pillBg[1], "the pill does not use the elevated pill background") : true,
     has("letter-spacing:12px", "the digits are not letter-spaced for legibility"),
-    has("{_EMAIL_MONO}", "the code is not monospaced"),
+    mono ? has(mono[1], "the code is not monospaced") : true,
     has("_EMAIL_CLIP_URI", "no clipboard cue beside the digits"),
-    has("_EMAIL_HEADING}", "the code is not high-contrast against the pill"),
+    has('color:{_EMAIL_HEADING}', "the code is not high-contrast against the pill"),
   ].find((r) => r !== true) || true;
 });
 
