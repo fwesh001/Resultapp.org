@@ -11,6 +11,10 @@ import {
   Users,
   Sparkles,
   ExternalLink,
+  Eye,
+  EyeOff,
+  MailCheck,
+  ShieldCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -30,13 +34,24 @@ import {
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 
 // ---------------------------------------------------------------------------
-// Phase 1 – RegisterSchoolForm (4 fields, direct provision, no Flutterwave)
+// RegisterSchoolForm — 3-step pay-first wizard.
+//
+//   1. School Details  — name, subdomain, admin email + OTP verification
+//   2. Account Security— admin name, passwords, student count
+//   3. Review & Payment— summary, terms consent, Flutterwave checkout
+//
+// Validation is scoped per step (validateStep1/2) so an incomplete later step
+// never blocks progress on an earlier one; Step 3 re-checks everything before
+// money moves. Inbox ownership gates PAYMENT only — an unverified address may
+// still reach Step 3 — so a slow or unconfigured mail path does not strand the
+// user on Step 1 with no recourse.
 // ---------------------------------------------------------------------------
 
 interface FormValues {
   schoolName: string;
   subdomain: string;
   adminEmail: string;
+  adminName: string;
   adminPassword: string;
   adminPasswordConfirm: string;
   studentCount: string; // keep string for controlled input
@@ -64,6 +79,11 @@ const RESERVED_SLUGS = new Set([
 
 const SUBDOMAIN_RE = /^[a-z0-9-]{3,30}$/;
 
+/** 6-digit code, entered by the user. Mirrors the backend's pydantic pattern. */
+const OTP_RE = /^[0-9]{6}$/;
+/** Resend cooldown shown to the user; the backend enforces its own window. */
+const OTP_RESEND_COOLDOWN_S = 60;
+
 function sanitizeSlug(raw: string): string {
   return raw
     .toLowerCase()
@@ -84,6 +104,7 @@ export function RegisterSchoolForm() {
     schoolName: "",
     subdomain: "",
     adminEmail: "",
+    adminName: "",
     adminPassword: "",
     adminPasswordConfirm: "",
     studentCount: "",
