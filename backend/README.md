@@ -39,7 +39,7 @@ backend/
 ```bash
 # On Droplet as root
 apt update && apt upgrade -y
-apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx php8.2 php8.2-fpm php8.2-pgsql php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip certbot python3-certbot-nginx git
+apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx php8.3 php8.3-fpm php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-intl php8.3-bcmath certbot python3-certbot-nginx git
 
 # Create deploy user (optional)
 # adduser deploy
@@ -221,7 +221,7 @@ sudo -u postgres psql -c "DROP USER IF EXISTS vhs_user;"
 ## 7) Nginx & SSL
 
 - Each provision creates `/etc/nginx/sites-available/<domain>` from `NGINX_TEMPLATE` in `site_generator.py`.
-- `client_max_body_size 20M`, `php8.2-fpm` via `unix:/var/run/php/php8.2-fpm.sock`
+- `client_max_body_size 20M`, `php8.3-fpm` via `unix:/var/run/php/php8.3-fpm.sock`
 - For SSL, set `AUTO_SSL=true` in `.env` and install certbot; after `deploy_site` succeeds, run:
   `certbot --nginx -d vhs.resultapp.org --non-interactive --agree-tos -m admin@resultapp.org`
   Or use wildcard: DigitalOcean DNS plugin `certbot certonly --dns-digitalocean`
