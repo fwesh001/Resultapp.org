@@ -299,23 +299,40 @@ _EMAIL_FONT = (
 )
 _EMAIL_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace"
 
-#: Blueprint grid — a 44px tile with a single hairline top/left rule.
-_EMAIL_GRID_URI = (
-    "data:image/svg+xml;charset=utf-8,"
-    "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='44'%20height='44'%3E"
-    "%3Cpath%20d='M44%200H0v44'%20fill='none'%20stroke='%23a78bfa'%20"
-    "stroke-opacity='0.09'%20stroke-width='1'/%3E%3C/svg%3E"
+def _svg_data_uri(svg: str) -> str:
+    """Percent-encode an SVG fragment into a CSS-safe data URI.
+
+    Encoding is done here rather than hand-written because of a bug this
+    replaces: the URIs previously embedded raw single quotes (xmlns='...')
+    inside an UNQUOTED url(). Per CSS tokenisation an unquoted url() may not
+    contain quotes, so the entire declaration is invalid and every client
+    silently drops the background — the grid was present in the markup and
+    simply never painted.
+
+    Verified in Chrome against five encodings: raw quotes fail, %27-encoded
+    quotes work, full percent-encoding works. Quotes-as-%27 is used because it
+    is also safe inside Outlook's inline-style parser, which chokes on some
+    fully-encoded forms. safe="" percent-encodes everything else (#, <, >, /).
+    """
+    from urllib.parse import quote
+
+    return "data:image/svg+xml;charset=utf-8," + quote(svg, safe="").replace("'", "%27")
+
+
+#: Blueprint grid — a 44px tile with a single hairline top+left rule.
+_EMAIL_GRID_URI = _svg_data_uri(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'>"
+    "<path d='M44 0H0v44' fill='none' stroke='#a78bfa' "
+    "stroke-opacity='0.09' stroke-width='1'/></svg>"
 )
 
-#: Clipboard glyph for the copy cue on the OTP pill.
-_EMAIL_CLIP_URI = (
-    "data:image/svg+xml;charset=utf-8,"
-    "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='15'%20height='15'%20"
-    "viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23a78bfa'%20"
-    "stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E"
-    "%3Crect%20x='9'%20y='9'%20width='13'%20height='13'%20rx='2'/%3E"
-    "%3Cpath%20d='M5%2015H4a2%202%200%200%201-2V4a2%202%200%200%202-2h9a2%202%200%200%202%202v1'/%3E"
-    "%3C/svg%3E"
+#: Clipboard glyph for the copy cue beside the OTP digits.
+_EMAIL_CLIP_URI = _svg_data_uri(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' "
+    "viewBox='0 0 24 24' fill='none' stroke='#a78bfa' stroke-width='2' "
+    "stroke-linecap='round' stroke-linejoin='round'>"
+    "<rect x='9' y='9' width='13' height='13' rx='2'/>"
+    "<path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/></svg>"
 )
 
 
