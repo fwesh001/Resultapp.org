@@ -107,8 +107,16 @@ export async function postAuth(
   const secret = getProxySecret();
   if (!secret) return misconfigured();
 
+  // A malformed BACKEND_URL must not reach fetch(): it throws ERR_INVALID_URL
+  // and turns a config typo into an opaque 502.
+  const backend = resolveBackendBase();
+  if (!backend.ok) {
+    logBadBackendUrl(`api/auth/${path}`, backend);
+    return NextResponse.json({ error: `Server misconfigured: ${backend.reason}` }, { status: 500 });
+  }
+
   try {
-    const res = await fetch(`${getBackendBase()}/api/v1/auth/${path}`, {
+    const res = await fetch(`${backend.base}/api/v1/auth/${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
       body: JSON.stringify(body),
