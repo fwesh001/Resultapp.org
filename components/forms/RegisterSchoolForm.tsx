@@ -490,13 +490,32 @@ export function RegisterSchoolForm() {
     }
   }
 
-  // Step 1 exit: validate, then re-check subdomain availability live.
-  // Never touches the provision API — payment happens in Step 3.
+  // Step 1 exit: validate, then prove the inbox, then re-check subdomain
+  // availability live. Never touches the provision API — payment is Step 3.
   async function handleStep1Next(e: React.FormEvent) {
     e.preventDefault();
     setGlobalError(null);
 
     if (!validateStep1()) return;
+
+    // STRICT GATE — proven inbox ownership is required to leave Step 1.
+    // Revised from the earlier "block payment only" decision: a registration
+    // wizard that collects an admin email should not let an unproven address
+    // advance into account security at all.
+    //
+    // Trade-off, stated plainly: if Brevo breaks (key missing, sender
+    // unverified, 502), the user is stranded on Step 1 with no path forward.
+    // That is the accepted cost of the strict gate. The failure is at least
+    // self-explaining — sendOtp surfaces the backend's real reason rather than
+    // the neutral "sent" response.
+    if (!isEmailVerified) {
+      setOtpError(
+        otpSent
+          ? "Enter the 6-digit code from your email to continue."
+          : "Verify your admin email to continue — send a code first."
+      );
+      return;
+    }
 
     // Sniped since the last keystroke: re-verify live before advancing.
     if (subdomainTaken) {
