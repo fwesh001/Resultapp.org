@@ -266,30 +266,166 @@ def public_base_url() -> str:
     return raw.rstrip("/")
 
 
+# ---------------------------------------------------------------------------
+# Email brand theme
+#
+# Mirrors the deep-purple neon aesthetic of resultapp.org (the hero section and
+# globals.css). Values are duplicated here rather than imported because email
+# rendering is a separate surface with its own constraints:
+#
+# * Everything is INLINE. Gmail strips <style> blocks from the <head> of some
+#   accounts and Outlook (Word engine) never honours them at all, so a
+#   stylesheet-only template arrives unstyled.
+# * Layout is <table>-based. Flexbox/grid are stripped by both.
+# * rgba() borders degrade to nothing in Outlook, so every translucent border
+#   has a solid hex fallback plus an <!--[if mso]> override.
+# * The grid and clipboard icons are SVG data URIs on table cells — inline
+#   <svg> is stripped by Gmail and Outlook alike.
+# ---------------------------------------------------------------------------
+
+_EMAIL_BG = "#090514"
+_EMAIL_CARD_BG = "#130926"
+_EMAIL_PILL_BG = "#1e113b"
+#: rgba(147, 51, 234, 0.3) — the requested glow border.
+_EMAIL_BORDER_RGBA = "rgba(147, 51, 234, 0.3)"
+#: Solid equivalent for clients with no rgba() support (Outlook).
+_EMAIL_BORDER_HEX = "#3b1d78"
+_EMAIL_HEADING = "#ffffff"
+_EMAIL_BODY = "#cbd5e1"
+_EMAIL_MUTED = "#94a3b8"
+_EMAIL_ACCENT = "#a78bfa"
+_EMAIL_FONT = (
+    "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+)
+_EMAIL_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace"
+
+#: Blueprint grid — a 44px tile with a single hairline top/left rule.
+_EMAIL_GRID_URI = (
+    "data:image/svg+xml;charset=utf-8,"
+    "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='44'%20height='44'%3E"
+    "%3Cpath%20d='M44%200H0v44'%20fill='none'%20stroke='%23a78bfa'%20"
+    "stroke-opacity='0.09'%20stroke-width='1'/%3E%3C/svg%3E"
+)
+
+#: Clipboard glyph for the copy cue on the OTP pill.
+_EMAIL_CLIP_URI = (
+    "data:image/svg+xml;charset=utf-8,"
+    "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='15'%20height='15'%20"
+    "viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23a78bfa'%20"
+    "stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E"
+    "%3Crect%20x='9'%20y='9'%20width='13'%20height='13'%20rx='2'/%3E"
+    "%3Cpath%20d='M5%2015H4a2%202%200%200%201-2V4a2%202%200%200%202-2h9a2%202%200%200%202%202v1'/%3E"
+    "%3C/svg%3E"
+)
+
+
 def _auth_email_shell(heading: str, body_html: str, footer_note: str) -> str:
-    """Shared inline-CSS shell. Email clients need table/inline styles."""
-    return f"""
-<!DOCTYPE html>
-<html>
-  <body style="margin:0;padding:0;background:#0B0514;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
-    <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
-      <div style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #2a1f3d;">
-        <div style="background:#0B0514;color:#ffffff;padding:22px 24px;">
-          <h1 style="margin:0;font-size:20px;font-weight:700;">{heading}</h1>
-        </div>
-        <div style="padding:24px;">
-          {body_html}
-          <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0;" />
-          <p style="margin:0;font-size:12px;line-height:18px;color:#71717a;">
-            {footer_note}<br/>
-            Sent by ResultApp. If you did not request this email you can safely ignore it.
-          </p>
-        </div>
-      </div>
-    </div>
-  </body>
-</html>
-""".strip()
+    """Shared dark-theme shell for every auth email.
+
+    Table layout, inline styles only, and an Outlook fallback for the
+    translucent borders. The blueprinted grid sits on the outer wrapper so it
+    reads as page texture behind the card, and disappears silently where SVG
+    data URIs are unsupported.
+    """
+    return f"""<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="supported-color-schemes" content="dark" />
+<title>{heading}</title>
+<!--[if mso]>
+<style>body,table,td,div,p,a,h1{{color:#ffffff !important;}}</style>
+<![endif]-->
+</head>
+<body bgcolor="{_EMAIL_BG}" style="margin:0;padding:0;background-color:{_EMAIL_BG};background-image:url({_EMAIL_GRID_URI});background-repeat:repeat;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{footer_note}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="{_EMAIL_BG}" style="background-color:{_EMAIL_BG};background-image:url({_EMAIL_GRID_URI});background-repeat:repeat;">
+  <tr>
+    <td align="center" style="padding:36px 14px;">
+      <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600"><tr><td><![endif]-->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:600px;">
+        <tr>
+          <td bgcolor="{_EMAIL_CARD_BG}" style="background-color:{_EMAIL_CARD_BG};border:1px solid {_EMAIL_BORDER_RGBA};border-radius:20px;mso-line-height-rule:exactly;">
+            <!--[if mso]>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="border:1px solid {_EMAIL_BORDER_HEX};">
+            <![endif]-->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <!-- Brand bar -->
+              <tr>
+                <td style="padding:22px 28px 0 28px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td align="left" style="font-family:{_EMAIL_FONT};font-size:15px;font-weight:700;letter-spacing:-0.01em;color:{_EMAIL_HEADING};">
+                        <span style="color:{_EMAIL_ACCENT};">&#9679;</span>&nbsp;resultapp.org
+                      </td>
+                      <td align="right" style="font-family:{_EMAIL_FONT};font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:{_EMAIL_MUTED};">
+                        Secure verification
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="height:1px;line-height:1px;font-size:0;margin:18px 0 0 0;background-color:{_EMAIL_BORDER_HEX};">&nbsp;</div>
+                </td>
+              </tr>
+              <!-- Heading -->
+              <tr>
+                <td style="padding:24px 28px 0 28px;font-family:{_EMAIL_FONT};font-size:23px;line-height:30px;font-weight:700;letter-spacing:-0.02em;color:{_EMAIL_HEADING};">
+                  {heading}
+                </td>
+              </tr>
+              <!-- Body -->
+              <tr>
+                <td style="padding:14px 28px 26px 28px;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
+                  {body_html}
+                </td>
+              </tr>
+            </table>
+            <!-- Footer -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#0d0620" style="background-color:#0d0620;border-top:1px solid {_EMAIL_BORDER_HEX};border-radius:0 0 20px 20px;">
+              <tr>
+                <td style="padding:18px 28px;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:{_EMAIL_MUTED};">
+                  Secured by ResultApp &bull; Automated school portal verification
+                  <br />
+                  If you did not request this email, you can safely ignore it.
+                </td>
+              </tr>
+            </table>
+            <!--[if mso]></td></tr></table><![endif]-->
+          </td>
+        </tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+    </td>
+  </tr>
+</table>
+</body>
+</html>""".strip()
+
+
+def _cta_button(label: str, href: str, tint: str = "#7c3aed") -> str:
+    """VML bulletproof button. A styled <a> is unreliable in Outlook."""
+    return f"""<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;">
+<tr>
+<td align="center" bgcolor="{tint}" style="background-color:{tint};border-radius:999px;mso-line-height-rule:exactly;">
+<a href="{href}" target="_blank" style="display:inline-block;padding:14px 30px;font-family:{_EMAIL_FONT};font-size:15px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;border-radius:999px;mso-padding-alt:14px 30px;">{label}</a>
+</td>
+</tr>
+</table>
+<!--[if mso]>
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{href}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="50%" strokecolor="{tint}" fillcolor="{tint}">
+<w:anchorlock/>
+<center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">{label}</center>
+</v:roundrect>
+<![endif]-->""".strip()
+
+
+def _fallback_link(link: str) -> str:
+    """Plain-text link for clients that drop the button."""
+    return f"""<p style="margin:18px 0 0 0;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:{_EMAIL_MUTED};word-break:break-all;">
+Button not working? Copy this link:<br />
+<a href="{link}" target="_blank" style="color:{_EMAIL_ACCENT};text-decoration:underline;word-break:break-all;">{link}</a>
+</p>""".strip()
 
 
 def send_auth_email(to_email: str, subject: str, html: str, text: str) -> bool:
@@ -366,13 +502,37 @@ def send_otp_email(to_email: str, raw_code: str, expires_minutes: int = 10) -> b
         return False
 
     minutes = max(1, int(expires_minutes or 10))
+    # The pill is a real <table> cell, not a styled <span>: Outlook ignores
+    # letter-spacing padding on inline elements and would clip the last digit.
+    # The trailing spacer cell balances the letter-spacing on the right.
     body = f"""
-        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Confirm your email address to finish creating your ResultApp school portal.</p>
-        <p style="margin:0 0 20px;font-size:15px;line-height:22px;color:#3f3f46;">Enter this code on the registration page:</p>
-        <p style="margin:0 0 20px;">
-          <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:10px;color:#0B0514;background:#f4f4f5;border:1px solid #d4d4d8;border-radius:12px;padding:12px 20px;">{code}</span>
+        <p style="margin:0 0 8px 0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
+          Confirm your email address to finish creating your ResultApp school portal.
         </p>
-        <p style="margin:0;font-size:12px;line-height:18px;color:#71717a;">
+        <p style="margin:0 0 18px 0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
+          Enter this code on the registration page to continue.
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 20px 0;">
+          <tr>
+            <td align="center" bgcolor="{_EMAIL_PILL_BG}" style="background-color:{_EMAIL_PILL_BG};border:1px solid {_EMAIL_BORDER_RGBA};border-radius:18px;padding:20px 26px;mso-line-height-rule:exactly;">
+              <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td bgcolor="{_EMAIL_PILL_BG}" style="border:1px solid {_EMAIL_BORDER_HEX};"><![endif]-->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td align="center" style="font-family:{_EMAIL_MONO};font-size:38px;line-height:44px;font-weight:700;letter-spacing:12px;color:{_EMAIL_HEADING};text-shadow:0 0 22px rgba(147,51,234,0.55);mso-line-height-rule:exactly;">{code}</td>
+                </tr>
+              </table>
+              <!--[if mso]></td></tr></table><![endif]-->
+            </td>
+            <td width="14" style="width:14px;font-size:0;line-height:0;">&nbsp;</td>
+            <td valign="middle" style="valign:middle;">
+              <img src="{_EMAIL_CLIP_URI}" width="15" height="15" alt="" style="display:block;width:15px;height:15px;border:0;outline:none;text-decoration:none;" />
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 20px 0;font-family:{_EMAIL_FONT};font-size:13px;line-height:20px;color:{_EMAIL_MUTED};text-align:center;">
+          Copy the six digits above and paste them into the registration page.
+        </p>
+        <p style="margin:0;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:{_EMAIL_MUTED};">
           This code expires in {minutes} minutes and can only be used once. If it expires, request a new one from the registration page.
         </p>
     """
