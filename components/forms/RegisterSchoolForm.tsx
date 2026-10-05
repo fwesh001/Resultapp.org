@@ -230,6 +230,46 @@ export function RegisterSchoolForm() {
     schoolName: string;
   } | null>(null);
 
+  // Post-provisioning hand-off. A paid user who closes the tab at the
+  // Flutterwave modal must not be stranded on a dead end, so the wizard sends
+  // them to their new portal on its own. The countdown is not decoration: the
+  // tenant is still deploying (the copy says 30-60s), so an instant redirect
+  // lands on a page that has not finished booting and reads as a second
+  // failure right after the first one.
+  const PORTAL_HANDOFF_SECONDS = 5;
+  const [handoffIn, setHandoffIn] = useState<number | null>(null);
+
+  /** Portal root -> admin login. Tolerates a trailing slash on deployedUrl. */
+  const adminLoginUrl = useMemo(
+    () => (successData ? `${successData.deployedUrl.replace(/\/+$/, "")}/admin/login` : ""),
+    [successData]
+  );
+
+  function cancelHandoff() {
+    setHandoffIn(null);
+  }
+
+  useEffect(() => {
+    if (!successData) {
+      setHandoffIn(null);
+      return;
+    }
+    setHandoffIn(PORTAL_HANDOFF_SECONDS);
+    const id = window.setInterval(() => {
+      setHandoffIn((n) => {
+        // Hard navigation: a client-side push would land on a cross-origin
+        // subdomain, which Next cannot route.
+        if (n !== null && n <= 1) {
+          window.clearInterval(id);
+          window.location.href = adminLoginUrl;
+          return 0;
+        }
+        return n === null ? null : n - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [successData, adminLoginUrl]);
+
   // Base domain fallback: NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org"
   const baseDomain =
     process.env.NEXT_PUBLIC_BASE_DOMAIN?.trim() || "resultapp.org";
@@ -793,6 +833,7 @@ export function RegisterSchoolForm() {
     setSuccessData(null);
     setTransactionId(null);
     setTxRef(null);
+    setHandoffIn(null);
     setPaidConflict(null);
     setProvisioning(false);
     setValues({ schoolName: "", subdomain: "", adminEmail: "", adminName: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "", acceptTerms: false });
@@ -820,7 +861,7 @@ export function RegisterSchoolForm() {
         </p>
 
         <a
-          href={successData.deployedUrl}
+          href={adminLoginUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-600 px-5 py-2.5 font-mono text-sm font-semibold text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] transition hover:bg-purple-500"
@@ -838,25 +879,44 @@ export function RegisterSchoolForm() {
           <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
             <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> is deploying (30–60s)</li>
             <li>• Admin login sent to <span className="text-white">{values.adminEmail}</span></li>
-            <li>• You can sign in as soon as the portal is ready</li>
+            <li>• Signing in at <span className="font-mono text-purple-200">{successData.domain}/admin/login</span> as soon as it is ready</li>
           </ul>
         </div>
 
-        <Button
-          className="mt-6 w-full rounded-full bg-white font-semibold text-[#0B0514] hover:bg-zinc-100"
-          size="lg"
-          onClick={() => (window.location.href = successData.deployedUrl)}
-        >
-          Go to your portal
-        </Button>
-
-        <button
-          type="button"
-          onClick={resetWizard}
-          className="mt-3 text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
-        >
-          Register another school
-        </button>
+        <div aria-live="polite" className="mt-6 w-full">
+          {handoffIn !== null ? (
+            <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-4">
+              <p className="flex items-center justify-center gap-2 text-sm font-medium text-white">
+                <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                Taking you to your admin login in {handoffIn}s…
+              </p>
+              <button
+                type="button"
+                onClick={cancelHandoff}
+                className="mt-2 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+              >
+                Stay on this page
+              </button>
+            </div>
+          ) : (
+            <>
+              <Button
+                className="w-full rounded-full bg-white font-semibold text-[#0B0514] hover:bg-zinc-100"
+                size="lg"
+                onClick={() => (window.location.href = adminLoginUrl)}
+              >
+                Go to your admin login
+              </Button>
+              <button
+                type="button"
+                onClick={resetWizard}
+                className="mt-3 text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+              >
+                Register another school
+              </button>
+            </>
+          )}
+        </div>
 
         <p className="mt-3 text-xs text-purple-300/40">
           Need help? Contact support@resultapp.org • {successData.domain}
