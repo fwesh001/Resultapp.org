@@ -564,8 +564,14 @@ check("a Markdown-pasted BACKEND_URL is rejected, not fetched", () => {
   }
   if (!/new URL\(/.test(lib)) return "the validator never parses the URL";
   // It must reject bracket/paren/whitespace shapes, not merely fail to parse.
-  if (!/\[\[\\\]\]|MARKDOWN_LINK_RE/.test(lib)) {
-    return "the validator does not detect a Markdown-pasted URL";
+  // Assert the rejection is reachable: the bracket/paren/whitespace test must
+  // still be CALLED, not merely declared. A deleted constant leaves the
+  // declaration absent; a deleted call leaves an unused one.
+  if (!/MARKDOWN_LINK_RE\.test\(/.test(lib)) {
+    return "MARKDOWN_LINK_RE is declared but never tested — the rich-text paste is no longer rejected";
+  }
+  if (!/const MARKDOWN_LINK_RE =/.test(lib)) {
+    return "there is no Markdown-link detection pattern";
   }
   // And the shared helper must be wired into the generic postAuth too.
   if (!/resolveBackendBase\(\)/.test(lib)) {
