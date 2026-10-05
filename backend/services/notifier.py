@@ -350,6 +350,43 @@ def send_auth_email(to_email: str, subject: str, html: str, text: str) -> bool:
         return False
 
 
+def send_otp_email(to_email: str, raw_code: str, expires_minutes: int = 10) -> bool:
+    """Email a short numeric code for the registration wizard.
+
+    Unlike the link-based emails there is no public_base_url() involvement: the
+    code is typed back into the same tab, so nothing is built from PUBLIC_BASE_URL
+    and a misconfigured host cannot break inbox ownership.
+
+    The raw code appears in the subject-adjacent body only, and is never logged
+    at INFO — the caller logs success/failure without echoing it.
+    """
+    code = str(raw_code or "").strip()
+    if len(code) != 6 or not code.isdigit():
+        logger.error("[EMAIL-AUTH] refusing to send a malformed OTP (expected 6 digits)")
+        return False
+
+    minutes = max(1, int(expires_minutes or 10))
+    body = f"""
+        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Confirm your email address to finish creating your ResultApp school portal.</p>
+        <p style="margin:0 0 20px;font-size:15px;line-height:22px;color:#3f3f46;">Enter this code on the registration page:</p>
+        <p style="margin:0 0 20px;">
+          <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:10px;color:#0B0514;background:#f4f4f5;border:1px solid #d4d4d8;border-radius:12px;padding:12px 20px;">{code}</span>
+        </p>
+        <p style="margin:0;font-size:12px;line-height:18px;color:#71717a;">
+          This code expires in {minutes} minutes and can only be used once. If it expires, request a new one from the registration page.
+        </p>
+    """
+    text = (
+        "Confirm your email address to finish creating your ResultApp school portal.\n\n"
+        f"Code: {code}\n\n"
+        f"This code expires in {minutes} minutes and can only be used once."
+    )
+    ok = send_auth_email(to_email.strip().lower(), "Your ResultApp verification code", _auth_email_shell("Confirm your email", body, "Verification code."), text)
+    if not ok:
+        logger.warning(f"[EMAIL-AUTH] OTP NOT delivered to {to_email} (code not logged)")
+    return ok
+
+
 def send_verification_email(to_email: str, to_name: str, raw_token: str, tenant: str = "") -> bool:
     """Email an inbox-ownership link. Never logs the raw token at INFO."""
     link = f"{public_base_url()}/verify-email?token={raw_token}&email={to_email.strip().lower()}"
