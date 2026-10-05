@@ -185,6 +185,67 @@ def create_school_database(subdomain: str, student_count: Optional[int] = None) 
         if conn:
             conn.close()
 
+# Dry-run against /opt/rosariosis-template/resultapp.sql shows exactly 95 public
+# tables.  Loading fewer than this means the dump did not complete.
+EXPECTED_TENANT_TABLE_COUNT = 95
+
+def seed_tenant_schema(db_creds: Dict[str, str]) -> Dict[str, Any]:
+    """Load the RosarioSIS/ResultApp tenant schema into the new database.
+
+    Runs the full dump as the tenant database owner (not the superuser) inside
+    a single transaction. PostgreSQL DDL is transactional, so any error rolls
+    the whole load back and leaves the database empty rather than half-seeded.
+    After the load, verifies the expected public table count is present.
+    """
+    template_dir = os.getenv("ROSARIOSIS_TEMPLATE_DIR", "/opt/rosariosis-template")
+    dump_path = os.path.join(template_dir, "resultapp.sql")
+
+    if not os.path.isfile(dump_path):
+        raise FileNotFoundError(f"Tenant schema dump not found: {dump_path}")
+
+    with open(dump_path, "r", encoding="utf-8") as schema_file:
+        schema_sql = schema_file.read()
+
+    conn = psycopg2.connect(
+        host=db_creds["db_host"],
+        port=db_creds["db_port"],
+        user=db_creds["db_user"],
+        password=db_creds["db_password"],
+        dbname=db_creds["db_name"],
+    )
+    try:
+        conn.autocommit = False
+        cur = conn.cursor()
+        logger.info(
+            f"[DB] Loading tenant schema from {dump_path} into '{db_creds['db_name']}'"
+        )
+        cur.execute(schema_sql)
+        cur.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
+        )
+        public_table_count = int(cur.fetchone()[0])
+        if public_table_count < EXPECTED_TENANT_TABLE_COUNT:
+            raise RuntimeError(
+                f"Tenant schema verification failed for '{db_creds['db_name']}': "
+                f"expected at least {EXPECTED_TENANT_TABLE_COUNT} public tables, "
+                f"found {public_table_count}"
+            )
+        conn.commit()
+        logger.info(
+            f"[DB] Tenant schema loaded for '{db_creds['db_name']}': "
+            f"{public_table_count} public tables"
+        )
+        return {
+            "db_name": db_creds["db_name"],
+            "db_user": db_creds["db_user"],
+            "public_table_count": public_table_count,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def rollback_database(db_name: str, db_user: str) -> None:
     """
     Drop database and user — used for rollback if later pipeline steps fail.

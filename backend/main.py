@@ -37,6 +37,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 # Services
 from services.db_manager import (
     create_school_database,
+    seed_tenant_schema,
     rollback_database,
     database_exists,
     test_connection,
@@ -591,6 +592,19 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.exception(f"[PROVISION] DB step failed for '{subdomain}': {e}")
             raise HTTPException(status_code=500, detail=f"Database provisioning failed: {e}")
+
+        # --- Step 1b: tenant schema ---
+        try:
+            schema_info = seed_tenant_schema(db_info)
+            logger.info(f"[PROVISION] Schema step OK: {schema_info['public_table_count']} public tables")
+        except Exception as e:
+            logger.exception(f"[PROVISION] Schema step failed for '{subdomain}': {e}")
+            try:
+                logger.warning(f"[PROVISION] Rolling back DB for '{subdomain}' after schema failure")
+                rollback_database(db_info["db_name"], db_info["db_user"])
+            except Exception as rb_e:
+                logger.error(f"[PROVISION] DB rollback also failed for '{subdomain}': {rb_e}")
+            raise HTTPException(status_code=500, detail=f"Tenant schema initialization failed: {e}")
 
         # --- Step 2 & 3: File deployment + Nginx (combined via deploy_site) ---
         try:
