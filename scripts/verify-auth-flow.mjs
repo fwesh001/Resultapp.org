@@ -777,6 +777,43 @@ check("the welcome email greeting uses the admin name", () => {
     : "send_welcome_email is not given the resolved admin_name";
 });
 
+check("a failed OTP send does not burn the resend cooldown", () => {
+  // Regression guard for a debugging trap: _cooldown_ok() reserves the window
+  // BEFORE the mail is attempted, so a Brevo outage made every retry inside the
+  // cooldown return a neutral 200 "sent" for an email that never existed.
+  if (!/def _release_cooldown/.test(router)) {
+    return "there is no _release_cooldown() helper";
+  }
+  if (!/pop\(key, None\)/.test(router)) {
+    return "_release_cooldown does not actually clear the reservation";
+  }
+  const fn = router.slice(
+    router.indexOf("def request_email_otp"),
+    router.indexOf("def verify_email_otp")
+  );
+  if (!fn) return "cannot locate request_email_otp";
+  // The release must sit on the not-delivered path, before the raise.
+  const fail = fn.indexOf("if not delivered:");
+  const rel = fn.indexOf("_release_cooldown(");
+  const raiseAt = fn.indexOf("HTTPException", fail);
+  if (fail === -1) return "the send path has no failure branch";
+  if (rel === -1) return "a failed send never releases the cooldown";
+  return rel < raiseAt
+    ? true
+    : "the cooldown is released after the error is raised — the retry is still blocked";
+});
+
+check("a successful OTP send keeps its cooldown (anti-abuse intact)", () => {
+  const fn = router.slice(
+    router.indexOf("def request_email_otp"),
+    router.indexOf("def verify_email_otp")
+  );
+  if (!fn) return "cannot locate request_email_otp";
+  return !/_release_cooldown\(/.test(fn.slice(fn.indexOf("return _OTP_SENT")))
+    ? true
+    : "the success path releases the cooldown, so the throttle does nothing";
+});
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) {
