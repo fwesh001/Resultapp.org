@@ -1036,12 +1036,18 @@ export function RegisterSchoolForm() {
     );
   }
 
-  return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
-      {renderStepIndicator()}
-      {/* School Name */}
-      <Input
-        label="School Name"
+  // -------------------------------------------------------------------------
+  // Step 1 — school details
+  // -------------------------------------------------------------------------
+  if (currentStep === 1) {
+    return (
+      <form onSubmit={handleStep1Next} noValidate className="space-y-5">
+        {renderStepIndicator()}
+        <h3 className="text-lg font-bold tracking-tight text-white">School details</h3>
+
+        {/* School Name */}
+        <Input
+          label="School Name"
         name="schoolName"
         placeholder="Victory High School"
         value={values.schoolName}
