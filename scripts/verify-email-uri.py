@@ -31,8 +31,11 @@ check("starts with the svg data-uri prefix", out.startswith("data:image/svg+xml;
 check("round-trips to the original svg", __import__("urllib.parse", fromlist=["unquote"]).unquote(out.split(",", 1)[1]).replace("%27", "'") == svg)
 
 print("\nshipped constants:")
-for name, uri in (("_EMAIL_GRID_URI", _EMAIL_GRID_URI), ("_EMAIL_CLIP_URI", _EMAIL_CLIP_URI)):
-    check(f"{name} is quote-free", "'" not in uri and '"' not in uri)
+# Only the grid remains an image. The clipboard cue became a text glyph after
+# it arrived as a tofu box in a real mailbox.
+check("_EMAIL_GRID_URI is quote-free", "'" not in _EMAIL_GRID_URI and '"' not in _EMAIL_GRID_URI)
+check("no clipboard SVG constant remains", not hasattr(nt, "_EMAIL_CLIP_URI"))
+check("copy cue is a text glyph", isinstance(getattr(nt, "_EMAIL_COPY_GLYPH", None), str))
 
 print(f"\n{'PASS' if not fail else 'FAIL'}: {fail} failing")
 sys.exit(1 if fail else 0)
