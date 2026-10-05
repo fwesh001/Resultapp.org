@@ -550,6 +550,14 @@ export function RegisterSchoolForm() {
 
   function startFlutterwaveCheckout() {
     setGlobalError(null);
+
+    // Final gate before money moves. The Pay button already blocks on consent
+    // and email verification, but this re-checks every step's rules — a value
+    // could have been edited in another tab, and /api/register-school
+    // re-validates server-side anyway, so failing here beats failing after a
+    // successful charge.
+    if (!validateAll()) return;
+
     const publicKey = getFlutterwavePublicKey();
     const ref = generateTxRef(values.subdomain.trim() || "school");
     const customerEmail = values.adminEmail.trim();
