@@ -403,12 +403,33 @@ console.log("\nRegistration wizard — payment gating");
 check("Pay is gated on BOTH consent and verified email", () => {
   const step3 = register.slice(register.indexOf("if (currentStep === 3) {"));
   if (!step3) return "cannot locate Step 3";
-  const m = step3.match(/disabled=\{([^}]*)\}/);
-  if (!m) return "no disabled binding on the payment button";
-  const expr = m[1];
+  // The button binds a derived flag; resolve it rather than demanding the
+  // whole expression be inline.
+  const bound = step3.match(/disabled=\{([^}]*)\}/);
+  if (!bound) return "no disabled binding on the payment button";
+  const flag = bound[1].trim();
+  const def = new RegExp(`const ${flag} =([^;]+);`).exec(step3);
+  if (!def) return `cannot resolve "${flag}" — the button may never be gated`;
+  const expr = def[1];
   return /payBlockedByTerms/.test(expr) && /payBlockedByEmail/.test(expr)
     ? true
-    : `the payment gate is "${expr}" — it must require both flags`;
+    : `"${flag}" is "${expr.trim()}" — it must require both flags`;
+});
+
+check("the consent flag itself is derived from the checkbox", () => {
+  const def = /const payBlockedByTerms =([^;]+);/.exec(register);
+  if (!def) return "payBlockedByTerms is not defined";
+  return /!values\.acceptTerms/.test(def[1])
+    ? true
+    : "payBlockedByTerms does not read the consent checkbox";
+});
+
+check("the email flag itself is derived from the verified state", () => {
+  const def = /const payBlockedByEmail =([^;]+);/.exec(register);
+  if (!def) return "payBlockedByEmail is not defined";
+  return /!isEmailVerified/.test(def[1])
+    ? true
+    : "payBlockedByEmail does not read isEmailVerified";
 });
 
 check("the disabled payment button explains itself", () =>
