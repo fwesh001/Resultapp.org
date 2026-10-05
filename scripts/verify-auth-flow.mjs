@@ -785,17 +785,22 @@ check("email SVG data URIs are quote-safe", () => {
   if (!/def _svg_data_uri/.test(notifier)) {
     return "there is no _svg_data_uri() encoder in notifier.py";
   }
-  // The encoder must percent-encode quotes, not merely pass them through.
-  if (!/%27/.test(notifier)) {
-    return "_svg_data_uri does not encode quotes as %27 — unquoted url() will be dropped";
+  // The encoder must delegate to urllib quote with safe="" — that single call
+  // is what escapes quotes, #, < and >. Asserting the emitted %27 in source
+  // text would be wrong: quote() produces it at runtime, and a previous
+  // version of this check passed under mutation for exactly that reason.
+  const enc = /def _svg_data_uri\([\s\S]*?\)\s*->\s*str:([\s\S]*?)\n\n\n/.exec(notifier);
+  if (!enc) return "cannot locate the _svg_data_uri body";
+  if (!/quote\(\s*svg\s*,\s*safe\s*=\s*""\s*\)/.test(enc[1])) {
+    return "_svg_data_uri must call quote(svg, safe=\"\") to escape quotes and #";
   }
-  // The generated URIs themselves must carry no raw quote.
+  // Both icons must be BUILT by the encoder, never hand-written.
   for (const name of ["_EMAIL_GRID_URI", "_EMAIL_CLIP_URI"]) {
-    const decl = new RegExp(`${name} = _svg_data_uri\\(`).test(notifier);
-    if (!decl) return `${name} is not built via _svg_data_uri()`;
+    if (!new RegExp(`${name} = _svg_data_uri\\(`).test(notifier)) {
+      return `${name} is not built via _svg_data_uri()`;
+    }
   }
-  const handWritten = /data:image\/svg\+xml;charset=utf-8,"\s*\n?\s*%3Csvg/.test(notifier);
-  return !handWritten
+  return !/data:image\/svg\+xml;charset=utf-8,"\s*\n?\s*%3Csvg/.test(notifier)
     ? true
     : "a hand-written SVG data URI survives — its encoding can silently drift again";
 });
