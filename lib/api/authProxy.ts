@@ -30,6 +30,67 @@ export function getBackendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
+// ---------------------------------------------------------------------------
+// Backend URL validation
+//
+// Added after a production incident: BACKEND_URL had been set in Vercel to a
+// pasted Markdown link, "[https://api.resultapp.org](https://api.resultapp.org)".
+// fetch() then threw ERR_INVALID_URL, every proxy 502'd, and because the origin
+// returned an HTML error page the browser's res.json() failed too — so the UI
+// showed a generic "we could not send a code" for what was a one-character
+// config typo.
+//
+// A bad BACKEND_URL is a deployment error, not a runtime failure. It is
+// detected here, named in the response, and logged with the offending value so
+// the next occurrence is diagnosed in seconds instead of by log archaeology.
+// ---------------------------------------------------------------------------
+
+export type BackendBaseResult =
+  | { ok: true; base: string }
+  | { ok: false; reason: string };
+
+/** Characters that mean the value was pasted from rendered Markdown/rich text. */
+const MARKDOWN_LINK_RE = /[[\]]|\([^)]*\)|\s/;
+
+export function resolveBackendBase(): BackendBaseResult {
+  const raw = (process.env.BACKEND_URL || "").trim();
+  if (!raw) {
+    return { ok: false, reason: "BACKEND_URL is not set on this deployment" };
+  }
+  if (MARKDOWN_LINK_RE.test(raw)) {
+    return {
+      ok: false,
+      reason:
+        "BACKEND_URL contains whitespace or brackets, so it was pasted as rich text rather than a bare URL. " +
+        'Set it to exactly: https://api.resultapp.org',
+    };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return {
+      ok: false,
+      reason: `BACKEND_URL is not a valid absolute URL. Set it to exactly: https://api.resultapp.org`,
+    };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return {
+      ok: false,
+      reason: `BACKEND_URL must start with http:// or https:// (got "${parsed.protocol}").`,
+    };
+  }
+  return { ok: true, base: raw.replace(/\/$/, "") };
+}
+
+/** Log a rejected BACKEND_URL. Safe to log: it is a hostname, never a secret. */
+export function logBadBackendUrl(scope: string, result: BackendBaseResult): void {
+  const raw = (process.env.BACKEND_URL || "").trim();
+  console.error(
+    `[${scope}] ${result.reason} — received: ${JSON.stringify(raw.slice(0, 120))}`
+  );
+}
+
 export function misconfigured(): NextResponse {
   return NextResponse.json(
     { error: "Server misconfigured: missing BACKEND_API_SECRET" },
