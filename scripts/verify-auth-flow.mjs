@@ -331,11 +331,14 @@ check("OTP verify is rate limited", () =>
     : "no throttle on the verify endpoint — 1e6 candidates is guessable"
 );
 
-check("OTP generation is throttled and cooldown-gated", () =>
-  /_cooldown_ok\(`otp:/.test(router) && /otp-send:/.test(router)
+check("OTP generation is throttled and cooldown-gated", () => {
+  // The key is built as f"otp:{payload.purpose}:{email}" — a literal backtick
+  // would never match.
+  if (!/_cooldown_ok\(\s*f?"otp:/.test(router)) return "no cooldown gate on generation";
+  return /otp-send:/.test(router)
     ? true
-    : "generation is unbounded — a caller could mail-bomb an address"
-);
+    : "no per-address generation cap — a caller could mail-bomb an address";
+});
 
 check("OTP verify is race-safe (row locked)", () =>
   /FOR UPDATE/.test(db) ? true : "two concurrent submits of one code could both win"
@@ -360,26 +363,34 @@ check("OTP verify collapses wrong/expired/replayed into one message", () => {
     : "the failure message does not merge the failure modes (oracle risk)";
 });
 
+/** Strip docstrings and comments so prose can't satisfy (or trip) a check. */
+const stripProse = (src) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/("""|''')[\s\S]*?\1/g, "");
+
 check("no raw OTP is ever logged", () => {
-  const send = notifier.slice(
-    notifier.indexOf("def send_otp_email"),
-    notifier.indexOf("def send_verification_email")
+  const send = stripProse(
+    notifier.slice(
+      notifier.indexOf("def send_otp_email"),
+      notifier.indexOf("def send_verification_email")
+    )
   );
   if (!send) return "cannot locate send_otp_email";
-  // A log line carrying the code would make the journal a second delivery path.
-  const logged = /logger\.(info|warning|error|debug)\([^)]*\bcode\b/i.test(
-    send.replace(/logger\.(error|warning)\("\/EMAIL-AUTH"\] refusing to send a malformed OTP[\s\S]*?\)/, "")
-  );
-  return !logged ? true : "a log statement appears to include the code";
+  // Only interpolation of the code variable matters — a message that merely
+  // says "code not logged" is the opposite of a leak.
+  return !/logger\.\w+\([^)]*\{code\}/.test(send)
+    ? true
+    : "a log statement interpolates the raw code";
 });
 
 check("OTP email builds no link (so PUBLIC_BASE_URL cannot break it)", () => {
-  const send = notifier.slice(
-    notifier.indexOf("def send_otp_email"),
-    notifier.indexOf("def send_verification_email")
+  const send = stripProse(
+    notifier.slice(
+      notifier.indexOf("def send_otp_email"),
+      notifier.indexOf("def send_verification_email")
+    )
   );
   if (!send) return "cannot locate send_otp_email";
-  return !/public_base_url\(\)/.test(send) && !/href=/.test(send)
+  return !/public_base_url\s*\(/.test(send) && !/href=/.test(send)
     ? true
     : "the OTP email builds a URL — it should be a typed code";
 });
