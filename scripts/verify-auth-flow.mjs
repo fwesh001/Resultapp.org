@@ -668,8 +668,8 @@ check("adminName bounds agree across all three layers", () => {
 });
 
 check("the wizard does not loosen the adminName bound", () => {
-  // Regression guard for the exact bug: a min of 2 against a backend min of 3
-  // means "Al" passes Step 2, gets charged, then 422s during provisioning.
+  // Regression guard for the exact bug: a client min below the backend min means
+  // a short name passes Step 2, gets charged, then 422s during provisioning.
   const fn = register.slice(
     register.indexOf("function validateSecurity"),
     register.indexOf("function validateStep1")
@@ -678,9 +678,22 @@ check("the wizard does not loosen the adminName bound", () => {
   if (/name\.length < 2\b/.test(fn)) {
     return "validateSecurity hardcodes a 2-character minimum";
   }
-  return /name\.length < ADMIN_NAME_MIN/.test(fn)
-    ? true
-    : "validateSecurity does not use the shared ADMIN_NAME_MIN";
+  if (!/name\.length < ADMIN_NAME_MIN/.test(fn)) {
+    return "validateSecurity does not use the shared ADMIN_NAME_MIN";
+  }
+  // Comparing the two named constants is not enough — they must equal the
+  // BACKEND bound, or both drift together and the check passes while the
+  // post-payment 422 remains.
+  const be = /admin_name: Optional\[str\] = Field\(None, min_length=(\d+), max_length=(\d+)/.exec(main);
+  const fe = /const ADMIN_NAME_MIN = (\d+);[\s\S]*?const ADMIN_NAME_MAX = (\d+);/.exec(register);
+  if (!be || !fe) return "cannot compare wizard and backend bounds";
+  if (Number(fe[1]) < Number(be[1])) {
+    return `the wizard accepts ${fe[1]} characters but the backend requires ${be[1]}`;
+  }
+  if (Number(fe[2]) > Number(be[2])) {
+    return `the wizard accepts ${fe[2]} characters but the backend caps at ${be[2]}`;
+  }
+  return true;
 });
 
 check("an out-of-range admin name is omitted, not forwarded as empty", () => {
