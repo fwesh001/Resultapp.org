@@ -22,7 +22,6 @@ import { readJson, resolveBackendBase, logBadBackendUrl } from "@/lib/api/authPr
  * passed through on failure.
  */
 
-const BACKEND_URL = (process.env.BACKEND_URL || "").trim().replace(/\/$/, "");
 const PROXY_SECRET = (process.env.BACKEND_API_SECRET || "").trim();
 
 export async function POST(req: NextRequest) {
@@ -33,17 +32,20 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
 
   // Misconfiguration is reported as 500 with a named variable, never masked as
-  // a delivery failure. Logs the variable name only — never a value.
-  if (!BACKEND_URL) {
-    console.error("[api/auth/request-email-otp] BACKEND_URL is not set on this deployment");
-    return NextResponse.json({ error: "Server misconfigured: missing BACKEND_URL" }, { status: 500 });
+  // a delivery failure. resolveBackendBase() also rejects a BACKEND_URL that was
+  // pasted as Markdown ("[https://…](https://…)") — that shape parses as
+  // invalid and used to surface as an opaque 502 from fetch().
+  const backend = resolveBackendBase();
+  if (!backend.ok) {
+    logBadBackendUrl("api/auth/request-email-otp", backend);
+    return NextResponse.json({ error: `Server misconfigured: ${backend.reason}` }, { status: 500 });
   }
   if (!PROXY_SECRET) {
     console.error("[api/auth/request-email-otp] BACKEND_API_SECRET is not set on this deployment");
     return NextResponse.json({ error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
-  const target = `${BACKEND_URL}/api/v1/auth/request-email-otp`;
+  const target = `${backend.base}/api/v1/auth/request-email-otp`;
 
   try {
     const res = await fetch(target, {
