@@ -789,18 +789,22 @@ check("email SVG data URIs are quote-safe", () => {
   // is what escapes quotes, #, < and >. Asserting the emitted %27 in source
   // text would be wrong: quote() produces it at runtime, and a previous
   // version of this check passed under mutation for exactly that reason.
-  const enc = /def _svg_data_uri\([\s\S]*?\)\s*->\s*str:([\s\S]*?)\n\n\n/.exec(notifier);
-  if (!enc) return "cannot locate the _svg_data_uri body";
-  // Check the ESCAPING CALL, not its exact spelling: a mutation that loosens
-  // safe="" must report that, not a misleading "cannot locate the body".
-  if (!/quote\(\s*svg\s*,/.test(enc[1])) {
+  // Slice the function body WITHOUT relying on a trailing blank-line delimiter,
+  // which a mutation to the docstring can shift.
+  const startIdx = notifier.indexOf("def _svg_data_uri");
+  if (startIdx === -1) return "there is no _svg_data_uri() encoder in notifier.py";
+  const after = notifier.slice(startIdx);
+  const endIdx = after.search(/\n(?:def |#: |_[A-Z])/);
+  const body = endIdx === -1 ? after : after.slice(0, endIdx);
+
+  if (!/quote\(\s*svg\s*,/.test(body)) {
     return "_svg_data_uri no longer escapes via urllib.quote(svg, ...)";
   }
-  const safe = /quote\(\s*svg\s*,\s*safe\s*=\s*("([^"]*)"|'([^']*)')\s*\)/.exec(enc[1]);
+  const safe = /quote\(\s*svg\s*,\s*safe\s*=\s*(?:r?("([^"]*)"|'([^']*)'))?\s*\)/.exec(body);
   if (!safe) {
     return "_svg_data_uri must pass safe=\"\" so quotes and # are percent-encoded";
   }
-  const safeChars = safe[2] !== undefined ? safe[2] : safe[3] || "";
+  const safeChars = safe[1] === undefined ? "" : safe[2] !== undefined ? safe[2] : safe[3];
   // Anything listed in safe= comes back RAW, which is what breaks the url().
   const dangerous = ["'", '"', "<", ">", "#"].filter((c) => safeChars.includes(c));
   if (dangerous.length) {
