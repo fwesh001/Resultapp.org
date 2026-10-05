@@ -809,9 +809,16 @@ check("a successful OTP send keeps its cooldown (anti-abuse intact)", () => {
     router.indexOf("def verify_email_otp")
   );
   if (!fn) return "cannot locate request_email_otp";
-  return !/_release_cooldown\(/.test(fn.slice(fn.indexOf("return _OTP_SENT")))
+  // LAST return _OTP_SENT is the success exit. The first two are earlier exits
+  // (cooldown-hit, rate-limited) whose tails would include the failure branch
+  // and make this check fire spuriously.
+  const successAt = fn.lastIndexOf("return _OTP_SENT");
+  if (successAt === -1) return "cannot locate the success return";
+  const beforeSuccess = fn.slice(0, successAt);
+  const releases = (beforeSuccess.match(/_release_cooldown\(/g) || []).length;
+  return releases === 1
     ? true
-    : "the success path releases the cooldown, so the throttle does nothing";
+    : `expected exactly one cooldown release before the success return, found ${releases}`;
 });
 
 const failed = results.filter((r) => !r.pass);
