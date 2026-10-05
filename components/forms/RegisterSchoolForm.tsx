@@ -913,10 +913,6 @@ export function RegisterSchoolForm() {
             <span className="font-mono font-medium text-white">{previewDomain}</span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">Admin</span>
-            <span className="font-medium text-white">{values.adminEmail.trim() || "—"}</span>
-          </div>
-          <div className="flex justify-between py-1">
             <span className="text-purple-200/60">Student slots</span>
             <span className="font-medium text-white">
               {orderCount} × {formatNaira(orderTier.pricePerStudent)}
