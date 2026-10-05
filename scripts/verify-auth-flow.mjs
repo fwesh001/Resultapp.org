@@ -777,6 +777,92 @@ check("the welcome email greeting uses the admin name", () => {
     : "send_welcome_email is not given the resolved admin_name";
 });
 
+check("email SVG data URIs are quote-safe", () => {
+  // Regression guard for a silent failure: the grid and clipboard URIs used to
+  // embed raw single quotes (xmlns='...') inside an UNQUOTED url(). Per CSS
+  // tokenisation that token is invalid, so every client dropped the background
+  // and the markup looked correct while painting nothing.
+  if (!/def _svg_data_uri/.test(notifier)) {
+    return "there is no _svg_data_uri() encoder in notifier.py";
+  }
+  // The encoder must percent-encode quotes, not merely pass them through.
+  if (!/%27/.test(notifier)) {
+    return "_svg_data_uri does not encode quotes as %27 — unquoted url() will be dropped";
+  }
+  // The generated URIs themselves must carry no raw quote.
+  for (const name of ["_EMAIL_GRID_URI", "_EMAIL_CLIP_URI"]) {
+    const decl = new RegExp(`${name} = _svg_data_uri\\(`).test(notifier);
+    if (!decl) return `${name} is not built via _svg_data_uri()`;
+  }
+  const handWritten = /data:image\/svg\+xml;charset=utf-8,"\s*\n?\s*%3Csvg/.test(notifier);
+  return !handWritten
+    ? true
+    : "a hand-written SVG data URI survives — its encoding can silently drift again";
+});
+
+check("the email grid is not hidden under the opaque wrapper table", () => {
+  // A body background paints beneath a full-width bgcolor table, so the grid
+  // must sit on the padding cell to be visible at all.
+  const shell = notifier.slice(
+    notifier.indexOf("def _auth_email_shell"),
+    notifier.indexOf("def _cta_button")
+  );
+  if (!shell) return "cannot locate _auth_email_shell";
+  const bodyOpen = shell.split("<body")[1] || "";
+  if (/background-image/.test(bodyOpen)) {
+    return "the grid is on <body>, where the opaque wrapper table hides it";
+  }
+  if (!/background-image:url\(\{_EMAIL_GRID_URI\}\)/.test(shell)) {
+    return "the grid is not applied anywhere in the shell";
+  }
+  return /background-repeat:repeat/.test(shell)
+    ? true
+    : "the grid does not tile";
+});
+
+check("the auth email keeps inline-only styling for Outlook/Gmail", () => {
+  const shell = notifier.slice(
+    notifier.indexOf("def _auth_email_shell"),
+    notifier.indexOf("def _cta_button")
+  );
+  if (!shell) return "cannot locate _auth_email_shell";
+  if (/<!--\[if mso\]>/.test(shell) !== true) {
+    return "no Outlook conditional comments — rgba borders will vanish";
+  }
+  if (!/role="presentation"/.test(shell)) {
+    return "layout is not table-based";
+  }
+  // A <style> block in <head> is stripped by Gmail and ignored by Outlook.
+  if (/<style>/.test(shell)) {
+    return "the shell depends on a <style> block, which Gmail strips";
+  }
+  return true;
+});
+
+check("the OTP pill is copy-ready and high-contrast", () => {
+  const send = stripProse(
+    notifier.slice(
+      notifier.indexOf("def send_otp_email"),
+      notifier.indexOf("def send_verification_email")
+    )
+  );
+  if (!send) return "cannot locate send_otp_email";
+  const has = (needle, msg) => (send.includes(needle) ? true : msg);
+  return [
+    has("{_EMAIL_PILL_BG}", "the pill does not use the elevated pill background"),
+    has("letter-spacing:12px", "the digits are not letter-spaced for legibility"),
+    has("{_EMAIL_MONO}", "the code is not monospaced"),
+    has("_EMAIL_CLIP_URI", "no clipboard cue beside the digits"),
+    has("_EMAIL_HEADING}", "the code is not high-contrast against the pill"),
+  ].find((r) => r !== true) || true;
+});
+
+check("auth email footer carries the trust line", () =>
+  /Secured by ResultApp/.test(notifier) && /Automated school portal verification/.test(notifier)
+    ? true
+    : "the footer trust line is missing"
+);
+
 check("a failed OTP send does not burn the resend cooldown", () => {
   // Regression guard for a debugging trap: _cooldown_ok() reserves the window
   // BEFORE the mail is attempted, so a Brevo outage made every retry inside the
