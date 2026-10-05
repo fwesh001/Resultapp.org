@@ -7,7 +7,8 @@ sys.path.insert(0, "backend")
 # Behavioural, not textual: does the function as-shipped actually emit a
 # quote-free URI? A regex over the source would pass even if the encoder were
 # broken, which is exactly the bug being guarded against.
-from services.notifier import _svg_data_uri, _EMAIL_GRID_URI, _EMAIL_CLIP_URI  # noqa: E402
+from services.notifier import _svg_data_uri, _EMAIL_GRID_URI  # noqa: E402
+import services.notifier as nt  # noqa: E402
 
 svg = "<svg xmlns='http://www.w3.org/2000/svg'><path d='M0 0'/></svg>"
 out = _svg_data_uri(svg)
