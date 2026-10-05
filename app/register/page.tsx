@@ -114,7 +114,8 @@ export default function RegisterPage() {
             </div>
 
 
-            {/* form card — dark — pay-first 3-step wizard (details → checkout → provision) */}
+            {/* form card — dark — 3-step wizard
+                (school details → account security → review & pay) */}
             <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6 md:p-7">
               <div className="mb-6">
                 <h2 className="text-base font-semibold tracking-tight text-white">School registration</h2>
@@ -147,8 +148,9 @@ export default function RegisterPage() {
             <div className="mt-5 rounded-xl border border-purple-500/15 bg-[#0F0A1E]/60 p-4 backdrop-blur">
               <p className="text-sm font-medium text-white">How it works</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-purple-200/60">
-                <li>Fill school & admin details</li>
-                <li>We verify and provision your portal automatically</li>
+                <li>Confirm your school, subdomain and admin email</li>
+                <li>Set the admin login and student capacity</li>
+                <li>Review, pay, and we provision your portal automatically</li>
                 <li>
                   Portal at <span className="font-mono text-purple-200">subdomain.resultapp.org</span> is auto-created
                 </li>
