@@ -335,6 +335,13 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS new_term_begins VARCHAR(32);
         """)
+        # Admin name as collected by the registration wizard. Additive, so
+        # existing tenants keep NULL and fall back to the email local part in
+        # the UI — this never invalidates a row written by an older build.
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS admin_name VARCHAR(80);
+        """)
         # Credit & Command: spendable token balance (zero-downtime, additive only)
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
