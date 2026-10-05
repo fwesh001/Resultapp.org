@@ -578,6 +578,7 @@ export function RegisterSchoolForm() {
       schoolName: values.schoolName.trim(),
       subdomain: values.subdomain.trim().toLowerCase(),
       adminEmail: values.adminEmail.trim().toLowerCase(),
+      adminName: values.adminName.trim(),
       adminPassword: values.adminPassword,
       studentCount: parseInt(values.studentCount.trim(), 10),
       // No initial_credits: the backend is strictly authoritative. It grants the
