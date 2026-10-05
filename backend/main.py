@@ -114,6 +114,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         # Loud, unlike the others: registration now hard-requires this table.
         logger.error(f"Consent tables init FAILED: {e}")
+    try:
+        from services.db_manager import init_email_otp_table, purge_expired_email_otps
+
+        init_email_otp_table()
+        # Opportunistic sweep; a public endpoint's table must not grow forever.
+        purge_expired_email_otps()
+    except Exception as e:
+        # Loud: the registration wizard gates payment on a working OTP, so a
+        # missing table here means every "Send code" click fails with a 500.
+        logger.error(f"Email OTP table init FAILED: {e}")
     yield
     # Shutdown: no-op
 
