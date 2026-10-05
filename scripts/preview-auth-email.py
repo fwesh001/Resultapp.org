@@ -16,7 +16,7 @@ from services.notifier import (  # noqa: E402
     _EMAIL_PILL_BG,
     _EMAIL_BORDER_RGBA,
     _EMAIL_GRID_URI,
-    _EMAIL_CLIP_URI,
+    _EMAIL_COPY_GLYPH,
 )
 
 OUT = pathlib.Path("tmp-email-preview")
@@ -71,7 +71,9 @@ checks = [
     ("pill bg present", f'bgcolor="{_EMAIL_PILL_BG}"' in otp_html),
     ("glow border rgba", _EMAIL_BORDER_RGBA in otp_html),
     ("grid data-uri embedded", "data:image/svg+xml" in otp_html and _EMAIL_GRID_URI.split(",")[1][:20] in otp_html),
-    ("clipboard icon present", _EMAIL_CLIP_URI.split(",")[1][:20] in otp_html),
+    ("copy cue is a TEXT glyph", _EMAIL_COPY_GLYPH in otp_html),
+    ("no <img> in the OTP pill", "<img" not in otp_html),
+    ("no data:image in the OTP render", "data:image" not in otp_html),
     ("code rendered", ">123456<" in otp_html),
     ("branding text", "resultapp.org" in otp_html),
     ("footer copy", "Secured by ResultApp" in otp_html),
