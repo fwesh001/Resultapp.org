@@ -18,7 +18,6 @@ import { readJson, resolveBackendBase, logBadBackendUrl } from "@/lib/api/authPr
  * cases below.
  */
 
-const BACKEND_URL = (process.env.BACKEND_URL || "").trim().replace(/\/$/, "");
 const PROXY_SECRET = (process.env.BACKEND_API_SECRET || "").trim();
 
 export async function POST(req: NextRequest) {
@@ -33,16 +32,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A 6-digit code is required" }, { status: 400 });
   }
 
-  if (!BACKEND_URL) {
-    console.error("[api/auth/verify-email-otp] BACKEND_URL is not set on this deployment");
-    return NextResponse.json({ error: "Server misconfigured: missing BACKEND_URL" }, { status: 500 });
+  const backend = resolveBackendBase();
+  if (!backend.ok) {
+    logBadBackendUrl("api/auth/verify-email-otp", backend);
+    return NextResponse.json({ error: `Server misconfigured: ${backend.reason}` }, { status: 500 });
   }
   if (!PROXY_SECRET) {
     console.error("[api/auth/verify-email-otp] BACKEND_API_SECRET is not set on this deployment");
     return NextResponse.json({ error: "Server misconfigured: missing BACKEND_API_SECRET" }, { status: 500 });
   }
 
-  const target = `${BACKEND_URL}/api/v1/auth/verify-email-otp`;
+  const target = `${backend.base}/api/v1/auth/verify-email-otp`;
 
   try {
     const res = await fetch(target, {
