@@ -68,11 +68,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(data, { status: 200 });
   } catch (e) {
-    let host = BACKEND_URL;
+    let host = backend.base;
     try {
       host = new URL(target).host;
     } catch {
-      /* BACKEND_URL is not a valid URL — log it verbatim below. */
+      /* Should be unreachable — resolveBackendBase validated it. */
     }
     // The code itself is never logged; only the host and transport error.
     console.error(
