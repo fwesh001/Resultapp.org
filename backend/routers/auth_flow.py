@@ -347,7 +347,7 @@ def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
             detail="We could not send a verification code. Please try again shortly.",
         )
 
-delivered = send_otp_email(
+    delivered = send_otp_email(
         issued["email"],
         issued["raw_code"],
         expires_minutes=int(issued.get("ttl_minutes") or 10),
