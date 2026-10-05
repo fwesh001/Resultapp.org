@@ -116,9 +116,27 @@ export function RegisterSchoolForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
   const [subdomainTaken, setSubdomainTaken] = useState(false);
-  // Pay-first 3-step wizard: 1 = details, 2 = checkout, 3 = provisioning.
+  // 1 = school details, 2 = account security, 3 = review & payment.
+  // Step 3 also renders the post-payment provisioning/provisioned states, which
+  // is why `successData` (not the step number) is the terminal condition.
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+
+  // --- Email OTP (inbox ownership proof, Step 1) --------------------------
+  // isEmailVerified gates the Pay button, never navigation: a user with a
+  // broken mail path can still reach review and see exactly what is missing.
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpResendIn, setOtpResendIn] = useState(0);
+
+  // Password visibility toggles (Step 2). Two independent fields — revealing
+  // one must not reveal the other, so they are never combined.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [paidConflict, setPaidConflict] = useState<{ transactionId: string } | null>(null);
