@@ -93,3 +93,6 @@ backend/PRD.md
 .vscode/settings.json
 VHS_02.jpg
 VHS_01.jpg
+
+# Rendered email previews (scripts/preview-auth-email.py output)
+tmp-email-preview/
