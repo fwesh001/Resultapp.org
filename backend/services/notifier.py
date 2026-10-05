@@ -302,21 +302,25 @@ _EMAIL_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospac
 def _svg_data_uri(svg: str) -> str:
     """Percent-encode an SVG fragment into a CSS-safe data URI.
 
-    Encoding is done here rather than hand-written because of a bug this
-    replaces: the URIs previously embedded raw single quotes (xmlns='...')
+    This function exists because of a bug it replaces. The grid and clipboard
+    URIs were previously hand-written with raw single quotes (xmlns='...')
     inside an UNQUOTED url(). Per CSS tokenisation an unquoted url() may not
-    contain quotes, so the entire declaration is invalid and every client
-    silently drops the background — the grid was present in the markup and
-    simply never painted.
+    contain quotes, so the declaration is invalid and every client drops it
+    silently: the markup looked perfect and the grid simply never painted.
+    Verified in Chrome — raw quotes fail, encoded quotes render.
 
-    Verified in Chrome against five encodings: raw quotes fail, %27-encoded
-    quotes work, full percent-encoding works. Quotes-as-%27 is used because it
-    is also safe inside Outlook's inline-style parser, which chokes on some
-    fully-encoded forms. safe="" percent-encodes everything else (#, <, >, /).
+    Encoding is generated rather than hand-written so it cannot drift again.
+    safe="" is what does the work: it percent-encodes quotes to %27 plus
+    #, <, > and /. (An earlier version also chained .replace("'", "%27"),
+    which was dead code — quote() had already done it. Harmless, but it
+    invited a false sense that quotes were handled by an explicit rule.)
+
+    The result is emitted UNQUOTED (url(...)) because Outlook and Gmail both
+    drop a quoted url() in inline styles.
     """
     from urllib.parse import quote
 
-    return "data:image/svg+xml;charset=utf-8," + quote(svg, safe="").replace("'", "%27")
+    return "data:image/svg+xml;charset=utf-8," + quote(svg, safe="")
 
 
 #: Blueprint grid — a 44px tile with a single hairline top+left rule.
