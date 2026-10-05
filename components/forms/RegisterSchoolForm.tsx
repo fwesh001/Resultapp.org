@@ -269,8 +269,8 @@ export function RegisterSchoolForm() {
   // is never blocked by an error on a field they cannot see yet. Step 3 runs
   // all three so nothing invalid can reach the payment provider.
   // -------------------------------------------------------------------------
-  function validateSchool(): Partial<FormValues> {
-    const next: Partial<FormValues> = {};
+  function validateSchool(): FormErrors {
+    const next: FormErrors = {};
 
     if (!values.schoolName.trim() || values.schoolName.trim().length < 3) {
       next.schoolName = "School name must be at least 3 characters";
@@ -299,8 +299,8 @@ export function RegisterSchoolForm() {
     return next;
   }
 
-  function validateSecurity(): Partial<FormValues> {
-    const next: Partial<FormValues> = {};
+  function validateSecurity(): FormErrors {
+    const next: FormErrors = {};
 
     const name = values.adminName.trim();
     if (!name) {
