@@ -310,17 +310,124 @@ export function RegisterSchoolForm() {
       });
     }
     if (globalError) setGlobalError(null);
+
+    // Editing the address invalidates its proof: the code was issued for the
+    // old value, so keeping isEmailVerified would let an unverified mailbox
+    // reach payment by typing then reverting one character.
+    if (field === "adminEmail") {
+      resetOtp();
+    }
   }
 
-  // Step 1 submit: local validation + availability ONLY. Never touches
-  // the provision API — payment happens in Step 2.
-  async function handleSubmit(e: React.FormEvent) {
+  // --- OTP -----------------------------------------------------------------
+
+  function resetOtp() {
+    setIsEmailVerified(false);
+    setOtpCode("");
+    setOtpSent(false);
+    setOtpError(null);
+    setOtpResendIn(0);
+  }
+
+  /** Countdown ticker for the resend button. */
+  useEffect(() => {
+    if (otpResendIn <= 0) return;
+    const t = setTimeout(() => setOtpResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpResendIn]);
+
+  async function sendOtp() {
+    const email = values.adminEmail.trim();
+    if (!isValidEmail(email)) {
+      setOtpError("Enter a valid email address first.");
+      return;
+    }
+
+    setOtpSending(true);
+    setOtpError(null);
+    try {
+      const res = await fetch("/api/auth/request-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+
+      if (!res.ok) {
+        // The backend returns an honest 502/503 when Brevo actually failed to
+        // deliver, rather than the neutral 200 it uses to avoid enumeration.
+        // Surfacing it here means a broken mail config is visible instead of
+        // looking like "code sent, but it never arrived".
+        setOtpError(
+          data.error ||
+            "We could not send a verification code. Please try again in a moment."
+        );
+        return;
+      }
+
+      setOtpSent(true);
+      setOtpCode("");
+      setOtpResendIn(OTP_RESEND_COOLDOWN_S);
+    } catch {
+      setOtpError("Could not reach the verification service. Check your connection.");
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
+  async function verifyOtp() {
+    const email = values.adminEmail.trim();
+    const code = otpCode.trim();
+    if (!OTP_RE.test(code)) {
+      setOtpError("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setOtpVerifying(true);
+    setOtpError(null);
+    try {
+      const res = await fetch("/api/auth/verify-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        verified?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      // A wrong/expired/replayed code comes back 200 with verified:false and one
+      // uniform message. A 429 means the throttle tripped.
+      if (!res.ok) {
+        setOtpError(data.error || "Too many attempts. Request a new code.");
+        return;
+      }
+      if (!data.verified) {
+        setOtpError(data.message || "That code is incorrect or has expired.");
+        return;
+      }
+
+      setIsEmailVerified(true);
+      setOtpError(null);
+    } catch {
+      setOtpError("Could not reach the verification service. Try again.");
+    } finally {
+      setOtpVerifying(false);
+    }
+  }
+
+  // Step 1 exit: validate, then re-check subdomain availability live.
+  // Never touches the provision API — payment happens in Step 3.
+  async function handleStep1Next(e: React.FormEvent) {
     e.preventDefault();
     setGlobalError(null);
 
-    if (!validate()) return;
+    if (!validateStep1()) return;
 
-    // Sniped since the last keystroke: re-verify live before advancing to payment.
+    // Sniped since the last keystroke: re-verify live before advancing.
     if (subdomainTaken) {
       setErrors((prev) => ({ ...prev, subdomain: "This subdomain was just taken — please choose another." }));
       return;
@@ -341,6 +448,20 @@ export function RegisterSchoolForm() {
     }
 
     setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleStep2Next(e: React.FormEvent) {
+    e.preventDefault();
+    setGlobalError(null);
+    if (!validateStep2()) return;
+    setCurrentStep(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goBack(target: 1 | 2) {
+    setGlobalError(null);
+    setCurrentStep(target);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
