@@ -99,6 +99,77 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+/**
+ * Password input with an Eye/EyeOff visibility toggle.
+ *
+ * components/ui/Input renders a bare <input> with no slot for a trailing
+ * control, so this duplicates its class string rather than bolting an
+ * absolutely-positioned button over it — an overlay would sit on top of the
+ * text and swallow clicks on the last characters.
+ */
+function PasswordField({
+  id,
+  label,
+  name,
+  placeholder,
+  value,
+  onChange,
+  error,
+  autoComplete,
+  visible,
+  onToggle,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  name: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  autoComplete?: string;
+  visible: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-purple-100">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          name={name}
+          type={visible ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          required
+          disabled={disabled}
+          className={`flex h-10 w-full rounded-xl border bg-purple-950/30 py-2 pl-3 pr-11 text-sm text-purple-50 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+            error
+              ? "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500"
+              : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
+          }`}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={disabled}
+          aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+          aria-pressed={visible}
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-purple-300/70 transition hover:text-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {visible ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 export function RegisterSchoolForm() {
   const [values, setValues] = useState<FormValues>({
     schoolName: "",
