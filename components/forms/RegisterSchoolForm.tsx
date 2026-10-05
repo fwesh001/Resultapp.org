@@ -192,10 +192,14 @@ export function RegisterSchoolForm() {
   }, [values.subdomain]);
 
   // -------------------------------------------------------------------------
-  // Validation
+  // Validation — scoped per step
+  //
+  // validateStep1/2 only populate the fields belonging to that step, so a user
+  // is never blocked by an error on a field they cannot see yet. Step 3 runs
+  // all three so nothing invalid can reach the payment provider.
   // -------------------------------------------------------------------------
-  function validate(): boolean {
-    const next: FormErrors = {};
+  function validateSchool(): Partial<FormValues> {
+    const next: Partial<FormValues> = {};
 
     if (!values.schoolName.trim() || values.schoolName.trim().length < 3) {
       next.schoolName = "School name must be at least 3 characters";
@@ -221,6 +225,21 @@ export function RegisterSchoolForm() {
       next.adminEmail = "Enter a valid email address";
     }
 
+    return next;
+  }
+
+  function validateSecurity(): Partial<FormValues> {
+    const next: Partial<FormValues> = {};
+
+    const name = values.adminName.trim();
+    if (!name) {
+      next.adminName = "Admin name is required";
+    } else if (name.length < 2) {
+      next.adminName = "Admin name must be at least 2 characters";
+    } else if (name.length > 120) {
+      next.adminName = "Admin name must be at most 120 characters";
+    }
+
     if (!values.adminPassword) {
       next.adminPassword = "Admin password is required";
     } else if (values.adminPassword.length < 8) {
@@ -244,13 +263,34 @@ export function RegisterSchoolForm() {
       next.studentCount = "Maximum 10,000 students";
     }
 
-    // Hard gate — registration is refused server-side without this, so it is
-    // enforced here too rather than letting the user pay and then fail.
+    return next;
+  }
+
+  /** Step 1 exit gate. */
+  function validateStep1(): boolean {
+    const next = validateSchool();
+    setErrors((prev) => ({ ...prev, ...next }));
+    return Object.keys(next).length === 0;
+  }
+
+  /** Step 2 exit gate. */
+  function validateStep2(): boolean {
+    const next = validateSecurity();
+    setErrors((prev) => ({ ...prev, ...next }));
+    return Object.keys(next).length === 0;
+  }
+
+  /**
+   * Step 3 gate — runs every step's rules, plus consent. Consent is a hard gate
+   * enforced server-side too (register-school re-validates), so checking it here
+   * is about not letting the user pay and only then fail.
+   */
+  function validateAll(): boolean {
+    const next = { ...validateSchool(), ...validateSecurity() };
     if (!values.acceptTerms) {
       next.acceptTerms =
         "You must accept the Terms of Service and Privacy Policy to continue";
     }
-
     setErrors(next);
     return Object.keys(next).length === 0;
   }
