@@ -284,6 +284,170 @@ check("no auth proxy leaks the shared secret to the browser", () => {
     : "a proxy references a secret that could reach the client";
 });
 
+// ---------------------------------------------------------------------------
+// Registration OTP (6-digit inbox-ownership proof).
+//
+// A 6-digit code is 1e6 candidates, so the controls that matter are the attempt
+// cap and the throttle — NOT the hash. These checks exist so a later refactor
+// cannot silently drop the caps and leave the endpoint enumerable in practice.
+// ---------------------------------------------------------------------------
+console.log("\nRegistration OTP — inbox ownership before payment");
+
+check("OTP endpoints exist and are secret-gated", () => {
+  if (!/@router\.post\("\/request-email-otp"/.test(router)) return "no /request-email-otp route";
+  if (!/@router\.post\("\/verify-email-otp"/.test(router)) return "no /verify-email-otp route";
+  return router.includes("dependencies=[Depends(_verify_auth_secret)]")
+    ? true
+    : "the router is no longer secret-gated";
+});
+
+check("OTP codes are never stored in the clear", () => {
+  if (!/code_hash/.test(db)) return "no code_hash column";
+  return /hash_auth_token\(raw\)/.test(db)
+    ? true
+    : "the raw code appears to be stored rather than hashed";
+});
+
+check("OTP is single-use and expires", () => {
+  if (!/consumed_at = NOW\(\)/.test(db)) return "a successful verify does not burn the code";
+  if (!/expires_at/.test(db)) return "no expiry column";
+  return /EMAIL_OTP_TTL_MINUTES/.test(db) && /int\(os\.getenv/.test(db)
+    ? true
+    : "no bounded, configurable TTL";
+});
+
+check("brute force is capped by an attempt limit", () => {
+  if (!/EMAIL_OTP_MAX_ATTEMPTS/.test(db)) return "no per-code attempt cap";
+  if (!/attempts = attempts \+ 1/.test(db)) return "a wrong guess does not spend an attempt";
+  return true;
+});
+
+check("OTP verify is rate limited", () =>
+  /rate_limit\.check\(/.test(router)
+    ? true
+    : "no throttle on the verify endpoint — 1e6 candidates is guessable"
+);
+
+check("OTP generation is throttled and cooldown-gated", () =>
+  /_cooldown_ok\(`otp:/.test(router) && /otp-send:/.test(router)
+    ? true
+    : "generation is unbounded — a caller could mail-bomb an address"
+);
+
+check("OTP verify is race-safe (row locked)", () =>
+  /FOR UPDATE/.test(db) ? true : "two concurrent submits of one code could both win"
+);
+
+check("OTP request reveals nothing about account existence", () => {
+  const fn = router.slice(
+    router.indexOf("def request_email_otp"),
+    router.indexOf("def verify_email_otp")
+  );
+  if (!fn) return "cannot locate request_email_otp";
+  return /is_email_verified|schools|platform_admins/.test(fn)
+    ? "the send path branches on account state — that is an enumeration oracle"
+    : true;
+});
+
+check("OTP verify collapses wrong/expired/replayed into one message", () => {
+  const fn = router.slice(router.indexOf("def verify_email_otp"));
+  if (!fn) return "cannot locate verify_email_otp";
+  return /incorrect or has expired/.test(fn)
+    ? true
+    : "the failure message does not merge the failure modes (oracle risk)";
+});
+
+check("no raw OTP is ever logged", () => {
+  const send = notifier.slice(
+    notifier.indexOf("def send_otp_email"),
+    notifier.indexOf("def send_verification_email")
+  );
+  if (!send) return "cannot locate send_otp_email";
+  // A log line carrying the code would make the journal a second delivery path.
+  const logged = /logger\.(info|warning|error|debug)\([^)]*\bcode\b/i.test(
+    send.replace(/logger\.(error|warning)\("\/EMAIL-AUTH"\] refusing to send a malformed OTP[\s\S]*?\)/, "")
+  );
+  return !logged ? true : "a log statement appears to include the code";
+});
+
+check("OTP email builds no link (so PUBLIC_BASE_URL cannot break it)", () => {
+  const send = notifier.slice(
+    notifier.indexOf("def send_otp_email"),
+    notifier.indexOf("def send_verification_email")
+  );
+  if (!send) return "cannot locate send_otp_email";
+  return !/public_base_url\(\)/.test(send) && !/href=/.test(send)
+    ? true
+    : "the OTP email builds a URL — it should be a typed code";
+});
+
+// ---------------------------------------------------------------------------
+// Wizard gating — payment must not be reachable without consent + a proven inbox.
+// ---------------------------------------------------------------------------
+console.log("\nRegistration wizard — payment gating");
+
+check("Pay is gated on BOTH consent and verified email", () => {
+  const step3 = register.slice(register.indexOf("if (currentStep === 3) {"));
+  if (!step3) return "cannot locate Step 3";
+  const m = step3.match(/disabled=\{([^}]*)\}/);
+  if (!m) return "no disabled binding on the payment button";
+  const expr = m[1];
+  return /payBlockedByTerms/.test(expr) && /payBlockedByEmail/.test(expr)
+    ? true
+    : `the payment gate is "${expr}" — it must require both flags`;
+});
+
+check("the disabled payment button explains itself", () =>
+  /payHint/.test(register)
+    ? true
+    : "a dead button with no reason shown — unblocks are impossible for the user"
+);
+
+check("editing the admin email revokes verification", () => {
+  const fn = register.slice(
+    register.indexOf("function handleChange"),
+    register.indexOf("function resetOtp")
+  );
+  if (!fn) return "cannot locate handleChange";
+  return /field === "adminEmail"/.test(fn) && /resetOtp\(\)/.test(fn)
+    ? true
+    : "changing the address leaves the old proof valid";
+});
+
+check("consent is rendered directly above the payment button", () => {
+  const step3 = register.slice(register.indexOf("if (currentStep === 3) {"));
+  if (!step3) return "cannot locate Step 3";
+  const consent = step3.indexOf('id="acceptTerms"');
+  const pay = step3.indexOf("startFlutterwaveCheckout");
+  if (consent === -1) return "no consent checkbox in Step 3";
+  if (pay === -1) return "no payment button in Step 3";
+  return consent < pay ? true : "the consent checkbox sits after the payment button";
+});
+
+check("the admin password is never sent to Flutterwave in meta", () => {
+  const m = register.match(/meta:\s*\{[\s\S]*?\}/);
+  if (!m) return "no meta block found";
+  return /adminPassword/.test(m[0])
+    ? "meta carries the admin password — it is disclosed to a third party"
+    : true;
+});
+
+check("OTP proxies never expose the shared secret", () => {
+  const proxies = [otpSend, otpVerify];
+  return proxies.every((p) => !/NEXT_PUBLIC_.*SECRET|SESSION_SECRET/.test(p))
+    ? true
+    : "an OTP proxy references a secret that could reach the client";
+});
+
+check("OTP proxies surface backend delivery failures", () => {
+  // The backend returns an honest 502 when Brevo failed. If the proxy swallowed
+  // it, a broken mail config would look identical to "sent, check your inbox".
+  const both = otpSend + otpVerify;
+  return /if \(!res\.ok\)/.test(both)
+    ? true
+    : "a proxy ignores non-200 responses, hiding mail failures";
+});
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) {
