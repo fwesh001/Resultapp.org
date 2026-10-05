@@ -510,15 +510,22 @@ check("Step 1 validation runs before the email gate", () => {
 check("OTP proxies fail loudly on missing configuration", () => {
   // A missing BACKEND_URL used to fall through to a hardcoded droplet IP whose
   // port was closed, surfacing as an opaque 502 indistinguishable from a Brevo
-  // failure. Both proxies must name the missing variable instead.
+  // failure. Both proxies must name the misconfiguration instead.
   for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
-    if (!/BACKEND_URL/.test(src)) return `${name} does not reference BACKEND_URL`;
     if (!/BACKEND_API_SECRET/.test(src)) return `${name} does not reference BACKEND_API_SECRET`;
-    if (!/missing BACKEND_URL/.test(src)) {
-      return `${name} has no explicit missing-BACKEND_URL guard`;
-    }
     if (!/missing BACKEND_API_SECRET/.test(src)) {
       return `${name} has no explicit missing-BACKEND_API_SECRET guard`;
+    }
+    // Backend resolution moved into the shared resolveBackendBase() helper,
+    // so the guard is the call to it plus a bail-out on !ok.
+    if (!/resolveBackendBase\(\)/.test(src)) {
+      return `${name} does not validate the backend URL via resolveBackendBase()`;
+    }
+    if (!/if \(!backend\.ok\)/.test(src)) {
+      return `${name} calls resolveBackendBase() but does not bail when it fails`;
+    }
+    if (!/status: 500/.test(src)) {
+      return `${name} does not report a misconfiguration as 500`;
     }
   }
   return true;
@@ -533,21 +540,39 @@ check("OTP proxies never fall back to a hardcoded backend", () => {
   for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
     const code = stripProse(src);
     if (banned.test(code)) return `${name} still references a hardcoded backend address in code`;
-    // No fallback chain: exactly one env var, coerced to "". The tolerated
-    // `BACKEND_URL || ""` idiom is the ABSENCE of a fallback — what must not
-    // appear is a second candidate source or a non-empty default.
-    const assignment = /const\s+BACKEND_URL\s*=\s*([^;]+);/.exec(code);
-    if (!assignment) return `${name} does not assign BACKEND_URL explicitly`;
-    if (!/process\.env\.BACKEND_URL/.test(assignment[1])) {
-      return `${name} does not read BACKEND_URL from the environment`;
-    }
+    // No fallback chain: exactly one env var, via the shared resolver.
     if (/PROVISION_API_URL|NEXT_PUBLIC_API_URL|API_URL/.test(code)) {
       return `${name} reads an alternative backend env var — that reintroduces the fallback chain`;
     }
-    // A non-empty default would be a hardcoded backend wearing a disguise.
-    if (!/\|\|\s*""\s*\)/.test(assignment[1]) && !/\|\|\s*""/.test(assignment[1])) {
-      return `${name} gives BACKEND_URL a non-empty default — it must default to empty and be guarded`;
+    // The resolved base must be what gets used, not a re-read of the env var.
+    if (/\$\{backend\.base\}/.test(code)) continue;
+    if (/\$\{BACKEND_URL\}/.test(code)) {
+      return `${name} interpolates the raw env var instead of the validated backend.base`;
     }
+  }
+  return true;
+});
+
+check("a Markdown-pasted BACKEND_URL is rejected, not fetched", () => {
+  // Production incident: BACKEND_URL was set to
+  // "[https://api.resultapp.org](https://api.resultapp.org)". fetch() threw
+  // ERR_INVALID_URL, every proxy 502'd, and the HTML error body broke the
+  // client's res.json() — so a rich-text paste presented as "email failed".
+  const lib = read(path.join("lib", "api", "authProxy.ts"));
+  if (!/export function resolveBackendBase/.test(lib)) {
+    return "there is no resolveBackendBase() validator in lib/api/authProxy.ts";
+  }
+  if (!/new URL\(/.test(lib)) return "the validator never parses the URL";
+  // It must reject bracket/paren/whitespace shapes, not merely fail to parse.
+  if (!/\[\[\\\]\]|MARKDOWN_LINK_RE/.test(lib)) {
+    return "the validator does not detect a Markdown-pasted URL";
+  }
+  // And the shared helper must be wired into the generic postAuth too.
+  if (!/resolveBackendBase\(\)/.test(lib)) {
+    return "postAuth does not use the validator";
+  }
+  if (!/Server misconfigured/.test(lib)) {
+    return "postAuth does not return a named misconfiguration";
   }
   return true;
 });
