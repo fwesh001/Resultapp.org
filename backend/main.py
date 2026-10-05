@@ -260,9 +260,25 @@ SUBDOMAIN_RE = re.compile(r"^[a-z0-9-]{3,30}$")
 RESERVED_SUBDOMAINS = {"www", "api", "admin", "app", "dashboard", "resultapp", "mail", "support", "help", "billing", "ops", "status"}
 
 class ProvisionRequest(BaseModel):
+    # Unknown fields are IGNORED, not rejected. This is stated explicitly
+    # rather than left to the Pydantic default so the intent survives: the
+    # Next.js proxy is free to add fields (adminName was one) without risking
+    # a 422 that would strand a school that has ALREADY PAID. Prefer
+    # `extra="ignore"` over `extra="forbid"` here — provision runs post-payment,
+    # so a strict schema would turn a typo into a paid-but-unprovisioned tenant.
+    model_config = ConfigDict(extra="ignore")
+
     school_name: str = Field(..., min_length=3, max_length=120, examples=["Victory High School"])
     subdomain: str = Field(..., min_length=3, max_length=30, examples=["vhs"], description="Desired slug, e.g. vhs -> vhs.resultapp.org")
     admin_email: EmailStr = Field(..., examples=["admin@victoryhigh.edu.ng"])
+    # Collected in wizard Step 2. Used for the welcome email greeting and the
+    # Flutterwave customer name; persisted to schools.admin_name.
+    #
+    # BOUNDS ARE A CONTRACT: min 3 / max 80 here must match validateSecurity()
+    # in components/forms/RegisterSchoolForm.tsx and the parity check in
+    # app/api/register-school/route.ts. Provisioning runs AFTER payment, so a
+    # mismatch (e.g. the client accepting 2 characters) rejects with a 422 the
+    # user only sees once they have been charged.
     admin_name: Optional[str] = Field(None, min_length=3, max_length=80, examples=["Mrs. Adaeze Okafor"], description="Optional — defaults to local part of email")
     admin_password: Optional[str] = Field(None, min_length=8, max_length=128, description="Phase 2 — admin portal password chosen at registration (stored as pgcrypto bcrypt hash)")
     transaction_id: Optional[str] = Field(None, min_length=1, max_length=100, description="Verified Flutterwave transaction_id (anti-replay: rejected if already redeemed)")
