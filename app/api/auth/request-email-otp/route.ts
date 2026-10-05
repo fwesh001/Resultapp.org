@@ -75,11 +75,11 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // Log which HOST was actually called — that single fact identifies a wrong
     // BACKEND_URL, DNS failure, or a blocked port. No secret, no email body.
-    let host = BACKEND_URL;
+    let host = backend.base;
     try {
       host = new URL(target).host;
     } catch {
-      /* BACKEND_URL is not a valid URL — log it verbatim below. */
+      /* Should be unreachable — resolveBackendBase validated it. */
     }
     console.error(
       `[api/auth/request-email-otp] fetch to ${host} failed:`,
