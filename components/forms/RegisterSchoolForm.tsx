@@ -761,8 +761,8 @@ export function RegisterSchoolForm() {
   // -------------------------------------------------------------------------
   const steps = [
     { n: 1, label: "School details" },
-    { n: 2, label: "Checkout" },
-    { n: 3, label: "Portal ready" },
+    { n: 2, label: "Account security" },
+    { n: 3, label: "Review & pay" },
   ] as const;
 
   function renderStepIndicator() {
