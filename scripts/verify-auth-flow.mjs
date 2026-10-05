@@ -912,21 +912,23 @@ check("auth email footer carries the trust line", () =>
 check("a provisioned school always has a redirect out", () => {
   // A paid user who closes the tab at the Flutterwave modal must not be left
   // on a terminal screen with nothing but a button.
-  // The check must find the navigation INSIDE the countdown effect. Asserting on
-  // the bare string `window.location.href = adminLoginUrl` also matches the
-  // success button's handler, so deleting the automatic handoff still passed —
-  // which is exactly what a mutation caught. Require the effect body.
-  const effectStart = register.indexOf("setHandoffIn(PORTAL_HANDOFF_SECONDS)");
-  if (effectStart === -1) return "the countdown effect never arms the handoff";
-  const effectEnd = register.search(/\n\s{2}\}, \[successData, adminLoginUrl\]\);/);
+  // The countdown is derived from a timestamp rather than stored as a decrementing
+  // counter, so "the effect" is the one keyed on handoffIn.
+  const effectStart = register.indexOf("if (handoffIn === null) return;");
+  if (effectStart === -1) return "there is no countdown effect keyed on handoffIn";
+  const effectEnd = register.search(/\n\s{2}\}, \[handoffIn, adminLoginUrl\]\);/);
   const effect = effectEnd === -1
-    ? register.slice(effectStart, effectStart + 900)
+    ? register.slice(effectStart, effectStart + 700)
     : register.slice(effectStart, effectEnd);
   if (!/window\.location\.href\s*=\s*adminLoginUrl/.test(effect)) {
     return "the countdown effect never navigates to adminLoginUrl";
   }
-  if (!/const \[handoffIn, setHandoffIn\]/.test(register)) {
-    return "there is no handoff countdown state";
+  // The countdown must be armed from successData, not left permanently null.
+  if (!/if \(successData && handoffStartedAt === null\)/.test(register)) {
+    return "the handoff is never armed when a school is provisioned";
+  }
+  if (!/const \[handoffStartedAt, setHandoffStartedAt\]/.test(register)) {
+    return "the handoff has no arming timestamp";
   }
   if (!/PORTAL_HANDOFF_SECONDS\s*=\s*\d+/.test(register)) {
     return "the handoff delay is not a declared constant";
@@ -939,10 +941,10 @@ check("a provisioned school always has a redirect out", () => {
   if (!/\/admin\/login/.test(register)) {
     return "the handoff does not target /admin/login";
   }
-  // And it must clear its interval, or a cancelled handoff keeps ticking.
-  return /clearInterval/.test(register)
+  // And it must clear its timeout, or a cancelled handoff still fires.
+  return /clearTimeout/.test(register)
     ? true
-    : "the handoff interval is never cleared — a cancelled redirect still fires";
+    : "the handoff timer is never cleared — a cancelled redirect still fires";
 });
 
 check("the redirect is a hard navigation, not a client-side route", () =>
