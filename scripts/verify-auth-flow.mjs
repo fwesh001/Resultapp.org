@@ -40,6 +40,9 @@ const ADMIN_AUTH = path.join("backend", "routers", "admin_auth.py");
 const PLATFORM_AUTH = path.join("backend", "routers", "platform_auth.py");
 const WALL = path.join("components", "auth", "VerifyEmailWall.tsx");
 const SIGNIN = path.join("components", "auth", "SignInForm.tsx");
+const REGISTER = path.join("components", "forms", "RegisterSchoolForm.tsx");
+const OTP_SEND_PROXY = path.join("app", "api", "auth", "request-email-otp", "route.ts");
+const OTP_VERIFY_PROXY = path.join("app", "api", "auth", "verify-email-otp", "route.ts");
 
 const results = [];
 function check(name, fn) {
