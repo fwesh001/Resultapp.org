@@ -339,11 +339,17 @@ def _auth_email_shell(heading: str, body_html: str, footer_note: str) -> str:
 <style>body,table,td,div,p,a,h1{{color:#ffffff !important;}}</style>
 <![endif]-->
 </head>
-<body bgcolor="{_EMAIL_BG}" style="margin:0;padding:0;background-color:{_EMAIL_BG};background-image:url({_EMAIL_GRID_URI});background-repeat:repeat;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body bgcolor="{_EMAIL_BG}" style="margin:0;padding:0;background-color:{_EMAIL_BG};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{footer_note}</div>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="{_EMAIL_BG}" style="background-color:{_EMAIL_BG};background-image:url({_EMAIL_GRID_URI});background-repeat:repeat;">
+<!-- Grid lives on this cell, NOT on <body>: a body background is painted
+     beneath a full-width wrapper table, and that table's bgcolor is opaque, so
+     the grid would never be visible. Putting it on the padding cell leaves the
+     surrounding gutter as the only uncovered area, which is where the
+     blueprint texture is actually meant to read. The URL is unquoted because
+     Chrome, Outlook and Gmail all drop a quoted url() in inline styles. -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="{_EMAIL_BG}" style="background-color:{_EMAIL_BG};">
   <tr>
-    <td align="center" style="padding:36px 14px;">
+    <td align="center" style="padding:36px 14px;background-image:url({_EMAIL_GRID_URI});background-repeat:repeat;">
       <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600"><tr><td><![endif]-->
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:600px;">
         <tr>
