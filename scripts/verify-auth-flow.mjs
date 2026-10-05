@@ -714,11 +714,18 @@ check("an out-of-range admin name is omitted, not forwarded as empty", () => {
 check("ProvisionRequest ignores unknown fields rather than 422-ing", () => {
   // This route runs post-payment: a strict schema would turn a stray key from
   // the Next.js proxy into a charged-but-unprovisioned tenant.
+  //
+  // Anchored to the start of a line so it can only match real code. The
+  // rationale comment quotes extra="ignore" verbatim, and a loose substring
+  // search would be satisfied by that comment alone.
   const cls = main.slice(main.indexOf("class ProvisionRequest"));
   if (!cls) return "cannot locate ProvisionRequest";
-  return /extra\s*=\s*["']ignore["']/.test(cls)
-    ? true
-    : "ProvisionRequest does not pin extra=ignore (default is ignore, but it must be deliberate)";
+  if (/^\s*model_config\s*=\s*ConfigDict\(\s*extra\s*=\s*["']ignore["']/m.test(cls)) {
+    return /^\s*model_config\s*=\s*ConfigDict\(\s*extra\s*=\s*["']forbid["']/m.test(cls)
+      ? "ProvisionRequest forbids extra fields — a stray key would 422 a paid user"
+      : true;
+  }
+  return "ProvisionRequest does not pin ConfigDict(extra='ignore') in code (the Pydantic default is ignore, but it must be deliberate)";
 });
 
 check("the Flutterwave customer name is the admin name, not the email prefix", () => {
