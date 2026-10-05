@@ -320,9 +320,29 @@ check("OTP is single-use and expires", () => {
 });
 
 check("brute force is capped by an attempt limit", () => {
-  if (!/EMAIL_OTP_MAX_ATTEMPTS/.test(db)) return "no per-code attempt cap";
   if (!/attempts = attempts \+ 1/.test(db)) return "a wrong guess does not spend an attempt";
+  // Assert the cap is a SMALL literal, not merely that the name exists —
+  // a 6-digit code is 1e6 candidates, so a cap set to 100000 is no cap at all.
+  const cap = /EMAIL_OTP_MAX_ATTEMPTS\s*=\s*(\d+)/.exec(db);
+  if (!cap) return "EMAIL_OTP_MAX_ATTEMPTS is not a literal integer";
+  const n = Number(cap[1]);
+  if (n < 1 || n > 10) {
+    return `the attempt cap is ${n} — with only 1e6 candidates it must be small (<=10)`;
+  }
+  // And it must not be silently overridable by env.
+  if (/EMAIL_OTP_MAX_ATTEMPTS\s*=\s*int\(\s*os\.getenv/.test(db)) {
+    return "the attempt cap is env-configurable — an operator typo would disable it";
+  }
   return true;
+});
+
+check("OTP TTL is short and bounded", () => {
+  const ttl = /EMAIL_OTP_TTL_MINUTES\s*=\s*int\(\s*os\.getenv\([^,]+,\s*"(\d+)"/.exec(db);
+  if (!ttl) return "EMAIL_OTP_TTL_MINUTES has no literal default";
+  const m = Number(ttl[1]);
+  return m > 0 && m <= 60
+    ? true
+    : `the default TTL is ${m} minutes — a typed code should expire far sooner`;
 });
 
 check("OTP verify is rate limited", () =>
