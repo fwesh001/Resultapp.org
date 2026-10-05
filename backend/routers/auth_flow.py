@@ -98,6 +98,23 @@ def _cooldown_ok(key: str) -> bool:
     return True
 
 
+def _release_cooldown(key: str) -> None:
+    """Undo a cooldown reservation when the send it gated never happened.
+
+    _cooldown_ok() reserves the window BEFORE the mail is attempted, which is
+    the right order for anti-abuse — but it means an operational failure (Brevo
+    rejecting the key, a 5xx) also burns the window. The caller then gets the
+    neutral "sent" response on every retry for the next minute: the worst
+    possible answer, because it tells a user to check an inbox that will never
+    receive anything.
+
+    Releasing on failure keeps the throttle doing its job against real abuse
+    (a successful send still holds the window) while letting someone retry
+    immediately after a transient error.
+    """
+    _last_request.pop(key, None)
+
+
 def _normalise(email: str) -> str:
     return str(email or "").strip().lower()
 
