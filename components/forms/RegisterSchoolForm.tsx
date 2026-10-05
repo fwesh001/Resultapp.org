@@ -891,10 +891,22 @@ export function RegisterSchoolForm() {
       <div>
         {renderStepIndicator()}
         <h3 className="text-lg font-bold tracking-tight text-white">Review &amp; pay</h3>
-        <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-sm">
+<div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-sm">
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">School</span>
-            <span className="font-medium text-white">{values.schoolName.trim() || "—"}</span>
+            <span className="text-purple-200/60">Admin</span>
+            <span className="font-medium text-white">
+              {values.adminName.trim() || "—"}
+              {isEmailVerified && (
+                <span className="ml-1.5 inline-flex align-middle text-emerald-300" title="Email verified">
+                  <MailCheck className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">email verified</span>
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-purple-200/60">Email</span>
+            <span className="font-medium text-white">{values.adminEmail.trim() || "—"}</span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-purple-200/60">Subdomain</span>
