@@ -531,9 +531,20 @@ check("OTP proxies never fall back to a hardcoded backend", () => {
   for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
     const code = stripProse(src);
     if (banned.test(code)) return `${name} still references a hardcoded backend address in code`;
-    // And there must be no fallback chain at all — a single env var only.
-    if (/BACKEND_URL\s*\|\||process\.env\.PROVISION_API_URL/.test(code)) {
-      return `${name} still walks a fallback chain for the backend URL`;
+    // No fallback chain: exactly one env var, coerced to "". The tolerated
+    // `BACKEND_URL || ""` idiom is the ABSENCE of a fallback — what must not
+    // appear is a second candidate source or a non-empty default.
+    const assignment = /const\s+BACKEND_URL\s*=\s*([^;]+);/.exec(code);
+    if (!assignment) return `${name} does not assign BACKEND_URL explicitly`;
+    if (!/process\.env\.BACKEND_URL/.test(assignment[1])) {
+      return `${name} does not read BACKEND_URL from the environment`;
+    }
+    if (/PROVISION_API_URL|NEXT_PUBLIC_API_URL|API_URL/.test(code)) {
+      return `${name} reads an alternative backend env var — that reintroduces the fallback chain`;
+    }
+    // A non-empty default would be a hardcoded backend wearing a disguise.
+    if (!/\|\|\s*""\s*\)/.test(assignment[1]) && !/\|\|\s*""/.test(assignment[1])) {
+      return `${name} gives BACKEND_URL a non-empty default — it must default to empty and be guarded`;
     }
   }
   return true;
