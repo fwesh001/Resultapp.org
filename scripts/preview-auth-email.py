@@ -5,6 +5,7 @@ Does not send anything. Writes OTP + verification HTML so the design can be
 opened in a browser exactly as a mail client would render it.
 """
 import pathlib
+import re
 import sys
 
 sys.path.insert(0, "backend")
@@ -72,8 +73,11 @@ checks = [
     ("glow border rgba", _EMAIL_BORDER_RGBA in otp_html),
     ("grid data-uri embedded", "data:image/svg+xml" in otp_html and _EMAIL_GRID_URI.split(",")[1][:20] in otp_html),
     ("copy cue is a TEXT glyph", _EMAIL_COPY_GLYPH in otp_html),
-    ("no <img> in the OTP pill", "<img" not in otp_html),
-    ("no data:image in the OTP render", "data:image" not in otp_html),
+    ("no <img> anywhere in the render", "<img" not in otp_html),
+    # The grid is still an SVG data URI and is verified separately by
+    # verify-email-grid.py / verify-email-uri.py. What must not come back is an
+    # <img>, i.e. an image DECODE dependency — which is exactly what broke.
+    ("no data:image inside an <img>", not re.search(r'<img[^>]*data:image', otp_html)),
     ("code rendered", ">123456<" in otp_html),
     ("branding text", "resultapp.org" in otp_html),
     ("footer copy", "Secured by ResultApp" in otp_html),
