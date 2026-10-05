@@ -553,19 +553,16 @@ def send_verification_email(to_email: str, to_name: str, raw_token: str, tenant:
     who = f" for {tenant}" if tenant else ""
     greeting = to_name.strip() or "there"
     body = f"""
-        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Hi {greeting},</p>
-        <p style="margin:0 0 16px;font-size:15px;line-height:22px;color:#3f3f46;">
+        <p style="margin:0 0 10px 0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
+          Hi {greeting},
+        </p>
+        <p style="margin:0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
           Please confirm your email address to finish setting up your ResultApp account{who}.
         </p>
-        <a href="{link}"
-           style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-weight:600;font-size:14px;">
-          Verify my email
-        </a>
-        <p style="margin:20px 0 0;font-size:12px;line-height:18px;color:#71717a;">
+        {_cta_button("Verify my email", link)}
+        {_fallback_link(link)}
+        <p style="margin:20px 0 0 0;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:{_EMAIL_MUTED};">
           This link expires in 24 hours. If it expires, request a new one from the sign-in page.
-        </p>
-        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#71717a;word-break:break-all;">
-          Button not working? Copy this link:<br/>{link}
         </p>
     """
     text = (
@@ -587,22 +584,19 @@ def send_password_reset_email(to_email: str, to_name: str, raw_token: str, tenan
     who = f" for {tenant}" if tenant else ""
     greeting = to_name.strip() or "there"
     body = f"""
-        <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Hi {greeting},</p>
-        <p style="margin:0 0 16px;font-size:15px;line-height:22px;color:#3f3f46;">
+        <p style="margin:0 0 10px 0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
+          Hi {greeting},
+        </p>
+        <p style="margin:0;font-family:{_EMAIL_FONT};font-size:15px;line-height:23px;color:{_EMAIL_BODY};">
           We received a request to reset the password for your ResultApp account{who}.
         </p>
-        <a href="{link}"
-           style="display:inline-block;background:#0B0514;color:#fff;text-decoration:none;padding:13px 22px;border-radius:999px;font-weight:600;font-size:14px;">
-            Choose a new password
-        </a>
-        <p style="margin:20px 0 0;font-size:12px;line-height:18px;color:#71717a;">
+        {_cta_button("Choose a new password", link)}
+        {_fallback_link(link)}
+        <p style="margin:20px 0 0 0;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:{_EMAIL_MUTED};">
           This link expires in 1 hour and can only be used once.
         </p>
-        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#b91c1c;">
+        <p style="margin:16px 0 0 0;font-family:{_EMAIL_FONT};font-size:12px;line-height:19px;color:#fca5a5;">
           If you did not request this, no action is needed — your password stays unchanged.
-        </p>
-        <p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#71717a;word-break:break-all;">
-          Button not working? Copy this link:<br/>{link}
         </p>
     """
     text = (
