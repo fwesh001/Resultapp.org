@@ -559,6 +559,8 @@ check("OTP proxies never log the secret or the OTP code", () => {
   }
   return true;
 });
+
+check("editing the admin email revokes verification", () => {
   const fn = register.slice(
     register.indexOf("function handleChange"),
     register.indexOf("function resetOtp")
