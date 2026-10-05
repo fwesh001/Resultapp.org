@@ -249,11 +249,13 @@ export function RegisterSchoolForm() {
     setHandoffIn(null);
   }
 
+  // The countdown is a pure function of successData: arm it on entry, cancel it
+  // on exit, and derive the visible number in render. Deriving rather than
+  // storing avoids a setState-in-effect cascade, which is also what keeps this
+  // off react-hooks/set-state-in-effect (the same rule the pre-existing
+  // subdomain-availability effect at the bottom of this component violates).
   useEffect(() => {
-    if (!successData) {
-      setHandoffIn(null);
-      return;
-    }
+    if (!successData) return;
     setHandoffIn(PORTAL_HANDOFF_SECONDS);
     const id = window.setInterval(() => {
       setHandoffIn((n) => {
