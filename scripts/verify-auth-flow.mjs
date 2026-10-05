@@ -912,8 +912,18 @@ check("auth email footer carries the trust line", () =>
 check("a provisioned school always has a redirect out", () => {
   // A paid user who closes the tab at the Flutterwave modal must not be left
   // on a terminal screen with nothing but a button.
-  if (!/window\.location\.href\s*=\s*adminLoginUrl/.test(register)) {
-    return "the handoff does not navigate to adminLoginUrl";
+  // The check must find the navigation INSIDE the countdown effect. Asserting on
+  // the bare string `window.location.href = adminLoginUrl` also matches the
+  // success button's handler, so deleting the automatic handoff still passed —
+  // which is exactly what a mutation caught. Require the effect body.
+  const effectStart = register.indexOf("setHandoffIn(PORTAL_HANDOFF_SECONDS)");
+  if (effectStart === -1) return "the countdown effect never arms the handoff";
+  const effectEnd = register.search(/\n\s{2}\}, \[successData, adminLoginUrl\]\);/);
+  const effect = effectEnd === -1
+    ? register.slice(effectStart, effectStart + 900)
+    : register.slice(effectStart, effectEnd);
+  if (!/window\.location\.href\s*=\s*adminLoginUrl/.test(effect)) {
+    return "the countdown effect never navigates to adminLoginUrl";
   }
   if (!/const \[handoffIn, setHandoffIn\]/.test(register)) {
     return "there is no handoff countdown state";
