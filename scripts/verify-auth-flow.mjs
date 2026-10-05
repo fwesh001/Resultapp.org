@@ -833,8 +833,15 @@ check("the auth email keeps inline-only styling for Outlook/Gmail", () => {
     return "layout is not table-based";
   }
   // A <style> block in <head> is stripped by Gmail and ignored by Outlook.
-  if (/<style>/.test(shell)) {
-    return "the shell depends on a <style> block, which Gmail strips";
+  // A <style> block is fine ONLY inside an <!--[if mso]--> conditional, which
+  // Outlook consumes and every other client discards. A bare <style> in <head>
+  // is what Gmail strips, so allow the tag only when it is conditional-wrapped.
+  const styleTags = shell.match(/<style>/g) || [];
+  if (styleTags.length > 0) {
+    const conditional = /<!--\[if mso\]>\s*<style>/.test(shell);
+    if (!conditional) {
+      return "the shell depends on a bare <style> block, which Gmail strips";
+    }
   }
   return true;
 });
