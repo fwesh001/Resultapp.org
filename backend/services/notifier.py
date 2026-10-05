@@ -20,7 +20,7 @@ BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 def _brevo_config():
     return {
         "api_key": os.getenv("BREVO_API_KEY", ""),
-        "sender_email": os.getenv("BREVO_SENDER_EMAIL", "noreply@resultapp.org"),
+        "sender_email": os.getenv("BREVO_SENDER_EMAIL", "support@resultapp.org"),
         "sender_name": os.getenv("BREVO_SENDER_NAME", "ResultApp"),
         "template_id": os.getenv("BREVO_WELCOME_TEMPLATE_ID", ""),
     }
@@ -250,15 +250,20 @@ def send_failure_alert(admin_email: str, subdomain: str, error_detail: str) -> N
 def public_base_url() -> str:
     """Public origin used to build emailed links.
 
-    No resultapp.org domain is purchased yet, so this must point at whatever
-    host the tester is actually serving (localhost, droplet IP, etc). Falls
-    back to the droplet so a link is never silently built against a dead host.
+    resultapp.org now resolves via Cloudflare, so PUBLIC_BASE_URL is the source
+    of truth. NEXT_PUBLIC_BASE_DOMAIN is kept as a secondary for older .env
+    files; a bare domain is upgraded to https:// because the value is pasted
+    straight into an href. Falls back to the production origin so a link is
+    never built against a dead host.
     """
-    return (
-        os.getenv("PUBLIC_BASE_URL", "")
-        or os.getenv("NEXT_PUBLIC_BASE_DOMAIN", "")
-        or "http://159.223.178.34:8000"
-    ).rstrip("/")
+    raw = os.getenv("PUBLIC_BASE_URL", "").strip() or os.getenv(
+        "NEXT_PUBLIC_BASE_DOMAIN", ""
+    ).strip()
+    if not raw:
+        return "https://resultapp.org"
+    if "://" not in raw:
+        raw = f"https://{raw}"
+    return raw.rstrip("/")
 
 
 def _auth_email_shell(heading: str, body_html: str, footer_note: str) -> str:
