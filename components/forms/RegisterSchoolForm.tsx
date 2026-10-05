@@ -237,7 +237,6 @@ export function RegisterSchoolForm() {
   // lands on a page that has not finished booting and reads as a second
   // failure right after the first one.
   const PORTAL_HANDOFF_SECONDS = 5;
-  const [handoffIn, setHandoffIn] = useState<number | null>(null);
 
   /** Portal root -> admin login. Tolerates a trailing slash on deployedUrl. */
   const adminLoginUrl = useMemo(
@@ -246,31 +245,44 @@ export function RegisterSchoolForm() {
   );
 
   function cancelHandoff() {
-    setHandoffIn(null);
+    setHandoffCancelled(true);
   }
 
-  // The countdown is a pure function of successData: arm it on entry, cancel it
-  // on exit, and derive the visible number in render. Deriving rather than
-  // storing avoids a setState-in-effect cascade, which is also what keeps this
-  // off react-hooks/set-state-in-effect (the same rule the pre-existing
-  // subdomain-availability effect at the bottom of this component violates).
+  // The countdown is DERIVED from a mount timestamp rather than stored as a
+  // decrementing counter. Storing it would mean setState inside the effect body,
+  // which react-hooks/set-state-in-effect rejects (a cascading render for
+  // something already computable), and it would also drift if the tab were
+  // backgrounded and timers throttled — the user would sit on "1s" indefinitely.
+  const [handoffStartedAt, setHandoffStartedAt] = useState<number | null>(null);
+  const [handoffCancelled, setHandoffCancelled] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Armed once per success, from the event that sets successData, rather than
+  // from an effect. This is the documented React escape hatch for "reset state
+  // when a prop changes" and keeps the render path free of extra passes.
+  if (successData && handoffStartedAt === null) {
+    setHandoffStartedAt(Date.now());
+    setHandoffCancelled(false);
+    setNow(Date.now());
+  }
+
+  const secondsElapsed = handoffStartedAt === null ? 0 : Math.floor((now - handoffStartedAt) / 1000);
+  const handoffIn =
+    successData && handoffStartedAt !== null && !handoffCancelled
+      ? Math.max(0, PORTAL_HANDOFF_SECONDS - secondsElapsed)
+      : null;
+
   useEffect(() => {
-    if (!successData) return;
-    setHandoffIn(PORTAL_HANDOFF_SECONDS);
-    const id = window.setInterval(() => {
-      setHandoffIn((n) => {
-        // Hard navigation: a client-side push would land on a cross-origin
-        // subdomain, which Next cannot route.
-        if (n !== null && n <= 1) {
-          window.clearInterval(id);
-          window.location.href = adminLoginUrl;
-          return 0;
-        }
-        return n === null ? null : n - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [successData, adminLoginUrl]);
+    if (handoffIn === null) return;
+    if (handoffIn <= 0) {
+      // Hard navigation: a client-side push would land on a cross-origin
+      // subdomain, which Next cannot route.
+      window.location.href = adminLoginUrl;
+      return;
+    }
+    const id = window.setTimeout(() => setNow(Date.now()), 1000);
+    return () => window.clearTimeout(id);
+  }, [handoffIn, adminLoginUrl]);
 
   // Base domain fallback: NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org"
   const baseDomain =
@@ -835,7 +847,8 @@ export function RegisterSchoolForm() {
     setSuccessData(null);
     setTransactionId(null);
     setTxRef(null);
-    setHandoffIn(null);
+    setHandoffStartedAt(null);
+    setHandoffCancelled(false);
     setPaidConflict(null);
     setProvisioning(false);
     setValues({ schoolName: "", subdomain: "", adminEmail: "", adminName: "", adminPassword: "", adminPasswordConfirm: "", studentCount: "", acceptTerms: false });
