@@ -3258,3 +3258,252 @@ def _row_to_dict(row, cursor) -> Dict[str, Any]:
         return {}
     cols = [desc[0] for desc in cursor.description]
     return dict(zip(cols, row))
+
+
+# ---------------------------------------------------------------------------
+# Email OTP — inbox ownership proof for the REGISTRATION wizard.
+#
+# Deliberately NOT stored on schools/platform_admins like the verification
+# token: at this point in the flow the tenant does not exist yet. The wizard
+# proves the address BEFORE payment and provisioning, so there is no row to
+# hang a column on. Standalone table, self-contained lifecycle.
+#
+# Brute-force posture: a 6-digit code is only 1e6 candidates, so hashing alone
+# is not a meaningful barrier — an attacker who reaches the verify endpoint can
+# simply enumerate. The real controls are (a) the per-code attempt cap below,
+# enforced in the same transaction as the comparison, and (b) the rate limit in
+# routers/auth_flow.py. Treat the hash as "never store the raw code", not as
+# the thing that makes guessing expensive.
+# ---------------------------------------------------------------------------
+
+EMAIL_OTP_TABLE = "email_otp_codes"
+
+#: Short TTL by design — the code is typed immediately in the same tab.
+EMAIL_OTP_TTL_MINUTES = int(os.getenv("EMAIL_OTP_TTL_MINUTES", "10"))
+#: Distinct wrong guesses tolerated per code before it is burned.
+EMAIL_OTP_MAX_ATTEMPTS = 5
+#: The only purpose currently issued. Narrow on purpose so a future
+#: password-reset OTP cannot be replayed against registration.
+EMAIL_OTP_PURPOSES = ("registration",)
+
+
+def generate_otp_code() -> str:
+    """6-digit zero-padded code from the CSPRNG (secrets, never random)."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def init_email_otp_table() -> None:
+    """Create the email_otp_codes table. Idempotent."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {EMAIL_OTP_TABLE} (
+                id          SERIAL PRIMARY KEY,
+                email       VARCHAR(255) NOT NULL,
+                purpose     VARCHAR(32)  NOT NULL DEFAULT 'registration',
+                code_hash   CHAR(64)     NOT NULL,
+                attempts    SMALLINT     NOT NULL DEFAULT 0,
+                created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                expires_at  TIMESTAMPTZ  NOT NULL,
+                consumed_at TIMESTAMPTZ
+            );
+        """)
+        # Lookup is always (email, purpose) newest-first.
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_email_otp_lookup
+            ON {EMAIL_OTP_TABLE} (email, purpose, created_at DESC);
+        """)
+        # Housekeeping: the harness sweeps spent rows, otherwise a public
+        # endpoint's table grows without bound.
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS ix_email_otp_expiry
+            ON {EMAIL_OTP_TABLE} (expires_at);
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"[DB] email OTP table init failed: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def purge_expired_email_otps() -> int:
+    """Delete OTPs that expired more than an hour ago. Returns rows removed.
+
+    Consumed rows are kept for a short while for audit, then swept by the same
+    predicate (expires_at is always in the past by then).
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"DELETE FROM {EMAIL_OTP_TABLE} WHERE expires_at < (NOW() - INTERVAL '1 hour');"
+        )
+        removed = cur.rowcount or 0
+        conn.commit()
+        return removed
+    except Exception as e:
+        logger.warning(f"[DB] purge_expired_email_otps failed: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return 0
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def issue_email_otp(email: str, purpose: str = "registration") -> Optional[Dict[str, Any]]:
+    """Mint an OTP, store only its hash, return the RAW code for emailing.
+
+    Issuing invalidates any earlier unconsumed code for the same
+    (email, purpose), so only the newest email contains a working code.
+    """
+    email = (email or "").strip().lower()
+    if not email or purpose not in EMAIL_OTP_PURPOSES:
+        return None
+
+    raw = generate_otp_code()
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=EMAIL_OTP_TTL_MINUTES)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        # Supersede, then insert — both in one transaction so a concurrent
+        # request cannot leave two live codes for the same address.
+        cur.execute(
+            f"""
+            UPDATE {EMAIL_OTP_TABLE}
+               SET consumed_at = NOW()
+             WHERE email = %s AND purpose = %s AND consumed_at IS NULL;
+            """,
+            (email, purpose),
+        )
+        cur.execute(
+            f"""
+            INSERT INTO {EMAIL_OTP_TABLE} (email, purpose, code_hash, expires_at)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id;
+            """,
+            (email, purpose, hash_auth_token(raw), expires),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return {
+            "raw_code": raw,
+            "email": email,
+            "purpose": purpose,
+            "expires_at": expires.isoformat(),
+            "ttl_minutes": EMAIL_OTP_TTL_MINUTES,
+        }
+    except Exception as e:
+        logger.error(f"[DB] issue_email_otp failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") -> bool:
+    """Verify and burn an OTP in one transaction.
+
+    Returns True only on an exact, unexpired, unconsumed match with attempts
+    remaining. Every other outcome — wrong code, expired, already used,
+    attempt cap hit — returns False identically, so the response is not an
+    oracle for which of those occurred.
+
+    The row is locked FOR UPDATE so two concurrent submissions of the same
+    code cannot both win.
+    """
+    email = (email or "").strip().lower()
+    raw_code = str(raw_code or "").strip()
+    if not email or not raw_code or purpose not in EMAIL_OTP_PURPOSES:
+        return False
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, code_hash, attempts, expires_at
+              FROM {EMAIL_OTP_TABLE}
+             WHERE email = %s AND purpose = %s AND consumed_at IS NULL
+             ORDER BY created_at DESC
+             LIMIT 1
+               FOR UPDATE;
+            """,
+            (email, purpose),
+        )
+        row = cur.fetchone()
+        if row is None:
+            conn.rollback()
+            return False
+
+        otp_id, stored_hash, attempts, expires_at = row[0], row[1], row[2], row[3]
+        now = datetime.now(timezone.utc)
+
+        # Compare first, and burn the code on any failure — a wrong guess costs
+        # the user their code rather than granting unlimited tries.
+        matched = hmac.compare_digest(str(stored_hash), hash_auth_token(raw_code))
+        expired = expires_at is not None and expires_at <= now
+        exhausted = int(attempts) >= EMAIL_OTP_MAX_ATTEMPTS
+
+        if matched and not expired and not exhausted:
+            cur.execute(
+                f"UPDATE {EMAIL_OTP_TABLE} SET consumed_at = NOW() WHERE id = %s;",
+                (otp_id,),
+            )
+            conn.commit()
+            return True
+
+        if not exhausted:
+            cur.execute(
+                f"UPDATE {EMAIL_OTP_TABLE} SET attempts = attempts + 1 WHERE id = %s;",
+                (otp_id,),
+            )
+            conn.commit()
+        else:
+            conn.rollback()
+        return False
+    except Exception as e:
+        logger.error(f"[DB] consume_email_otp failed for {email}: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
