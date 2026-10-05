@@ -791,8 +791,20 @@ check("email SVG data URIs are quote-safe", () => {
   // version of this check passed under mutation for exactly that reason.
   const enc = /def _svg_data_uri\([\s\S]*?\)\s*->\s*str:([\s\S]*?)\n\n\n/.exec(notifier);
   if (!enc) return "cannot locate the _svg_data_uri body";
-  if (!/quote\(\s*svg\s*,\s*safe\s*=\s*""\s*\)/.test(enc[1])) {
-    return "_svg_data_uri must call quote(svg, safe=\"\") to escape quotes and #";
+  // Check the ESCAPING CALL, not its exact spelling: a mutation that loosens
+  // safe="" must report that, not a misleading "cannot locate the body".
+  if (!/quote\(\s*svg\s*,/.test(enc[1])) {
+    return "_svg_data_uri no longer escapes via urllib.quote(svg, ...)";
+  }
+  const safe = /quote\(\s*svg\s*,\s*safe\s*=\s*("([^"]*)"|'([^']*)')\s*\)/.exec(enc[1]);
+  if (!safe) {
+    return "_svg_data_uri must pass safe=\"\" so quotes and # are percent-encoded";
+  }
+  const safeChars = safe[2] !== undefined ? safe[2] : safe[3] || "";
+  // Anything listed in safe= comes back RAW, which is what breaks the url().
+  const dangerous = ["'", '"', "<", ">", "#"].filter((c) => safeChars.includes(c));
+  if (dangerous.length) {
+    return `safe="${safeChars}" leaves ${dangerous.join(" ")} unencoded — the url() will be dropped`;
   }
   // Both icons must be BUILT by the encoder, never hand-written.
   for (const name of ["_EMAIL_GRID_URI", "_EMAIL_CLIP_URI"]) {
