@@ -3470,8 +3470,10 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
         otp_id, stored_hash, attempts, expires_at = row[0], row[1], row[2], row[3]
         now = datetime.now(timezone.utc)
 
-        # Compare first, and burn the code on any failure — a wrong guess costs
-        # the user their code rather than granting unlimited tries.
+        # Compare first. A wrong guess does NOT consume the code — it spends one
+        # of the 5 attempts, so a mistyped digit is recoverable while a genuine
+        # brute force is capped at 5 tries per issued code (and 10 per 5 min per
+        # address+IP via routers/auth_flow.py).
         matched = hmac.compare_digest(str(stored_hash), hash_auth_token(raw_code))
         expired = expires_at is not None and expires_at <= now
         exhausted = int(attempts) >= EMAIL_OTP_MAX_ATTEMPTS
