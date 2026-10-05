@@ -867,16 +867,30 @@ export function RegisterSchoolForm() {
   }
 
   // -------------------------------------------------------------------------
-  // Step 2 — checkout summary
+  // Step 3 — review & payment
   // -------------------------------------------------------------------------
-  if (currentStep === 2) {
+  if (currentStep === 3) {
     const isLocalhost =
       typeof window !== "undefined" &&
       (window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1"));
+
+    // Single source of truth for why the Pay button is unavailable, rendered as
+    // a hint rather than leaving a dead button with no explanation.
+    const payBlockedByTerms = !values.acceptTerms;
+    const payBlockedByEmail = !isEmailVerified;
+    const payDisabled = isSubmitting || orderCount <= 0 || payBlockedByTerms || payBlockedByEmail;
+    const payHint = payBlockedByTerms
+      ? "Accept the Terms of Service and Privacy Policy to continue."
+      : payBlockedByEmail
+        ? "Verify your admin email to unlock payment."
+        : orderCount <= 0
+          ? "Enter your estimated student count to see a total."
+          : null;
+
     return (
       <div>
         {renderStepIndicator()}
-        <h3 className="text-lg font-bold tracking-tight text-white">Order summary</h3>
+        <h3 className="text-lg font-bold tracking-tight text-white">Review &amp; pay</h3>
         <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-sm">
           <div className="flex justify-between py-1">
             <span className="text-purple-200/60">School</span>
