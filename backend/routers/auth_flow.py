@@ -347,7 +347,7 @@ def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
             detail="We could not send a verification code. Please try again shortly.",
         )
 
-    delivered = send_otp_email(
+delivered = send_otp_email(
         issued["email"],
         issued["raw_code"],
         expires_minutes=int(issued.get("ttl_minutes") or 10),
@@ -355,8 +355,11 @@ def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
     if not delivered:
         # Surfaced honestly — an operator needs to see that mail is broken, and
         # the code is worthless to anyone who did not receive it, so this
-        # discloses nothing an attacker could not already guess.
+        # discloses nothing an attacker could already guess.
         logger.error(f"[auth-flow] OTP email not delivered to {email}")
+        # Nothing was sent, so the user must be able to retry at once instead of
+        # being met with a neutral "sent" for the rest of the cooldown window.
+        _release_cooldown(f"otp:{payload.purpose}:{email}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="We could not send the verification code. Please try again shortly.",
