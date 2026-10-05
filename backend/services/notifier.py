@@ -330,14 +330,19 @@ _EMAIL_GRID_URI = _svg_data_uri(
     "stroke-opacity='0.09' stroke-width='1'/></svg>"
 )
 
-#: Clipboard glyph for the copy cue beside the OTP digits.
-_EMAIL_CLIP_URI = _svg_data_uri(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='15' height='15' "
-    "viewBox='0 0 24 24' fill='none' stroke='#a78bfa' stroke-width='2' "
-    "stroke-linecap='round' stroke-linejoin='round'>"
-    "<rect x='9' y='9' width='13' height='13' rx='2'/>"
-    "<path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/></svg>"
-)
+#: Clipboard cue for the copy affordance beside the OTP digits.
+#:
+#: This was an <img> with a data:image/svg+xml source. It rendered correctly in
+#: Chrome and then arrived as a TOFU SQUARE in a real mailbox — the client did
+#: not decode the data URI. That is the lesson: a data-URI SVG proves nothing
+#: about inbox rendering, because email sanitisers strip exactly that.
+#:
+#: Replaced with a TEXT glyph, which is a font lookup rather than an image
+#: decode, so it cannot fail to render. U+29C9 "two joined squares" reads as a
+#: copy/duplicate mark in monospace and system fonts; if a client lacks the
+#: codepoint it degrades to a narrow space and the caption beneath carries the
+#: meaning on its own.
+_EMAIL_COPY_GLYPH = "⧉"
 
 
 def _auth_email_shell(heading: str, body_html: str, footer_note: str) -> str:
