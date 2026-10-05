@@ -32,8 +32,10 @@ import os
 import time
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+
+from services import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,17 @@ class ResetPasswordRequest(BaseModel):
     token: str = Field(..., min_length=8, max_length=200)
     new_password: str = Field(..., min_length=8, max_length=128)
     scope: str = Field("schools", pattern="^(schools|platform_admins)$")
+
+
+class RequestEmailOtpRequest(BaseModel):
+    email: EmailStr
+    purpose: str = Field("registration", pattern="^registration$")
+
+
+class VerifyEmailOtpRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6, pattern="^[0-9]{6}$")
+    purpose: str = Field("registration", pattern="^registration$")
 
 
 # Uniform response for anything account-scoped. Never varies with existence.
@@ -253,6 +266,119 @@ def reset_password(payload: ResetPasswordRequest):
         "success": False,
         "reset": False,
         "message": "This reset link is invalid or has expired. Request a new one.",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Email OTP — registration wizard inbox-ownership proof.
+#
+# Why OTP rather than the existing verification link: a link opens a new tab,
+# which tears down the multi-step wizard's client state and the payment handoff
+# that follows it. A 6-digit code keeps the user in the same tab.
+#
+# Enumeration posture: the request endpoint NEVER reveals whether an address is
+# registered or already verified — the registration wizard is precisely the
+# place where "unknown email" and "email already taken" are both sensitive
+# answers. The verify endpoint's failure modes (wrong / expired / replayed /
+# attempt-cap) are collapsed into one uniform false.
+# ---------------------------------------------------------------------------
+
+#: Uniform response for anything account-scoped. Never varies with existence.
+_OTP_SENT = {
+    "success": True,
+    "sent": True,
+    "message": "If that address can receive mail, a verification code is on its way.",
+}
+
+#: Verify-side throttle. A 6-digit code has only 1e6 candidates, so this plus
+#: the per-code attempt cap in db_manager are the controls that matter — the
+#: SHA-256 hash only ensures the raw code is never at rest.
+_OTP_VERIFY_MAX_HITS = 10
+_OTP_VERIFY_WINDOW_S = 300
+
+
+@router.post("/request-email-otp", summary="Issue a registration OTP (neutral response)")
+def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
+    email = _normalise(payload.email)
+    client_ip = request.client.host if request.client else "unknown"
+
+    if not _cooldown_ok(f"otp:{payload.purpose}:{email}"):
+        # Neutral: identical body to the success path.
+        return _OTP_SENT
+
+    # Per-address cap on generation: stops a caller cycling through many
+    # addresses to mail-bomb a domain.
+    allowed, retry_after = rate_limit.check(
+        f"otp-send:{email}", max_hits=5, window_s=3600
+    )
+    if not allowed:
+        logger.warning(
+            f"[auth-flow] OTP generation rate limit hit for {email} "
+            f"(client={client_ip}); suppressing send"
+        )
+        return _OTP_SENT
+
+    from services.db_manager import issue_email_otp
+    from services.notifier import send_otp_email
+
+    issued = issue_email_otp(email, purpose=payload.purpose)
+    if issued is None:
+        # Storage failure — not an enumeration risk (no code exists either way).
+        logger.error(f"[auth-flow] could not issue OTP for {email}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="We could not send a verification code. Please try again shortly.",
+        )
+
+    delivered = send_otp_email(
+        issued["email"],
+        issued["raw_code"],
+        expires_minutes=int(issued.get("ttl_minutes") or 10),
+    )
+    if not delivered:
+        # Surfaced honestly — an operator needs to see that mail is broken, and
+        # the code is worthless to anyone who did not receive it, so this
+        # discloses nothing an attacker could not already guess.
+        logger.error(f"[auth-flow] OTP email not delivered to {email}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="We could not send the verification code. Please try again shortly.",
+        )
+    return _OTP_SENT
+
+
+@router.post("/verify-email-otp", summary="Verify a registration OTP")
+def verify_email_otp(payload: VerifyEmailOtpRequest, request: Request):
+    email = _normalise(payload.email)
+    client_ip = request.client.host if request.client else "unknown"
+
+    allowed, retry_after = rate_limit.check(
+        f"otp-verify:{client_ip}:{email}",
+        max_hits=_OTP_VERIFY_MAX_HITS,
+        window_s=_OTP_VERIFY_WINDOW_S,
+    )
+    if not allowed:
+        logger.warning(
+            f"[auth-flow] OTP verify rate limit hit (client={client_ip}); "
+            f"retry in {retry_after}s"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please request a new code and wait a moment.",
+        )
+
+    from services.db_manager import consume_email_otp
+
+    ok = consume_email_otp(email, payload.code, purpose=payload.purpose)
+    if ok:
+        logger.info(f"[auth-flow] email OTP verified: {email} (client={client_ip})")
+        return {"success": True, "verified": True, "email": email}
+
+    # One message for wrong / expired / replayed / attempt-cap. Never echo which.
+    return {
+        "success": False,
+        "verified": False,
+        "message": "That code is incorrect or has expired. Request a new one.",
     }
 
 
