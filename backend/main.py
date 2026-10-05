@@ -656,6 +656,9 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 email=admin_email,
                 phone=phone,
                 student_count=student_count,
+                # Persisted so the portal UI and support can greet the admin by
+                # name instead of re-deriving it from the email local part.
+                admin_name=admin_name or None,
                 admin_password_hash=str(payload.admin_password).strip()
                 if payload.admin_password and str(payload.admin_password).strip()
                 else None,
