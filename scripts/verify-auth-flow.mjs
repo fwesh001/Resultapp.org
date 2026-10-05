@@ -524,11 +524,19 @@ check("OTP proxies fail loudly on missing configuration", () => {
 
 check("OTP proxies never fall back to a hardcoded backend", () => {
   // The specific regression: a static IP fallback re-introduces the closed-port
-  // call that made this bug undiagnosable.
+  // call that made this bug undiagnosable. Only EXECUTABLE code counts — the
+  // proxies document the old fallback by name in their header comment, so the
+  // source must be stripped of comments before this is meaningful.
   const banned = /159\.223\.178\.34|127\.0\.0\.1:8000|localhost:8000/;
-  return !banned.test(otpSend) && !banned.test(otpVerify)
-    ? true
-    : "an OTP proxy still contains a hardcoded backend address";
+  for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
+    const code = stripProse(src);
+    if (banned.test(code)) return `${name} still references a hardcoded backend address in code`;
+    // And there must be no fallback chain at all — a single env var only.
+    if (/BACKEND_URL\s*\|\||process\.env\.PROVISION_API_URL/.test(code)) {
+      return `${name} still walks a fallback chain for the backend URL`;
+    }
+  }
+  return true;
 });
 
 check("OTP proxies log the target host on transport failure", () => {
