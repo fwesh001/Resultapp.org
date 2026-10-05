@@ -62,9 +62,12 @@ function check(name, fn) {
 
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
 const db = read(DB);
-const router = read(ROUTER);
 const notifier = read(NOTIFIER);
+const router = read(ROUTER);
 const main = read(MAIN);
+const register = read(REGISTER);
+const otpSend = read(OTP_SEND_PROXY);
+const otpVerify = read(OTP_VERIFY_PROXY);
 const wall = read(WALL);
 const signin = read(SIGNIN);
 
