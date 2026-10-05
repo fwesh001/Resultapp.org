@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# ResultApp Droplet Bootstrap — run as root on fresh Ubuntu 22.04
+# ResultApp Droplet Bootstrap — run as root on fresh Ubuntu 24.04 (Noble)
+# PHP 8.3 is the default PHP on Noble; 8.2 is not available in the archive.
 set -euo pipefail
 
 echo "=== ResultApp Droplet Bootstrap ==="
@@ -14,7 +15,8 @@ export DEBIAN_FRONTEND=noninteractive
 echo "[1/7] apt update & base deps"
 apt update && apt upgrade -y
 apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx \
-  php8.2 php8.2-fpm php8.2-pgsql php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-gd \
+  php8.3 php8.3-fpm php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-gd \
+  php8.3-intl php8.3-bcmath \
   certbot python3-certbot-nginx git ufw
 
 echo "[2/7] Create system paths"
@@ -35,10 +37,10 @@ fi
 systemctl enable --now postgresql
 
 echo "[4/7] PHP-FPM & Nginx"
-systemctl enable --now php8.2-fpm
+systemctl enable --now php8.3-fpm
 systemctl enable --now nginx
 # Ensure php sock exists
-ls -l /var/run/php/php8.2-fpm.sock || echo "php-fpm sock not found yet — check php8.2-fpm status"
+ls -l /var/run/php/php8.3-fpm.sock || echo "php-fpm sock not found yet — check php8.3-fpm status"
 
 echo "[5/7] Python venv & deps"
 # Assume repo cloned to /opt/resultapp.org or current dir
