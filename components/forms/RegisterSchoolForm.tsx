@@ -482,7 +482,11 @@ export function RegisterSchoolForm() {
     const publicKey = getFlutterwavePublicKey();
     const ref = generateTxRef(values.subdomain.trim() || "school");
     const customerEmail = values.adminEmail.trim();
-    const customerName = customerEmail.split("@")[0] || values.schoolName.trim();
+    // Admin Name is now collected in Step 2. The email prefix was a poor
+    // fallback ("j.obi" reads as noise on a bank statement), so it is only
+    // used if the field is somehow empty.
+    const customerName =
+      values.adminName.trim() || customerEmail.split("@")[0] || values.schoolName.trim();
 
     const openModal = () => {
       initiateFlutterwaveInlinePayment(
