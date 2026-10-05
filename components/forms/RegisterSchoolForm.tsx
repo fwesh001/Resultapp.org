@@ -84,6 +84,16 @@ const OTP_RE = /^[0-9]{6}$/;
 /** Resend cooldown shown to the user; the backend enforces its own window. */
 const OTP_RESEND_COOLDOWN_S = 60;
 
+/**
+ * Admin name bounds — MUST equal ProvisionRequest.admin_name in
+ * backend/main.py (min_length=3, max_length=80). Enforced here as well as in
+ * app/api/register-school/route.ts so an out-of-range name is caught on Step 2,
+ * BEFORE Flutterwave takes the money. scripts/verify-auth-flow.mjs asserts all
+ * three layers agree, because a drift here is a paid-but-unprovisioned tenant.
+ */
+const ADMIN_NAME_MIN = 3;
+const ADMIN_NAME_MAX = 80;
+
 function sanitizeSlug(raw: string): string {
   return raw
     .toLowerCase()
@@ -303,12 +313,16 @@ export function RegisterSchoolForm() {
     const next: FormErrors = {};
 
     const name = values.adminName.trim();
+    // Bounds mirror ProvisionRequest.admin_name in backend/main.py exactly
+    // (min 3 / max 80). Provisioning runs AFTER payment, so a looser client
+    // bound here does not produce a friendlier message — it produces a 422 the
+    // user only meets once they have been charged.
     if (!name) {
       next.adminName = "Admin name is required";
-    } else if (name.length < 2) {
-      next.adminName = "Admin name must be at least 2 characters";
-    } else if (name.length > 120) {
-      next.adminName = "Admin name must be at most 120 characters";
+    } else if (name.length < ADMIN_NAME_MIN) {
+      next.adminName = `Admin name must be at least ${ADMIN_NAME_MIN} characters`;
+    } else if (name.length > ADMIN_NAME_MAX) {
+      next.adminName = `Admin name must be at most ${ADMIN_NAME_MAX} characters`;
     }
 
     if (!values.adminPassword) {
