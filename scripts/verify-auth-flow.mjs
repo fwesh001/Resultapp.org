@@ -909,6 +909,39 @@ check("auth email footer carries the trust line", () =>
     : "the footer trust line is missing"
 );
 
+check("a provisioned school always has a redirect out", () => {
+  // A paid user who closes the tab at the Flutterwave modal must not be left
+  // on a terminal screen with nothing but a button.
+  if (!/window\.location\.href\s*=\s*adminLoginUrl/.test(register)) {
+    return "the handoff does not navigate to adminLoginUrl";
+  }
+  if (!/const \[handoffIn, setHandoffIn\]/.test(register)) {
+    return "there is no handoff countdown state";
+  }
+  if (!/PORTAL_HANDOFF_SECONDS\s*=\s*\d+/.test(register)) {
+    return "the handoff delay is not a declared constant";
+  }
+  // The countdown must be cancellable — otherwise the user is trapped.
+  if (!/cancelHandoff/.test(register)) {
+    return "the automatic redirect cannot be cancelled";
+  }
+  // Target must be the admin login, not the bare portal root.
+  if (!/\/admin\/login/.test(register)) {
+    return "the handoff does not target /admin/login";
+  }
+  // And it must clear its interval, or a cancelled handoff keeps ticking.
+  return /clearInterval/.test(register)
+    ? true
+    : "the handoff interval is never cleared — a cancelled redirect still fires";
+});
+
+check("the redirect is a hard navigation, not a client-side route", () =>
+  // A client-side push to a cross-origin subdomain cannot be handled by Next.
+  !/router\.(push|replace)\(\s*adminLoginUrl/.test(register)
+    ? true
+    : "the handoff uses a client-side router for a cross-origin subdomain"
+);
+
 check("a failed OTP send does not burn the resend cooldown", () => {
   // Regression guard for a debugging trap: _cooldown_ok() reserves the window
   // BEFORE the mail is attempted, so a Brevo outage made every retry inside the
