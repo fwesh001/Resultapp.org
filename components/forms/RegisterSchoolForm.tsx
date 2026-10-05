@@ -1102,47 +1102,206 @@ export function RegisterSchoolForm() {
       </div>
 
       {/* Admin Email */}
-      <Input
-        label="Admin Email"
-        name="adminEmail"
-        type="email"
-        placeholder="admin@victoryhigh.edu.ng"
-        value={values.adminEmail}
-        onChange={(e) => handleChange("adminEmail", e.target.value)}
-        error={errors.adminEmail}
-        required
-        autoComplete="email"
-        disabled={isSubmitting}
-      />
+        <Input
+          label="Admin Email"
+          name="adminEmail"
+          type="email"
+          placeholder="admin@victoryhigh.edu.ng"
+          value={values.adminEmail}
+          onChange={(e) => handleChange("adminEmail", e.target.value)}
+          error={errors.adminEmail}
+          required
+          autoComplete="email"
+          disabled={isSubmitting}
+        />
 
-      {/* Admin Password — Phase 2 admin portal credential */}
-      <Input
-        label="Admin Password"
-        name="adminPassword"
-        type="password"
-        placeholder="Minimum 8 characters"
-        value={values.adminPassword}
-        onChange={(e) => handleChange("adminPassword", e.target.value)}
-        error={errors.adminPassword}
-        required
-        autoComplete="new-password"
-        disabled={isSubmitting}
-      />
-      <Input
-        label="Confirm Admin Password"
-        name="adminPasswordConfirm"
-        type="password"
-        placeholder="Repeat your password"
-        value={values.adminPasswordConfirm}
-        onChange={(e) => handleChange("adminPasswordConfirm", e.target.value)}
-        error={errors.adminPasswordConfirm}
-        required
-        autoComplete="new-password"
-        disabled={isSubmitting}
-      />
+        {/* Email verification — proves inbox ownership before payment.
+            Deliberately NOT a gate on leaving Step 1: if Brevo is
+            misconfigured the user would be stranded with no recourse, so
+            this only disables the Pay button in Step 3 (with an explanation). */}
+        <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.06] p-4">
+          {isEmailVerified ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+              <MailCheck className="h-4 w-4 text-emerald-400" aria-hidden />
+              Email verified — you can continue
+            </p>
+          ) : (
+            <>
+              <p className="flex items-center gap-2 text-sm font-medium text-purple-100">
+                <ShieldCheck className="h-4 w-4 text-purple-300" aria-hidden />
+                Verify this email
+              </p>
+              <p className="mt-1 text-xs leading-5 text-purple-200/60">
+                We&apos;ll email a 6-digit code. Required before you can pay.
+              </p>
 
-      {/* Student Count — Step 2: capacity estimate + quick packages */}
-      <div className="flex flex-col gap-1.5">
+              <div className="mt-3 flex flex-col gap-2">
+                {otpSent ? (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        id="input-otp"
+                        name="otp"
+                        value={otpCode}
+                        onChange={(e) => {
+                          // Digits only, capped at 6 — matches the backend's
+                          // ^[0-9]{6}$ so a typo is caught before a round trip.
+                          const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                          setOtpCode(digits);
+                          if (errors.adminEmail) setOtpError(null);
+                        }}
+                        placeholder="000000"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        aria-label="6-digit verification code"
+                        aria-describedby={otpError ? "otp-error" : undefined}
+                        disabled={otpVerifying}
+                        className={`h-10 w-full rounded-xl border bg-purple-950/30 px-3 py-2 font-mono text-sm tracking-[0.4em] text-purple-50 placeholder:tracking-[0.4em] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
+                          otpError
+                            ? "border-red-500/60 focus-visible:ring-red-500"
+                            : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
+                        }`}
+                      />
+                      <Button
+                        className="shrink-0 gap-1.5 rounded-full font-semibold text-white"
+                        disabled={otpVerifying}
+                        onClick={verifyOtp}
+                      >
+                        {otpVerifying ? <Loader2 className="animate-spin" /> : null}
+                        Verify
+                      </Button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={sendOtp}
+                      disabled={otpSending || otpResendIn > 0}
+                      className="self-start text-xs font-medium text-purple-300/70 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+                    >
+                      {otpSending
+                        ? "Sending…"
+                        : otpResendIn > 0
+                          ? `Resend code in ${otpResendIn}s`
+                          : "Send a new code"}
+                    </button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2 rounded-full"
+                    disabled={otpSending}
+                    onClick={sendOtp}
+                  >
+                    {otpSending ? <Loader2 className="animate-spin" /> : null}
+                    Send verification code
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+
+          {otpError && (
+            <p id="otp-error" role="alert" className="mt-2 text-xs leading-5 text-red-300">
+              {otpError}
+            </p>
+          )}
+        </div>
+
+        {/* Global error (handles 409 etc) */}
+        {globalError && (
+          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span>{globalError}</span>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isSubmitting}
+          size="lg"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking availability…
+            </>
+          ) : (
+            <>Continue to account security</>
+          )}
+        </Button>
+
+        {isSubmitting && (
+          <p className="text-center text-xs text-purple-300/50">
+            Verifying your subdomain is still available…
+          </p>
+        )}
+
+        <p className="text-center text-xs leading-5 text-purple-300/40">
+          Your portal at{" "}
+          <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be
+          created securely.
+        </p>
+      </form>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 2 — account security
+  // -------------------------------------------------------------------------
+  if (currentStep === 2) {
+    return (
+      <form onSubmit={handleStep2Next} noValidate className="space-y-5">
+        {renderStepIndicator()}
+        <h3 className="text-lg font-bold tracking-tight text-white">Account security</h3>
+
+        {/* Admin Name — used for the Flutterwave customer name and the welcome
+            email. Previously derived from the email prefix, which read as
+            noise on a bank statement. */}
+        <Input
+          label="Admin Name"
+          name="adminName"
+          placeholder="Dr. Jane Obi"
+          value={values.adminName}
+          onChange={(e) => handleChange("adminName", e.target.value)}
+          error={errors.adminName}
+          required
+          autoComplete="name"
+          disabled={isSubmitting}
+        />
+
+        {/* Password fields with visibility toggles. Two independent flags —
+            revealing one must not reveal the other. */}
+        <PasswordField
+          id="input-adminPassword"
+          label="Admin Password"
+          name="adminPassword"
+          placeholder="Minimum 8 characters"
+          value={values.adminPassword}
+          onChange={(v) => handleChange("adminPassword", v)}
+          error={errors.adminPassword}
+          autoComplete="new-password"
+          visible={showPassword}
+          onToggle={() => setShowPassword((v) => !v)}
+          disabled={isSubmitting}
+        />
+        <PasswordField
+          id="input-adminPasswordConfirm"
+          label="Confirm Admin Password"
+          name="adminPasswordConfirm"
+          placeholder="Repeat your password"
+          value={values.adminPasswordConfirm}
+          onChange={(v) => handleChange("adminPasswordConfirm", v)}
+          error={errors.adminPasswordConfirm}
+          autoComplete="new-password"
+          visible={showConfirmPassword}
+          onToggle={() => setShowConfirmPassword((v) => !v)}
+          disabled={isSubmitting}
+        />
+
+        {/* Student Count — capacity estimate + quick packages */}
+        <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Quick capacity packages">
           {[100, 250, 500, 1000].map((n) => (
             <button
