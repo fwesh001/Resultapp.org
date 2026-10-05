@@ -43,6 +43,7 @@ const SIGNIN = path.join("components", "auth", "SignInForm.tsx");
 const REGISTER = path.join("components", "forms", "RegisterSchoolForm.tsx");
 const OTP_SEND_PROXY = path.join("app", "api", "auth", "request-email-otp", "route.ts");
 const OTP_VERIFY_PROXY = path.join("app", "api", "auth", "verify-email-otp", "route.ts");
+const REGISTER_SCHOOL = path.join("app", "api", "register-school", "route.ts");
 
 const results = [];
 function check(name, fn) {
@@ -68,6 +69,7 @@ const main = read(MAIN);
 const register = read(REGISTER);
 const otpSend = read(OTP_SEND_PROXY);
 const otpVerify = read(OTP_VERIFY_PROXY);
+const registerSchool = read(REGISTER_SCHOOL);
 const wall = read(WALL);
 const signin = read(SIGNIN);
 
@@ -627,6 +629,101 @@ check("OTP proxies surface backend delivery failures", () => {
   return /if \(!res\.ok\)/.test(register)
     ? true
     : "the wizard ignores non-200 responses from the OTP proxies";
+});
+
+check("adminName is threaded from the wizard to the backend", () => {
+  // End-to-end: wizard state -> provision payload -> FastAPI schema -> DB.
+  if (!/adminName: string;/.test(register)) return "the wizard has no adminName state";
+  if (!/adminName: values\.adminName\.trim\(\)/.test(register)) {
+    return "the provision payload does not carry adminName";
+  }
+  if (!/fastApiPayload\.admin_name = adminName/.test(registerSchool)) {
+    return "the proxy does not forward admin_name to FastAPI";
+  }
+  if (!/admin_name: Optional\[str\]/.test(main)) {
+    return "ProvisionRequest has no admin_name field";
+  }
+  return /kwargs\.get\("admin_name"\)/.test(db)
+    ? true
+    : "register_school never persists admin_name";
+});
+
+check("adminName bounds agree across all three layers", () => {
+  // Provisioning runs AFTER payment. If the client accepts a name the backend
+  // rejects, the user pays and then gets a 422 — the worst possible ordering.
+  const fe = /const ADMIN_NAME_MIN = (\d+);[\s\S]*?const ADMIN_NAME_MAX = (\d+);/.exec(register);
+  const be = /admin_name: Optional\[str\] = Field\(None, min_length=(\d+), max_length=(\d+)/.exec(main);
+  const px = /const ADMIN_NAME_MIN = (\d+);[\s\S]*?const ADMIN_NAME_MAX = (\d+);/.exec(registerSchool);
+  if (!fe) return "the wizard does not declare ADMIN_NAME_MIN/MAX";
+  if (!be) return "ProvisionRequest.admin_name declares no min/max";
+  if (!px) return "the proxy does not declare ADMIN_NAME_MIN/MAX";
+  const key = `${fe[1]}:${fe[2]}`;
+  if (be[0] && `${be[1]}:${be[2]}` !== key) {
+    return `backend bounds are ${be[1]}:${be[2]} but the wizard uses ${key}`;
+  }
+  if (`${px[1]}:${px[2]}` !== key) {
+    return `proxy bounds are ${px[1]}:${px[2]} but the wizard uses ${key}`;
+  }
+  return true;
+});
+
+check("the wizard does not loosen the adminName bound", () => {
+  // Regression guard for the exact bug: a min of 2 against a backend min of 3
+  // means "Al" passes Step 2, gets charged, then 422s during provisioning.
+  const fn = register.slice(
+    register.indexOf("function validateSecurity"),
+    register.indexOf("function validateStep1")
+  );
+  if (!fn) return "cannot locate validateSecurity";
+  if (/name\.length < 2\b/.test(fn)) {
+    return "validateSecurity hardcodes a 2-character minimum";
+  }
+  return /name\.length < ADMIN_NAME_MIN/.test(fn)
+    ? true
+    : "validateSecurity does not use the shared ADMIN_NAME_MIN";
+});
+
+check("an out-of-range admin name is omitted, not forwarded as empty", () => {
+  // Forwarding admin_name="" would violate ProvisionRequest's min_length.
+  // The proxy must drop the key instead.
+  if (!/if \(adminName\) fastApiPayload\.admin_name = adminName/.test(registerSchool)) {
+    return "the proxy forwards admin_name unconditionally";
+  }
+  const norm = registerSchool.slice(
+    registerSchool.indexOf("const emailLocalPart"),
+    registerSchool.indexOf("const adminPassword")
+  );
+  return /ADMIN_NAME_MIN/.test(norm)
+    ? true
+    : "the email-prefix fallback ignores the backend length bounds";
+});
+
+check("ProvisionRequest ignores unknown fields rather than 422-ing", () => {
+  // This route runs post-payment: a strict schema would turn a stray key from
+  // the Next.js proxy into a charged-but-unprovisioned tenant.
+  const cls = main.slice(main.indexOf("class ProvisionRequest"));
+  if (!cls) return "cannot locate ProvisionRequest";
+  return /extra\s*=\s*["']ignore["']/.test(cls)
+    ? true
+    : "ProvisionRequest does not pin extra=ignore (default is ignore, but it must be deliberate)";
+});
+
+check("the Flutterwave customer name is the admin name, not the email prefix", () => {
+  const m = /const customerName\s*=\s*([^;]+);/.exec(register);
+  if (!m) return "no customerName assignment";
+  return /values\.adminName/.test(m[1])
+    ? true
+    : "the checkout still derives the payer name from the email";
+});
+
+check("the welcome email greeting uses the admin name", () => {
+  // backend derives it once, then hands it to send_welcome_email.
+  if (!/admin_name = \(payload\.admin_name or admin_email\.split/.test(main)) {
+    return "the backend no longer resolves admin_name from the payload";
+  }
+  return /admin_name=admin_name,/.test(main)
+    ? true
+    : "send_welcome_email is not given the resolved admin_name";
 });
 
 const failed = results.filter((r) => !r.pass);
