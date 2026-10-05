@@ -854,14 +854,14 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
         if admin_password_hash:
             cur.execute(
                 f"""
-                INSERT INTO {SCHOOLS_REGISTRY_TABLE}
+INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     (subdomain, school_name, email, phone, address, city, state, country,
                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                      is_verified, is_active, subscription_plan, subscription_status, student_count,
-                     admin_password_hash)
+                     admin_password_hash, admin_name)
                 VALUES
                     (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                     crypt(%s, gen_salt('bf')))
+                     crypt(%s, gen_salt('bf')), %s)
                 ON CONFLICT (subdomain) DO UPDATE SET
                     school_name = EXCLUDED.school_name,
                     email = EXCLUDED.email,
@@ -876,6 +876,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                     proprietor_name = EXCLUDED.proprietor_name,
                     registration_number = EXCLUDED.registration_number,
                     admin_password_hash = EXCLUDED.admin_password_hash,
+                    admin_name = EXCLUDED.admin_name,
                     updated_at = NOW()
                 RETURNING *;
                 """,
@@ -899,17 +900,19 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                     kwargs.get("subscription_status", "unpaid"),
                     kwargs.get("student_count"),
                     admin_password_hash,
+                    kwargs.get("admin_name"),
                 ),
             )
         else:
             cur.execute(
                 f"""
-                INSERT INTO {SCHOOLS_REGISTRY_TABLE}
+            INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     (subdomain, school_name, email, phone, address, city, state, country,
                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
-                     is_verified, is_active, subscription_plan, subscription_status, student_count)
+                     is_verified, is_active, subscription_plan, subscription_status, student_count,
+                     admin_name)
                 VALUES
-                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (subdomain) DO UPDATE SET
                     school_name = EXCLUDED.school_name,
                     email = EXCLUDED.email,
@@ -923,6 +926,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                     motto = EXCLUDED.motto,
                     proprietor_name = EXCLUDED.proprietor_name,
                     registration_number = EXCLUDED.registration_number,
+                    admin_name = EXCLUDED.admin_name,
                     updated_at = NOW()
                 RETURNING *;
                 """,
@@ -945,6 +949,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
                     kwargs.get("subscription_plan"),
                     kwargs.get("subscription_status", "unpaid"),
                     kwargs.get("student_count"),
+                    kwargs.get("admin_name"),
                 ),
             )
         row = cur.fetchone()
