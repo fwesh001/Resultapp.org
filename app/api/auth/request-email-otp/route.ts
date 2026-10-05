@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readJson } from "@/lib/api/authProxy";
+import { readJson, resolveBackendBase, logBadBackendUrl } from "@/lib/api/authProxy";
 
 /**
  * POST /api/auth/request-email-otp
