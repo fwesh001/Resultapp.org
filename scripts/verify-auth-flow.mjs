@@ -937,9 +937,15 @@ check("a provisioned school always has a redirect out", () => {
   if (!/cancelHandoff/.test(register)) {
     return "the automatic redirect cannot be cancelled";
   }
-  // Target must be the admin login, not the bare portal root.
-  if (!/\/admin\/login/.test(register)) {
-    return "the handoff does not target /admin/login";
+  // Target must be the admin login, not the bare portal root. Assert the URL
+  // BUILDER specifically: a bare "/admin/login somewhere in the file" check
+  // passed under mutation when deployedUrl was pointed at the portal root.
+  const urlBuilder = /\$\{\s*successData\.deployedUrl\.replace\([^)]*\)\s*\}\/admin\/login/.test(register);
+  if (!urlBuilder) {
+    return "adminLoginUrl is not built from deployedUrl + /admin/login";
+  }
+  if (!/const adminLoginUrl = useMemo/.test(register)) {
+    return "there is no memoised adminLoginUrl";
   }
   // And it must clear its timeout, or a cancelled handoff still fires.
   return /clearTimeout/.test(register)
