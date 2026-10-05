@@ -796,9 +796,11 @@ export function RegisterSchoolForm() {
   }
 
   // -------------------------------------------------------------------------
-  // Step 3 — provisioning / paid-conflict (before the step-1 form)
+  // Post-payment: provisioning / paid-conflict / failure. Distinguished from
+  // Step 3 (review & pay) by having a transactionId — before payment there is
+  // nothing to provision.
   // -------------------------------------------------------------------------
-  if (currentStep === 3 && !successData) {
+  if (currentStep === 3 && transactionId && !successData) {
     return (
       <div>
         {renderStepIndicator()}
