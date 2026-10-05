@@ -458,7 +458,107 @@ check("the disabled payment button explains itself", () =>
     : "a dead button with no reason shown — unblocks are impossible for the user"
 );
 
-check("editing the admin email revokes verification", () => {
+check("Step 1 cannot be left without a verified inbox", () => {
+  const fn = register.slice(
+    register.indexOf("async function handleStep1Next"),
+    register.indexOf("function handleStep2Next")
+  );
+  if (!fn) return "cannot locate handleStep1Next";
+  // The flag must be CHECKED, not merely read — `!isEmailVerified` with an
+  // early return is the gate; a bare reference would not be.
+  const guard = fn.match(/if\s*\(!isEmailVerified\)\s*\{[\s\S]*?\n\s*\}/);
+  if (!guard) return "handleStep1Next has no !isEmailVerified early-return guard";
+  if (!/return;/.test(guard[0])) return "the guard does not return before advancing";
+  // And the guard must come BEFORE the step transition, or it is decorative.
+  const guardAt = fn.indexOf("!isEmailVerified");
+  const advanceAt = fn.indexOf("setCurrentStep(2)");
+  if (advanceAt === -1) return "handleStep1Next never advances to Step 2";
+  return guardAt < advanceAt
+    ? true
+    : "the email check runs after the step transition — it blocks nothing";
+});
+
+check("Step 2 cannot be left without passing its own validation", () => {
+  const fn = register.slice(
+    register.indexOf("function handleStep2Next"),
+    register.indexOf("function goBack")
+  );
+  if (!fn) return "cannot locate handleStep2Next";
+  const guardAt = fn.indexOf("validateStep2()");
+  const advanceAt = fn.indexOf("setCurrentStep(3)");
+  if (guardAt === -1) return "handleStep2Next does not call validateStep2()";
+  if (advanceAt === -1) return "handleStep2Next never advances to Step 3";
+  return /if\s*\(!validateStep2\(\)\)\s*return/.test(fn) && guardAt < advanceAt
+    ? true
+    : "validateStep2() does not gate the transition";
+});
+
+check("Step 1 validation runs before the email gate", () => {
+  const fn = register.slice(
+    register.indexOf("async function handleStep1Next"),
+    register.indexOf("function handleStep2Next")
+  );
+  const vAt = fn.indexOf("validateStep1()");
+  const gAt = fn.indexOf("!isEmailVerified");
+  return vAt !== -1 && gAt !== -1 && vAt < gAt
+    ? true
+    : "field errors should be reported before the verification gate";
+});
+
+check("OTP proxies fail loudly on missing configuration", () => {
+  // A missing BACKEND_URL used to fall through to a hardcoded droplet IP whose
+  // port was closed, surfacing as an opaque 502 indistinguishable from a Brevo
+  // failure. Both proxies must name the missing variable instead.
+  for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
+    if (!/BACKEND_URL/.test(src)) return `${name} does not reference BACKEND_URL`;
+    if (!/BACKEND_API_SECRET/.test(src)) return `${name} does not reference BACKEND_API_SECRET`;
+    if (!/missing BACKEND_URL/.test(src)) {
+      return `${name} has no explicit missing-BACKEND_URL guard`;
+    }
+    if (!/missing BACKEND_API_SECRET/.test(src)) {
+      return `${name} has no explicit missing-BACKEND_API_SECRET guard`;
+    }
+  }
+  return true;
+});
+
+check("OTP proxies never fall back to a hardcoded backend", () => {
+  // The specific regression: a static IP fallback re-introduces the closed-port
+  // call that made this bug undiagnosable.
+  const banned = /159\.223\.178\.34|127\.0\.0\.1:8000|localhost:8000/;
+  return !banned.test(otpSend) && !banned.test(otpVerify)
+    ? true
+    : "an OTP proxy still contains a hardcoded backend address";
+});
+
+check("OTP proxies log the target host on transport failure", () => {
+  for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
+    const fn = src.slice(src.indexOf("} catch"));
+    if (!fn) return `${name} has no catch block`;
+    if (!/console\.error/.test(fn)) return `${name} does not log on transport failure`;
+    if (!/host/.test(fn)) {
+      return `${name} logs the failure but not the host it called`;
+    }
+  }
+  return true;
+});
+
+check("OTP proxies never log the secret or the OTP code", () => {
+  for (const [name, src] of [["request-email-otp", otpSend], ["verify-email-otp", otpVerify]]) {
+    const logged = src
+      .split("console.error")
+      .slice(1)
+      .join("console.error");
+    if (/PROXY_SECRET[},)]/.test(logged) && !/not set/.test(logged)) {
+      return `${name} may log the shared secret`;
+    }
+    // verify-email-otp handles a code; it must never appear in a log statement.
+    if (name === "verify-email-otp" && /\$\{code\}/.test(logged)) {
+      return `${name} logs the OTP code`;
+    }
+  }
+  return true;
+});
   const fn = register.slice(
     register.indexOf("function handleChange"),
     register.indexOf("function resetOtp")
