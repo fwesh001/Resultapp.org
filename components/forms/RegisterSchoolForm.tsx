@@ -1387,91 +1387,36 @@ export function RegisterSchoolForm() {
       </div>
 
       {/* Global error (handles 409 etc) */}
-      {globalError && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-          <span>{globalError}</span>
-        </div>
-      )}
-
-      {/* Submit — Step 1 only validates; payment happens in Step 2 */}
-      <Button
-        type="submit"
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
-        disabled={isSubmitting}
-        size="lg"
-      >
-        {isSubmitting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking availability…
-          </>
-        ) : (
-          <>
-            Continue to Payment
-          </>
+        {globalError && (
+          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span>{globalError}</span>
+          </div>
         )}
-      </Button>
 
-      {/* Loading helper text */}
-      {isSubmitting && (
-        <p className="text-center text-xs text-purple-300/50">
-          Verifying your subdomain is still available…
-        </p>
-      )}
+        {/* Submit — Step 2 validates only; payment happens in Step 3. Not
+            gated on email verification: the user should be able to review
+            their order even if mail is broken. */}
+        <Button
+          type="submit"
+          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={isSubmitting}
+          size="lg"
+        >
+          Review &amp; continue to payment
+        </Button>
 
-      {/* Consent — a real, required checkbox, not a passive notice. The
-          accepted version strings are persisted server-side alongside the
-          tenant row (LEGAL_REMEDIATION.md P0 item 4). components/ui/Input
-          hardcodes text-input styling, so this is a raw checkbox. */}
-      <div className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.06] p-4">
-        <label htmlFor="acceptTerms" className="flex cursor-pointer items-start gap-3">
-          <input
-            id="acceptTerms"
-            type="checkbox"
-            checked={values.acceptTerms}
-            onChange={(e) => handleChange("acceptTerms", e.target.checked)}
-            className="mt-0.5 h-5 w-5 shrink-0 rounded accent-purple-600"
-            aria-describedby="acceptTerms-error"
-          />
-          <span className="text-xs leading-5 text-purple-200/75">
-            I have read and accept the{" "}
-            <Link
-              href="/terms"
-              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
-            >
-              Terms of Service
-            </Link>{" "}
-            (v{TERMS_VERSION}) and the{" "}
-            <Link
-              href="/privacy"
-              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
-            >
-              Privacy Policy
-            </Link>{" "}
-            (v{PRIVACY_VERSION}) on behalf of this school, and confirm I am
-            authorised to bind it. Payments are final sale — see the{" "}
-            <Link
-              href="/refund-policy"
-              className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
-            >
-              Refund Policy
-            </Link>
-            .
-          </span>
-        </label>
-        {errors.acceptTerms && (
-          <p id="acceptTerms-error" role="alert" className="mt-2 pl-8 text-xs text-red-300">
-            {errors.acceptTerms}
-          </p>
-        )}
-      </div>
+        <button
+          type="button"
+          onClick={() => goBack(1)}
+          className="w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+        >
+          ← Back to school details
+        </button>
+      </form>
+    );
+  }
 
-      <p className="text-center text-xs leading-5 text-purple-300/40">
-        Your portal at{" "}
-        <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be
-        created securely.
-      </p>
-    </form>
-  );
+  // Unreachable: currentStep is 1, 2, or 3, and all three return above.
+  return null;
 }
