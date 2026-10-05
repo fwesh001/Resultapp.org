@@ -32,7 +32,7 @@ load_dotenv()
 from fastapi import FastAPI, Header, HTTPException, Depends, Request, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 
 # Services
 from services.db_manager import (
