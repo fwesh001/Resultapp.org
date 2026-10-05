@@ -475,12 +475,17 @@ check("OTP proxies never expose the shared secret", () => {
 });
 
 check("OTP proxies surface backend delivery failures", () => {
-  // The backend returns an honest 502 when Brevo failed. If the proxy swallowed
-  // it, a broken mail config would look identical to "sent, check your inbox".
-  const both = otpSend + otpVerify;
-  return /if \(!res\.ok\)/.test(both)
+  // postAuth is what flattens the backend's honest 502 ("we could not send the
+  // code") into an error response. If it stopped doing so, a broken Brevo
+  // config would be indistinguishable from a delivered message.
+  const proxyLib = read(path.join("lib", "api", "authProxy.ts"));
+  if (!/if \(!res\.ok\)/.test(proxyLib)) {
+    return "postAuth no longer forwards the backend's non-200 status";
+  }
+  // And the wizard must actually branch on it rather than showing "sent".
+  return /if \(!res\.ok\)/.test(register)
     ? true
-    : "a proxy ignores non-200 responses, hiding mail failures";
+    : "the wizard ignores non-200 responses from the OTP proxies";
 });
 
 const failed = results.filter((r) => !r.pass);
