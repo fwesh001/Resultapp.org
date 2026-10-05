@@ -847,24 +847,27 @@ check("the auth email keeps inline-only styling for Outlook/Gmail", () => {
 });
 
 check("the OTP pill is copy-ready and high-contrast", () => {
-  const send = stripProse(
-    notifier.slice(
-      notifier.indexOf("def send_otp_email"),
-      notifier.indexOf("def send_verification_email")
-    )
+  // NOT prose-stripped here: the pill markup lives inside an f-string body, and
+  // stripProse removes triple-quoted strings wholesale — which would delete the
+  // very markup being asserted. Match on the constant NAMES instead.
+  const send = notifier.slice(
+    notifier.indexOf("def send_otp_email"),
+    notifier.indexOf("def send_verification_email")
   );
   if (!send) return "cannot locate send_otp_email";
   const has = (needle, msg) => (send.includes(needle) ? true : msg);
-  // Sentinels first (so body text is dropped), then search the whole file.
-  const pillBg = /_EMAIL_PILL_BG\s*=\s*"([^"]+)"/.exec(notifier);
-  const mono = /_EMAIL_MONO\s*=\s*"([^"]+)"/.exec(notifier);
+  // The constants must actually be defined, or referencing them is meaningless.
+  const defined = (name) =>
+    new RegExp(`${name}\\s*=\\s*_svg_data_uri\\(|${name}\\s*=\\s*"`).test(notifier);
   return [
-    pillBg ? true : "no _EMAIL_PILL_BG constant",
-    pillBg ? has(pillBg[1], "the pill does not use the elevated pill background") : true,
+    defined("_EMAIL_PILL_BG") ? true : "_EMAIL_PILL_BG is not defined",
+    has("{_EMAIL_PILL_BG}", "the pill does not use the elevated pill background"),
     has("letter-spacing:12px", "the digits are not letter-spaced for legibility"),
-    mono ? has(mono[1], "the code is not monospaced") : true,
-    has("_EMAIL_CLIP_URI", "no clipboard cue beside the digits"),
-    has('color:{_EMAIL_HEADING}', "the code is not high-contrast against the pill"),
+    defined("_EMAIL_MONO") ? true : "_EMAIL_MONO is not defined",
+    has("{_EMAIL_MONO}", "the code is not monospaced"),
+    has("{_EMAIL_CLIP_URI}", "no clipboard cue beside the digits"),
+    has("color:{_EMAIL_HEADING}", "the code is not high-contrast against the pill"),
+    has("text-align:center", "the pill is not centred"),
   ].find((r) => r !== true) || true;
 });
 
