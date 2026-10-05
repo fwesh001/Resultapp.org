@@ -810,11 +810,15 @@ check("email SVG data URIs are quote-safe", () => {
   if (dangerous.length) {
     return `safe="${safeChars}" leaves ${dangerous.join(" ")} unencoded — the url() will be dropped`;
   }
-  // Both icons must be BUILT by the encoder, never hand-written.
-  for (const name of ["_EMAIL_GRID_URI", "_EMAIL_CLIP_URI"]) {
-    if (!new RegExp(`${name} = _svg_data_uri\\(`).test(notifier)) {
-      return `${name} is not built via _svg_data_uri()`;
-    }
+  // The grid must be BUILT by the encoder, never hand-written. The clipboard
+  // icon is deliberately NOT an image any more (it rendered as a tofu box in a
+  // real mailbox), so only the grid is asserted here.
+  if (!/_EMAIL_GRID_URI = _svg_data_uri\(/.test(notifier)) {
+    return "_EMAIL_GRID_URI is not built via _svg_data_uri()";
+  }
+  // No icon may sneak back in as an <img> with a data: source.
+  if (/<img[^>]*data:image/.test(notifier)) {
+    return "a data: image was reintroduced — it renders as a tofu box in mail clients";
   }
   return !/data:image\/svg\+xml;charset=utf-8,"\s*\n?\s*%3Csvg/.test(notifier)
     ? true
@@ -886,9 +890,16 @@ check("the OTP pill is copy-ready and high-contrast", () => {
     has("letter-spacing:12px", "the digits are not letter-spaced for legibility"),
     defined("_EMAIL_MONO") ? true : "_EMAIL_MONO is not defined",
     has("{_EMAIL_MONO}", "the code is not monospaced"),
-    has("{_EMAIL_CLIP_URI}", "no clipboard cue beside the digits"),
     has("color:{_EMAIL_HEADING}", "the code is not high-contrast against the pill"),
     has("text-align:center", "the pill is not centred"),
+    // The copy cue must be a TEXT glyph. It was an <img> with a data:image/svg
+    // source, which rendered fine in Chrome and arrived as a tofu box in a real
+    // mailbox — email sanitisers strip data-URI images. A font lookup cannot
+    // fail that way, so any image-based cue is now a regression.
+    defined("_EMAIL_COPY_GLYPH") ? true : "_EMAIL_COPY_GLYPH is not defined",
+    has("{_EMAIL_COPY_GLYPH}", "no copy cue beside the digits"),
+    !/<img\b/.test(send) ? true : "the pill uses an <img> — data-URI images arrive as tofu in mail",
+    !/data:image/.test(send) ? true : "the pill embeds a data: image, which email clients may strip",
   ].find((r) => r !== true) || true;
 });
 
