@@ -94,6 +94,19 @@ function clientIp(req: NextRequest): string | undefined {
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * Admin name bounds — MUST equal ProvisionRequest.admin_name in
+ * backend/main.py (min_length=3, max_length=80) and ADMIN_NAME_MIN/MAX in
+ * components/forms/RegisterSchoolForm.tsx.
+ *
+ * Enforced here so an out-of-range value fails as a clean 400 with a fieldError
+ * the wizard can pin to the input. Provisioning runs post-payment, so letting
+ * the backend be the only validator turns a bound mismatch into a charged user
+ * staring at a provisioning error.
+ */
+const ADMIN_NAME_MIN = 3;
+const ADMIN_NAME_MAX = 80;
+
 interface RegisterSchoolBody {
   // Phase 1 required 4 fields (support both camel & snake for robustness)
   schoolName?: string;
@@ -178,7 +191,17 @@ export async function POST(req: NextRequest) {
 
   // Optional derived
   const adminNameRaw = String(body.adminName ?? body.admin_name ?? "").trim();
-  const adminName = adminNameRaw || adminEmail.split("@")[0] || "";
+  // Never let the email local part become the SENT value when it is too short
+  // for the backend bound — "ab@x.edu" would otherwise forward admin_name="ab"
+  // and draw a 422 from ProvisionRequest. Omitting the field lets the backend
+  // apply its own fallback instead of rejecting the request.
+  const emailLocalPart = adminEmail.split("@")[0] || "";
+  const adminName =
+    adminNameRaw.length >= ADMIN_NAME_MIN && adminNameRaw.length <= ADMIN_NAME_MAX
+      ? adminNameRaw
+      : emailLocalPart.length >= ADMIN_NAME_MIN && emailLocalPart.length <= ADMIN_NAME_MAX
+        ? emailLocalPart
+        : "";
   const adminPassword = String(body.adminPassword ?? body.admin_password ?? "");
 
   // ---- Validation (client spec + backend 409/422 parity) ----
@@ -204,6 +227,15 @@ export async function POST(req: NextRequest) {
     fieldErrors.adminEmail = "Admin email is required";
   } else if (!isValidEmail(adminEmail)) {
     fieldErrors.adminEmail = "Enter a valid email address";
+  }
+
+  // Only enforced when the client actually supplied one — admin_name is optional
+  // on the backend, and omitting it is a valid (non-error) path.
+  if (adminNameRaw && (adminNameRaw.length < ADMIN_NAME_MIN || adminNameRaw.length > ADMIN_NAME_MAX)) {
+    fieldErrors.adminName =
+      adminNameRaw.length < ADMIN_NAME_MIN
+        ? `Admin name must be at least ${ADMIN_NAME_MIN} characters`
+        : `Admin name must be at most ${ADMIN_NAME_MAX} characters`;
   }
 
   if (!adminPassword) {
@@ -277,7 +309,8 @@ export async function POST(req: NextRequest) {
     privacy_version: resolvedPrivacyVersion,
     consent_ip: clientIp(req),
   };
-  // Include optional only if present (backend treats as optional)
+  // Include optional only if present (backend treats as optional). Sending an
+  // empty string would fail ProvisionRequest's min_length, so omit instead.
   if (adminName) fastApiPayload.admin_name = adminName;
   // Credit & Command: the free-credit grant is decided SERVER-SIDE only.
   // A client-supplied initial_credits (initialCredits) is deliberately dropped —
