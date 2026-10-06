@@ -44,6 +44,8 @@ const REGISTER = path.join("components", "forms", "RegisterSchoolForm.tsx");
 const OTP_SEND_PROXY = path.join("app", "api", "auth", "request-email-otp", "route.ts");
 const OTP_VERIFY_PROXY = path.join("app", "api", "auth", "verify-email-otp", "route.ts");
 const REGISTER_SCHOOL = path.join("app", "api", "register-school", "route.ts");
+const REGISTER_STATUS = path.join("app", "api", "register-school", "status", "route.ts");
+const FLW = path.join("lib", "flutterwave.ts");
 
 const results = [];
 function check(name, fn) {
@@ -70,6 +72,8 @@ const register = read(REGISTER);
 const otpSend = read(OTP_SEND_PROXY);
 const otpVerify = read(OTP_VERIFY_PROXY);
 const registerSchool = read(REGISTER_SCHOOL);
+const registerStatus = read(REGISTER_STATUS);
+const flw = read(FLW);
 const wall = read(WALL);
 const signin = read(SIGNIN);
 
@@ -1003,6 +1007,61 @@ check("a successful OTP send keeps its cooldown (anti-abuse intact)", () => {
     ? true
     : `expected exactly one cooldown release before the success return, found ${releases}`;
 });
+
+console.log("\nPayment verification: settled only, and never confused with pending");
+check("the API envelope status is never treated as proof of payment", () => {
+  // The envelope's top-level `status` is "success" whenever the provider merely
+  // FOUND a transaction — including failed/abandoned/refunded ones. Treating it
+  // as payment confirmation provisions a portal for a charge that never settled.
+  const bad = registerSchool.match(/verification\.status\s*===\s*["']success["']/);
+  return bad ? "verification.status (the envelope) is used as a payment signal" : true;
+});
+check("payment is decided by the transaction status, via classifyPaymentStatus", () =>
+  /classifyPaymentStatus\(\s*data\.status\s*\)/.test(registerSchool)
+    ? true
+    : "the transaction status is not classified before provisioning"
+);
+check("classifyPaymentStatus has explicit paid and pending sets", () => {
+  const hasPaid = /PAID_STATUSES\s*=\s*new Set\(\[[^\]]*"successful"/.test(flw);
+  const hasPending = /PENDING_STATUSES\s*=\s*new Set\(\[[^\]]*"success-pending-validation"/.test(flw);
+  return hasPaid && hasPending
+    ? true
+    : "PAID_STATUSES / PENDING_STATUSES are missing or incomplete";
+});
+check("a pending bank transfer is not reported as a verification failure", () => {
+  if (!/pending:\s*true/.test(registerSchool)) return "no pending:true branch";
+  if (!/still processing/i.test(registerSchool))
+    return "the pending branch does not explain that the payment is still processing";
+  if (/Payment verification failed\. Please contact support\./.test(registerSchool))
+    return "the dead-end 'contact support' message is still returned for pending payments";
+  return true;
+});
+check("the server can verify by its own tx_ref when the modal's id will not resolve", () =>
+  /verifyTransactionByReference/.test(registerSchool)
+    ? true
+    : "no tx_ref fallback lookup"
+);
+check("a client-supplied tx_ref is only honoured for this registration's own subdomain", () => {
+  if (!/expectedRefPrefix/.test(registerSchool)) return "no prefix check on the tx_ref";
+  if (!/startsWith\(expectedRefPrefix\)/.test(registerSchool))
+    return "the tx_ref prefix is computed but never enforced";
+  return true;
+});
+check("the recovery endpoint reports the provider's own status and message", () => {
+  if (!/provider_status/.test(registerStatus)) return "provider_status is not surfaced";
+  if (!/provider_message/.test(registerStatus)) return "provider_message is not surfaced";
+  return true;
+});
+check("the wizard shows a pending state instead of a provisioning failure", () => {
+  if (!/paymentPending/.test(register)) return "no pending state in the wizard";
+  if (!/Payment still processing/.test(register)) return "no pending panel is rendered";
+  return true;
+});
+check("the admin password is still never sent to Flutterwave", () =>
+  !/meta:[\s\S]{0,600}adminPassword/.test(register)
+    ? true
+    : "adminPassword appears inside a Flutterwave meta block"
+);
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

@@ -159,6 +159,76 @@ export async function verifyTransaction(
   return data;
 }
 
+/**
+ * Statuses that mean the money is confirmed and a portal may be provisioned.
+ */
+export const PAID_STATUSES = new Set(["successful", "success", "completed"]);
+
+/**
+ * Statuses that mean a charge exists but the provider has not confirmed it
+ * yet. A bank transfer sits in `success-pending-validation` until the paying
+ * bank's settlement clears, which can take minutes or hours.
+ *
+ * These are NOT failures. Treating them as failures is what produced the worst
+ * possible customer experience: someone who just transferred ₦10,000 was told
+ * "payment verification failed, contact support" for a transaction that was
+ * sitting in a perfectly normal pending state.
+ */
+export const PENDING_STATUSES = new Set([
+  "success-pending-validation",
+  "pending",
+  "processing",
+  "ongoing",
+]);
+
+/**
+ * Classify a Flutterwave transaction status into the only three answers the
+ * registration flow cares about.
+ *
+ * CRITICAL: pass `data.status` (the TRANSACTION status), never the envelope's
+ * top-level `status`. The envelope is `"success"` whenever the API merely
+ * FOUND the transaction — including failed, abandoned and refunded ones — so
+ * treating the envelope as proof of payment provisions portals for free.
+ */
+export function classifyPaymentStatus(status: unknown): "paid" | "pending" | "failed" {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (PAID_STATUSES.has(s)) return "paid";
+  if (PENDING_STATUSES.has(s)) return "pending";
+  return "failed";
+}
+
+/**
+ * Verify a charge by the reference WE generated before opening checkout.
+ *
+ * Preferred over `verifyTransaction(id)` because the inline modal's
+ * `transaction_id` is not always resolvable by the public API (3-D Secure and
+ * test-mode mock checkouts both hand back ids the verify endpoint rejects),
+ * while the tx_ref is echoed by the provider and always resolves.
+ */
+export async function verifyTransactionByReference(
+  txRef: string
+): Promise<FlutterwaveVerifyResponse> {
+  const secretKey = getSecretKey();
+  const res = await fetch(
+    `${FLW_BASE_URL}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(txRef)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    }
+  );
+  const data = (await res.json()) as FlutterwaveVerifyResponse;
+  if (!res.ok) {
+    throw new Error(
+      `Flutterwave verify-by-reference failed: ${data.message || res.statusText}`
+    );
+  }
+  return data;
+}
+
 export function verifyWebhookSignature(verifHashHeader: string | null): boolean {
   const secretHash =
     process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || process.env.FLW_WEBHOOK_HASH || "";

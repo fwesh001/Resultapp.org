@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { classifyPaymentStatus } from "@/lib/flutterwave";
 
 /**
  * Payment status lookup by tx_ref
@@ -21,7 +22,6 @@ import { NextRequest, NextResponse } from "next/server";
  */
 
 const TX_REF_RE = /^[A-Za-z0-9_-]{8,128}$/;
-const SUCCESS_STATUSES = new Set(["successful", "success", "completed"]);
 
 export async function GET(req: NextRequest) {
   const txRef = (req.nextUrl.searchParams.get("tx_ref") || "").trim();
@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  let providerStatus = 0;
+  let providerMessage = "";
   let data: {
     status?: string;
     message?: string;
@@ -73,7 +75,9 @@ export async function GET(req: NextRequest) {
         cache: "no-store",
       }
     );
+    providerStatus = res.status;
     data = (await res.json()) as typeof data;
+    providerMessage = String(data?.message || "");
   } catch (err) {
     console.error("[register-school/status] lookup failed", err);
     return NextResponse.json(
@@ -86,17 +90,32 @@ export async function GET(req: NextRequest) {
   const status = String(tx?.status || data?.status || "").toLowerCase();
 
   if (!tx?.id) {
-    // No transaction for this reference yet. For a genuinely abandoned
-    // checkout this is terminal; for one still mid-3DS it is transient. We
-    // report "unknown" so the client can distinguish "not yet" from "failed".
-    return NextResponse.json({ status: "unknown", tx_ref: txRef });
+    // No transaction for this reference. Report the provider's own HTTP status
+    // and message so a 401 "Invalid auth key" is never mistaken for a 404
+    // "Transaction not found" — those two need completely different fixes, and
+    // collapsing them into a bare "unknown" is what made this undiagnosable.
+    console.warn("[register-school/status] no transaction", {
+      tx_ref: txRef,
+      providerStatus,
+      providerMessage,
+    });
+    return NextResponse.json({
+      status: "unknown",
+      tx_ref: txRef,
+      provider_status: providerStatus || undefined,
+      provider_message: providerMessage || undefined,
+    });
   }
 
-  const paid = SUCCESS_STATUSES.has(status);
+  const verdict = classifyPaymentStatus(status);
+  const paid = verdict === "paid";
 
   return NextResponse.json({
     status: paid ? "successful" : status || "unknown",
     paid,
+    // Lets the wizard say "still processing" instead of "failed" for a bank
+    // transfer that is legitimately awaiting settlement.
+    pending: verdict === "pending",
     transaction_id: tx.id,
     amount: Number(tx.charged_amount ?? tx.amount ?? 0),
     tx_ref: tx.tx_ref || txRef,

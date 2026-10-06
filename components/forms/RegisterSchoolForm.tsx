@@ -15,6 +15,7 @@ import {
   EyeOff,
   MailCheck,
   ShieldCheck,
+  Clock,
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -227,6 +228,11 @@ export function RegisterSchoolForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
+  // A charge that exists but has not been confirmed by the provider (bank
+  // transfers sit in `success-pending-validation` until settlement clears).
+  // This is a waiting state, not a failure — it gets its own panel so a
+  // customer who just paid is never told to contact support.
+  const [paymentPending, setPaymentPending] = useState(false);
   // A reference survives a lost callback, so the wizard can always ask the
   // provider what happened instead of stranding a customer who already paid.
   const [pendingRef] = useState<string | null>(() => {
@@ -783,11 +789,13 @@ export function RegisterSchoolForm() {
       const data = (await res.json().catch(() => ({}))) as {
         status?: string;
         paid?: boolean;
+        pending?: boolean;
         transaction_id?: number | string;
       };
 
       if (data.paid && data.transaction_id) {
         setGlobalError(null);
+        setPaymentPending(false);
         setTransactionId(String(data.transaction_id));
         setTxRef(ref);
         setPaidConflict(null);
@@ -798,6 +806,17 @@ export function RegisterSchoolForm() {
           /* ignore */
         }
         window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      // Charge exists but is unconfirmed. Do NOT claim "no payment found" —
+      // the money is with the provider, awaiting settlement.
+      if (data.pending) {
+        setCurrentStep(3);
+        setPaymentPending(true);
+        setGlobalError(
+          "Your payment is still processing. Bank transfers stay unconfirmed until the provider clears them — nothing has been created yet, and you will not be charged twice."
+        );
         return;
       }
 
@@ -863,6 +882,7 @@ export function RegisterSchoolForm() {
 
     setProvisioning(true);
     setGlobalError(null);
+    setPaymentPending(false);
 
     void (async () => {
       try {
@@ -876,6 +896,7 @@ export function RegisterSchoolForm() {
           success?: boolean;
           error?: string;
           code?: string;
+          pending?: boolean;
           transaction_id?: string;
           fieldErrors?: Record<string, string>;
           deployed_url?: string;
@@ -885,6 +906,14 @@ export function RegisterSchoolForm() {
           school_name?: string;
           details?: string;
         };
+
+        // Provider has the charge but has not confirmed it yet. Not an error —
+        // surface it as "still processing" and let the user re-check.
+        if (data.pending) {
+          setPaymentPending(true);
+          setGlobalError(data.error || null);
+          return;
+        }
 
         if (!res.ok || !data.success) {
           if (data.fieldErrors) {
@@ -940,6 +969,7 @@ export function RegisterSchoolForm() {
     provisionFired.current = false;
     setGlobalError(null);
     setPaidConflict(null);
+    setPaymentPending(false);
     setRetryNonce((n) => n + 1);
   }
 
@@ -1122,6 +1152,39 @@ export function RegisterSchoolForm() {
               Payment confirmed. Provisioning your database, site, and admin account — this may take a minute.
               Please keep this tab open.
             </p>
+          </div>
+        ) : paymentPending ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/20">
+              <Clock className="h-8 w-8 text-amber-400" />
+            </div>
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">
+              Payment still processing
+            </h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+              {globalError ||
+                "Your payment has been received but the provider has not confirmed it yet. Bank transfers can take a few minutes to clear."}
+            </p>
+            <p className="mt-2 max-w-md text-xs leading-5 text-purple-300/50">
+              Your money is safe and your portal will be built automatically once the payment
+              clears. Nothing has been created yet, and you will not be charged twice.
+            </p>
+            <div className="mt-6 flex w-full flex-col gap-2">
+              <Button
+                className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
+                size="lg"
+                onClick={retryProvision}
+              >
+                <Loader2 className="h-4 w-4" /> Check again
+              </Button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+              >
+                Back to checkout
+              </button>
+            </div>
           </div>
         ) : globalError ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
