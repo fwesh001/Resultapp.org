@@ -12,8 +12,30 @@ import {
   MousePointerClick,
 } from "lucide-react";
 
-// Helper to switch concepts while deciding. Set to 1, 2, or 3.
-const CONCEPT: 1 | 2 | 3 = 1;
+export default function FeaturesGrid() {
+  const [concept, setConcept] = useState<1 | 2 | 3>(1);
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-center gap-2">
+        {([1, 2, 3] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setConcept(n)}
+            className={`rounded-full border px-4 py-1.5 text-xs font-medium transition-colors ${
+              concept === n
+                ? "border-purple-400/60 bg-purple-600/30 text-white"
+                : "border-purple-500/20 bg-purple-900/10 text-purple-200/60 hover:text-purple-100"
+            }`}
+          >
+            Design {n}
+          </button>
+        ))}
+      </div>
+      {concept === 2 ? <SpotlightGrid /> : concept === 3 ? <FocusGrid /> : <FlipGrid />}
+    </div>
+  );
+}
 
 type Card = {
   title: string;
@@ -49,12 +71,6 @@ const CARDS: Card[] = [
   },
 ];
 
-export default function FeaturesGrid() {
-  if (CONCEPT === 2) return <SpotlightGrid />;
-  if (CONCEPT === 3) return <FocusGrid />;
-  return <FlipGrid />;
-}
-
 function useReveal() {
   const [revealed, setRevealed] = useState(false);
   return { revealed, setRevealed, toggle: () => setRevealed((v) => !v) };
@@ -73,13 +89,13 @@ function TapCue({ revealed }: { revealed: boolean }) {
 }
 
 const glassBase =
-  "relative aspect-square w-full overflow-hidden rounded-2xl border border-purple-600/30 bg-[#130926]/60 backdrop-blur-md";
+  "aspect-square w-full overflow-hidden rounded-2xl border border-purple-600/30 bg-[#130926]/60 backdrop-blur-md";
 
 /* ---------------- Concept 1: 3D Glass Flip ---------------- */
 
 function FlipGrid() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
       {CARDS.map((card) => (
         <FlipCard key={card.title} card={card} />
       ))}
@@ -105,53 +121,52 @@ function FlipCard({ card }: { card: Card }) {
       }}
       onViewportEnter={() => setRevealed(true)}
       viewport={{ amount: 0.6, once: false }}
-      className="block w-full cursor-pointer text-left [perspective:1200px] md:cursor-default"
+      className="block w-full cursor-pointer text-left md:cursor-default"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
-      <motion.div
-        animate={{ rotateY: flipped && !reduce ? 180 : 0 }}
-        transition={{ duration: reduce ? 0 : 0.6, ease: [0.32, 0.72, 0, 1] }}
-        className="relative aspect-square w-full"
-        style={{ transformStyle: "preserve-3d" }}
-      >
-        {/* Front — Problem */}
-        <div
-          className={`${glassBase} absolute inset-0 flex flex-col justify-between p-5 md:p-6`}
-          style={{ backfaceVisibility: "hidden" }}
+      <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
+        {/* Front — Problem: slides out to the left */}
+        <motion.div
+          initial={false}
+          animate={{ x: flipped && !reduce ? "-100%" : "0%", opacity: flipped ? 0 : 1 }}
+          transition={{ duration: reduce ? 0 : 0.45, ease: "easeInOut" }}
+          className={`${glassBase} absolute inset-0 flex flex-col justify-between p-4 md:p-5`}
         >
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
-            <Icon className="h-5 w-5" />
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
+            <Icon className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-purple-300/70">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-purple-300/70">
               {card.title}
             </h3>
-            <p className="mt-3 text-base leading-7 text-purple-100/80 md:text-lg">
+            <p className="mt-2 text-sm leading-6 text-purple-100/80">
               {card.problem}
             </p>
           </div>
           <TapCue revealed={revealed} />
-        </div>
+        </motion.div>
 
-        {/* Back — Solution */}
-        <div
-          className={`${glassBase} absolute inset-0 flex flex-col justify-between border-purple-400/50 bg-[#1b0f38]/70 p-5 shadow-[0_0_50px_rgba(147,51,234,0.35)] md:p-6`}
-          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+        {/* Back — Solution: slides in from the right, same spot */}
+        <motion.div
+          initial={false}
+          animate={{ x: flipped ? "0%" : "100%", opacity: flipped ? 1 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.45, ease: "easeInOut" }}
+          className={`${glassBase} absolute inset-0 flex flex-col justify-between border-purple-400/50 bg-[#1b0f38]/70 p-4 shadow-[0_0_50px_rgba(147,51,234,0.35)] md:p-5`}
         >
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/40 bg-purple-600/30 text-purple-200">
-            <Sparkles className="h-5 w-5" />
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-400/40 bg-purple-600/30 text-purple-200">
+            <Sparkles className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-purple-300">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-purple-300">
               {card.title}
             </h3>
-            <p className="mt-3 bg-gradient-to-r from-purple-300 to-fuchsia-300 bg-clip-text text-base font-medium leading-7 text-transparent md:text-lg">
+            <p className="mt-2 bg-gradient-to-r from-purple-300 to-fuchsia-300 bg-clip-text text-sm font-medium leading-6 text-transparent">
               {card.solution}
             </p>
           </div>
           <TapCue revealed={!revealed} />
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </motion.button>
   );
 }
@@ -160,7 +175,7 @@ function FlipCard({ card }: { card: Card }) {
 
 function SpotlightGrid() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
       {CARDS.map((card) => (
         <SpotlightCard key={card.title} card={card} />
       ))}
@@ -195,7 +210,7 @@ function SpotlightCard({ card }: { card: Card }) {
       }}
       onViewportEnter={() => setRevealed(true)}
       viewport={{ amount: 0.6, once: false }}
-      className={`${glassBase} group block cursor-pointer p-5 text-left transition-colors duration-300 md:cursor-default md:p-6 ${
+      className={`relative ${glassBase} group block cursor-pointer p-4 md:p-5 text-left transition-colors duration-300 md:cursor-default md:p-5 ${
         revealed ? "border-[#9333ea]/70" : "border-transparent"
       }`}
     >
@@ -208,10 +223,10 @@ function SpotlightCard({ card }: { card: Card }) {
         }}
       />
       <div className="relative flex h-full flex-col justify-between">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
+        <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
           <Icon className="h-5 w-5" />
         </div>
-        <div className="relative min-h-[7.5rem]">
+        <div className="relative min-h-[6.5rem]">
           <h3 className="text-sm font-semibold uppercase tracking-widest text-purple-300/70">
             {card.title}
           </h3>
@@ -245,7 +260,7 @@ function SpotlightCard({ card }: { card: Card }) {
 function FocusGrid() {
   const [hovered, setHovered] = useState<number | null>(null);
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
       {CARDS.map((card, i) => (
         <FocusCard
           key={card.title}
@@ -290,7 +305,7 @@ function FocusCard({
       viewport={{ amount: 0.6, once: false }}
       animate={{ scale: revealed ? 1.05 : 1, opacity: dimmed ? 0.55 : 1 }}
       transition={{ duration: 0.3 }}
-      className={`${glassBase} block cursor-pointer p-5 text-left md:cursor-default md:p-6 ${
+      className={`relative ${glassBase} block cursor-pointer p-5 text-left md:cursor-default md:p-5 ${
         revealed
           ? "border-purple-400/50 shadow-[0_0_60px_rgba(147,51,234,0.4)]"
           : "shadow-none"
@@ -298,7 +313,7 @@ function FocusCard({
     >
       <div className="flex h-full flex-col justify-between">
         <div className="flex items-center justify-between">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-600/15 text-purple-300">
             <Icon className="h-5 w-5" />
           </div>
           <h3
@@ -324,7 +339,7 @@ function FocusCard({
             initial={false}
             animate={{ opacity: revealed ? 1 : 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-x-0 top-6 text-base font-medium leading-7 text-white md:text-lg"
+            className="absolute inset-x-0 top-6 text-sm font-medium leading-6 text-white"
           >
             {card.solution}
           </motion.p>
