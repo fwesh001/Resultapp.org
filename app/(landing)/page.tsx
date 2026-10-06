@@ -1,12 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  FileSpreadsheet,
-  Calculator,
-  Check,
-  Users,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { PricingCalculator } from "@/components/ui/PricingCalculator";
 import FaqSection from "@/components/landing/FaqSection";
 import FeaturesGrid from "@/components/landing/FeaturesGrid";
@@ -92,30 +85,22 @@ export default function HomePage() {
             </span>
           </div>
 
-          {/* trust strip — now directly under CTAs since preview removed */}
-          <div className="mt-10 flex w-full max-w-4xl flex-col items-center gap-3 rounded-2xl border border-purple-500/10 bg-purple-900/[0.06] px-6 py-4 backdrop-blur md:flex-row md:justify-between">
-            <p className="text-xs font-medium tracking-widest text-purple-300/70">TRUSTED WORKFLOW</p>
-            <div className="flex flex-wrap justify-center gap-6 text-sm text-purple-200/70">
-              <span className="inline-flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-purple-400" /> CSV Import</span>
-              <span className="h-4 w-px bg-purple-500/15 max-sm:hidden" />
-              <span className="inline-flex items-center gap-2"><Calculator className="h-4 w-4 text-purple-400" /> Auto Grading</span>
-              <span className="h-4 w-px bg-purple-500/15 max-sm:hidden" />
-              <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 text-purple-400" /> Parent Portal</span>
-            </div>
-          </div>
         </section>
 
         {/* BENTO FEATURE GRID — still inside Zone A */}
-        <section className="relative mx-auto w-full max-w-6xl px-6 pb-12 md:pb-16">
+        <section id="features" className="relative mx-auto w-full max-w-6xl scroll-mt-20 px-6 pb-12 md:pb-16">
           <div className="mx-auto mb-8 max-w-2xl text-center md:mb-10">
             <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/5 px-3 py-1 text-xs font-medium tracking-wide text-purple-300">
               <Sparkles className="h-3.5 w-3.5" /> PLATFORM FEATURES
             </div>
-            <h2 className="mt-4 text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">
-              Everything for seamless results
-            </h2>
+            <div className="mt-4 inline-block">
+              <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">
+                Features
+              </h2>
+              <div className="mt-3 h-px w-full bg-gradient-to-r from-purple-500/60 via-purple-500/20 to-transparent" />
+            </div>
             <p className="mt-3 text-sm leading-6 text-purple-200/60 md:text-[15px]">
-              Four powerful promises — speed, accuracy, branding and delight.
+              Built for Grading &amp; Reporting, Accessibility, Security, and Cost Efficiency.
             </p>
           </div>
 
@@ -139,9 +124,12 @@ export default function HomePage() {
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(147,51,234,0.07),transparent_72%)]" />
 
         {/* PRICING CALCULATOR */}
-        <section className="relative mx-auto w-full max-w-6xl px-6 pb-16 pt-10 md:pb-20 md:pt-12">
+        <section id="pricing" className="relative mx-auto w-full max-w-6xl scroll-mt-20 px-6 pb-16 pt-10 md:pb-20 md:pt-12">
           <div className="mb-8 text-center md:mb-10">
-            <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">Simple pricing, brutal clarity</h2>
+            <div className="inline-block">
+              <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">Pricing</h2>
+              <div className="mt-3 h-px w-full bg-gradient-to-r from-purple-500/60 via-purple-500/20 to-transparent" />
+            </div>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-purple-200/60 md:text-base">
               Use the calculator. See your exact slot cost instantly. No demos, no calls.
             </p>
