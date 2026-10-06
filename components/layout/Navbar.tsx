@@ -6,7 +6,8 @@ import { GraduationCap, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 const links = [
-  { label: "Pricing", href: "/pricing" },
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Support", href: "/support" },
@@ -36,7 +37,10 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-2 text-sm font-medium md:flex">
-          <Link href="/pricing" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
+          <Link href="#features" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
+            Features
+          </Link>
+          <Link href="#pricing" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
             Pricing
           </Link>
           <Link href="/about" className="inline-flex min-h-[44px] items-center rounded-md px-3 text-purple-200/70 transition-colors hover:text-white">
