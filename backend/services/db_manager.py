@@ -1014,6 +1014,7 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                 ),
             )
         row = cur.fetchone()
+        out = _row_to_dict(row, cur)
 
         # ---- Consent record, same transaction --------------------------
         # A registration without recorded acceptance is not a registration we
@@ -1045,8 +1046,10 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                 "terms_version, privacy_version and accepted_by are required to register a school"
             )
 
-        cur.execute("COMMIT;")
-        out = _row_to_dict(row, cur)
+        try:
+            conn.commit()
+        except Exception:
+            cur.execute("COMMIT;")
         out["consent"] = consent_written
         return out
     except Exception as e:
@@ -3327,7 +3330,7 @@ def tenant_exists(subdomain: str) -> bool:
 
 def _row_to_dict(row, cursor) -> Dict[str, Any]:
     """Convert a psycopg2 cursor row to a dict using cursor column names."""
-    if row is None:
+    if row is None or not getattr(cursor, "description", None):
         return {}
     cols = [desc[0] for desc in cursor.description]
     return dict(zip(cols, row))
