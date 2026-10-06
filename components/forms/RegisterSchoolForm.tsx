@@ -85,6 +85,13 @@ const OTP_RE = /^[0-9]{6}$/;
 const OTP_RESEND_COOLDOWN_S = 60;
 
 /**
+ * sessionStorage key holding the tx_ref of an in-flight checkout.
+ * Written before the Flutterwave modal opens so a callback that never
+ * arrives is still recoverable after a reload.
+ */
+const PENDING_TX_REF_KEY = "resultapp:pending-tx-ref";
+
+/**
  * Admin name bounds — MUST equal ProvisionRequest.admin_name in
  * backend/main.py (min_length=3, max_length=80). Enforced here as well as in
  * app/api/register-school/route.ts so an out-of-range name is caught on Step 2,
@@ -220,6 +227,20 @@ export function RegisterSchoolForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
+  // A reference survives a lost callback, so the wizard can always ask the
+  // provider what happened instead of stranding a customer who already paid.
+  const [pendingRef] = useState<string | null>(() => {
+    // Lazy initialiser rather than a mount effect: this reads an external
+    // store, which is exactly what useState initialisers are for, and it avoids
+    // the setState-in-effect cascading render the lint rule rejects.
+    if (typeof window === "undefined") return null;
+    try {
+      return window.sessionStorage.getItem(PENDING_TX_REF_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [paidConflict, setPaidConflict] = useState<{ transactionId: string } | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const provisionFired = useRef(false);
@@ -330,6 +351,12 @@ export function RegisterSchoolForm() {
   // Validation — scoped per step
   //
   // validateStep1/2 only populate the fields belonging to that step, so a user
+  // A payment whose Flutterwave callback never arrived is recovered via
+  // pendingRef, seeded by the lazy initialiser above. The reference is only
+  // ever surfaced to the user, never auto-applied: we cannot know whether the
+  // abandoned attempt belonged to the school now being registered, so the human
+  // decides. resolvePaymentByReference still verifies server-side.
+
   // is never blocked by an error on a field they cannot see yet. Step 3 runs
   // all three so nothing invalid can reach the payment provider.
   // -------------------------------------------------------------------------
@@ -661,7 +688,7 @@ export function RegisterSchoolForm() {
           txRef: ref,
           amount: orderTotal,
           currency: "NGN",
-          customer: { email: customerEmail, name: customerName },
+           customer: { email: customerEmail, name: customerName },
           customizations: {
             title: `ResultApp • ${values.schoolName.trim()}`,
             description: `${orderCount} slots × ${formatNaira(orderTier.pricePerStudent)} = ${formatNaira(orderTotal)}`,
@@ -703,7 +730,13 @@ export function RegisterSchoolForm() {
             window.scrollTo({ top: 0, behavior: "smooth" });
           },
           onClose: () => {
-            setGlobalError("Payment was cancelled — no charge made, nothing was created. You can retry anytime.");
+            // A closed modal is NOT proof of a cancelled payment. Flutterwave
+            // leaves its own success screen up and only calls onclose when the
+            // user dismisses it, so the common case here is "paid, modal
+            // dismissed" — telling that customer nothing was created strands
+            // them with a charge and no portal. Always ask the provider what
+            // actually happened to the reference we generated.
+            void resolvePaymentByReference(ref, true);
           },
           onError: () => {
             setGlobalError("Payment checkout failed to start. Check your connection and retry.");
@@ -716,6 +749,13 @@ export function RegisterSchoolForm() {
       console.warn("NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY not set — using dummy key");
     }
     setIsSubmitting(true);
+    // Persist the reference BEFORE checkout opens. If the modal never hands
+    // control back, this is the only surviving link to the payment.
+    try {
+      window.sessionStorage.setItem(PENDING_TX_REF_KEY, ref);
+    } catch {
+      /* private mode — the in-memory ref still works for this tab */
+    }
     loadFlutterwaveScript()
       .then(openModal)
       .catch((err) => {
@@ -723,6 +763,68 @@ export function RegisterSchoolForm() {
         setGlobalError("Could not load Flutterwave checkout. Check your connection and try again.");
       })
       .finally(() => setIsSubmitting(false));
+  }
+
+  /**
+   * Recovery path for a payment whose inline callback never resolved.
+   *
+   * Asks the server what happened to `ref`. On a confirmed success it seeds
+   * `transactionId`, which is all the provisioning effect needs — the server
+   * re-verifies the charge independently, so this cannot provision a payment
+   * that did not happen.
+   */
+  async function resolvePaymentByReference(ref: string, fromModalClose: boolean) {
+    setIsCheckingPayment(true);
+    try {
+      const res = await fetch(
+        `/api/register-school/status?tx_ref=${encodeURIComponent(ref)}`,
+        { cache: "no-store" }
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        status?: string;
+        paid?: boolean;
+        transaction_id?: number | string;
+      };
+
+      if (data.paid && data.transaction_id) {
+        setGlobalError(null);
+        setTransactionId(String(data.transaction_id));
+        setTxRef(ref);
+        setPaidConflict(null);
+        setCurrentStep(3);
+        try {
+          window.sessionStorage.removeItem(PENDING_TX_REF_KEY);
+        } catch {
+          /* ignore */
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (fromModalClose) {
+        setGlobalError(
+          "No completed payment was found for this attempt — nothing was created. You can retry anytime."
+        );
+      }
+    } catch {
+      if (fromModalClose) {
+        setGlobalError(
+          "We could not confirm your payment status. If you were charged, contact support@resultapp.org with your reference and we will sort it out."
+        );
+      }
+    } finally {
+      setIsCheckingPayment(false);
+    }
+  }
+
+  /** Manual escape hatch for a customer who believes they were charged. */
+  function checkPaymentStatus() {
+    const ref = txRef || pendingRef || "";
+    if (!ref) {
+      setGlobalError("No payment attempt to check yet.");
+      return;
+    }
+    void resolvePaymentByReference(ref, true);
   }
 
   function useDevMockPayment() {
@@ -1207,6 +1309,37 @@ export function RegisterSchoolForm() {
           >
             Dev Mock Payment (localhost only)
           </Button>
+        )}
+
+        {/* Recovery affordance. A customer whose Flutterwave modal hung must
+            never be told "nothing was created" and left with no way forward —
+            they may already have been charged. */}
+        {(pendingRef || txRef) && (
+          <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100/80">
+            <p className="font-medium text-amber-100">Already paid?</p>
+            <p className="mt-1 text-amber-100/70">
+              Reference{" "}
+              <span className="font-mono">
+                {(pendingRef || txRef || "").slice(0, 34)}
+              </span>
+              . If you completed a payment but did not get a portal, check its
+              status — this never charges you again.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-2 w-full gap-2 rounded-full"
+              disabled={isCheckingPayment}
+              onClick={checkPaymentStatus}
+            >
+              {isCheckingPayment ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Checking…
+                </>
+              ) : (
+                "Check payment status"
+              )}
+            </Button>
+          </div>
         )}
 
         <button
