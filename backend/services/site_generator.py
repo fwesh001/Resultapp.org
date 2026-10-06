@@ -7,6 +7,7 @@ Site generator for ResultApp Droplet.
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import secrets
@@ -120,6 +121,12 @@ $DatabasePrefix = '';
 // RosarioSIS specific
 $DefaultSyear = date('Y');
 $RosarioNotifyAddress = '{admin_email}';
+
+// Required by Warehouse.php (sets $_SESSION['locale']) and read by index.php
+// via `count( $RosarioLocales )`. Without it every tenant portal dies with
+// "Undefined variable $RosarioLocales" and a fatal count(): null error, so the
+// login page never renders no matter how correct the database is.
+$RosarioLocales = [ 'en_US.utf8' ];
 ?>
 """
 
@@ -210,6 +217,22 @@ def _write_rosariosis_config(subdomain: str, db_creds: Dict[str, str], school_na
             admin_email=admin_email,
             generated_at=datetime.now(timezone.utc).isoformat(),
         )
+
+    # A copied/patched config can still be missing keys the app reads at
+    # bootstrap. Repair the two that are fatal at runtime rather than trusting
+    # whatever the template happened to ship:
+    #   $DatabaseName  -> the app opens the wrong (or no) database
+    #   $RosarioLocales-> Warehouse.php fatals, so the login page never renders
+    def _ensure_assignment(text: str, var: str, line: str) -> str:
+        if re.search(rf"^\s*\${var}\s*=", text, re.MULTILINE):
+            return text
+        logger.warning("[FS] Injecting missing $%s into generated config", var)
+        return text.rstrip() + "\n" + line + "\n"
+
+    content = _ensure_assignment(content, "DatabaseName",
+                                 f"$DatabaseName = '{db_creds['db_name']}';")
+    content = _ensure_assignment(content, "RosarioLocales",
+                                 "$RosarioLocales = [ 'en_US.utf8' ];")
 
     # Ensure parent dir exists
     config_path.parent.mkdir(parents=True, exist_ok=True)

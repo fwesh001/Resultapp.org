@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Any
 
 import psycopg2
 from psycopg2 import sql
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, ISOLATION_LEVEL_READ_COMMITTED
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,27 @@ def _connect_as_superuser():
         logger.warning("PG_SUPERUSER_PASSWORD is empty — ensure postgres peer/trust auth or set password")
     conn = psycopg2.connect(**cfg)
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    return conn
+
+
+def _connect_as_superuser_transactional():
+    """Superuser connection with a REAL transaction (autocommit OFF).
+
+    `_connect_as_superuser()` deliberately hands back an autocommit connection,
+    which is right for DDL like CREATE DATABASE (which cannot run inside a
+    transaction) but is poison for multi-statement writes: the moment you send
+    an explicit `BEGIN` on such a connection the atomicity you think you have is
+    a client-side illusion, and the previous `except: cur.execute("COMMIT;")`
+    fallback turned an aborted transaction into a silent ROLLBACK — PostgreSQL
+    treats COMMIT on an aborted transaction as a rollback. That is how
+    register_school() could report success while persisting neither the school
+    row nor its consent record.
+
+    Anything that must write two rows together uses this instead.
+    """
+    cfg = _pg_config()
+    conn = psycopg2.connect(**cfg)
+    conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
     return conn
 
 # ---------------------------------------------------------------------------
@@ -896,21 +917,23 @@ def init_consent_tables() -> None:
 def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any]:
     """Register a newly provisioned school in the central registry.
 
-    The schools INSERT and the consent INSERT share one explicit transaction.
-    Previously the connection was left in autocommit and a failure here was
-    swallowed by the caller, which could leave a live portal with no
-    `schools` row. A portal must not exist without the registry row, and it
-    must not exist without a consent record behind it — so both writes are
-    atomic, and a failure rolls the whole thing back.
+    The schools INSERT and the consent INSERT share one real transaction on a
+    non-autocommit connection. A portal must not exist without the registry row,
+    and it must not exist without a consent record behind it — so both writes are
+    atomic, a failure rolls the whole thing back, and the result is read back
+    from the database before we claim success.
+
+    The read-back is not belt-and-braces. This function previously reported
+    success while persisting NOTHING: the autocommit connection made the
+    explicit BEGIN a no-op, the INSERTs ran outside any transaction, and the
+    `except: cur.execute("COMMIT;")` fallback could convert an aborted
+    transaction into a silent rollback. Callers logged "School registered in
+    registry" and moved on, leaving a live portal that no lookup could find.
     """
     conn = None
     try:
-        conn = _connect_as_superuser()
+        conn = _connect_as_superuser_transactional()
         cur = conn.cursor()
-        try:
-            cur.execute("BEGIN;")
-        except Exception:
-            pass
         admin_password_hash = kwargs.get("admin_password_hash")
         if admin_password_hash:
             cur.execute(
@@ -1038,18 +1061,45 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                 "(terms_version=%r privacy_version=%r accepted_by=%r)",
                 subdomain, terms_version, privacy_version, accepted_by,
             )
-            try:
-                cur.execute("ROLLBACK;")
-            except Exception:
-                pass
             raise ValueError(
                 "terms_version, privacy_version and accepted_by are required to register a school"
             )
 
+        conn.commit()
+
+        # Read the row back on a FRESH cursor. RETURNING tells us what the
+        # statement claimed; only a committed row proves anything, and this is
+        # the only place that can tell the difference.
+        verify = conn.cursor()
         try:
-            conn.commit()
-        except Exception:
-            cur.execute("COMMIT;")
+            verify.execute(
+                f"SELECT subdomain FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+                (subdomain,),
+            )
+            persisted = verify.fetchone()
+            verify.execute(
+                f"SELECT id FROM {TENANT_CONSENTS_TABLE} "
+                "WHERE subdomain = %s AND terms_version = %s AND privacy_version = %s;",
+                (subdomain, str(terms_version), str(privacy_version)),
+            )
+            consent_persisted = verify.fetchone()
+        finally:
+            verify.close()
+
+        if persisted is None or consent_persisted is None:
+            missing = []
+            if persisted is None:
+                missing.append("schools row")
+            if consent_persisted is None:
+                missing.append("consent record")
+            # The commit already succeeded, so there is nothing to roll back —
+            # but we must not report success we cannot evidence.
+            raise RuntimeError(
+                f"Registry write for '{subdomain}' did not persist "
+                f"({' and '.join(missing)} missing after commit). "
+                "A portal must not exist without its registry row."
+            )
+
         out["consent"] = consent_written
         return out
     except Exception as e:
