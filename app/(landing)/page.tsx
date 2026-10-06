@@ -90,9 +90,6 @@ export default function HomePage() {
         {/* BENTO FEATURE GRID — still inside Zone A */}
         <section id="features" className="relative mx-auto w-full max-w-6xl scroll-mt-20 px-6 pb-12 md:pb-16">
           <div className="mx-auto mb-8 max-w-2xl text-center md:mb-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/5 px-3 py-1 text-xs font-medium tracking-wide text-purple-300">
-              <Sparkles className="h-3.5 w-3.5" /> PLATFORM FEATURES
-            </div>
             <div className="mt-4 inline-block">
               <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">
                 Features
