@@ -88,7 +88,7 @@ export default function HomePage() {
         </section>
 
         {/* BENTO FEATURE GRID — still inside Zone A */}
-        <section id="features" className="relative mx-auto w-full max-w-6xl scroll-mt-20 px-6 pb-12 md:pb-16">
+        <section id="features" className="relative mx-auto w-full max-w-6xl scroll-mt-1 px-6 pb-12 md:pb-16">
           <div className="mx-auto mb-8 max-w-2xl text-center md:mb-10">
             <div className="mt-4 inline-block">
               <h2 className="text-[1.7rem] font-semibold tracking-tight text-white md:text-4xl">
