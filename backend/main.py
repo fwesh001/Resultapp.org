@@ -35,17 +35,19 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 
 # Services
+#
+# The per-tenant PHP/RosarioSIS stack is gone. A tenant is now nothing more than
+# a row in the central `schools` registry: the Next.js app on Vercel serves
+# every subdomain (middleware rewrites the Host to /[subdomain]/...) and reads
+# its data from this API. So provisioning creates no database, no site files
+# and no nginx vhost — it only writes the registry row and sends the email.
 from services.db_manager import (
-    create_school_database,
-    seed_tenant_schema,
-    rollback_database,
-    database_exists,
     test_connection,
     init_schools_registry,
     register_school,
     get_school_by_subdomain,
+    tenant_exists,
 )
-from services.site_generator import deploy_site, rollback_site, site_exists, generate_temp_credentials, get_domain
 from services.notifier import send_welcome_email, send_failure_alert
 
 # Phase 2: Grading router is included after app/lifespan definition to avoid circular import
@@ -333,10 +335,9 @@ class ProvisionResponse(BaseModel):
     total_amount_ngn: int
     timestamp: str
     provisioning_ms: int
-    database: Dict[str, str]  # without password
-    #: Set when the schools/consent registry write failed after the site was
-    #: already deployed. Non-null means the portal is live but unevidenced and
-    #: an operator must reconcile it.
+    #: Set when the schools/consent registry write failed. Non-null means the
+    #: school is NOT servable — its subdomain will not resolve to a portal —
+    #: so an operator must reconcile it before the customer is told anything.
     registry_error: Optional[str] = None
 
 # ---------------------------------------------------------------------------
@@ -559,17 +560,14 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         f"from {request.client.host if request.client else 'unknown'}"
     )
 
-    # Quick idempotency checks before expensive work
-    if database_exists(subdomain):
-        logger.warning(f"[PROVISION] Rejected — database for '{subdomain}' already exists")
-        raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned (database exists)")
-
-    if site_exists(subdomain):
-        logger.warning(f"[PROVISION] Rejected — site for '{subdomain}' already exists")
-        raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned (site exists)")
+    # Idempotency: the registry row IS the tenant. No database or site exists
+    # to check, so a duplicate subdomain must be detected here.
+    if tenant_exists(subdomain):
+        logger.warning(f"[PROVISION] Rejected — '{subdomain}' already registered")
+        raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned")
 
     # Anti-replay: a verified transaction_id redeems exactly one school.
-    # Checked BEFORE any DB/site work so replays cost zero resources.
+    # Checked BEFORE any write so replays cost zero resources.
     tx_id = (payload.transaction_id or "").strip() if payload.transaction_id else ""
     provision_ref = f"provision:{tx_id}" if tx_id else None
     if provision_ref:
@@ -579,60 +577,47 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             logger.warning(f"[PROVISION] Rejected — transaction '{tx_id}' already redeemed")
             raise HTTPException(status_code=400, detail="Transaction reference already used")
 
-    # Track provisioning artefacts for rollback
-    db_info: Optional[Dict[str, str]] = None
-    site_info: Optional[Dict[str, str]] = None
-    temp_creds: Optional[Dict[str, str]] = None
+    domain = f"{subdomain}.resultapp.org"
+    login_url = f"https://{domain}/admin/login"
 
     try:
-        # --- Step 1: Database ---
+        # --- Step 1: Registry + consent (the whole tenant) ---
+        #
+        # This single transactional write is what makes the school exist. The
+        # Next.js app on Vercel resolves every subdomain through its middleware
+        # to /[subdomain]/..., and reads the school from this row — so if this
+        # write fails, nothing else can substitute for it.
         try:
-            db_info = create_school_database(subdomain=subdomain, student_count=student_count)
-            logger.info(f"[PROVISION] DB step OK: {db_info['db_name']} / {db_info['db_user']}")
-        except Exception as e:
-            logger.exception(f"[PROVISION] DB step failed for '{subdomain}': {e}")
-            raise HTTPException(status_code=500, detail=f"Database provisioning failed: {e}")
-
-        # --- Step 1b: tenant schema ---
-        try:
-            schema_info = seed_tenant_schema(db_info)
-            logger.info(f"[PROVISION] Schema step OK: {schema_info['public_table_count']} public tables")
-        except Exception as e:
-            logger.exception(f"[PROVISION] Schema step failed for '{subdomain}': {e}")
-            try:
-                logger.warning(f"[PROVISION] Rolling back DB for '{subdomain}' after schema failure")
-                rollback_database(db_info["db_name"], db_info["db_user"])
-            except Exception as rb_e:
-                logger.error(f"[PROVISION] DB rollback also failed for '{subdomain}': {rb_e}")
-            raise HTTPException(status_code=500, detail=f"Tenant schema initialization failed: {e}")
-
-        # --- Step 2 & 3: File deployment + Nginx (combined via deploy_site) ---
-        try:
-            site_info = deploy_site(
+            register_school(
                 subdomain=subdomain,
-                db_creds=db_info,
                 school_name=school_name,
-                admin_email=admin_email,
+                email=admin_email,
+                phone=phone,
+                student_count=student_count,
+                admin_name=admin_name or None,
+                admin_password_hash=str(payload.admin_password).strip()
+                if payload.admin_password and str(payload.admin_password).strip()
+                else None,
+                terms_version=payload.terms_version,
+                privacy_version=payload.privacy_version,
+                accepted_by=admin_email,
+                consent_ip=payload.consent_ip,
             )
-            logger.info(f"[PROVISION] FS+Nginx step OK: {site_info['domain']} -> {site_info['site_path']}")
+            logger.info(f"[PROVISION] Registered '{subdomain}' in the central registry")
         except Exception as e:
-            logger.exception(f"[PROVISION] Site deployment failed for '{subdomain}': {e}")
-            # Rollback DB because site failed (requirement: no orphaned DB)
-            try:
-                logger.warning(f"[PROVISION] Rolling back DB for '{subdomain}' after site failure")
-                rollback_database(db_info["db_name"], db_info["db_user"])
-            except Exception as rb_e:
-                logger.error(f"[PROVISION] DB rollback also failed for '{subdomain}': {rb_e}")
-            raise HTTPException(status_code=500, detail=f"Site deployment failed: {e}. Database rolled back.")
+            logger.exception(f"[PROVISION] Registry write failed for '{subdomain}': {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Registry provisioning failed: {e}",
+            )
 
-        # --- Step 4: Notify (best-effort) ---
-        temp_creds = generate_temp_credentials(admin_email)
-        domain = site_info["domain"]
-        login_url = site_info["url"]
-
-        # Store temp credentials somewhere? In real flow you would INSERT into RosarioSIS DB.
-        # For now we just email them; the droplet's deploy created DB but not yet seeded admin user.
-        # Brevo failure does not trigger rollback — we log and continue.
+        # --- Step 2: Notify (best-effort) ---
+        #
+        # There are no temp credentials to mint any more: the admin password the
+        # customer chose at signup is stored as a bcrypt hash in the registry,
+        # and the portal is set up through the verification email below.
+        # Brevo failure does NOT roll back — the school row is the source of
+        # truth and the customer can request a new link from the sign-in page.
         try:
             email_ok = send_welcome_email(
                 admin_email=admin_email,
@@ -640,7 +625,7 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 school_name=school_name,
                 subdomain=subdomain,
                 student_count=student_count,
-                temp_credentials=temp_creds,
+                temp_credentials=None,
                 domain=domain,
                 login_url=login_url,
             )
@@ -654,79 +639,39 @@ async def provision_school(payload: ProvisionRequest, request: Request):
 
         logger.info(f"[PROVISION] SUCCESS for '{subdomain}' in {elapsed_ms}ms -> {login_url}")
 
-        # Registry + consent. Both writes are atomic and consent is mandatory:
-        # a school row cannot be created without a matching consent record, so
-        # a failure here means neither landed.
-        #
-        # This cannot be swallowed silently. The site is already deployed at
-        # this point, so we surface the failure in the response for the caller
-        # and log it at ERROR — an operator must reconcile it, because an
-        # unevidenced portal is a compliance exposure, not a cosmetic one.
         registry_error = None
-        try:
-            register_school(
-                subdomain=subdomain,
-                school_name=school_name,
-                email=admin_email,
-                phone=phone,
-                student_count=student_count,
-                # Persisted so the portal UI and support can greet the admin by
-                # name instead of re-deriving it from the email local part.
-                admin_name=admin_name or None,
-                admin_password_hash=str(payload.admin_password).strip()
-                if payload.admin_password and str(payload.admin_password).strip()
-                else None,
-                terms_version=payload.terms_version,
-                privacy_version=payload.privacy_version,
-                accepted_by=admin_email,
-                consent_ip=payload.consent_ip,
-            )
-            logger.info(
-                "[PROVISION] School registered in registry for '%s' with consent "
-                "terms=%s privacy=%s",
-                subdomain, payload.terms_version, payload.privacy_version,
-            )
-        except Exception as e:
-            registry_error = str(e)
-            logger.error(
-                "[PROVISION] FAILED to register school '%s' in registry: %s "
-                "— portal is live but unevidenced; reconcile before serving real data",
-                subdomain, e,
-                exc_info=True,
-            )
 
         # Email verification for the new admin. Placed AFTER register_school so
         # the row (and therefore the token column) actually exists.
         #
-        # Non-fatal, same as the welcome mail: provisioning has already
-        # succeeded and must not be rolled back over a mail hiccup. Because
-        # login is a SOFT login the admin can still use the portal unverified,
-        # and can request a new link from the sign-in page.
-        if registry_error is None:
-            try:
-                from services.db_manager import issue_verification_token
-                from services.notifier import send_verification_email
+        # Non-fatal, same as the welcome mail: the school is already registered
+        # and must not be rolled back over a mail hiccup. Because login is a
+        # SOFT login the admin can still use the portal unverified, and can
+        # request a new link from the sign-in page.
+        try:
+            from services.db_manager import issue_verification_token
+            from services.notifier import send_verification_email
 
-                _issued = issue_verification_token(admin_email, table="schools")
-                if _issued is None:
-                    logger.warning(
-                        f"[PROVISION] No registry row matched {admin_email} for verification (non-fatal)"
-                    )
-                elif not send_verification_email(
-                    _issued["email"],
-                    _issued.get("name") or admin_name or "",
-                    _issued["raw_token"],
-                    tenant=school_name,
-                ):
-                    logger.warning(
-                        f"[PROVISION] Verification email not delivered to {admin_email} (non-fatal)"
-                    )
-                else:
-                    logger.info(f"[PROVISION] Verification email queued for {admin_email}")
-            except Exception as e:
+            _issued = issue_verification_token(admin_email, table="schools")
+            if _issued is None:
                 logger.warning(
-                    f"[PROVISION] Verification email step failed for '{admin_email}': {e} (non-fatal)"
+                    f"[PROVISION] No registry row matched {admin_email} for verification (non-fatal)"
                 )
+            elif not send_verification_email(
+                _issued["email"],
+                _issued.get("name") or admin_name or "",
+                _issued["raw_token"],
+                tenant=school_name,
+            ):
+                logger.warning(
+                    f"[PROVISION] Verification email not delivered to {admin_email} (non-fatal)"
+                )
+            else:
+                logger.info(f"[PROVISION] Verification email queued for {admin_email}")
+        except Exception as e:
+            logger.warning(
+                f"[PROVISION] Verification email step failed for '{admin_email}': {e} (non-fatal)"
+            )
 
         # Credit & Command: conditional free-credit grant.
         #
@@ -836,13 +781,6 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             timestamp=timestamp,
             provisioning_ms=elapsed_ms,
             registry_error=registry_error,
-            database={
-                "db_name": db_info["db_name"],
-                "db_user": db_info["db_user"],
-                "db_host": db_info["db_host"],
-                # Never return password in response — admin gets it via email
-                "db_port": db_info["db_port"],
-            },
         )
 
     except HTTPException:
@@ -850,17 +788,10 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         raise
     except Exception as e:
         logger.exception(f"[PROVISION] Unexpected error for '{subdomain}': {e}")
-        # Generic rollback: if db_info exists but site_info does not, we may have orphan DB
-        if db_info and not site_info:
-            try:
-                rollback_database(db_info["db_name"], db_info["db_user"])
-            except Exception as rb_e:
-                logger.error(f"[PROVISION] Unexpected rollback failed: {rb_e}")
-        elif db_info and site_info:
-            # Both created but we are in unexpected post-site error (e.g. email crash)
-            # We do NOT rollback on email failure — site is still valid
-            # But for unknown errors we attempt to keep system consistent by not auto-deleting
-            logger.warning(f"[PROVISION] Unexpected error after site creation — keeping deployed site for '{subdomain}' for manual inspection")
+        # There is nothing to roll back: the only artefact a tenant has is its
+        # registry row, and register_school() is atomic (row + consent or
+        # neither). Anything that fails after it leaves a complete, servable
+        # school — credits, notifications and mail are all best-effort.
         raise HTTPException(status_code=500, detail=f"Provisioning failed: {e}")
 
 # ---------------------------------------------------------------------------
@@ -881,21 +812,40 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
     job_key = subdomain
     provision_jobs[job_key] = {"status": "running", "subdomain": subdomain, "started_at": datetime.now(timezone.utc).isoformat()}
     try:
-        # Reuse synchronous logic by calling service layers directly (without HTTPException mapping)
-        db_info = create_school_database(subdomain, payload.student_count)
-        site_info = deploy_site(subdomain, db_info, payload.school_name, str(payload.admin_email))
-        temp_creds = generate_temp_credentials(str(payload.admin_email))
-        send_welcome_email(
-            admin_email=str(payload.admin_email),
-            admin_name=payload.admin_name or str(payload.admin_email).split("@")[0],
-            school_name=payload.school_name,
+        # Same two steps as the synchronous path: write the registry row (which
+        # is the entire tenant), then notify. Mail failure is not fatal.
+        register_school(
             subdomain=subdomain,
+            school_name=payload.school_name,
+            email=str(payload.admin_email),
+            phone=payload.phone,
             student_count=payload.student_count,
-            temp_credentials=temp_creds,
-            domain=site_info["domain"],
-            login_url=site_info["url"],
+            admin_name=payload.admin_name or None,
+            admin_password_hash=str(payload.admin_password).strip()
+            if payload.admin_password and str(payload.admin_password).strip()
+            else None,
+            terms_version=payload.terms_version,
+            privacy_version=payload.privacy_version,
+            accepted_by=str(payload.admin_email),
+            consent_ip=payload.consent_ip,
         )
-        result = {"success": True, "domain": site_info["domain"], "url": site_info["url"], "timestamp": datetime.now(timezone.utc).isoformat()}
+        domain = f"{subdomain}.resultapp.org"
+        login_url = f"https://{domain}/admin/login"
+        try:
+            send_welcome_email(
+                admin_email=str(payload.admin_email),
+                admin_name=payload.admin_name or str(payload.admin_email).split("@")[0],
+                school_name=payload.school_name,
+                subdomain=subdomain,
+                student_count=payload.student_count,
+                temp_credentials=None,
+                domain=domain,
+                login_url=login_url,
+            )
+        except Exception as e:
+            logger.warning(f"[BG] Welcome email failed for {subdomain}: {e} (non-fatal)")
+
+        result = {"success": True, "domain": domain, "url": login_url, "timestamp": datetime.now(timezone.utc).isoformat()}
         provision_jobs[job_key].update({"status": "success", "result": result})
         if callback_url:
             try:
@@ -909,9 +859,9 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
 
 @app.post("/api/v1/provision/async", tags=["provisioning"], dependencies=[Depends(verify_api_secret)])
 async def provision_async(payload: ProvisionBackgroundRequest, background_tasks: BackgroundTasks):
-    if database_exists(payload.subdomain) or site_exists(payload.subdomain):
-        raise HTTPException(status_code=409, detail=f"Subdomain '{payload.subdomain}' already provisioned")
     subdomain = payload.subdomain.lower().strip()
+    if tenant_exists(subdomain):
+        raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned")
     background_tasks.add_task(_background_provision_task, subdomain, payload, payload.callback_url)
     return {"success": True, "message": f"Provisioning started for {subdomain}.resultapp.org", "subdomain": subdomain, "status": "queued", "check": f"/api/v1/provision/status/{subdomain}"}
 
@@ -919,12 +869,13 @@ async def provision_async(payload: ProvisionBackgroundRequest, background_tasks:
 async def provision_status(subdomain: str):
     subdomain = subdomain.lower().strip()
     job = provision_jobs.get(subdomain)
-    if not job:
-        # Fallback: check if site already exists synchronously
-        if site_exists(subdomain) and database_exists(subdomain):
-            return {"subdomain": subdomain, "status": "success", "domain": get_domain(subdomain), "url": f"https://{get_domain(subdomain)}"}
-        raise HTTPException(status_code=404, detail=f"No job found for '{subdomain}'")
-    return job
+    if job:
+        return job
+    # No in-memory job (e.g. after a restart): the registry is authoritative.
+    if tenant_exists(subdomain):
+        domain = f"{subdomain}.resultapp.org"
+        return {"subdomain": subdomain, "status": "success", "domain": domain, "url": f"https://{domain}/admin/login"}
+    raise HTTPException(status_code=404, detail=f"No job found for '{subdomain}'")
 
 # ---------------------------------------------------------------------------
 # Global exception handler (JSON)

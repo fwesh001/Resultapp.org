@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # ResultApp Droplet Bootstrap — run as root on fresh Ubuntu 24.04 (Noble)
-# PHP 8.3 is the default PHP on Noble; 8.2 is not available in the archive.
+#
+# This droplet runs the FastAPI backend and PostgreSQL ONLY. There is no PHP
+# and no per-tenant web root: the Next.js app on Vercel serves every tenant
+# subdomain (middleware rewrites the Host to /[subdomain]/...) and calls this
+# API for data. Nginx exists solely to reverse-proxy api.resultapp.org to
+# uvicorn.
 set -euo pipefail
 
-echo "=== ResultApp Droplet Bootstrap ==="
+echo "=== ResultApp Droplet Bootstrap (API + Postgres only) ==="
 
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root (sudo ./bootstrap.sh)"
@@ -12,22 +17,19 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "[1/7] apt update & base deps"
+echo "[1/6] apt update & base deps"
 apt update && apt upgrade -y
-apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx \
-  php8.3 php8.3-fpm php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-gd \
-  php8.3-intl php8.3-bcmath \
-  certbot python3-certbot-nginx git ufw
+# NOTE: no php* packages. They were only ever needed to run the abandoned
+# RosarioSIS tenant apps and are deliberately absent.
+apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib \
+  nginx certbot git ufw
 
-echo "[2/7] Create system paths"
-mkdir -p /opt/rosariosis-template
-mkdir -p /var/www/vhosts
+echo "[2/6] Create system paths"
 mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-chown -R www-data:www-data /var/www/vhosts || true
-chmod 755 /var/www/vhosts
+mkdir -p /var/www/certbot-webroot/.well-known/acme-challenge
+# /var/www/vhosts is intentionally NOT created — no tenant is ever hosted here.
 
-echo "[3/7] PostgreSQL — set superuser password (you will be prompted if not set)"
-# If PG_SUPERUSER_PASSWORD already exported, use it
+echo "[3/6] PostgreSQL — set superuser password (you will be prompted if not set)"
 if [[ -n "${PG_SUPERUSER_PASSWORD:-}" ]]; then
   sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$PG_SUPERUSER_PASSWORD';"
 else
@@ -36,14 +38,10 @@ else
 fi
 systemctl enable --now postgresql
 
-echo "[4/7] PHP-FPM & Nginx"
-systemctl enable --now php8.3-fpm
+echo "[4/6] Nginx"
 systemctl enable --now nginx
-# Ensure php sock exists
-ls -l /var/run/php/php8.3-fpm.sock || echo "php-fpm sock not found yet — check php8.3-fpm status"
 
-echo "[5/7] Python venv & deps"
-# Assume repo cloned to /opt/resultapp.org or current dir
+echo "[5/6] Python venv & deps"
 BACKEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ ! -d "$BACKEND_DIR" ]]; then BACKEND_DIR="$(pwd)"; fi
 cd "$BACKEND_DIR"
@@ -55,7 +53,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 echo "Python deps installed in $BACKEND_DIR/.venv"
 
-echo "[6/7] .env"
+echo "[6/6] .env"
 if [[ ! -f ".env" ]]; then
   cp .env.example .env
   echo "Created .env from .env.example — EDIT IT NOW: nano $BACKEND_DIR/.env"
@@ -63,7 +61,6 @@ else
   echo ".env already exists — skipping"
 fi
 
-echo "[7/7] systemd service"
 cat > /etc/systemd/system/resultapp-provision.service <<'UNIT'
 [Unit]
 Description=ResultApp Provisioning Service (FastAPI)
@@ -84,15 +81,15 @@ StandardError=journal
 WantedBy=multi-user.target
 UNIT
 
-# Adjust WorkingDirectory if your clone path differs
-# Update path if you cloned elsewhere
-
 systemctl daemon-reload
-echo "Enable with: systemctl enable --now resultapp-provision"
-echo "Check: systemctl status resultapp-provision && journalctl -u resultapp-provision -f"
 
 echo ""
 echo "=== Bootstrap done ==="
 echo "Next: nano $BACKEND_DIR/.env  (set API_SECRET_KEY, PG_SUPERUSER_PASSWORD, BREVO_API_KEY)"
 echo "Then: systemctl enable --now resultapp-provision"
-echo "And:  Add DNS wildcard *.resultapp.org -> $(curl -s ifconfig.me || echo '<droplet-ip>')"
+echo "Check: systemctl status resultapp-provision && journalctl -u resultapp-provision -f"
+echo ""
+echo "DNS on the Cloudflare side:"
+echo "  resultapp.org, www.resultapp.org, *.resultapp.org -> CNAME cname.vercel-dns.com (proxied)"
+echo "  api.resultapp.org                             -> A <this-droplet-ip> (proxied)"
+echo "Tenant portals are served by the Next.js app on Vercel — nothing to host here."

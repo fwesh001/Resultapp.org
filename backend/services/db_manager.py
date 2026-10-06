@@ -1,12 +1,15 @@
-"""
-PostgreSQL automation for ResultApp Droplet.
-Creates isolated database + user per school (e.g. subdomain 'vhs' -> database 'vhs_db', user 'vhs_user').
+﻿"""
+PostgreSQL access for ResultApp.
 
-Design goals:
-- idempotent checks (fail fast if DB/user exists)
-- secure random password
-- minimal privileges (GRANT ALL on DATABASE + schema public)
-- clean rollback helpers
+There is no per-tenant database. Every school is a row in the central registry
+(`schools`) inside the platform database, alongside the tenant_* tables that
+hold its students, grades and staff. The Next.js app on Vercel serves all
+tenant subdomains and reads its data from the API, so provisioning creates no
+database, no role and no site files — it writes the registry row and stops.
+
+Connection styles:
+  - _connect_as_superuser()               autocommit; DDL and single statements
+  - _connect_as_superuser_transactional()  explicit transaction; atomic writes
 """
 
 import logging
@@ -44,7 +47,7 @@ def _pg_config():
 RESERVED_DB_NAMES = {"postgres", "template0", "template1"}
 
 def _sanitize_subdomain(subdomain: str) -> str:
-    """Validate and normalize subdomain for use as DB identifiers."""
+    """Validate and normalize subdomain for use as a registry key."""
     if not subdomain or len(subdomain) < 3:
         raise ValueError("Subdomain must be >= 3 chars")
     # already validated upstream, but enforce lowercase alnum+hyphen
@@ -53,28 +56,6 @@ def _sanitize_subdomain(subdomain: str) -> str:
         raise ValueError("Subdomain contains invalid characters")
     return norm
 
-def _db_identifiers(subdomain: str) -> Dict[str, str]:
-    """
-    Derive postgres identifiers from subdomain.
-    Hyphens replaced with underscores because unquoted postgres identifiers
-    cannot contain hyphens.
-    """
-    base = _sanitize_subdomain(subdomain).replace("-", "_")
-    # Postgres max identifier 63 chars; keep well under
-    db_name = f"{base}_db"[:60]
-    db_user = f"{base}_user"[:60]
-    if db_name in RESERVED_DB_NAMES:
-        db_name = f"school_{db_name}"
-        db_user = f"school_{db_user}"
-    return {"base": base, "db_name": db_name, "db_user": db_user}
-
-def _generate_password(length: int = 24) -> str:
-    alphabet = string.ascii_letters + string.digits
-    # ensure at least one of each class
-    while True:
-        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
-        if any(c.islower() for c in pwd) and any(c.isupper() for c in pwd) and any(c.isdigit() for c in pwd):
-            return pwd
 
 def _connect_as_superuser():
     cfg = _pg_config()
@@ -88,263 +69,22 @@ def _connect_as_superuser():
 def _connect_as_superuser_transactional():
     """Superuser connection with a REAL transaction (autocommit OFF).
 
-    `_connect_as_superuser()` deliberately hands back an autocommit connection,
-    which is right for DDL like CREATE DATABASE (which cannot run inside a
-    transaction) but is poison for multi-statement writes: the moment you send
-    an explicit `BEGIN` on such a connection the atomicity you think you have is
-    a client-side illusion, and the previous `except: cur.execute("COMMIT;")`
-    fallback turned an aborted transaction into a silent ROLLBACK — PostgreSQL
-    treats COMMIT on an aborted transaction as a rollback. That is how
-    register_school() could report success while persisting neither the school
-    row nor its consent record.
+    `_connect_as_superuser()` hands back an autocommit connection, which is
+    right for single statements but poison for multi-statement writes: the
+    moment you send an explicit `BEGIN` on such a connection the atomicity you
+    think you have is a client-side illusion, and an `except: cur.execute("COMMIT;")`
+    fallback turns an aborted transaction into a silent ROLLBACK — PostgreSQL
+    treats COMMIT on an aborted transaction as a rollback.
 
-    Anything that must write two rows together uses this instead.
+    That is exactly how register_school() once reported success while persisting
+    neither the school row nor its consent record. Anything that must write two
+    rows together uses this instead.
     """
     cfg = _pg_config()
     conn = psycopg2.connect(**cfg)
     conn.set_isolation_level(ISOLATION_LEVEL_READ_COMMITTED)
     return conn
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def create_school_database(subdomain: str, student_count: Optional[int] = None) -> Dict[str, str]:
-    """
-    Create isolated DB + user for a school.
-
-    Returns dict with:
-      db_name, db_user, db_password, db_host, db_port
-
-    Raises: ValueError (validation), RuntimeError (exists / pg error)
-    """
-    ids = _db_identifiers(subdomain)
-    db_name = ids["db_name"]
-    db_user = ids["db_user"]
-    db_password = _generate_password()
-    cfg = _pg_config()
-
-    logger.info(f"[DB] Provisioning database '{db_name}' with user '{db_user}' for subdomain '{subdomain}'")
-
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-
-        # --- Check existence (fail fast, idempotent) ---
-        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (db_name,))
-        if cur.fetchone():
-            raise RuntimeError(f"Database '{db_name}' already exists — subdomain '{subdomain}' is taken")
-
-        cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s;", (db_user,))
-        if cur.fetchone():
-            raise RuntimeError(f"Database user '{db_user}' already exists")
-
-        # --- CREATE USER ---
-        # Use psycopg2.sql for safe quoting
-        cur.execute(
-            sql.SQL("CREATE USER {} WITH PASSWORD %s;").format(sql.Identifier(db_user)),
-            (db_password,)
-        )
-        logger.info(f"[DB] Created user '{db_user}'")
-
-        # --- CREATE DATABASE WITH OWNER ---
-        encoding = os.getenv("PG_ENCODING", "UTF8")
-        template = os.getenv("PG_TEMPLATE", "template0")
-        cur.execute(
-            sql.SQL("CREATE DATABASE {} OWNER {} ENCODING %s TEMPLATE %s;").format(
-                sql.Identifier(db_name), sql.Identifier(db_user)
-            ),
-            (encoding, template),
-        )
-        logger.info(f"[DB] Created database '{db_name}' owned by '{db_user}'")
-
-        # --- Grant privileges on database and public schema ---
-        # Connect to the new DB to grant schema privileges
-        # Reuse superuser connection but need to touch new DB
-        cur.execute(sql.SQL("GRANT ALL PRIVILEGES ON DATABASE {} TO {};").format(
-            sql.Identifier(db_name), sql.Identifier(db_user)
-        ))
-
-        # Open a second connection specifically to the new DB for schema grants
-        new_db_conn = psycopg2.connect(
-            host=cfg["host"], port=cfg["port"], user=cfg["user"],
-            password=cfg["password"], dbname=db_name
-        )
-        new_db_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        try:
-            nc = new_db_conn.cursor()
-            nc.execute(sql.SQL("GRANT ALL ON SCHEMA public TO {};").format(sql.Identifier(db_user)))
-            # For RosarioSIS which may need to create tables
-            nc.execute(sql.SQL("ALTER DATABASE {} OWNER TO {};").format(sql.Identifier(db_name), sql.Identifier(db_user)))
-            nc.close()
-        finally:
-            new_db_conn.close()
-
-        logger.info(f"[DB] Privileges granted for '{db_user}' on '{db_name}'")
-
-        return {
-            "db_name": db_name,
-            "db_user": db_user,
-            "db_password": db_password,
-            "db_host": cfg["host"],
-            "db_port": str(cfg["port"]),
-            "subdomain": subdomain,
-        }
-
-    except (ValueError, RuntimeError):
-        raise
-    except Exception as e:
-        logger.exception(f"[DB] Failed to provision database for '{subdomain}': {e}")
-        # Attempt rollback of partial creates
-        try:
-            rollback_database(db_name, db_user)
-        except Exception as rb_e:
-            logger.error(f"[DB] Rollback also failed: {rb_e}")
-        raise RuntimeError(f"Database provisioning failed: {e}") from e
-    finally:
-        if conn:
-            conn.close()
-
-# Dry-run against /opt/rosariosis-template/resultapp.sql shows exactly 95 public
-# tables.  Loading fewer than this means the dump did not complete.
-EXPECTED_TENANT_TABLE_COUNT = 95
-
-def seed_tenant_schema(db_creds: Dict[str, str]) -> Dict[str, Any]:
-    """Load the RosarioSIS/ResultApp tenant schema into the new database.
-
-    Runs the full dump as the tenant database owner (not the superuser) inside
-    a single transaction. PostgreSQL DDL is transactional, so any error rolls
-    the whole load back and leaves the database empty rather than half-seeded.
-    After the load, verifies the expected public table count is present.
-    """
-    template_dir = os.getenv("ROSARIOSIS_TEMPLATE_DIR", "/opt/rosariosis-template")
-    dump_path = os.path.join(template_dir, "resultapp.sql")
-
-    if not os.path.isfile(dump_path):
-        raise FileNotFoundError(f"Tenant schema dump not found: {dump_path}")
-
-    with open(dump_path, "r", encoding="utf-8") as schema_file:
-        schema_sql = schema_file.read()
-
-    conn = psycopg2.connect(
-        host=db_creds["db_host"],
-        port=db_creds["db_port"],
-        user=db_creds["db_user"],
-        password=db_creds["db_password"],
-        dbname=db_creds["db_name"],
-    )
-    try:
-        conn.autocommit = False
-        cur = conn.cursor()
-        logger.info(
-            f"[DB] Loading tenant schema from {dump_path} into '{db_creds['db_name']}'"
-        )
-        cur.execute(schema_sql)
-        cur.execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
-        )
-        public_table_count = int(cur.fetchone()[0])
-        if public_table_count < EXPECTED_TENANT_TABLE_COUNT:
-            raise RuntimeError(
-                f"Tenant schema verification failed for '{db_creds['db_name']}': "
-                f"expected at least {EXPECTED_TENANT_TABLE_COUNT} public tables, "
-                f"found {public_table_count}"
-            )
-        conn.commit()
-        logger.info(
-            f"[DB] Tenant schema loaded for '{db_creds['db_name']}': "
-            f"{public_table_count} public tables"
-        )
-        return {
-            "db_name": db_creds["db_name"],
-            "db_user": db_creds["db_user"],
-            "public_table_count": public_table_count,
-        }
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-def rollback_database(db_name: str, db_user: str) -> None:
-    """
-    Drop database and user — used for rollback if later pipeline steps fail.
-    Terminates active connections before DROP.
-    """
-    logger.warning(f"[DB] Rolling back — dropping DB '{db_name}' and user '{db_user}'")
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-
-        # Terminate connections to target DB so DROP succeeds
-        cur.execute(
-            """
-            SELECT pg_terminate_backend(pid)
-            FROM pg_stat_activity
-            WHERE datname = %s AND pid <> pg_backend_pid();
-            """,
-            (db_name,)
-        )
-
-        # Drop DB if exists
-        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (db_name,))
-        if cur.fetchone():
-            cur.execute(sql.SQL("DROP DATABASE IF EXISTS {};").format(sql.Identifier(db_name)))
-            logger.info(f"[DB] Dropped database '{db_name}'")
-
-        # Drop user if exists
-        cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s;", (db_user,))
-        if cur.fetchone():
-            cur.execute(sql.SQL("DROP USER IF EXISTS {};").format(sql.Identifier(db_user)))
-            logger.info(f"[DB] Dropped user '{db_user}'")
-
-    except Exception as e:
-        logger.error(f"[DB] Rollback error for '{db_name}'/'{db_user}': {e}")
-        raise
-    finally:
-        if conn:
-            conn.close()
-
-def transaction_reference_used(reference_id: str) -> bool:
-    """True if a ledger reference_id was already redeemed (anti double-spend).
-
-    Checks both billing_ledger and credit_ledger. Used by provision_school to
-    reject replayed Flutterwave transaction_ids before any resources are built.
-    """
-    ref = (reference_id or "").strip()
-    if not ref:
-        return False
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-        cur.execute(f"SELECT 1 FROM {BILLING_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
-        if cur.fetchone() is not None:
-            return True
-        cur.execute(f"SELECT 1 FROM {CREDIT_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
-        return cur.fetchone() is not None
-    except Exception as e:
-        logger.error(f"[DB] transaction_reference_used check failed for '{ref}': {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
-
-
-def database_exists(subdomain: str) -> bool:
-    """Check if a school DB already exists (for idempotency checks)."""
-    ids = _db_identifiers(subdomain)
-    conn = None
-    try:
-        conn = _connect_as_superuser()
-        cur = conn.cursor()
-        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (ids["db_name"],))
-        return cur.fetchone() is not None
-    finally:
-        if conn:
-            conn.close()
 
 def test_connection() -> bool:
     """Health check: can we connect as superuser?"""
@@ -419,7 +159,7 @@ def init_schools_registry() -> None:
         """)
         # Admin name as collected by the registration wizard. Additive, so
         # existing tenants keep NULL and fall back to the email local part in
-        # the UI — this never invalidates a row written by an older build.
+        # the UI â€” this never invalidates a row written by an older build.
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS admin_name VARCHAR(80);
@@ -458,7 +198,7 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS principal_signature_url TEXT;
         """)
-        # Phase: Superadmin Command Center — immutable audit trail for manual ops
+        # Phase: Superadmin Command Center â€” immutable audit trail for manual ops
         cur.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id               SERIAL PRIMARY KEY,
@@ -569,7 +309,7 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS current_session VARCHAR(9);
         """)
-        # Phase 2: Admin Authentication — per-tenant admin credential (nullable so
+        # Phase 2: Admin Authentication â€” per-tenant admin credential (nullable so
         # pre-existing schools keep working; login treats NULL as "not set up yet").
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
@@ -585,7 +325,7 @@ def init_schools_registry() -> None:
         # no cause anywhere in the database: the superadmin "reason" field was
         # optional free text written only to audit_logs.details, and nothing
         # ever read it back. That made it impossible to distinguish "suspended
-        # for non-payment" from "suspended for abuse" — so a school suspended
+        # for non-payment" from "suspended for abuse" â€” so a school suspended
         # for abuse could restore itself by paying. See LEGAL_REMEDIATION.md
         # P1 item 11.
         #
@@ -702,7 +442,7 @@ def init_schools_registry() -> None:
             CREATE INDEX IF NOT EXISTS ix_publications_lookup
             ON result_publications (subdomain, student_id, term);
         """)
-        # One-time migration: paid tenants keep working — convert their
+        # One-time migration: paid tenants keep working â€” convert their
         # legacy student_count quota into an opening credit balance with a
         # matching PURCHASE ledger row. Guarded by ledger absence so
         # replays (and legitimately spent-down balances) are never re-credited.
@@ -778,7 +518,7 @@ def _insert_tenant_consent(
     )
     row = cur.fetchone()
     if row is None:
-        # Replay against an existing acceptance — return the original.
+        # Replay against an existing acceptance â€” return the original.
         cur.execute(
             f"""
             SELECT id, subdomain, terms_version, privacy_version, accepted_at,
@@ -919,7 +659,7 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
 
     The schools INSERT and the consent INSERT share one real transaction on a
     non-autocommit connection. A portal must not exist without the registry row,
-    and it must not exist without a consent record behind it — so both writes are
+    and it must not exist without a consent record behind it â€” so both writes are
     atomic, a failure rolls the whole thing back, and the result is read back
     from the database before we claim success.
 
@@ -1092,7 +832,7 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                 missing.append("schools row")
             if consent_persisted is None:
                 missing.append("consent record")
-            # The commit already succeeded, so there is nothing to roll back —
+            # The commit already succeeded, so there is nothing to roll back â€”
             # but we must not report success we cannot evidence.
             raise RuntimeError(
                 f"Registry write for '{subdomain}' did not persist "
@@ -1219,7 +959,7 @@ def admin_password_is_set(subdomain: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Phase: Superadmin Command Center — audit trail + NGN revenue tracking
+# Phase: Superadmin Command Center â€” audit trail + NGN revenue tracking
 # ---------------------------------------------------------------------------
 
 AUDIT_LOGS_TABLE = "audit_logs"
@@ -1274,7 +1014,7 @@ def log_admin_action(
 # a database dump cannot be replayed as a working reset URL.
 #
 # Accounts are addressed by (table, email). A person may hold accounts on
-# several tenants, so a reset is scoped to ONE matched row — never applied
+# several tenants, so a reset is scoped to ONE matched row â€” never applied
 # across tenants.
 # ---------------------------------------------------------------------------
 
@@ -1287,7 +1027,7 @@ _AUTH_TABLES = ("schools", "platform_admins")
 
 
 def _resolve_auth_table(table: str) -> Optional[str]:
-    """Whitelist table names — these identifiers cannot be parameterised."""
+    """Whitelist table names â€” these identifiers cannot be parameterised."""
     if table in _AUTH_TABLES:
         return table
     return None
@@ -1642,7 +1382,7 @@ def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int
 
 
 # ---------------------------------------------------------------------------
-# Multi-user superadmin — platform_admins (pgcrypto bcrypt, like tenant auth)
+# Multi-user superadmin â€” platform_admins (pgcrypto bcrypt, like tenant auth)
 # ---------------------------------------------------------------------------
 
 
@@ -1755,7 +1495,7 @@ def set_platform_admin_active(email: str, is_active: bool) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Credit & Command — token ledger + publication gate (zero-downtime, additive)
+# Credit & Command â€” token ledger + publication gate (zero-downtime, additive)
 # ---------------------------------------------------------------------------
 
 CREDIT_LEDGER_TABLE = "credit_ledger"
@@ -1763,9 +1503,35 @@ RESULT_PUBLICATIONS_TABLE = "result_publications"
 BILLING_LEDGER_TABLE = "billing_ledger"
 APP_SETTINGS_TABLE = "app_settings"
 
+
+def transaction_reference_used(reference_id: str) -> bool:
+    """True if a ledger reference_id was already redeemed (anti double-spend).
+
+    Checks both billing_ledger and credit_ledger. Used by provision_school to
+    reject replayed Flutterwave transaction_ids before anything is written.
+    """
+    ref = (reference_id or "").strip()
+    if not ref:
+        return False
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM {BILLING_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
+        if cur.fetchone() is not None:
+            return True
+        cur.execute(f"SELECT 1 FROM {CREDIT_LEDGER_TABLE} WHERE reference_id = %s LIMIT 1;", (ref,))
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.error(f"[DB] transaction_reference_used check failed for '{ref}': {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 #: Why a tenant was suspended. Persisted on the tenant row (not just the audit
 #: log) because the billing restore hook has to be able to tell a payment
-#: problem from an abuse ban — otherwise a school suspended for abuse could
+#: problem from an abuse ban â€” otherwise a school suspended for abuse could
 #: restore itself by paying. See LEGAL_REMEDIATION.md item 11.
 #:
 #: `None` and 'nonpayment' mean a verified payment lifts the suspension.
@@ -1786,12 +1552,12 @@ TENANT_CONSENTS_TABLE = "tenant_consents"
 TRIAL_CREDITS = 30
 TRIAL_SLOTS = 0  # slots are purchased via student_count; credits are the trial gift
 
-#: Default flat price per publishing credit (NGN) — superadmin tunable via app_settings.
+#: Default flat price per publishing credit (NGN) â€” superadmin tunable via app_settings.
 DEFAULT_CREDIT_PRICE = 200
 
 #: Minimum initial capacity for a school to earn the free registration credits.
 #: Inclusive: exactly FREE_CREDITS_MIN_STUDENTS students qualifies. 500 is also
-#: the ₦90/student volume tier boundary, so the threshold is a real commercial
+#: the â‚¦90/student volume tier boundary, so the threshold is a real commercial
 #: line rather than an arbitrary number.
 FREE_CREDITS_MIN_STUDENTS = 500
 
@@ -1803,8 +1569,8 @@ FREE_CREDITS_ENABLED_KEY = "free_credits_enabled"
 def current_academic_session(now: Optional[datetime] = None) -> str:
     """Derive the academic session label dynamically (YYYY/YYYY+1).
 
-    Nigerian school year starts in September: Sep–Dec belongs to the
-    session starting this year, Jan–Aug belongs to the session that
+    Nigerian school year starts in September: Sepâ€“Dec belongs to the
+    session starting this year, Janâ€“Aug belongs to the session that
     started last year.
     """
     ref = now or datetime.now(timezone.utc)
@@ -1837,7 +1603,7 @@ def get_credit_balance(subdomain: str) -> int:
 
 
 def topup_slots(subdomain: str, amount: int, reference_id: str, description: Optional[str] = None, amount_ngn: int = 0) -> Dict[str, Any]:
-    """Purchase slots (capacity) — additive, idempotent on reference_id. Dual-writes billing_ledger."""
+    """Purchase slots (capacity) â€” additive, idempotent on reference_id. Dual-writes billing_ledger."""
     subdomain = _sanitize_subdomain(subdomain)
     amount = int(amount)
     amount_ngn = max(0, int(amount_ngn or 0))
@@ -1866,7 +1632,7 @@ def topup_slots(subdomain: str, amount: int, reference_id: str, description: Opt
             """,
             (subdomain, amount, reference_id, description or f"Slot purchase: {amount} slots", amount_ngn),
         )
-        # Also mirror to credit_ledger for legacy readers? No — slots are not credits, keep billing_ledger only for SLOT.
+        # Also mirror to credit_ledger for legacy readers? No â€” slots are not credits, keep billing_ledger only for SLOT.
         cur.execute(
             f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}
@@ -1993,7 +1759,7 @@ def add_credit_ledger_entry(
     reference_id: Optional[str] = None,
     description: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Insert an immutable ledger entry. Duplicate reference_id → returns existing row."""
+    """Insert an immutable ledger entry. Duplicate reference_id â†’ returns existing row."""
     subdomain = _sanitize_subdomain(subdomain)
     conn = None
     try:
@@ -2012,7 +1778,7 @@ def add_credit_ledger_entry(
         )
         row = cur.fetchone()
         if row is None and reference_id:
-            # Replay with an existing reference — return the original entry.
+            # Replay with an existing reference â€” return the original entry.
             cur.execute(
                 f"""
                 SELECT id, subdomain, amount, transaction_type, reference_id,
@@ -2043,10 +1809,10 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
 
     Sets schools.credit_balance and writes the ledger row atomically.
     Dual-writes to billing_ledger (token_type=CREDIT) for zero-downtime parity.
-    Safe to call once per tenant — reference_id makes replays idempotent.
+    Safe to call once per tenant â€” reference_id makes replays idempotent.
 
     Zero-credit semantics: when `amount` is 0 this returns WITHOUT touching the
-    ledger. That matters because the reference_id is the idempotency key — a
+    ledger. That matters because the reference_id is the idempotency key â€” a
     zero-value row would consume `init:<subdomain>` permanently, so a school that
     was under the volume threshold (or provisioned while the toggle was off)
     could never be granted credits later via this path. Skipping keeps the key
@@ -2335,7 +2101,7 @@ def add_billing_ledger_entry(
     description: Optional[str] = None,
     amount_ngn: int = 0,
 ) -> Dict[str, Any]:
-    """Insert into unified billing_ledger. Duplicate reference_id → returns existing row (idempotent)."""
+    """Insert into unified billing_ledger. Duplicate reference_id â†’ returns existing row (idempotent)."""
     subdomain = _sanitize_subdomain(subdomain)
     ttype = token_type.strip().upper()
     if ttype not in ("SLOT", "CREDIT"):
@@ -2403,7 +2169,7 @@ def _dual_write_ledger(
         try:
             add_credit_ledger_entry(subdomain, amount, transaction_type, reference_id, description)
         except Exception as e:
-            # Duplicate reference_id is not an error — just idempotent replay
+            # Duplicate reference_id is not an error â€” just idempotent replay
             logger.warning(f"[DB] Dual-write credit_ledger failed for '{subdomain}' {reference_id}: {e}")
 
 
@@ -2470,7 +2236,7 @@ def publish_student_results(
     conn = None
     try:
         conn = _connect_as_superuser()
-        # Autocommit is ON for superuser connections — use explicit transaction.
+        # Autocommit is ON for superuser connections â€” use explicit transaction.
         cur = conn.cursor()
         cur.execute("BEGIN;")
         cur.execute(
@@ -2482,7 +2248,7 @@ def publish_student_results(
             cur.execute("ROLLBACK;")
             raise ValueError(f"Unknown tenant '{subdomain}'")
         balance = int(row[0] or 0)
-        # Determine which students are not yet published (free re-prints excluded) — case-insensitive for migration
+        # Determine which students are not yet published (free re-prints excluded) â€” case-insensitive for migration
         cur.execute(
             f"""
             SELECT student_id FROM {RESULT_PUBLICATIONS_TABLE}
@@ -2684,7 +2450,7 @@ def init_roster_registry() -> None:
             );
         """)
 
-        # Staff — with password_hash for Staff Authentication (default PIN 123456 hashed via pgcrypto)
+        # Staff â€” with password_hash for Staff Authentication (default PIN 123456 hashed via pgcrypto)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TENANT_STAFF_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2704,13 +2470,13 @@ def init_roster_registry() -> None:
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
         # Enforce NOT NULL after backfill (idempotent)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
-        # Future-proof Active Staff flag — additive, defaults TRUE, counts WHERE is_active=TRUE
+        # Future-proof Active Staff flag â€” additive, defaults TRUE, counts WHERE is_active=TRUE
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
         # Report signatures: per-staff signature image (URL), self-managed.
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS signature_url TEXT;")
 
-        # Allocations — subject → staff → class
+        # Allocations â€” subject â†’ staff â†’ class
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TENANT_ALLOCATIONS_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2723,7 +2489,7 @@ def init_roster_registry() -> None:
             );
         """)
 
-        # Subjects — master list per tenant (for relational Allocate)
+        # Subjects â€” master list per tenant (for relational Allocate)
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TENANT_SUBJECTS_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2734,7 +2500,7 @@ def init_roster_registry() -> None:
             );
         """)
 
-        # Grades — per-student per-subject per-term scores (focused grading workflow)
+        # Grades â€” per-student per-subject per-term scores (focused grading workflow)
         # student_id is a logical link to tenant_students.student_id (not enforced
         # as an FK), so a database-level cascade is not possible.
         #
@@ -2742,7 +2508,7 @@ def init_roster_registry() -> None:
         # That was reversed: a non-FK link keyed on the admission-number *string*
         # meant a re-enrolment reusing a withdrawn admission number inherited the
         # previous pupil's grades, remarks, behavioural ratings and published
-        # state — and was published for free as already-published. Erasure also
+        # state â€” and was published for free as already-published. Erasure also
         # has to reach the free-text remarks about a child.
         #
         # The cascade is now application-level and transactional, in
@@ -2763,7 +2529,7 @@ def init_roster_registry() -> None:
             );
         """)
 
-        # Form assignments — exactly ONE form teacher per class (contextual allocations).
+        # Form assignments â€” exactly ONE form teacher per class (contextual allocations).
         # staff_id is a logical link to tenant_staff.staff_id (not an FK so
         # roster edits never cascade). Empty table = no behavior change.
         cur.execute(f"""
@@ -2780,7 +2546,7 @@ def init_roster_registry() -> None:
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_subdomain ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain);")
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_staff ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain, staff_id);")
 
-        # Remarks — nullable per-student per-subject per-term comment, form-teacher-only writes.
+        # Remarks â€” nullable per-student per-subject per-term comment, form-teacher-only writes.
         cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS remarks TEXT;")
         # Smart Remarks outputs (cutover targets; legacy `remarks` kept for history).
         cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS form_teacher_remark TEXT;")
@@ -2809,7 +2575,7 @@ def init_roster_registry() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Template-Driven Notification Engine — Phase 1 (central platform tables)
+# Template-Driven Notification Engine â€” Phase 1 (central platform tables)
 # ---------------------------------------------------------------------------
 # Design:
 # - Central tables live in the superuser DB alongside `schools` (NOT per-school
@@ -2832,7 +2598,7 @@ NOTIFICATION_READS_TABLE = "notification_reads"
 VALID_NOTIFICATION_CATEGORIES = ("BILLING", "SYSTEM", "ONBOARDING", "SECURITY", "ACTION", "ANNOUNCEMENT")
 
 #: System trigger defaults. `{{var}}` placeholders are rendered by
-#: services/notifications.dispatch_event in Phase 2 (missing keys → "").
+#: services/notifications.dispatch_event in Phase 2 (missing keys â†’ "").
 DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
     {
         "event_type": "ONBOARDING_WELCOME",
@@ -2875,7 +2641,7 @@ DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
 def init_notification_tables() -> None:
     """Create notification engine tables if they do not exist (idempotent).
 
-    Safe to call on every startup. Additive only — never drops or alters
+    Safe to call on every startup. Additive only â€” never drops or alters
     existing columns. Mirrors init_schools_registry / init_roster_registry.
     """
     conn = None
@@ -3032,11 +2798,11 @@ def seed_default_notification_templates() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Support Hub — cross-tenant tickets from the public /support page
+# Support Hub â€” cross-tenant tickets from the public /support page
 # ---------------------------------------------------------------------------
 # `tenant_id` is NULL for anonymous marketing-page submissions, and is set to
 # ON DELETE SET NULL (not CASCADE, unlike `notifications`) so a ticket survives
-# deletion of the school it was filed against — it is a platform-level record of
+# deletion of the school it was filed against â€” it is a platform-level record of
 # a customer interaction, not a per-tenant notification.
 #
 # The proxy (app/api/support/route.ts) is the only writer and it resolves
@@ -3060,7 +2826,7 @@ MAX_SUPPORT_PAYLOAD_BYTES = 64 * 1024
 def init_support_tables() -> None:
     """Create the support ticket table if it does not exist (idempotent).
 
-    Safe to call on every startup. Additive only — never drops or alters
+    Safe to call on every startup. Additive only â€” never drops or alters
     existing columns. Mirrors init_notification_tables.
     """
     conn = None
@@ -3387,7 +3153,7 @@ def _row_to_dict(row, cursor) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Email OTP — inbox ownership proof for the REGISTRATION wizard.
+# Email OTP â€” inbox ownership proof for the REGISTRATION wizard.
 #
 # Deliberately NOT stored on schools/platform_admins like the verification
 # token: at this point in the flow the tenant does not exist yet. The wizard
@@ -3395,7 +3161,7 @@ def _row_to_dict(row, cursor) -> Dict[str, Any]:
 # hang a column on. Standalone table, self-contained lifecycle.
 #
 # Brute-force posture: a 6-digit code is only 1e6 candidates, so hashing alone
-# is not a meaningful barrier — an attacker who reaches the verify endpoint can
+# is not a meaningful barrier â€” an attacker who reaches the verify endpoint can
 # simply enumerate. The real controls are (a) the per-code attempt cap below,
 # enforced in the same transaction as the comparison, and (b) the rate limit in
 # routers/auth_flow.py. Treat the hash as "never store the raw code", not as
@@ -3404,7 +3170,7 @@ def _row_to_dict(row, cursor) -> Dict[str, Any]:
 
 EMAIL_OTP_TABLE = "email_otp_codes"
 
-#: Short TTL by design — the code is typed immediately in the same tab.
+#: Short TTL by design â€” the code is typed immediately in the same tab.
 EMAIL_OTP_TTL_MINUTES = int(os.getenv("EMAIL_OTP_TTL_MINUTES", "10"))
 #: Distinct wrong guesses tolerated per code before it is burned.
 EMAIL_OTP_MAX_ATTEMPTS = 5
@@ -3514,7 +3280,7 @@ def issue_email_otp(email: str, purpose: str = "registration") -> Optional[Dict[
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Supersede, then insert — both in one transaction so a concurrent
+        # Supersede, then insert â€” both in one transaction so a concurrent
         # request cannot leave two live codes for the same address.
         cur.execute(
             f"""
@@ -3561,8 +3327,8 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
     """Verify and burn an OTP in one transaction.
 
     Returns True only on an exact, unexpired, unconsumed match with attempts
-    remaining. Every other outcome — wrong code, expired, already used,
-    attempt cap hit — returns False identically, so the response is not an
+    remaining. Every other outcome â€” wrong code, expired, already used,
+    attempt cap hit â€” returns False identically, so the response is not an
     oracle for which of those occurred.
 
     The row is locked FOR UPDATE so two concurrent submissions of the same
@@ -3596,7 +3362,7 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
         otp_id, stored_hash, attempts, expires_at = row[0], row[1], row[2], row[3]
         now = datetime.now(timezone.utc)
 
-        # Compare first. A wrong guess does NOT consume the code — it spends one
+        # Compare first. A wrong guess does NOT consume the code â€” it spends one
         # of the 5 attempts, so a mistyped digit is recoverable while a genuine
         # brute force is capped at 5 tries per issued code (and 10 per 5 min per
         # address+IP via routers/auth_flow.py).
