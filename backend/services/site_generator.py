@@ -33,6 +33,11 @@ def _template_dir() -> Path:
 def _nginx_available() -> Path:
     return Path(_cfg("NGINX_SITES_AVAILABLE", "/etc/nginx/sites-available"))
 
+
+def _acme_webroot() -> Path:
+    """Webroot certbot writes challenges into, mirrored by every tenant vhost."""
+    return Path(_cfg("ACME_WEBROOT", "/var/www/certbot-webroot"))
+
 def _nginx_enabled() -> Path:
     return Path(_cfg("NGINX_SITES_ENABLED", "/etc/nginx/sites-enabled"))
 
@@ -68,6 +73,17 @@ server {{
     listen 80;
     listen [::]:80;
     server_name {domain};
+
+    # ACME HTTP-01 challenges MUST be served from the webroot before the
+    # catch-all try_files rule below. Without this, /well-known/acme-challenge/
+    # falls through to /index.php and returns the whole 2.7 KB login page as
+    # the "challenge token", which makes Let's Encrypt abort with
+    # "reader size limit exceeded" — so no certificate can ever be issued.
+    location ^~ /.well-known/acme-challenge/ {{
+        root {acme_webroot};
+        default_type "text/plain";
+        try_files $uri =404;
+    }}
 
     root {site_path};
     index index.php index.html index.htm;
@@ -255,7 +271,11 @@ def _generate_nginx_config(subdomain: str) -> Path:
     site_path = get_site_path(subdomain)
     conf_path = get_nginx_conf_path(subdomain)
 
-    conf_content = NGINX_TEMPLATE.format(domain=domain, site_path=str(site_path))
+    conf_content = NGINX_TEMPLATE.format(
+        domain=domain,
+        site_path=str(site_path),
+        acme_webroot=_acme_webroot(),
+    )
 
     # Ensure nginx available exists
     conf_path.parent.mkdir(parents=True, exist_ok=True)
