@@ -58,6 +58,8 @@ function extractTenant(host, pathname = "/") {
   return null;
 }
 
+const DEMO_ESCAPE = new Set(["","about","pricing","contact","support","register","login","forgot-password","reset-password","verify-email","dashboard","privacy","terms","refund-policy","robots.txt","sitemap.xml","demo"]);
+
 /** Mirrors the middleware() rewrite decision. */
 function rewrite(host, pathname) {
   if (
@@ -72,8 +74,10 @@ function rewrite(host, pathname) {
   const tenant = extractTenant(host, pathname);
   if (!tenant) {
     const hostname = host.split(":")[0].toLowerCase();
-    if (hostname === "demo.resultapp.org" && (pathname === "/" || pathname === "")) {
-      return "/demo";
+    if (hostname === "demo.resultapp.org") {
+      if (pathname === "/" || pathname === "") return "/demo";
+      const first = pathname.split("/").filter(Boolean)[0] || "";
+      if (DEMO_ESCAPE.has(first)) return `REDIRECT:https://resultapp.org${pathname}`;
     }
     return pathname;
   }
@@ -142,6 +146,18 @@ check("bare demo host rewrites to landing page", () =>
   assert.equal(rewrite("demo.resultapp.org", "/"), "/demo"));
 check("apex root untouched", () =>
   assert.equal(rewrite("resultapp.org", "/"), "/"));
+check("demo marketing path escapes to apex (pricing)", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/pricing"), "REDIRECT:https://resultapp.org/pricing"));
+check("demo escape keeps deep path + query shape", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/register"), "REDIRECT:https://resultapp.org/register"));
+check("demo legal path escapes (privacy)", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/privacy"), "REDIRECT:https://resultapp.org/privacy"));
+check("demo /demo canonicalizes to apex landing", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/demo"), "REDIRECT:https://resultapp.org/demo"));
+check("production marketing path untouched (no redirect)", () =>
+  assert.equal(rewrite("resultapp.org", "/pricing"), "/pricing"));
+check("production tenant path untouched by escape list", () =>
+  assert.equal(rewrite("vhs.resultapp.org", "/register"), "/vhs/register"));
 check("reserved demo id rejected (api)", () =>
   assert.equal(extractTenant("demo.resultapp.org", "/api/x"), null));
 check("reserved demo id rejected (superadmin)", () =>
