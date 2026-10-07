@@ -6,5 +6,22 @@ export async function GET() {
 }
 
 export async function POST() {
-  return NextResponse.json({ probe: "demo-ping-post-ok" }, { status: 200 });
+  const started = Date.now();
+  try {
+    const res = await fetch("http://159.223.178.34:8000/api/v1/demo/provision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": "wrong-key-probe" },
+      cache: "no-store",
+    });
+    const text = await res.text();
+    return NextResponse.json(
+      { probe: "fetch-ok", backendStatus: res.status, ms: Date.now() - started, bodyHead: text.slice(0, 120) },
+      { status: 200 },
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { probe: "fetch-threw", ms: Date.now() - started, error: String(e).slice(0, 200) },
+      { status: 200 },
+    );
+  }
 }
