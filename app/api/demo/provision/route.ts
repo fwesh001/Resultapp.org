@@ -51,12 +51,79 @@ function getBackendBase(): string {
 }
 
 export async function POST(req: NextRequest) {
-  // TEMPORARY stub while root-causing an edge 502 — real logic restored next.
-  void req;
-  void clientIp;
-  void allowed;
-  void getBackendBase;
-  return NextResponse.json({ stub: "provision-stub-ok" }, { status: 200 });
+  // TEMPORARY outer guard while root-causing an edge 502 — echoes the real
+  // error as JSON instead of letting the function die opaquely.
+  try {
+    return await handleProvision(req);
+  } catch (e) {
+    return NextResponse.json(
+      { diag: "outer-catch", error: String(e).slice(0, 300), stack: String((e as Error)?.stack || "").slice(0, 500) },
+      { status: 200 },
+    );
+  }
+}
+
+async function handleProvision(req: NextRequest) {
+  const ip = clientIp(req);
+  const gate = allowed(ip);
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "RATE_LIMITED",
+        error: "Demo launch limit reached — please try again in a little while.",
+        retry_after_s: gate.retryAfterS,
+      },
+      { status: 429 },
+    );
+  }
+
+  const secret =
+    process.env.BACKEND_API_SECRET?.trim() ||
+    process.env.PROVISION_API_SECRET?.trim() ||
+    "";
+  if (!secret) {
+    return NextResponse.json(
+      { success: false, error: "Demo provisioning is not configured." },
+      { status: 500 },
+    );
+  }
+
+  let data: Record<string, unknown>;
+  let status = 502;
+  try {
+    const res = await fetch(`${getBackendBase()}/api/v1/demo/provision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      cache: "no-store",
+    });
+    status = res.status;
+    data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  } catch (e) {
+    console.error("[demo/provision] backend unreachable", e);
+    return NextResponse.json(
+      { success: false, error: "Could not reach the demo service. Please retry." },
+      { status: 502 },
+    );
+  }
+
+  if (status === 429) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "DEMO_AT_CAPACITY",
+        error: "All demo classrooms are in use right now — please try again in a few minutes.",
+      },
+      { status: 429 },
+    );
+  }
+  if (!resOk(status) || (data as { subdomain?: string }).subdomain === undefined) {
+    return NextResponse.json(
+      { success: false, error: "Demo launch failed. Please retry." },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json({ success: true, ...data }, { status: 200 });
 }
 
 function resOk(status: number): boolean {
