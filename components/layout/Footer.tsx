@@ -15,6 +15,7 @@ export function Footer() {
             <p className="text-sm font-semibold tracking-wide text-purple-100">Product</p>
             <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
               <li><Link href="/pricing" className="transition-colors hover:text-white">Pricing</Link></li>
+              <li><a href="https://demo.resultapp.org" className="transition-colors hover:text-white">Demo</a></li>
               <li><Link href="/register" className="transition-colors hover:text-white">Register</Link></li>
             </ul>
           </div>
