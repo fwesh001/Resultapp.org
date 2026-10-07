@@ -19,6 +19,7 @@ import { Loader2, Play, RotateCcw } from "lucide-react";
  */
 
 const DEMO_ID_RE = /^demo-[a-z0-9]{6}$/;
+const ACTIVE_DEMO_COOKIE = "active_demo";
 
 function readActiveDemo(): string | null {
   if (typeof document === "undefined") return null;
