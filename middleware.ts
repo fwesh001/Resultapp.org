@@ -215,6 +215,12 @@ export function middleware(request: NextRequest) {
   // mapping is structural, not temporary. Runs before tenant extraction so a
   // marketing slug can never be claimed as a demo id.
   if (isDemoHost) {
+    // Bare demo host owns the landing page (rewritten, URL unchanged).
+    if (pathname === "/" || pathname === "") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/demo";
+      return NextResponse.rewrite(url);
+    }
     const first = pathname.split("/").filter(Boolean)[0] || "";
     if (DEMO_ESCAPE_PATHS.has(first)) {
       const url = request.nextUrl.clone();
