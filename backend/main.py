@@ -339,6 +339,10 @@ class ProvisionResponse(BaseModel):
     #: school is NOT servable — its subdomain will not resolve to a portal —
     #: so an operator must reconcile it before the customer is told anything.
     registry_error: Optional[str] = None
+    #: Outcome of registering the tenant subdomain on Vercel. The school exists
+    #: in the registry either way; success=false means the portal is not
+    #: routable yet and must be reconciled before it is advertised to the buyer.
+    vercel_domain: Dict[str, Any] = {}
 
 # ---------------------------------------------------------------------------
 # Health / root
@@ -700,6 +704,35 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Failed to grant initial credits for '{subdomain}': {e}")
 
+        # Vercel domain: register the tenant subdomain so the Next.js app can serve
+        # it. Until Vercel knows the hostname it will not answer it, so this is
+        # what actually makes the school reachable.
+        #
+        # Best-effort by design: the school row is already committed, so a
+        # Vercel outage must not fail a customer who has paid. The outcome is
+        # returned in the response so the caller can be honest about the portal
+        # not being live yet rather than redirecting into a dead subdomain.
+        vercel_domain: Dict[str, Any] = {"configured": False, "success": False}
+        try:
+            from services.vercel_domains import add_tenant_domain
+
+            vercel_domain = add_tenant_domain(subdomain)
+            if vercel_domain.get("success"):
+                logger.info(
+                    "[PROVISION] Vercel domain ready for '%s' (verified=%s)",
+                    subdomain, vercel_domain.get("verified"),
+                )
+            else:
+                logger.warning(
+                    "[PROVISION] Vercel domain NOT ready for '%s': %s — "
+                    "school is registered but not yet reachable; reconcile with "
+                    "`vercel_domains.add_tenant_domain`",
+                    subdomain, vercel_domain.get("error"),
+                )
+        except Exception as e:
+            vercel_domain = {"configured": True, "success": False, "error": str(e)}
+            logger.warning(f"[PROVISION] Vercel domain step failed for '{subdomain}': {e}")
+
         # Notification Engine: onboarding welcome (best-effort — never blocks provision)
         try:
             from services.notifications import dispatch_event as _dispatch_onboarding
@@ -781,6 +814,10 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             timestamp=timestamp,
             provisioning_ms=elapsed_ms,
             registry_error=registry_error,
+            # Whether the tenant subdomain is actually routable on Vercel yet.
+            # success=false here means "registered but not yet reachable", which
+            # the caller must not present to a customer as a live portal.
+            vercel_domain=vercel_domain,
         )
 
     except HTTPException:
@@ -831,6 +868,18 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
         )
         domain = f"{subdomain}.resultapp.org"
         login_url = f"https://{domain}/admin/login"
+
+        # Register the subdomain on Vercel so the Next.js app can serve it.
+        # Best-effort: a Vercel outage must not fail an already-registered school.
+        vercel_domain = {"configured": False, "success": False}
+        try:
+            from services.vercel_domains import add_tenant_domain
+
+            vercel_domain = add_tenant_domain(subdomain)
+        except Exception as e:
+            vercel_domain = {"configured": True, "success": False, "error": str(e)}
+            logger.warning(f"[BG] Vercel domain step failed for {subdomain}: {e}")
+
         try:
             send_welcome_email(
                 admin_email=str(payload.admin_email),
@@ -845,7 +894,7 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
         except Exception as e:
             logger.warning(f"[BG] Welcome email failed for {subdomain}: {e} (non-fatal)")
 
-        result = {"success": True, "domain": domain, "url": login_url, "timestamp": datetime.now(timezone.utc).isoformat()}
+        result = {"success": True, "domain": domain, "url": login_url, "vercel_domain": vercel_domain, "timestamp": datetime.now(timezone.utc).isoformat()}
         provision_jobs[job_key].update({"status": "success", "result": result})
         if callback_url:
             try:
