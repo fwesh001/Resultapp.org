@@ -73,6 +73,35 @@ function extractTenant(request: NextRequest): string | null {
 }
 
 /**
+ * Collapse a route that has been doubled.
+ *
+ * A pasted or redirected URL can arrive as two identical halves —
+ * "/admin/login/admin/login". Left alone that rewrites to
+ * "/<sub>/admin/login/admin/login", which matches no route and 404s even though
+ * the tenant is perfectly reachable. When the path is exactly two copies of the
+ * same segment list, keep one.
+ *
+ * Only an exact "X + X" is collapsed. A single repeated segment that is a
+ * genuine part of a deeper route (e.g. "/vhs/admin/vhs") is left alone, because
+ * guessing there would silently change real URLs.
+ */
+export function dedupeRepeatedPrefix(pathname: string): string {
+  const trimmed = pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!trimmed) return "/";
+
+  const segments = trimmed.split("/");
+  if (segments.length < 2 || segments.length % 2 !== 0) return pathname;
+
+  const half = segments.length / 2;
+  const first = segments.slice(0, half);
+  const second = segments.slice(half);
+  if (first.join("/") === second.join("/")) {
+    return `/${first.join("/")}`;
+  }
+  return pathname;
+}
+
+/**
  * Strip a leading "/<subdomain>" so "/vhs" and "/vhs/admin" become
  * "/" and "/admin" respectively. Without this the rewrite produced
  * "/vhs/vhs" and the tenant 404'd.
@@ -106,7 +135,13 @@ export function middleware(request: NextRequest) {
   }
 
   const url = request.nextUrl.clone();
-  url.pathname = `/${subdomain}${normalizePath(pathname, subdomain)}`;
+  // Order matters. Strip the tenant slug the developer may also have typed
+  // FIRST, then collapse a doubled route — otherwise a slug left on the front
+  // makes the segment count odd and the halving no longer lines up.
+  //   /vhs/admin/login/admin/login -> strip slug -> /admin/login/admin/login
+  //                                -> dedupe     -> /admin/login
+  const withoutSlug = normalizePath(pathname, subdomain);
+  url.pathname = `/${subdomain}${dedupeRepeatedPrefix(withoutSlug)}`;
 
   return NextResponse.rewrite(url);
 }

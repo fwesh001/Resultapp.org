@@ -22,6 +22,19 @@ function normalizePath(pathname, subdomain) {
   return pathname;
 }
 
+/** Mirrors middleware.ts dedupeRepeatedPrefix(). */
+function dedupeRepeatedPrefix(pathname) {
+  const trimmed = pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!trimmed) return "/";
+  const segments = trimmed.split("/");
+  if (segments.length < 2 || segments.length % 2 !== 0) return pathname;
+  const half = segments.length / 2;
+  const first = segments.slice(0, half);
+  const second = segments.slice(half);
+  if (first.join("/") === second.join("/")) return `/${first.join("/")}`;
+  return pathname;
+}
+
 /** Mirrors middleware.ts extractTenant(). */
 function extractTenant(host) {
   const hostname = host.split(":")[0].toLowerCase();
@@ -86,6 +99,40 @@ check("bare localhost not a tenant", () =>
   assert.equal(extractTenant("localhost:3000"), null));
 check("www.localhost not a tenant", () =>
   assert.equal(extractTenant("www.localhost:3000"), null));
+
+console.log("\nDoubled route collapsing");
+check("/admin/login/admin/login -> /admin/login", () =>
+  assert.equal(dedupeRepeatedPrefix("/admin/login/admin/login"), "/admin/login"));
+check("/admin/admin -> /admin", () =>
+  assert.equal(dedupeRepeatedPrefix("/admin/admin"), "/admin"));
+check("/admin/(dashboard)/results x2 collapses", () =>
+  assert.equal(
+    dedupeRepeatedPrefix("/admin/(dashboard)/results/admin/(dashboard)/results"),
+    "/admin/(dashboard)/results",
+  ));
+check("single route untouched", () =>
+  assert.equal(dedupeRepeatedPrefix("/admin/login"), "/admin/login"));
+check("odd segment count untouched", () =>
+  assert.equal(dedupeRepeatedPrefix("/a/b/c"), "/a/b/c"));
+check("halves differing = untouched (real deep route)", () =>
+  assert.equal(dedupeRepeatedPrefix("/admin/students/grades"), "/admin/students/grades"));
+check("root untouched", () =>
+  assert.equal(dedupeRepeatedPrefix("/"), "/"));
+check("empty -> root", () =>
+  assert.equal(dedupeRepeatedPrefix(""), "/"));
+
+console.log("\nCombined pipeline (slug-strip then dedupe)");
+const pipeline = (path, sub) => dedupeRepeatedPrefix(normalizePath(path, sub));
+check("/admin/login/admin/login -> /admin/login", () =>
+  assert.equal(pipeline("/admin/login/admin/login", "vhs"), "/admin/login"));
+check("/vhs/admin/login/admin/login -> /admin/login (slug first, then dedupe)", () =>
+  assert.equal(pipeline("/vhs/admin/login/admin/login", "vhs"), "/admin/login"));
+check("/admin/login -> /admin/login (untouched)", () =>
+  assert.equal(pipeline("/admin/login", "vhs"), "/admin/login"));
+check("/vhs -> /", () =>
+  assert.equal(pipeline("/vhs", "vhs"), "/"));
+check("/vhs/admin -> /admin", () =>
+  assert.equal(pipeline("/vhs/admin", "vhs"), "/admin"));
 
 console.log(`\n${pass}/${pass + fails.length} middleware checks passed`);
 if (fails.length) {
