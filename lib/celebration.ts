@@ -69,6 +69,10 @@ interface BurstOptions {
   durationMs?: number;
   colors?: string[];
   origin?: CelebrationOrigin;
+  minSize?: number;
+  maxSize?: number;
+  decayMin?: number;
+  decayMax?: number;
 }
 
 function burst({
@@ -79,6 +83,10 @@ function burst({
   durationMs = 1400,
   colors = DEFAULT_COLORS,
   origin = { x: 0.5, y: 0.35 },
+  minSize = 2.4,
+  maxSize = 5.8,
+  decayMin = 0.008,
+  decayMax = 0.02,
 }: BurstOptions = {}): void {
   if (!shouldCelebrate()) return;
   const canvas = document.createElement("canvas");
@@ -114,13 +122,13 @@ function burst({
       y: originY,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      size: (2.4 + Math.random() * 3.4) * scale,
+      size: (minSize + Math.random() * Math.max(0.5, maxSize - minSize)) * scale,
       color: colors[Math.floor(Math.random() * colors.length)] ?? "#ffffff",
       circle: Math.random() < 0.42,
       rotation: Math.random() * Math.PI * 2,
       rotationSpeed: (Math.random() - 0.5) * 0.28,
       life: 1,
-      decay: 0.008 + Math.random() * 0.012,
+      decay: decayMin + Math.random() * Math.max(0.001, decayMax - decayMin),
     };
   });
 
@@ -186,12 +194,36 @@ export function fireMilestoneBurst(bar: HTMLElement | null, milestoneFraction: n
 
 /** Focused completion burst anchored to the portal call to action. */
 export function fireCompletionBurst(anchor: HTMLElement | null): void {
+  if (!shouldCelebrate()) return;
+  // Smaller viewports get a lighter shower so the finale stays smooth.
+  const smallViewport =
+    typeof window !== "undefined" && window.innerWidth < 480;
   burst({
-    particleCount: 110,
-    spreadDegrees: 78,
-    startVelocity: 10,
-    gravity: 0.22,
-    durationMs: 2200,
+    particleCount: smallViewport ? 160 : 260,
+    spreadDegrees: 130,
+    startVelocity: 13,
+    gravity: 0.18,
+    durationMs: 5200,
+    minSize: 3,
+    maxSize: 7,
+    decayMin: 0.004,
+    decayMax: 0.009,
     origin: originFromElement(anchor, { x: 0.5, y: 0.34 }),
   });
+  // Delayed echo wave from the same origin — a second swell without a second
+  // code path. Timers are safe here: burst() cleans up its own canvas.
+  window.setTimeout(() => {
+    burst({
+      particleCount: smallViewport ? 55 : 90,
+      spreadDegrees: 110,
+      startVelocity: 11,
+      gravity: 0.18,
+      durationMs: 3800,
+      minSize: 3,
+      maxSize: 7,
+      decayMin: 0.004,
+      decayMax: 0.009,
+      origin: originFromElement(anchor, { x: 0.5, y: 0.34 }),
+    });
+  }, 600);
 }

@@ -34,6 +34,7 @@ import {
 } from "@/lib/pricing";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 import { fireCompletionBurst, fireMilestoneBurst } from "@/lib/celebration";
+import { friendlyStage, useSimulatedProgress } from "@/lib/progress";
 
 // ---------------------------------------------------------------------------
 // RegisterSchoolForm — 3-step pay-first wizard.
@@ -318,10 +319,24 @@ export function RegisterSchoolForm() {
   const portalCtaRef = useRef<HTMLAnchorElement | null>(null);
   const celebratedMilestones = useRef<Set<number>>(new Set());
   const celebratedCompletion = useRef(false);
-  const [portalReadyAt, setPortalReadyAt] = useState<number | null>(null);
+  // Wall-clock of the last genuine backend advance. Powers the "still
+  // working" notice when the provider takes a while — the bar keeps drifting
+  // on simulated ticks, but after 45s of no real movement we say so plainly.
+  const lastBackendAdvanceRef = useRef<number>(Date.now());
+  // Single-shot handoff timer. Navigation is armed exactly once and fires from
+  // its own timeout — it never depends on the 1s countdown ticker advancing,
+  // so a stalled/throttled tick loop can no longer strand a paying customer.
+  const handoffTimeoutRef = useRef<number | null>(null);
   // Hold navigation briefly after readiness so the completion celebration is
   // visible instead of being cut off by an instant redirect.
   const CELEBRATION_HOLD_MS = 2800;
+
+  function clearHandoffTimeout() {
+    if (handoffTimeoutRef.current !== null) {
+      window.clearTimeout(handoffTimeoutRef.current);
+      handoffTimeoutRef.current = null;
+    }
+  }
 
   // Armed once per success, from the event that sets successData, rather than
   // from an effect. This is the documented React escape hatch for "reset state
@@ -343,7 +358,7 @@ export function RegisterSchoolForm() {
   useEffect(() => {
     celebratedMilestones.current.clear();
     celebratedCompletion.current = false;
-    setPortalReadyAt(null);
+    clearHandoffTimeout();
   }, [successData?.subdomain]);
 
   // Poll readiness. 5s interval keeps it responsive without hammering the API;
@@ -367,10 +382,13 @@ export function RegisterSchoolForm() {
         const percent = Number(data.percent);
         const ready = data.ready === true;
         const normalized = Number.isFinite(percent) ? Math.max(5, Math.min(100, percent)) : 40;
-        setProgress({
-          percent: normalized,
-          stage: String(data.stage || "Setting up your portal"),
-          ready,
+        setProgress((p) => {
+          if (!p || normalized > p.percent) lastBackendAdvanceRef.current = Date.now();
+          return {
+            percent: normalized,
+            stage: String(data.stage || "Setting up your portal"),
+            ready,
+          };
         });
         for (const milestone of [60, 85]) {
           if (normalized >= milestone && !celebratedMilestones.current.has(milestone)) {
@@ -399,35 +417,58 @@ export function RegisterSchoolForm() {
 
   const portalReady = progress?.ready === true;
 
-  useEffect(() => {
-    if (!portalReady || celebratedCompletion.current) return;
-    celebratedCompletion.current = true;
-    setPortalReadyAt(Date.now());
-    fireCompletionBurst(portalCtaRef.current);
-  }, [portalReady]);
+  // Displayed progress is decoupled from backend truth: it drifts upward
+  // smoothly while waiting but can never reach 100 until the portal answers.
+  // The backend `stage` strings stay in state for debugging; users only ever
+  // see the friendly copy below.
+  const displayPercent = useSimulatedProgress(progress?.percent ?? null, portalReady);
+  const displayStage = friendlyStage(displayPercent, portalReady);
+  const stalled =
+    !portalReady && !progressTimedOut && now - lastBackendAdvanceRef.current > 45000;
 
+  // Bulletproof handoff: a single effect arms exactly one navigation timeout
+  // when the portal becomes ready (or the wait times out). The visible
+  // countdown below is display-only and never gates navigation, so a stalled
+  // tick loop, backgrounded tab, or stale clock state cannot trap the user.
+  // The readiness gate itself is unchanged: this effect does nothing until
+  // the portal genuinely answers (or the timeout fallback fires).
   useEffect(() => {
-    if (handoffIn === null) return;
-    // Hold until the portal genuinely answers, so the countdown is the last
-    // beat of a completed journey rather than a leap into a 525.
-    if (!portalReady && !progressTimedOut) return;
-    const celebrationHoldMs =
-      portalReady && portalReadyAt !== null
-        ? Math.max(0, CELEBRATION_HOLD_MS - (now - portalReadyAt))
-        : 0;
-    if (handoffIn <= 0) {
-      if (celebrationHoldMs > 0) {
-        const id = window.setTimeout(() => setNow(Date.now()), Math.min(celebrationHoldMs, 1000));
-        return () => window.clearTimeout(id);
-      }
-      // Hard navigation: a client-side push would land on a cross-origin
-      // subdomain, which Next cannot route.
-      window.location.href = adminLoginUrl;
+    if (!successData || handoffCancelled) {
+      clearHandoffTimeout();
       return;
     }
-    const id = window.setTimeout(() => setNow(Date.now()), 1000);
-    return () => window.clearTimeout(id);
-  }, [handoffIn, adminLoginUrl, portalReady, portalReadyAt, progressTimedOut]);
+    if (!portalReady && !progressTimedOut) return;
+    if (handoffTimeoutRef.current !== null) return;
+    if (portalReady && !celebratedCompletion.current) {
+      celebratedCompletion.current = true;
+      fireCompletionBurst(portalCtaRef.current);
+    }
+    console.info("[handoff] portal ready — navigating shortly", {
+      subdomain: successData.subdomain,
+      timedOut: progressTimedOut && !portalReady,
+    });
+    handoffTimeoutRef.current = window.setTimeout(
+      () => {
+        handoffTimeoutRef.current = null;
+        // Hard navigation: a client-side push would land on a cross-origin
+        // subdomain, which Next cannot route.
+        window.location.href = adminLoginUrl;
+      },
+      portalReady ? CELEBRATION_HOLD_MS : 0,
+    );
+    return () => {
+      clearHandoffTimeout();
+    };
+  }, [successData, handoffCancelled, portalReady, progressTimedOut, adminLoginUrl]);
+
+  // Display-only countdown ticker. This advances the visible "in Xs" text and
+  // NOTHING else — navigation no longer depends on it, so a throttled or
+  // stalled tick can only freeze a number on screen, never the redirect.
+  useEffect(() => {
+    if (!successData || handoffCancelled) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [successData, handoffCancelled]);
 
   // Base domain fallback: NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org"
   const baseDomain =
@@ -1181,10 +1222,10 @@ export function RegisterSchoolForm() {
                   {!progressTimedOut && (
                     <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
                   )}
-                  {progress?.stage || "Setting up your portal"}
+                  {displayStage}
                 </p>
                 <span className="font-mono text-sm tabular-nums text-purple-200">
-                  {progress?.percent ?? 10}%
+                  {displayPercent}%
                 </span>
               </div>
 
@@ -1192,21 +1233,23 @@ export function RegisterSchoolForm() {
                 ref={progressBarRef}
                 className="mt-3 h-2 w-full overflow-hidden rounded-full bg-purple-950/60"
                 role="progressbar"
-                aria-valuenow={progress?.percent ?? 10}
+                aria-valuenow={displayPercent}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label="Portal setup progress"
               >
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-400 transition-[width] duration-700 ease-out"
-                  style={{ width: `${progress?.percent ?? 10}%` }}
+                  style={{ width: `${displayPercent}%` }}
                 />
               </div>
 
               <p className="mt-3 text-xs leading-5 text-purple-200/60">
                 {progressTimedOut
                   ? "This is taking longer than usual — your subdomain is registered and your payment is safe. You can wait a little longer or open it now and refresh shortly."
-                  : "Your payment is confirmed and your school is registered. We are issuing the SSL certificate for your subdomain — this normally takes under a minute. You will be taken to your admin login automatically."}
+                  : stalled
+                    ? "Still working — this step sometimes takes a few minutes. Your payment is safe and your school is registered."
+                    : "Your payment is confirmed and your school is registered. We are issuing the SSL certificate for your subdomain — this normally takes under a minute. You will be taken to your admin login automatically."}
               </p>
 
               {progressTimedOut && (
@@ -1235,6 +1278,13 @@ export function RegisterSchoolForm() {
                 <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
                 Taking you to your admin login in {handoffIn}s…
               </p>
+              <button
+                type="button"
+                onClick={() => (window.location.href = adminLoginUrl)}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 font-semibold text-[#0B0514] hover:bg-zinc-100"
+              >
+                Open admin login now
+              </button>
               <button
                 type="button"
                 onClick={cancelHandoff}

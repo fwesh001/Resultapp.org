@@ -945,16 +945,33 @@ check("auth email footer carries the trust line", () =>
 check("a provisioned school always has a redirect out", () => {
   // A paid user who closes the tab at the Flutterwave modal must not be left
   // on a terminal screen with nothing but a button.
-  // The countdown is derived from a timestamp rather than stored as a decrementing
-  // counter, so "the effect" is the one keyed on handoffIn.
-  const effectStart = register.indexOf("if (handoffIn === null) return;");
-  if (effectStart === -1) return "there is no countdown effect keyed on handoffIn";
-  const effectEnd = register.search(/\n\s{2}\}, \[handoffIn, adminLoginUrl[^\]]*\]\);/);
-  const effect = effectEnd === -1
-    ? register.slice(effectStart, effectStart + 700)
-    : register.slice(effectStart, effectEnd);
+  // Navigation is single-shot (handoffTimeoutRef), never ticker-driven, so the
+  // countdown text below is display-only.
+  const effectStart = register.indexOf("handoffTimeoutRef.current = window.setTimeout");
+  if (effectStart === -1) return "there is no single-shot handoff timeout arming navigation";
+  const effect = register.slice(Math.max(0, effectStart - 1600), effectStart + 700);
   if (!/window\.location\.href\s*=\s*adminLoginUrl/.test(effect)) {
     return "the countdown effect never navigates to adminLoginUrl";
+  }
+  // Bulletproofing: navigation must be armed by a single timeout, never by
+  // the countdown ticker advancing. Depending on `now`/`handoffIn` here is
+  // what stranded users when ticks stalled.
+  if (!/handoffTimeoutRef\.current\s*=\s*window\.setTimeout/.test(effect)) {
+    return "navigation is not driven by a single-shot handoff timeout";
+  }
+  if (/portalReadyAt/.test(register)) {
+    return "the stale dual-clock hold (portalReadyAt) is still present";
+  }
+  if (!/clearHandoffTimeout/.test(effect)) {
+    return "the handoff timeout is never cleared on cancel/unmount";
+  }
+  // A manual escape must exist DURING the countdown, not only after timeout.
+  const countdownBranch = register.slice(
+    register.indexOf("Taking you to your admin login"),
+    register.indexOf("Taking you to your admin login") + 1400
+  );
+  if (!/Open admin login now/.test(countdownBranch)) {
+    return "no manual open-CTA is rendered alongside the countdown";
   }
   // The countdown must be armed from successData, not left permanently null.
   if (!/if \(successData && handoffStartedAt === null\)/.test(register)) {
@@ -1119,6 +1136,36 @@ check("the wizard shows an honest progress indicator", () => {
   if (!/percent/.test(register)) return "no progress percentage is tracked";
   // A timeout escape hatch, or the customer is trapped on a spinner forever.
   if (!/progressTimedOut/.test(register)) return "there is no escape hatch if the portal never becomes ready";
+  return true;
+});
+
+check("displayed progress is simulated but honesty-capped", () => {
+  const hook = read(path.join("lib", "progress.ts"));
+  if (!/useSimulatedProgress/.test(register)) return "the wizard does not use the simulated progress hook";
+  // Display must never fall behind backend truth...
+  if (!/Math\.max\(d, backend\)/.test(hook)) return "displayed progress can fall behind the backend";
+  // ...and must never claim 100% before the portal answers.
+  if (!/if \(ready\)/.test(hook) || !/setDisplay\(100\)/.test(hook)) {
+    return "100 is not gated exclusively on readiness";
+  }
+  if (!/97/.test(hook)) return "there is no sub-100 ceiling while waiting";
+  return true;
+});
+
+check("progress copy is non-technical", () => {
+  const hook = read(path.join("lib", "progress.ts"));
+  for (const phrase of [
+    "Setting up your school environment",
+    "Preparing student and staff databases",
+    "Configuring secure gradebooks",
+    "Finalizing your secure portal",
+  ]) {
+    if (!hook.includes(phrase)) return `friendly copy is missing: ${phrase}`;
+  }
+  // The rendered stage must come from the friendly map, not backend jargon.
+  if (!/friendlyStage\(displayPercent, portalReady\)/.test(register)) {
+    return "the wizard still renders the backend stage string verbatim";
+  }
   return true;
 });
 
