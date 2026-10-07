@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Play, RotateCcw } from "lucide-react";
-import { ACTIVE_DEMO_COOKIE } from "@/app/api/demo/provision/route";
+
+// Must equal ACTIVE_DEMO_COOKIE in app/api/demo/provision/route.ts (the
+// proxy is the only writer). Kept as a literal here so the client bundle
+// never imports next/server. Pinned by scripts/verify-demo-isolation.mjs.
 
 /**
  * "Launch interactive demo" button with session resumption.
