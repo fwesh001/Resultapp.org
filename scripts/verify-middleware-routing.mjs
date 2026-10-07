@@ -58,7 +58,7 @@ function extractTenant(host, pathname = "/") {
   return null;
 }
 
-const DEMO_ESCAPE = new Set(["","about","pricing","contact","support","register","login","forgot-password","reset-password","verify-email","dashboard","privacy","terms","refund-policy","robots.txt","sitemap.xml","demo"]);
+const DEMO_ESCAPE = new Set(["about","pricing","contact","support","register","login","forgot-password","reset-password","verify-email","dashboard","privacy","terms","refund-policy","robots.txt","sitemap.xml","demo"]);
 
 /** Mirrors the middleware() rewrite decision. */
 function rewrite(host, pathname) {
