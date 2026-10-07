@@ -59,16 +59,7 @@ function getBackendOrigin(): string {
 }
 
 export async function POST(req: NextRequest) {
-  // TEMPORARY outer guard while root-causing an edge 502 — echoes the real
-  // error as JSON instead of letting the function die opaquely.
-  try {
-    return await handleProvision(req);
-  } catch (e) {
-    return NextResponse.json(
-      { diag: "outer-catch", error: String(e).slice(0, 300), stack: String((e as Error)?.stack || "").slice(0, 500) },
-      { status: 200 },
-    );
-  }
+  return handleProvision(req);
 }
 
 async function handleProvision(req: NextRequest) {
