@@ -21,9 +21,6 @@ export default function DemoLandingPage() {
   return (
     <main className="min-h-screen bg-[#0B0514] text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
-        <p className="rounded-full border border-purple-500/20 bg-purple-900/20 px-4 py-1.5 text-xs font-medium tracking-wide text-purple-200">
-          INTERACTIVE DEMO • NO SIGNUP • NO PAYMENT
-        </p>
         <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
           Walk through a real school portal
         </h1>
