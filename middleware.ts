@@ -206,29 +206,33 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
+  const isDemoHost = host === `demo.${BASE_DOMAIN}`;
+
+  // Demo-host escape hatch FIRST: known marketing/apex routes leave for the
+  // main site instead of being swallowed as demo tenant ids (/pricing must
+  // show Pricing, not "School not found: Pricing"). Permanent redirect: the
+  // mapping is structural, not temporary. Runs before tenant extraction so a
+  // marketing slug can never be claimed as a demo id.
+  if (isDemoHost) {
+    const first = pathname.split("/").filter(Boolean)[0] || "";
+    if (DEMO_ESCAPE_PATHS.has(first)) {
+      const url = request.nextUrl.clone();
+      url.hostname = BASE_DOMAIN;
+      url.protocol = "https:";
+      url.port = "";
+      return NextResponse.redirect(url, 308);
+    }
+  }
+
   const tenant = extractTenant(request);
   if (!tenant) {
     // Bare demo host (demo.<domain>/) owns a dedicated landing page with the
     // "launch demo" entrypoint — anything else falls through untouched.
-    const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
-    if (host === `demo.${BASE_DOMAIN}`) {
-      if (pathname === "/" || pathname === "") {
-        const url = request.nextUrl.clone();
-        url.pathname = "/demo";
-        return NextResponse.rewrite(url);
-      }
-      // Known marketing/apex routes escape back to the main site instead of
-      // being swallowed as demo tenant ids (/pricing must show Pricing, not
-      // "School not found: Pricing"). Permanent redirect: the mapping is
-      // structural, not temporary.
-      const first = pathname.split("/").filter(Boolean)[0] || "";
-      if (DEMO_ESCAPE_PATHS.has(first)) {
-        const url = request.nextUrl.clone();
-        url.hostname = BASE_DOMAIN;
-        url.protocol = "https:";
-        url.port = "";
-        return NextResponse.redirect(url, 308);
-      }
+    if (isDemoHost && (pathname === "/" || pathname === "")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/demo";
+      return NextResponse.rewrite(url);
     }
     return NextResponse.next();
   }
