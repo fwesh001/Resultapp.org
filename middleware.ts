@@ -211,13 +211,29 @@ export function middleware(request: NextRequest) {
     // Bare demo host (demo.<domain>/) owns a dedicated landing page with the
     // "launch demo" entrypoint — anything else falls through untouched.
     const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
-    if (host === `demo.${BASE_DOMAIN}` && (pathname === "/" || pathname === "")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/demo";
-      return NextResponse.rewrite(url);
+    if (host === `demo.${BASE_DOMAIN}`) {
+      if (pathname === "/" || pathname === "") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/demo";
+        return NextResponse.rewrite(url);
+      }
+      // Known marketing/apex routes escape back to the main site instead of
+      // being swallowed as demo tenant ids (/pricing must show Pricing, not
+      // "School not found: Pricing"). Permanent redirect: the mapping is
+      // structural, not temporary.
+      const first = pathname.split("/").filter(Boolean)[0] || "";
+      if (DEMO_ESCAPE_PATHS.has(first)) {
+        const url = request.nextUrl.clone();
+        url.hostname = BASE_DOMAIN;
+        url.protocol = "https:";
+        url.port = "";
+        return NextResponse.redirect(url, 308);
+      }
     }
     return NextResponse.next();
   }
+
+  const { slug: subdomain, demoId } = tenant;
 
   const url = request.nextUrl.clone();
   // Order matters. Strip the tenant slug the developer may also have typed
