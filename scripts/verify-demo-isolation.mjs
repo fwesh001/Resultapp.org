@@ -124,7 +124,7 @@ check("proxy enforces max 2 launches per IP per hour", () =>
 );
 check("active_demo cookie is cross-subdomain with 1h TTL", () => {
   if (!/ACTIVE_DEMO_COOKIE = "active_demo"/.test(demoProxy)) return "cookie name missing in proxy";
-  if (!/Domain=\.resultapp\.org/.test(demoProxy)) return "cookie is not shared across subdomains";
+  if (!/ACTIVE_DEMO_DOMAIN = "\.resultapp\.org"/.test(demoProxy)) return "cookie is not shared across subdomains";
   if (!/ACTIVE_DEMO_MAX_AGE_S = 3600/.test(demoProxy)) return "cookie TTL is not 1 hour";
   return true;
 });
@@ -153,10 +153,11 @@ check("banner register link is absolute", () =>
     : "banner link is relative and would misroute on the demo host"
 );
 check("footer Demo link is absolute and in Product list", () => {
-  const product = layoutFooter.slice(layoutFooter.indexOf("Product"));
-  return /href="https:\/\/demo\.resultapp\.org">Demo</.test(product)
-    ? true
-    : "footer Demo link missing, misplaced, or relative";
+  const start = layoutFooter.indexOf("Product");
+  if (start < 0) return "Product section not found in footer";
+  const product = layoutFooter.slice(start, layoutFooter.indexOf("</ul>", start));
+  if (!product.includes("https://demo.resultapp.org")) return "Demo link is not absolute";
+  return />Demo<\/a>/.test(product) ? true : "Demo link not inside the Product list";
 });
 check("modal close button pinned top-right", () =>
   /absolute right-4 top-4/.test(modal) ? true : "modal X is not pinned top-right"
@@ -170,8 +171,11 @@ console.log("\nContextual help");
 const helpDict = read(path.join("lib", "demoHelpContent.ts"));
 const demoHelp = read(path.join("components", "demo", "DemoHelp.tsx"));
 check("help covers login, roster, billing, grading + fallback", () => {
-  for (const re of ["admin\\/login", "staff\\/login", "billing", "grading"]) {
-    if (!new RegExp(re).test(helpDict)) return `no dictionary entry matching ${re}`;
+  // Route matchers are written as /\/admin\/login/ — strip escapes so the
+  // assertions read as the paths a visitor actually visits.
+  const flat = helpDict.replace(/\\/g, "");
+  for (const re of [/\/admin\/login/, /\/staff\/login/, /\/admin\/billing/, /grading/]) {
+    if (!re.test(flat)) return `no dictionary entry matching ${re}`;
   }
   return /DEMO_HELP_FALLBACK/.test(helpDict) ? true : "no fallback guide";
 });
