@@ -149,12 +149,18 @@ def add_tenant_domain(subdomain: str) -> Dict[str, Any]:
         )
         return result
 
-    # 409 = the domain is already attached to the project. That is the state we
-    # were trying to reach, so it counts as success.
+    # 409 = the domain is already attached to the project. Attachment alone is
+    # success, but it says nothing about verification, so check Vercel's actual
+    # status instead of assuming that an existing domain is already verified.
     if resp.status_code == 409:
         result["success"] = True
-        result["verified"] = True
-        logger.info("[Vercel] Domain '%s' already attached", result["domain"])
+        status = get_domain_status(slug) or {}
+        result["verified"] = bool(status.get("verified"))
+        logger.info(
+            "[Vercel] Domain '%s' already attached (verified=%s)",
+            result["domain"],
+            result["verified"],
+        )
         return result
 
     detail = ""
@@ -200,18 +206,20 @@ def _ipv4_only():
 
 
 def _cf_api(method: str, url: str, **kwargs) -> requests.Response:
-    """Call the Cloudflare API, retrying over IPv4 if the token is refused.
+    """Call the Cloudflare API over IPv4.
 
-    A 9109 from the first attempt means "wrong address family", not "bad
-    token", so retrying with IPv4 pinned is safe and is the difference between
-    provisioning working unattended and silently failing.
+    The token is allowlisted by the droplet's IPv4 address, but Cloudflare can
+    reject the same token over IPv6 either as 9109 or as a generic 10000
+    authentication error. Always presenting the allowlisted IPv4 address is what
+    makes DNS automation work unattended. Fall back to normal resolution only if
+    IPv4 itself cannot be used.
     """
-    resp = requests.request(method, url, **kwargs)
-    if resp.status_code == 403 and "9109" in resp.text:
-        logger.warning("[Cloudflare] token refused over IPv6; retrying pinned to IPv4")
+    try:
         with _ipv4_only():
-            resp = requests.request(method, url, **kwargs)
-    return resp
+            return requests.request(method, url, **kwargs)
+    except requests.RequestException as exc:
+        logger.warning("[Cloudflare] IPv4 request failed (%s); retrying with normal resolution", exc.__class__.__name__)
+        return requests.request(method, url, **kwargs)
 
 
 def publish_verification_txt(domain: str, value: str) -> Dict[str, Any]:
