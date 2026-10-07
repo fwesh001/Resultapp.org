@@ -42,10 +42,10 @@ function allowed(ip: string): { ok: boolean; retryAfterS: number } {
 }
 
 function getBackendBase(): string {
-  // PROVISION_API_URL already ends at /api/v1/provision (the paid endpoint),
-  // so strip that suffix before appending the demo path — otherwise the
-  // backend sees /api/v1/provision/api/v1/demo/provision and 404s.
-  // (Same normalization as register-school's buildTargetUrl.)
+  // PROVISION_API_URL may be the droplet root, the /api/v1 base, or the full
+  // /api/v1/provision endpoint (register-school handles all three shapes).
+  // Normalize every shape to a clean base before appending our own path —
+  // otherwise the backend sees a doubled path and 404s.
   const raw =
     process.env.PROVISION_API_URL?.trim() ||
     process.env.BACKEND_URL?.trim() ||
@@ -54,9 +54,9 @@ function getBackendBase(): string {
   const stripped = raw
     .replace(/\/$/, "")
     .replace(/\/api\/v1\/provision\/?$/, "")
+    .replace(/\/api\/v1\/?$/, "")
     .replace(/\/provision\/?$/, "");
-  if (stripped.includes("/api/v1")) return stripped.replace(/\/$/, "");
-  return `${stripped}/api/v1`.replace(/\/$/, "");
+  return `${stripped}/api/v1`;
 }
 
 export async function POST(req: NextRequest) {
