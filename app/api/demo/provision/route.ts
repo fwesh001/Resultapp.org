@@ -42,12 +42,21 @@ function allowed(ip: string): { ok: boolean; retryAfterS: number } {
 }
 
 function getBackendBase(): string {
+  // PROVISION_API_URL already ends at /api/v1/provision (the paid endpoint),
+  // so strip that suffix before appending the demo path — otherwise the
+  // backend sees /api/v1/provision/api/v1/demo/provision and 404s.
+  // (Same normalization as register-school's buildTargetUrl.)
   const raw =
     process.env.PROVISION_API_URL?.trim() ||
     process.env.BACKEND_URL?.trim() ||
     process.env.API_URL?.trim() ||
     "http://159.223.178.34:8000";
-  return raw.replace(/\/$/, "");
+  const stripped = raw
+    .replace(/\/$/, "")
+    .replace(/\/api\/v1\/provision\/?$/, "")
+    .replace(/\/provision\/?$/, "");
+  if (stripped.includes("/api/v1")) return stripped.replace(/\/$/, "");
+  return `${stripped}/api/v1`.replace(/\/$/, "");
 }
 
 export async function POST(req: NextRequest) {
