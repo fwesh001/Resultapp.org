@@ -10,8 +10,9 @@ import { NextRequest, NextResponse } from "next/server";
  * capacity cap and per-minute brake as the second lock.
  *
  * In-memory sliding window: correct per serverless instance; the backend's
- * global cap is the hard guarantee. 3 launches/hour/IP is generous for a
- * human prospect and starves a naive bot.
+ * global cap is the hard guarantee. 2 launches/hour/IP is strict enough to
+ * stop cookie-cleared bots from farming databases, while the active_demo
+ * cookie steers honest returners to Continue instead of re-provisioning.
  */
 
 const WINDOW_MS = 60 * 60 * 1000;
@@ -133,7 +134,18 @@ async function handleProvision(req: NextRequest) {
       { status: 502 },
     );
   }
-  return NextResponse.json({ success: true, ...data }, { status: 200 });
+  // Remember this classroom in the browser so a returning prospect gets
+  // "Continue your Demo" instead of minting a second database. Set here (not
+  // by FastAPI) because only this proxy's response reaches the browser.
+  const out = NextResponse.json({ success: true, ...data }, { status: 200 });
+  out.cookies.set(ACTIVE_DEMO_COOKIE, String((data as { subdomain?: string }).subdomain), {
+    domain: ACTIVE_DEMO_DOMAIN,
+    path: "/",
+    maxAge: ACTIVE_DEMO_MAX_AGE_S,
+    secure: true,
+    sameSite: "lax",
+  });
+  return out;
 }
 
 function resOk(status: number): boolean {
