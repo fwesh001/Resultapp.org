@@ -148,7 +148,7 @@ export function Modal({
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-2 top-2 h-11 w-11"
+                className="absolute right-4 top-4 h-11 w-11"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close modal"
               >
@@ -157,7 +157,7 @@ export function Modal({
             )}
 
             {(title || description) && (
-              <div className="mb-4 pr-8">
+              <div className="mb-4 pr-10">
                 {title && <h3 className="text-lg font-semibold">{title}</h3>}
                 {description && (
                   <p className="mt-1 text-sm text-zinc-500">{description}</p>
