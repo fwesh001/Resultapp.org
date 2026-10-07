@@ -75,6 +75,32 @@ const RESERVED_DEMO_IDS = new Set([
 
 const DEMO_ID_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
 
+/**
+ * Apex-level routes that exist on the marketing site, never as tenant pages.
+ * On the demo host these must escape back to resultapp.org — otherwise the
+ * first-segment tenant rule would swallow them as demo ids (e.g. /pricing
+ * would 404 as "School not found: Pricing" instead of showing Pricing).
+ */
+const DEMO_ESCAPE_PATHS = new Set([
+  "",
+  "about",
+  "pricing",
+  "contact",
+  "support",
+  "register",
+  "login",
+  "forgot-password",
+  "reset-password",
+  "verify-email",
+  "dashboard",
+  "privacy",
+  "terms",
+  "refund-policy",
+  "robots.txt",
+  "sitemap.xml",
+  "demo",
+]);
+
 function extractTenant(request: NextRequest): TenantRef | null {
   // --- Explicit development override ---
   if (process.env.NODE_ENV !== "production") {
@@ -192,7 +218,6 @@ export function middleware(request: NextRequest) {
     }
     return NextResponse.next();
   }
-  const { slug: subdomain, demoId } = tenant;
 
   const url = request.nextUrl.clone();
   // Order matters. Strip the tenant slug the developer may also have typed
