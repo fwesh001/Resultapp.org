@@ -1,5 +1,5 @@
 import SignInForm from "@/components/auth/SignInForm";
-import { getTenant } from "@/lib/tenant";
+import { getTenant, isDemoTenant } from "@/lib/tenant";
 import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
 import { GraduationCap, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
@@ -23,6 +23,7 @@ export default async function AdminLoginPage({
   const subdomain = raw.toLowerCase().trim();
   const school = await getTenant(subdomain);
   const showSetupBanner = (await searchParams)?.setup === "required";
+  const demoHost = isDemoTenant(school);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
@@ -38,7 +39,9 @@ export default async function AdminLoginPage({
             </span>
             <div>
               <h1 className="text-lg font-semibold tracking-tight text-white">Admin Portal</h1>
-              <p className="text-xs font-mono text-purple-300/60">{subdomain}.resultapp.org</p>
+              <p className="text-xs font-mono text-purple-300/60">
+                {demoHost ? `demo.resultapp.org/${subdomain}` : `${subdomain}.resultapp.org`}
+              </p>
             </div>
             <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
               <ShieldCheck className="h-3 w-3" /> Secure

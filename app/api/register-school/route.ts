@@ -360,6 +360,7 @@ export async function POST(req: NextRequest) {
       .replace(/[^a-z0-9-]/g, "")}_`;
     const trustedRef =
       txRefRaw &&
+      !/^demo[-_]/i.test(txRefRaw) &&
       txRefRaw.startsWith(expectedRefPrefix) &&
       /^[A-Za-z0-9_-]{8,128}$/.test(txRefRaw)
         ? txRefRaw

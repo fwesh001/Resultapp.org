@@ -35,21 +35,50 @@ function dedupeRepeatedPrefix(pathname) {
   return pathname;
 }
 
-/** Mirrors middleware.ts extractTenant(). */
-function extractTenant(host) {
+/** Mirrors middleware.ts extractTenant(). Returns { slug, demoId } or null. */
+function extractTenant(host, pathname = "/") {
   const hostname = host.split(":")[0].toLowerCase();
   if (!hostname) return null;
   const labels = hostname.split(".");
 
   if (labels.length === 2 && (labels[1] === "localhost" || labels[1] === "127.0.0.1")) {
-    return labels[0] && labels[0] !== "www" ? labels[0] : null;
+    return labels[0] && labels[0] !== "www" ? { slug: labels[0], demoId: null } : null;
   }
   const BASE = "resultapp.org";
   if (hostname === BASE || hostname === `www.${BASE}`) return null;
+  if (hostname === `demo.${BASE}`) {
+    const first = pathname.split("/").filter(Boolean)[0] || "";
+    const RESERVED = new Set(["www","api","admin","app","dashboard","resultapp","mail","support","help","billing","ops","status","superadmin","demo","_next","favicon"]);
+    if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(first) || RESERVED.has(first)) return null;
+    return { slug: first, demoId: first };
+  }
   if (labels.length > 2) {
-    return labels[0] && labels[0] !== "www" ? labels[0] : null;
+    return labels[0] && labels[0] !== "www" ? { slug: labels[0], demoId: null } : null;
   }
   return null;
+}
+
+/** Mirrors the middleware() rewrite decision. */
+function rewrite(host, pathname) {
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/superadmin") ||
+    pathname.startsWith("/favicon") ||
+    /\.[a-zA-Z]+$/.test(pathname)
+  ) {
+    return pathname;
+  }
+  const tenant = extractTenant(host, pathname);
+  if (!tenant) {
+    const hostname = host.split(":")[0].toLowerCase();
+    if (hostname === "demo.resultapp.org" && (pathname === "/" || pathname === "")) {
+      return "/demo";
+    }
+    return pathname;
+  }
+  const withoutSlug = normalizePath(pathname, tenant.demoId ?? tenant.slug);
+  return `/${tenant.slug}${dedupeRepeatedPrefix(withoutSlug)}`;
 }
 
 let pass = 0;
@@ -84,13 +113,13 @@ check("stripped once, not recursively", () =>
 
 console.log("\nTenant detection");
 check("production tenant host detected", () =>
-  assert.equal(extractTenant("vhs.resultapp.org"), "vhs"));
+  assert.deepEqual(extractTenant("vhs.resultapp.org"), { slug: "vhs", demoId: null }));
 check("tenant with port detected", () =>
-  assert.equal(extractTenant("vhs.resultapp.org:443"), "vhs"));
+  assert.deepEqual(extractTenant("vhs.resultapp.org:443"), { slug: "vhs", demoId: null }));
 check("vhs.localhost:3000 detected (was marketing page)", () =>
-  assert.equal(extractTenant("vhs.localhost:3000"), "vhs"));
+  assert.deepEqual(extractTenant("vhs.localhost:3000"), { slug: "vhs", demoId: null }));
 check("vhs.127.0.0.1:3000 detected", () =>
-  assert.equal(extractTenant("vhs.127.0.0.1:3000"), "vhs"));
+  assert.deepEqual(extractTenant("vhs.127.0.0.1:3000"), { slug: "vhs", demoId: null }));
 check("apex not a tenant", () =>
   assert.equal(extractTenant("resultapp.org"), null));
 check("www apex not a tenant", () =>
@@ -99,6 +128,32 @@ check("bare localhost not a tenant", () =>
   assert.equal(extractTenant("localhost:3000"), null));
 check("www.localhost not a tenant", () =>
   assert.equal(extractTenant("www.localhost:3000"), null));
+
+console.log("\nPath-routed demo tenants (demo.resultapp.org/<id>)");
+check("demo id extracted from first path segment", () =>
+  assert.deepEqual(extractTenant("demo.resultapp.org", "/0001/admin"), { slug: "0001", demoId: "0001" }));
+check("demo rewrite keeps tenant prefix once", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/0001/admin/login"), "/0001/admin/login"));
+check("demo root path collapses to tenant root", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/0001"), "/0001/"));
+check("bare demo host falls through (landing owns /)", () =>
+  assert.equal(extractTenant("demo.resultapp.org", "/"), null));
+check("bare demo host rewrites to landing page", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/"), "/demo"));
+check("apex root untouched", () =>
+  assert.equal(rewrite("resultapp.org", "/"), "/"));
+check("reserved demo id rejected (api)", () =>
+  assert.equal(extractTenant("demo.resultapp.org", "/api/x"), null));
+check("reserved demo id rejected (superadmin)", () =>
+  assert.equal(extractTenant("demo.resultapp.org", "/superadmin"), null));
+check("reserved demo id rejected (demo)", () =>
+  assert.equal(extractTenant("demo.resultapp.org", "/demo"), null));
+check("short demo id rejected", () =>
+  assert.equal(extractTenant("demo.resultapp.org", "/ab"), null));
+check("demo system paths bypass untouched", () =>
+  assert.equal(rewrite("demo.resultapp.org", "/api/tenant/0001"), "/api/tenant/0001"));
+check("production rewrite unchanged by demo branch", () =>
+  assert.equal(rewrite("vhs.resultapp.org", "/admin/login"), "/vhs/admin/login"));
 
 console.log("\nDoubled route collapsing");
 check("/admin/login/admin/login -> /admin/login", () =>

@@ -1,4 +1,6 @@
-import { getTenant } from "@/lib/tenant";
+import { getTenant, isDemoTenant } from "@/lib/tenant";
+import { DemoBanner } from "@/components/demo/DemoBanner";
+import { DemoHelp } from "@/components/demo/DemoHelp";
 
 /**
  * Tenant (subdomain) layout.
@@ -17,10 +19,13 @@ export default async function TenantLayout({
   const { subdomain } = await params;
 
   const school = await getTenant(subdomain);
+  const demo = isDemoTenant(school);
 
   return (
     <div data-subdomain={subdomain} data-school-id={school?.id ?? undefined}>
+      {demo && <DemoBanner subdomain={subdomain} />}
       <main>{children}</main>
+      {demo && <DemoHelp />}
     </div>
   );
 }

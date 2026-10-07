@@ -1,0 +1,7 @@
+[Unit]
+Description=ResultApp demo sweep (hard-delete expired demo tenants)
+After=network.target resultapp-provision.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/demo-sweep.sh

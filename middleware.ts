@@ -17,9 +17,13 @@ import { NextRequest, NextResponse } from "next/server";
  *      are only two labels, so they must be checked BEFORE the "two labels or
  *      fewer means bare domain" rule or local testing silently falls through to
  *      the marketing site.
- *   4. Otherwise a hostname with more than two labels is a tenant, and the
+ *   4. `demo.<BASE_DOMAIN>` is path-routed: the FIRST PATH SEGMENT is the
+ *      tenant id ("demo.resultapp.org/0001/admin" -> tenant "0001"). This lets
+ *      unlimited ephemeral demo tenants share one verified domain + cert, so
+ *      no per-demo Vercel/Cloudflare writes are ever needed.
+ *   5. Otherwise a hostname with more than two labels is a tenant, and the
  *      first label is the subdomain ("vhs.resultapp.org" -> "vhs").
- *   5. Everything else (the apex, "www", bare "localhost") is not a tenant.
+ *   6. Everything else (the apex, "www", bare "localhost") is not a tenant.
  *
  * Path normalization:
  *   The subdomain is derived from the HOST, never from the path. But developers
@@ -34,14 +38,51 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org";
 
-function extractTenant(request: NextRequest): string | null {
+/**
+ * A resolved tenant: `slug` is the registry key the app renders,
+ * `demoId` is set only for path-routed demo tenants (host demo.<domain>).
+ */
+export interface TenantRef {
+  slug: string;
+  demoId: string | null;
+}
+
+/**
+ * Path segments that may never be a demo tenant id. Mirrors the backend
+ * RESERVED_SUBDOMAINS plus system paths the middleware bypasses — a demo id
+ * of "api" or "superadmin" must 404 as unknown, never shadow real routes.
+ * (The /api, /_next, /superadmin bypasses run before extraction anyway;
+ * this is the second lock on the same door.)
+ */
+const RESERVED_DEMO_IDS = new Set([
+  "www",
+  "api",
+  "admin",
+  "app",
+  "dashboard",
+  "resultapp",
+  "mail",
+  "support",
+  "help",
+  "billing",
+  "ops",
+  "status",
+  "superadmin",
+  "demo",
+  "_next",
+  "favicon",
+]);
+
+const DEMO_ID_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
+
+function extractTenant(request: NextRequest): TenantRef | null {
   // --- Explicit development override ---
   if (process.env.NODE_ENV !== "production") {
     const header = request.headers.get("x-tenant-subdomain");
     const query = request.nextUrl.searchParams.get("__tenant");
     const forced = (header || query || "").trim().toLowerCase();
     if (forced && /^[a-z0-9][a-z0-9-]*$/.test(forced)) {
-      return forced;
+      return { slug: forced, demoId: null };
     }
   }
 
@@ -55,7 +96,7 @@ function extractTenant(request: NextRequest): string | null {
   // bare-domain check below. This is what makes `vhs.localhost:3000` work.
   if (labels.length === 2 && (labels[1] === "localhost" || labels[1] === "127.0.0.1")) {
     const slug = labels[0];
-    return slug && slug !== "www" ? slug : null;
+    return slug && slug !== "www" ? { slug, demoId: null } : null;
   }
 
   // Bare apex / www — not a tenant.
@@ -63,10 +104,20 @@ function extractTenant(request: NextRequest): string | null {
     return null;
   }
 
+  // Path-routed demo host: demo.<domain>/<id>/... — the first path segment
+  // is the tenant. One verified domain serves unlimited ephemeral demos.
+  // A bare /demo path (no id) falls through to the marketing site; the demo
+  // landing page owns that route explicitly.
+  if (hostname === `demo.${BASE_DOMAIN}`) {
+    const first = request.nextUrl.pathname.split("/").filter(Boolean)[0] || "";
+    if (!DEMO_ID_RE.test(first) || RESERVED_DEMO_IDS.has(first)) return null;
+    return { slug: first, demoId: first };
+  }
+
   // Anything with 3+ labels is a tenant subdomain.
   if (labels.length > 2) {
     const slug = labels[0];
-    return slug && slug !== "www" ? slug : null;
+    return slug && slug !== "www" ? { slug, demoId: null } : null;
   }
 
   return null;
@@ -129,10 +180,19 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const subdomain = extractTenant(request);
-  if (!subdomain) {
+  const tenant = extractTenant(request);
+  if (!tenant) {
+    // Bare demo host (demo.<domain>/) owns a dedicated landing page with the
+    // "launch demo" entrypoint — anything else falls through untouched.
+    const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
+    if (host === `demo.${BASE_DOMAIN}` && (pathname === "/" || pathname === "")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/demo";
+      return NextResponse.rewrite(url);
+    }
     return NextResponse.next();
   }
+  const { slug: subdomain, demoId } = tenant;
 
   const url = request.nextUrl.clone();
   // Order matters. Strip the tenant slug the developer may also have typed
@@ -140,10 +200,18 @@ export function middleware(request: NextRequest) {
   // makes the segment count odd and the halving no longer lines up.
   //   /vhs/admin/login/admin/login -> strip slug -> /admin/login/admin/login
   //                                -> dedupe     -> /admin/login
-  const withoutSlug = normalizePath(pathname, subdomain);
+  // For path-routed demos the slug lives in the path (demoId), so it is the
+  // segment stripped here: /0001/admin -> /admin -> rewrite /0001/admin.
+  const withoutSlug = normalizePath(pathname, demoId ?? subdomain);
   url.pathname = `/${subdomain}${dedupeRepeatedPrefix(withoutSlug)}`;
 
-  return NextResponse.rewrite(url);
+  const res = NextResponse.rewrite(url);
+  if (demoId) {
+    // Demo tenants must never be indexed: noindex on every demo response,
+    // set at the single choke point all demo traffic passes through.
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
+  return res;
 }
 
 export const config = {

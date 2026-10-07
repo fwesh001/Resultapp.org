@@ -93,6 +93,9 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
     updatedAt: raw.updated_at,
     isVerified: raw.is_verified,
     isActive: raw.status === "active" || raw.is_active,
+    // Demo tenants are namespaced by subscription_status, never by slug —
+    // real subdomains cannot collide with this flag by construction.
+    demo: (raw.subscription_status || "").toLowerCase() === "demo",
     subscription:
       raw.subscription_plan || raw.subscription_status
         ? ({
@@ -117,6 +120,21 @@ function normalizeSchool(raw: TenantRegistrySchool): School {
           }
         : undefined,
   };
+}
+
+/**
+ * Single source of truth for "is this a demo tenant".
+ *
+ * Data-driven (registry subscription_status), never hostname-driven: the
+ * same demo row renders identically whether reached via demo.resultapp.org
+ * path routing, localhost dev overrides, or any future host layout.
+ */
+export function isDemoTenant(school: Pick<School, "demo" | "slug"> | null | undefined): boolean {
+  if (!school) return false;
+  if (school.demo === true) return true;
+  // Belt-and-braces: the demo- slug prefix is reserved server-side, so a
+  // matching slug is demo even if the flag is ever missing.
+  return school.slug.startsWith("demo-");
 }
 
 /**

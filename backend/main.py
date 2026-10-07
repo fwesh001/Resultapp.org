@@ -566,6 +566,9 @@ async def provision_school(payload: ProvisionRequest, request: Request):
 
     # Idempotency: the registry row IS the tenant. No database or site exists
     # to check, so a duplicate subdomain must be detected here.
+    if subdomain.startswith("demo-"):
+        logger.warning(f"[PROVISION] Rejected — '{subdomain}' uses the reserved demo prefix")
+        raise HTTPException(status_code=422, detail="Subdomains starting with 'demo-' are reserved for trial demos")
     if tenant_exists(subdomain):
         logger.warning(f"[PROVISION] Rejected — '{subdomain}' already registered")
         raise HTTPException(status_code=409, detail=f"Subdomain '{subdomain}' already provisioned")
@@ -996,6 +999,18 @@ try:
     logger.info("[App] Grading engine router mounted (/api/v1/templates, /api/v1/records/*)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Grading router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
+# Ephemeral demos — path-routed under demo.resultapp.org/<id>
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.demo import router as demo_router
+
+    app.include_router(demo_router)
+    logger.info("[App] Demo router mounted (POST /api/v1/demo/provision, POST /api/v1/demo/sweep)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Demo router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Phase 4: Super Admin — mount router (keeps provisioner intact)

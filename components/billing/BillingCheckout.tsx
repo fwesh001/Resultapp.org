@@ -19,6 +19,7 @@ import {
   CREDIT_PRICE,
   getSliderPct,
 } from "@/lib/pricing";
+import { isDemoTenant } from "@/lib/tenant";
 
 interface BillingCheckoutProps {
   tenantId: string;
@@ -439,6 +440,18 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
         <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 bg-purple-500/10 p-3 text-sm text-purple-200">
           <Loader2 className="h-4 w-4 animate-spin" />
           {upgrading ? "Verifying payment & unlocking…" : "Initializing Flutterwave…"}
+        </div>
+      )}
+
+      {isDemoTenant({ slug: tenantId }) && (
+        <div className="rounded-xl border border-amber-400/25 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100/80">
+          <p className="font-medium text-amber-100">Demo checkout — no real money moves.</p>
+          <p className="mt-1 text-amber-100/70">
+            Use test card <span className="font-mono">5531 8866 9555 5447</span> (any future
+            expiry, any CVV), or pick <span className="font-medium">Bank Transfer → Mock
+            Bank</span> and confirm “I have sent the money”. The same server
+            verification runs as production.
+          </p>
         </div>
       )}
 

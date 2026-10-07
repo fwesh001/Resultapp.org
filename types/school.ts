@@ -39,6 +39,8 @@ export interface School {
   updatedAt: string;
   isVerified: boolean;
   isActive: boolean;
+  /** Ephemeral demo tenant (path-routed under demo.resultapp.org). */
+  demo?: boolean;
   subscription?: Subscription;
   credits?: StudentCredits;
 }

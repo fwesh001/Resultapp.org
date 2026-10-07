@@ -1108,6 +1108,7 @@ def platform_stats():
             f"""
             SELECT COALESCE(SUM(amount_ngn), 0) FROM {BILLING_LEDGER_TABLE}
             WHERE transaction_type IN ('CREDIT_PURCHASE', 'SLOT_PURCHASE')
+              AND subdomain NOT LIKE 'demo-%'
               AND date_trunc('month', created_at) = date_trunc('month', NOW());
             """
         )
@@ -1116,6 +1117,7 @@ def platform_stats():
             f"""
             SELECT COALESCE(SUM(amount_ngn), 0) FROM {BILLING_LEDGER_TABLE}
             WHERE transaction_type IN ('CREDIT_PURCHASE', 'SLOT_PURCHASE')
+              AND subdomain NOT LIKE 'demo-%'
               AND date_trunc('month', created_at) = date_trunc('month', NOW() - INTERVAL '1 month');
             """
         )

@@ -98,7 +98,8 @@ def _collect_recipients(
             cur.execute(
                 f"""
                 SELECT subdomain, email FROM {SCHOOLS_REGISTRY_TABLE}
-                WHERE deleted_at IS NULL AND email IS NOT NULL AND email <> '';
+                WHERE deleted_at IS NULL AND email IS NOT NULL AND email <> ''
+                  AND COALESCE(subscription_status, '') <> 'demo';
                 """
             )
             for subdomain, email in cur.fetchall():
@@ -112,6 +113,7 @@ def _collect_recipients(
                       AND EXISTS (
                         SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} sch
                         WHERE sch.subdomain = s.subdomain AND sch.deleted_at IS NULL
+                          AND COALESCE(sch.subscription_status, '') <> 'demo'
                       );
                     """
                 )
@@ -125,6 +127,7 @@ def _collect_recipients(
               AND EXISTS (
                 SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} sch
                 WHERE sch.subdomain = s.subdomain AND sch.deleted_at IS NULL
+                  AND COALESCE(sch.subscription_status, '') <> 'demo'
               );
             """
         )
