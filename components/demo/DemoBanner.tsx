@@ -7,6 +7,9 @@ import { FlaskConical } from "lucide-react";
  * Persistent demo banner. Rendered for demo tenants only, above all portal
  * content. Pushes content down (never overlays) and links out to real
  * registration — the demo's job is to convert, not to trap.
+ *
+ * The register link is absolute: a relative /register on the demo host
+ * would be swallowed by path-based tenant routing.
  */
 export function DemoBanner({ subdomain }: { subdomain: string }) {
   return (
@@ -19,7 +22,7 @@ export function DemoBanner({ subdomain }: { subdomain: string }) {
         Demo mode — explore freely, this classroom resets automatically.
       </span>
       <Link
-        href="/register"
+        href="https://resultapp.org/register"
         className="underline underline-offset-4 hover:opacity-80"
       >
         Get your own portal ({subdomain})
