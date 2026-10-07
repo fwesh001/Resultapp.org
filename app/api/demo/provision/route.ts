@@ -41,22 +41,21 @@ function allowed(ip: string): { ok: boolean; retryAfterS: number } {
   return { ok: true, retryAfterS: 0 };
 }
 
-function getBackendBase(): string {
+function getBackendOrigin(): string {
   // PROVISION_API_URL may be the droplet root, the /api/v1 base, or the full
   // /api/v1/provision endpoint (register-school handles all three shapes).
-  // Normalize every shape to a clean base before appending our own path —
-  // otherwise the backend sees a doubled path and 404s.
+  // Normalize every shape to the bare origin — the fetch below appends the
+  // full /api/v1/demo/provision path itself.
   const raw =
     process.env.PROVISION_API_URL?.trim() ||
     process.env.BACKEND_URL?.trim() ||
     process.env.API_URL?.trim() ||
     "http://159.223.178.34:8000";
-  const stripped = raw
+  return raw
     .replace(/\/$/, "")
     .replace(/\/api\/v1\/provision\/?$/, "")
     .replace(/\/api\/v1\/?$/, "")
     .replace(/\/provision\/?$/, "");
-  return `${stripped}/api/v1`;
 }
 
 export async function POST(req: NextRequest) {
@@ -101,7 +100,7 @@ async function handleProvision(req: NextRequest) {
   let data: Record<string, unknown>;
   let status = 502;
   try {
-    const res = await fetch(`${getBackendBase()}/api/v1/demo/provision`, {
+    const res = await fetch(`${getBackendOrigin()}/api/v1/demo/provision`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
       cache: "no-store",
