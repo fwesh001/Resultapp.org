@@ -116,6 +116,76 @@ check("isDemoTenant is data-driven, not hostname-driven", () => {
   return true;
 });
 
+console.log("\nSession resumption (cookie + Continue)");
+const demoProxy = read(path.join("app", "api", "demo", "provision", "route.ts"));
+const launcher = read(path.join("components", "demo", "DemoLauncher.tsx"));
+check("proxy enforces max 2 launches per IP per hour", () =>
+  /MAX_PER_WINDOW = 2/.test(demoProxy) ? true : "proxy limit is not 2/hour"
+);
+check("active_demo cookie is cross-subdomain with 1h TTL", () => {
+  if (!/ACTIVE_DEMO_COOKIE = "active_demo"/.test(demoProxy)) return "cookie name missing in proxy";
+  if (!/Domain=\.resultapp\.org/.test(demoProxy)) return "cookie is not shared across subdomains";
+  if (!/ACTIVE_DEMO_MAX_AGE_S = 3600/.test(demoProxy)) return "cookie TTL is not 1 hour";
+  return true;
+});
+check("launcher cookie name matches the proxy writer", () => {
+  const a = /ACTIVE_DEMO_COOKIE = "([^"]+)"/.exec(demoProxy);
+  const b = /ACTIVE_DEMO_COOKIE = "([^"]+)"/.exec(launcher);
+  if (!a || !b) return "cookie constant missing on one side";
+  return a[1] === b[1] ? true : `proxy writes ${a[1]} but launcher reads ${b[1]}`;
+});
+check("Continue verifies liveness before reuse", () =>
+  /\/api\/tenant\//.test(launcher) && /available/.test(launcher)
+    ? true
+    : "Continue does not check the classroom still exists"
+);
+check("swept classroom degrades to fresh launch", () =>
+  /clearActiveDemo/.test(launcher) ? true : "stale cookie is never cleared"
+);
+
+console.log("\nEscape hatches and polish");
+const demoBanner = read(path.join("components", "demo", "DemoBanner.tsx"));
+const layoutFooter = read(path.join("components", "layout", "Footer.tsx"));
+const modal = read(path.join("components", "ui", "Modal.tsx"));
+check("banner register link is absolute", () =>
+  /href="https:\/\/resultapp\.org\/register"/.test(demoBanner)
+    ? true
+    : "banner link is relative and would misroute on the demo host"
+);
+check("footer Demo link is absolute and in Product list", () => {
+  const product = layoutFooter.slice(layoutFooter.indexOf("Product"));
+  return /href="https:\/\/demo\.resultapp\.org">Demo</.test(product)
+    ? true
+    : "footer Demo link missing, misplaced, or relative";
+});
+check("modal close button pinned top-right", () =>
+  /absolute right-4 top-4/.test(modal) ? true : "modal X is not pinned top-right"
+);
+check("landing pill removed", () => {
+  const landing = read(path.join("app", "demo", "page.tsx"));
+  return /INTERACTIVE DEMO/.test(landing) ? "pill copy still present" : true;
+});
+
+console.log("\nContextual help");
+const helpDict = read(path.join("lib", "demoHelpContent.ts"));
+const demoHelp = read(path.join("components", "demo", "DemoHelp.tsx"));
+check("help covers login, roster, billing, grading + fallback", () => {
+  for (const re of ["admin\\/login", "staff\\/login", "billing", "grading"]) {
+    if (!new RegExp(re).test(helpDict)) return `no dictionary entry matching ${re}`;
+  }
+  return /DEMO_HELP_FALLBACK/.test(helpDict) ? true : "no fallback guide";
+});
+check("accordion is single-open with aria wiring", () =>
+  /openIndex === i/.test(demoHelp) && /aria-expanded/.test(demoHelp) && /aria-controls/.test(demoHelp)
+    ? true
+    : "help accordion is not single-open/accessible"
+);
+check("auto-open is login-only and session-gated", () => {
+  if (!/LOGIN_PATH_RE/.test(demoHelp)) return "no login-path gate on auto-open";
+  if (!/sessionStorage/.test(demoHelp)) return "auto-open is not once-per-session";
+  return true;
+});
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} demo-isolation checks passed`);
 if (failed.length) {
