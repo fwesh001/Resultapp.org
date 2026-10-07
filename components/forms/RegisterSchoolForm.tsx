@@ -33,6 +33,7 @@ import {
   FREE_CREDIT_GRANT,
 } from "@/lib/pricing";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
+import { fireCompletionBurst, fireMilestoneBurst } from "@/lib/celebration";
 
 // ---------------------------------------------------------------------------
 // RegisterSchoolForm — 3-step pay-first wizard.
@@ -310,6 +311,17 @@ export function RegisterSchoolForm() {
     ready: boolean;
   } | null>(null);
   const [progressTimedOut, setProgressTimedOut] = useState(false);
+  // Celebration anchors and once-per-registration state. Milestone bursts are
+  // tied to the progress bar so particles originate where the user is looking;
+  // the finale is anchored to the portal call to action.
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const portalCtaRef = useRef<HTMLAnchorElement | null>(null);
+  const celebratedMilestones = useRef<Set<number>>(new Set());
+  const celebratedCompletion = useRef(false);
+  const [portalReadyAt, setPortalReadyAt] = useState<number | null>(null);
+  // Hold navigation briefly after readiness so the completion celebration is
+  // visible instead of being cut off by an instant redirect.
+  const CELEBRATION_HOLD_MS = 2800;
 
   // Armed once per success, from the event that sets successData, rather than
   // from an effect. This is the documented React escape hatch for "reset state
@@ -327,6 +339,12 @@ export function RegisterSchoolForm() {
     successData && handoffStartedAt !== null && !handoffCancelled
       ? Math.max(0, PORTAL_HANDOFF_SECONDS - secondsElapsed)
       : null;
+
+  useEffect(() => {
+    celebratedMilestones.current.clear();
+    celebratedCompletion.current = false;
+    setPortalReadyAt(null);
+  }, [successData?.subdomain]);
 
   // Poll readiness. 5s interval keeps it responsive without hammering the API;
   // the 6-minute ceiling is generous because certificate issuance on a cold
@@ -348,11 +366,18 @@ export function RegisterSchoolForm() {
         if (cancelled) return;
         const percent = Number(data.percent);
         const ready = data.ready === true;
+        const normalized = Number.isFinite(percent) ? Math.max(5, Math.min(100, percent)) : 40;
         setProgress({
-          percent: Number.isFinite(percent) ? Math.max(5, Math.min(100, percent)) : 40,
+          percent: normalized,
           stage: String(data.stage || "Setting up your portal"),
           ready,
         });
+        for (const milestone of [60, 85]) {
+          if (normalized >= milestone && !celebratedMilestones.current.has(milestone)) {
+            celebratedMilestones.current.add(milestone);
+            fireMilestoneBurst(progressBarRef.current, milestone / 100);
+          }
+        }
         if (Date.now() - started > MAX_WAIT_MS && !ready) {
           setProgressTimedOut(true);
           return;
@@ -375,11 +400,26 @@ export function RegisterSchoolForm() {
   const portalReady = progress?.ready === true;
 
   useEffect(() => {
+    if (!portalReady || celebratedCompletion.current) return;
+    celebratedCompletion.current = true;
+    setPortalReadyAt(Date.now());
+    fireCompletionBurst(portalCtaRef.current);
+  }, [portalReady]);
+
+  useEffect(() => {
     if (handoffIn === null) return;
     // Hold until the portal genuinely answers, so the countdown is the last
     // beat of a completed journey rather than a leap into a 525.
     if (!portalReady && !progressTimedOut) return;
+    const celebrationHoldMs =
+      portalReady && portalReadyAt !== null
+        ? Math.max(0, CELEBRATION_HOLD_MS - (now - portalReadyAt))
+        : 0;
     if (handoffIn <= 0) {
+      if (celebrationHoldMs > 0) {
+        const id = window.setTimeout(() => setNow(Date.now()), Math.min(celebrationHoldMs, 1000));
+        return () => window.clearTimeout(id);
+      }
       // Hard navigation: a client-side push would land on a cross-origin
       // subdomain, which Next cannot route.
       window.location.href = adminLoginUrl;
@@ -387,7 +427,7 @@ export function RegisterSchoolForm() {
     }
     const id = window.setTimeout(() => setNow(Date.now()), 1000);
     return () => window.clearTimeout(id);
-  }, [handoffIn, adminLoginUrl, portalReady, progressTimedOut]);
+  }, [handoffIn, adminLoginUrl, portalReady, portalReadyAt, progressTimedOut]);
 
   // Base domain fallback: NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org"
   const baseDomain =
@@ -766,7 +806,7 @@ export function RegisterSchoolForm() {
       values.adminName.trim() || customerEmail.split("@")[0] || values.schoolName.trim();
 
     const openModal = () => {
-      initiateFlutterwaveInlinePayment(
+      const checkout = initiateFlutterwaveInlinePayment(
         {
           publicKey: publicKey || "FLWPUBK_TEST-dummy-key-for-demo-do-not-use-in-prod",
           txRef: ref,
@@ -806,6 +846,15 @@ export function RegisterSchoolForm() {
             if (!ok || !res.transaction_id) {
               setGlobalError("Payment was not successful. Please try again — nothing was created.");
               return;
+            }
+            // Flutterwave intentionally leaves its success screen visible after
+            // invoking callback. Dismiss it immediately so the paid customer
+            // sees the live provisioning progress underneath. This is only UI
+            // dismissal: provisioning still waits for server-side verification.
+            try {
+              checkout?.close();
+            } catch (err) {
+              console.warn("[RegisterSchoolForm] checkout dismissal failed", err);
             }
             setTransactionId(String(res.transaction_id));
             setTxRef(res.tx_ref || ref);
@@ -1089,6 +1138,7 @@ export function RegisterSchoolForm() {
 
         {portalReady ? (
           <a
+            ref={portalCtaRef}
             href={adminLoginUrl}
             target="_blank"
             rel="noopener noreferrer"
@@ -1139,6 +1189,7 @@ export function RegisterSchoolForm() {
               </div>
 
               <div
+                ref={progressBarRef}
                 className="mt-3 h-2 w-full overflow-hidden rounded-full bg-purple-950/60"
                 role="progressbar"
                 aria-valuenow={progress?.percent ?? 10}

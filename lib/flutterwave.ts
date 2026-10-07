@@ -290,8 +290,12 @@ export interface FlutterwaveInlineResponse {
 // Extend Window for FlutterwaveCheckout injected by script
 declare global {
   interface Window {
-    FlutterwaveCheckout?: (config: Record<string, unknown>) => void;
+    FlutterwaveCheckout?: (config: Record<string, unknown>) => { close: () => void } | void;
   }
+}
+
+export interface FlutterwaveCheckoutHandle {
+  close: () => void;
 }
 
 /**
@@ -340,28 +344,28 @@ export interface InitiateInlinePaymentCallbacks {
 export function initiateFlutterwaveInlinePayment(
   config: FlutterwaveInlineConfig,
   callbacks: InitiateInlinePaymentCallbacks = {}
-): void {
+): FlutterwaveCheckoutHandle | null {
   if (typeof window === "undefined") {
     callbacks.onError?.(new Error("FlutterwaveCheckout is only available on the client"));
-    return;
+    return null;
   }
 
   if (!window.FlutterwaveCheckout) {
     callbacks.onError?.(
       new Error("FlutterwaveCheckout not loaded. Call loadFlutterwaveScript() first.")
     );
-    return;
+    return null;
   }
 
   if (!config.publicKey) {
     callbacks.onError?.(new Error("Flutterwave public key is missing"));
-    return;
+    return null;
   }
 
   const { onSuccess, onClose, onError } = callbacks;
 
   try {
-    window.FlutterwaveCheckout({
+    const checkout = window.FlutterwaveCheckout({
       public_key: config.publicKey,
       tx_ref: config.txRef,
       amount: config.amount,
@@ -396,8 +400,11 @@ export function initiateFlutterwaveInlinePayment(
         onClose?.();
       },
     });
+    if (checkout && typeof checkout.close === "function") return checkout;
+    return null;
   } catch (err) {
     onError?.(err as Error);
+    return null;
   }
 }
 

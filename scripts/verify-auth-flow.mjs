@@ -771,6 +771,35 @@ check("the Flutterwave customer name is the admin name, not the email prefix", (
     : "the checkout still derives the payer name from the email";
 });
 
+check("a successful checkout is dismissed before the wizard advances", () => {
+  if (!/const checkout = initiateFlutterwaveInlinePayment\(/.test(register)) {
+    return "the checkout handle is discarded, so the modal cannot be dismissed programmatically";
+  }
+  const start = register.indexOf("onSuccess: (res) => {");
+  const end = register.indexOf("onClose: () => {", start);
+  const callback = start === -1 ? "" : register.slice(start, end === -1 ? start + 1200 : end);
+  if (!/checkout\?\.close\(\)/.test(callback)) return "a successful callback never dismisses the checkout modal";
+  if (!(callback.indexOf("checkout?.close()") < callback.indexOf("setTransactionId"))) {
+    return "wizard state advances before the checkout modal is dismissed";
+  }
+  if (!/verifyTransactionByReference|transaction_id/.test(registerSchool)) {
+    return "modal dismissal bypassed server-side payment verification";
+  }
+  return true;
+});
+
+check("milestone and completion celebrations are bounded and accessible", () => {
+  if (!/celebratedMilestones/.test(register)) return "milestone celebrations can refire on every poll";
+  if (!/celebratedCompletion/.test(register)) return "the completion celebration can refire";
+  if (!/prefers-reduced-motion/.test(read(path.join("lib", "celebration.ts")))) {
+    return "celebrations ignore reduced-motion preferences";
+  }
+  if (!/canvas\.remove\(\)/.test(read(path.join("lib", "celebration.ts")))) {
+    return "celebration canvases are never cleaned up";
+  }
+  return true;
+});
+
 check("the welcome email greeting uses the admin name", () => {
   // backend derives it once, then hands it to send_welcome_email.
   if (!/admin_name = \(payload\.admin_name or admin_email\.split/.test(main)) {
@@ -920,7 +949,7 @@ check("a provisioned school always has a redirect out", () => {
   // counter, so "the effect" is the one keyed on handoffIn.
   const effectStart = register.indexOf("if (handoffIn === null) return;");
   if (effectStart === -1) return "there is no countdown effect keyed on handoffIn";
-  const effectEnd = register.search(/\n\s{2}\}, \[handoffIn, adminLoginUrl\]\);/);
+  const effectEnd = register.search(/\n\s{2}\}, \[handoffIn, adminLoginUrl[^\]]*\]\);/);
   const effect = effectEnd === -1
     ? register.slice(effectStart, effectStart + 700)
     : register.slice(effectStart, effectEnd);
