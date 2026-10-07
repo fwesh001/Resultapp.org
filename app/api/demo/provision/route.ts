@@ -85,7 +85,12 @@ async function handleProvision(req: NextRequest) {
         error: "Demo launch limit reached — please try again in a little while.",
         retry_after_s: gate.retryAfterS,
       },
-      { status: 429 },
+      {
+        status: 429,
+        // Standard header so intermediaries and browser tooling can honor the
+        // cooldown without parsing the body.
+        headers: { "Retry-After": String(gate.retryAfterS) },
+      },
     );
   }
 
