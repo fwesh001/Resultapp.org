@@ -71,13 +71,16 @@ function rewrite(host, pathname) {
   ) {
     return pathname;
   }
+  const hostname = host.split(":")[0].toLowerCase();
+  // Demo-host escape hatch runs BEFORE tenant extraction.
+  if (hostname === "demo.resultapp.org") {
+    const first = pathname.split("/").filter(Boolean)[0] || "";
+    if (DEMO_ESCAPE.has(first)) return `REDIRECT:https://resultapp.org${pathname}`;
+  }
   const tenant = extractTenant(host, pathname);
   if (!tenant) {
-    const hostname = host.split(":")[0].toLowerCase();
-    if (hostname === "demo.resultapp.org") {
-      if (pathname === "/" || pathname === "") return "/demo";
-      const first = pathname.split("/").filter(Boolean)[0] || "";
-      if (DEMO_ESCAPE.has(first)) return `REDIRECT:https://resultapp.org${pathname}`;
+    if (hostname === "demo.resultapp.org" && (pathname === "/" || pathname === "")) {
+      return "/demo";
     }
     return pathname;
   }
