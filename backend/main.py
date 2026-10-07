@@ -714,20 +714,25 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         # not being live yet rather than redirecting into a dead subdomain.
         vercel_domain: Dict[str, Any] = {"configured": False, "success": False}
         try:
-            from services.vercel_domains import add_tenant_domain
+            from services.vercel_domains import ensure_domain_verified
 
-            vercel_domain = add_tenant_domain(subdomain)
-            if vercel_domain.get("success"):
+            # Adds the domain, publishes the Cloudflare TXT that Vercel needs,
+            # then waits briefly for verification. Without the TXT step the
+            # domain sits unverified and every visitor gets a 525.
+            vercel_domain = ensure_domain_verified(subdomain)
+            vercel_domain["configured"] = True
+            vercel_domain["success"] = bool(vercel_domain.get("added"))
+            if vercel_domain.get("verified"):
                 logger.info(
-                    "[PROVISION] Vercel domain ready for '%s' (verified=%s)",
-                    subdomain, vercel_domain.get("verified"),
+                    "[PROVISION] Vercel domain verified for '%s'",
+                    subdomain,
                 )
             else:
                 logger.warning(
-                    "[PROVISION] Vercel domain NOT ready for '%s': %s — "
+                    "[PROVISION] Vercel domain added but NOT verified for '%s' — "
                     "school is registered but not yet reachable; reconcile with "
-                    "`vercel_domains.add_tenant_domain`",
-                    subdomain, vercel_domain.get("error"),
+                    "`vercel_domains.ensure_domain_verified`",
+                    subdomain,
                 )
         except Exception as e:
             vercel_domain = {"configured": True, "success": False, "error": str(e)}

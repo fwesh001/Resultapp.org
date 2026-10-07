@@ -30,6 +30,7 @@ Env:
 
 import logging
 import os
+import time
 from typing import Any, Dict, Optional
 
 import requests
@@ -37,6 +38,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 VERCEL_API = "https://api.vercel.com"
+CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
 
 #: A domain add is a single small POST. Keep it short so a Vercel outage can
 #: never hold up a customer's provisioning.
@@ -143,6 +145,128 @@ def add_tenant_domain(subdomain: str) -> Dict[str, Any]:
     result["error"] = f"Vercel HTTP {resp.status_code}: {detail}" if detail else f"Vercel HTTP {resp.status_code}"
     logger.error("[Vercel] Domain add for '%s' failed: %s", slug, result["error"])
     return result
+
+
+def _cf_config() -> Dict[str, str]:
+    return {
+        "token": (os.getenv("CLOUDFLARE_API_TOKEN") or "").strip(),
+        "zone_id": (os.getenv("CLOUDFLARE_ZONE_ID") or "").strip(),
+    }
+
+
+def publish_verification_txt(domain: str, value: str) -> Dict[str, Any]:
+    """Write the `_vercel` TXT record Vercel needs to verify a domain.
+
+    Without this the subdomain is added to Vercel but stays unverified, so
+    Cloudflare has no certificate to present and every visitor gets a 525
+    SSL-handshake error until a human edits DNS by hand. Doing it here is what
+    makes tenant provisioning genuinely hands-off.
+
+    Cloudflare stays authoritative for the zone — we only add a TXT record, we
+    never move nameservers, so Email Routing and the Brevo DKIM/SPF records are
+    untouched.
+    """
+    cfg = _cf_config()
+    if not cfg["token"] or not cfg["zone_id"]:
+        return {"written": False, "reason": "Cloudflare API not configured"}
+    if not domain or not value:
+        return {"written": False, "reason": "missing domain or value"}
+
+    headers = {"Authorization": f"Bearer {cfg['token']}", "Content-Type": "application/json"}
+    name = "_vercel"
+
+    try:
+        # Reuse the existing record when there is one, so repeated provisions do
+        # not pile up duplicate TXT entries.
+        listed = requests.get(
+            f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
+            params={"type": "TXT", "name": name},
+            headers=headers,
+            timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
+        )
+        if listed.ok:
+            for rec in listed.json().get("result", []):
+                # _vercel carries one TXT per verified domain; append, never clobber.
+                if rec.get("content") == value:
+                    return {"written": True, "reason": "already present"}
+                requests.post(
+                    f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
+                    json={"type": "TXT", "name": name, "content": value, "ttl": 300},
+                    headers=headers,
+                    timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
+                )
+                return {"written": True, "reason": "appended"}
+
+        resp = requests.post(
+            f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
+            json={"type": "TXT", "name": name, "content": value, "ttl": 300},
+            headers=headers,
+            timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
+        )
+        if resp.ok:
+            return {"written": True, "reason": "created"}
+        return {"written": False, "reason": f"HTTP {resp.status_code}"}
+    except requests.RequestException as exc:
+        logger.error("[Cloudflare] TXT publish failed for %s: %s", domain, exc.__class__.__name__)
+        return {"written": False, "reason": exc.__class__.__name__}
+
+
+def _verification_value(payload: Dict[str, Any]) -> Optional[str]:
+    """Pull the required TXT value out of a Vercel domain response."""
+    verification = payload.get("verification")
+    if isinstance(verification, dict):
+        value = verification.get("value")
+        return str(value) if value else None
+    if isinstance(verification, list):
+        for item in verification:
+            if isinstance(item, dict) and item.get("value"):
+                return str(item["value"])
+    return None
+
+
+def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str, Any]:
+    """Add the domain AND publish its verification TXT, then poll until verified.
+
+    Returns {verified, added, txt, domain}. Safe to call repeatedly.
+    """
+    slug = (subdomain or "").strip().lower()
+    domain = f"{slug}.resultapp.org"
+    out: Dict[str, Any] = {
+        "verified": False,
+        "added": False,
+        "txt": None,
+        "domain": domain,
+    }
+    if not slug:
+        return out
+
+    added = add_tenant_domain(slug)
+    out["added"] = bool(added.get("success"))
+    out["verified"] = bool(added.get("verified"))
+    if not is_configured():
+        return out
+
+    if not out["verified"]:
+        status = get_domain_status(slug) or {}
+        needed = _verification_value(status)
+        if needed:
+            txt = publish_verification_txt(domain, needed)
+            out["txt"] = txt
+            logger.info("[Vercel] Published verification TXT for '%s': %s", domain, txt.get("reason"))
+
+    # Vercel re-checks on a timer; a short bounded poll turns a multi-minute
+    # human wait into a couple of seconds inside the provision request.
+    deadline = time.time() + max(0.0, timeout_s)
+    while time.time() < deadline and not out["verified"]:
+        time.sleep(5)
+        st = get_domain_status(slug) or {}
+        out["verified"] = bool(st.get("verified"))
+
+    if out["verified"]:
+        logger.info("[Vercel] '%s' verified", domain)
+    else:
+        logger.warning("[Vercel] '%s' still unverified after %.0fs", domain, timeout_s)
+    return out
 
 
 def get_domain_status(subdomain: str) -> Optional[Dict[str, Any]]:

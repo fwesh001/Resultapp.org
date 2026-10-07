@@ -97,8 +97,8 @@ def send_welcome_email(
     admin_name: str,
     school_name: str,
     subdomain: str,
-    student_count: int,
-    temp_credentials: Dict[str, str],
+student_count: int,
+    temp_credentials: Optional[Dict[str, str]] = None,
     domain: Optional[str] = None,
     login_url: Optional[str] = None,
 ) -> bool:
@@ -106,23 +106,28 @@ def send_welcome_email(
     Send welcome email via Brevo.
 
     Returns True on success, False on failure (logs details).
-    If BREVO_API_KEY is missing, logs and returns True (dev mode — no-op).
+    If BREVO_API_KEY is missing, logs and returns True (dev mode - no-op).
+
+    `temp_credentials` is optional: the customer now chooses their own admin
+    password during signup, so there is no generated credential to hand out.
+    It is still accepted for older callers and for dev-mode logging.
     """
     cfg = _brevo_config()
     domain = domain or f"{subdomain.lower().strip()}.resultapp.org"
     login_url = login_url or f"https://{domain}"
+    creds = temp_credentials or {}
 
     # Dev/CI mode without key: log only
     if not cfg["api_key"]:
         logger.warning(
             f"[EMAIL] BREVO_API_KEY not set — skipping real send for {admin_email} "
-            f"(domain={domain}, user={temp_credentials.get('username')}). "
+            f"(domain={domain}, user={creds.get('username')}). "
             f"In production set BREVO_API_KEY to enable email."
         )
         # For Droplet dev without Brevo, we still want to log the credentials
         logger.info(
             f"[EMAIL-DEV] Would send to {admin_email}: "
-            f"login={login_url} user={temp_credentials.get('username')} pass={temp_credentials.get('password')}"
+            f"login={login_url} user={creds.get('username')} pass={creds.get('password')}"
         )
         return True
 
@@ -154,8 +159,8 @@ def send_welcome_email(
                 "admin_name": admin_name,
                 "admin_email": admin_email,
                 "student_count": student_count,
-                "temp_username": temp_credentials.get("username", admin_email),
-                "temp_password": temp_credentials.get("password", ""),
+                "temp_username": creds.get("username") or admin_email,
+                "temp_password": creds.get("password", ""),
                 "total_amount": student_count * 100,
             }
 
@@ -167,16 +172,16 @@ def send_welcome_email(
             admin_name=admin_name,
             admin_email=admin_email,
             student_count=student_count,
-            temp_username=temp_credentials.get("username", admin_email),
-            temp_password=temp_credentials.get("password", ""),
+            temp_username=creds.get("username") or admin_email,
+            temp_password=creds.get("password", ""),
             login_url=login_url,
         )
         payload["htmlContent"] = html
         payload["textContent"] = (
             f"Welcome to ResultApp, {school_name}!\n"
             f"Your portal: {login_url}\n"
-            f"Username: {temp_credentials.get('username', admin_email)}\n"
-            f"Temporary Password: {temp_credentials.get('password', '')}\n"
+            f"Username: {creds.get('username') or admin_email}\n"
+            f"Temporary Password: {creds.get('password', '') or '(the password you chose at signup)'}\n"
             f"Student slots: {student_count} (NGN {student_count*100} paid)\n"
             f"Please change your password on first login.\n"
         )
