@@ -68,6 +68,13 @@ CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
 _TIMEOUT_CONNECT = 10
 _TIMEOUT_READ = 25
 
+#: Minimum interval between explicit Vercel verification attempts for one
+#: tenant. Readiness is polled every few seconds; without this, every poll
+#: would ask Vercel to recheck DNS.
+_VERIFY_RETRY_SECONDS = 60.0
+_verify_lock = threading.Lock()
+_last_verify_attempt: Dict[str, float] = {}
+
 
 def _config() -> Dict[str, str]:
     return {
@@ -299,6 +306,60 @@ def _verification_value(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def verify_project_domain(subdomain: str) -> Optional[Dict[str, Any]]:
+    """Ask Vercel to check the published TXT challenge right now.
+
+    Adding a domain and publishing its TXT is not enough: Vercel only marks
+    the hostname verified after its verify endpoint sees the challenge. This
+    returns Vercel's domain payload, or None when verification cannot be
+    completed yet.
+    """
+    cfg = _config()
+    slug = (subdomain or "").strip().lower()
+    if not slug or not is_configured():
+        return None
+
+    domain = f"{slug}.resultapp.org"
+    params = {}
+    if cfg["team_id"]:
+        params["teamId"] = cfg["team_id"]
+    url = f"{VERCEL_API}/v9/projects/{cfg['project_id']}/domains/{domain}/verify"
+
+    try:
+        resp = requests.post(
+            url,
+            params=params,
+            headers=_auth_headers(cfg["token"]),
+            timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
+        )
+    except requests.RequestException as exc:
+        logger.error("[Vercel] Verify request failed for '%s': %s: %s", domain, exc.__class__.__name__, exc)
+        return None
+
+    if resp.status_code != 200:
+        logger.warning("[Vercel] Verify not complete for '%s': HTTP %s", domain, resp.status_code)
+        return None
+    try:
+        return resp.json()
+    except Exception:  # noqa: BLE001
+        logger.warning("[Vercel] Verify response for '%s' was not JSON", domain)
+        return None
+
+
+def _verify_due(slug: str, now: Optional[float] = None) -> bool:
+    """Allow one explicit verify attempt per tenant per retry interval."""
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return False
+    timestamp = now if now is not None else time.time()
+    with _verify_lock:
+        last = _last_verify_attempt.get(slug, 0.0)
+        if timestamp - last < _VERIFY_RETRY_SECONDS:
+            return False
+        _last_verify_attempt[slug] = timestamp
+        return True
+
+
 def start_domain_verification(subdomain: str) -> Dict[str, Any]:
     """Add the tenant domain and immediately publish the verification TXT.
 
@@ -331,6 +392,12 @@ def start_domain_verification(subdomain: str) -> Dict[str, Any]:
             txt = publish_verification_txt(domain, needed)
             out["txt"] = txt
             logger.info("[Vercel] Published verification TXT for '%s': %s", domain, txt.get("reason"))
+        # The challenge may not have propagated yet, but an immediate check is
+        # free and sometimes completes instantly. Later readiness polls retry at
+        # a bounded interval while DNS propagates.
+        verified = verify_project_domain(slug) or {}
+        if verified.get("verified"):
+            out["verified"] = True
     return out
 
 
@@ -351,6 +418,8 @@ def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str,
     while time.time() < deadline and not out["verified"]:
         time.sleep(5)
         st = get_domain_status(slug) or {}
+        if not st.get("verified"):
+            st = verify_project_domain(slug) or st
         out["verified"] = bool(st.get("verified"))
 
     if out["verified"]:
@@ -462,7 +531,15 @@ def get_portal_readiness(subdomain: str) -> Dict[str, Any]:
         registered = False
 
     probe = probe_portal(slug, timeout=6.0)
-    vstatus = get_domain_status(slug) or {}
+
+    # A progressing tenant may be waiting only for Vercel to notice an already
+    # published TXT. Retrigger verification at a bounded interval so ordinary
+    # readiness polling, rather than an operator, completes that step.
+    vstatus: Dict[str, Any] = {}
+    if registered and not probe["reachable"] and _verify_due(slug):
+        vstatus = verify_project_domain(slug) or {}
+    if not vstatus:
+        vstatus = get_domain_status(slug) or {}
     verified = bool(vstatus.get("verified"))
 
     if probe["reachable"]:
