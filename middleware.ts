@@ -82,7 +82,6 @@ const DEMO_ID_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
  * would 404 as "School not found: Pricing" instead of showing Pricing).
  */
 const DEMO_ESCAPE_PATHS = new Set([
-  "",
   "about",
   "pricing",
   "contact",
