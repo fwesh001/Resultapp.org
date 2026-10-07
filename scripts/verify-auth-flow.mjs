@@ -944,9 +944,17 @@ check("a provisioned school always has a redirect out", () => {
   // Target must be the admin login, not the bare portal root. Assert the URL
   // BUILDER specifically: a bare "/admin/login somewhere in the file" check
   // passed under mutation when deployedUrl was pointed at the portal root.
-  const urlBuilder = /\$\{\s*successData\.deployedUrl\.replace\([^)]*\)\s*\}\/admin\/login/.test(register);
-  if (!urlBuilder) {
-    return "adminLoginUrl is not built from deployedUrl + /admin/login";
+  //
+  // The builder must also be idempotent. `deployed_url` has shipped as both the
+  // portal root and the full login URL; blindly appending produced a handoff to
+  // /admin/login/admin/login, which the customer sees verbatim.
+  const root = /successData\.deployedUrl\.replace\(/.test(register);
+  if (!root) return "adminLoginUrl is not derived from successData.deployedUrl";
+  if (!/\/admin\/login/.test(register)) {
+    return "adminLoginUrl never targets /admin/login";
+  }
+  if (!/\/admin\\\/login\$/.test(register)) {
+    return "adminLoginUrl does not guard against an already-appended /admin/login";
   }
   if (!/const adminLoginUrl = useMemo/.test(register)) {
     return "there is no memoised adminLoginUrl";
@@ -1062,6 +1070,28 @@ check("the admin password is still never sent to Flutterwave", () =>
     ? true
     : "adminPassword appears inside a Flutterwave meta block"
 );
+
+check("the handoff waits for the portal to actually answer", () => {
+  // A freshly provisioned subdomain is not reachable until Vercel issues its
+  // certificate; until then Cloudflare serves a 525. Redirecting into that
+  // window is what made a paid registration read as a failure.
+  if (!/readiness/.test(register)) {
+    return "the wizard never polls a readiness endpoint";
+  }
+  if (!/if \(!portalReady && !progressTimedOut\) return;/.test(register)) {
+    return "the countdown/redirect is not gated on portal readiness";
+  }
+  return true;
+});
+
+check("the wizard shows an honest progress indicator", () => {
+  if (!/role="progressbar"/.test(register)) return "no progressbar is rendered";
+  if (!/aria-valuenow/.test(register)) return "the progressbar has no aria-valuenow";
+  if (!/percent/.test(register)) return "no progress percentage is tracked";
+  // A timeout escape hatch, or the customer is trapped on a spinner forever.
+  if (!/progressTimedOut/.test(register)) return "there is no escape hatch if the portal never becomes ready";
+  return true;
+});
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

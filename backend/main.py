@@ -802,10 +802,14 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             except Exception:
                 pass
 
+        # `deployed_url` is the PORTAL ROOT, not the login page. The Next.js
+        # wizard appends "/admin/login" itself, so returning the full login URL
+        # here produced /admin/login/admin/login on the handoff redirect.
+        # `portal_url` carries the deep link for callers that want it.
         return ProvisionResponse(
             success=True,
             message=f"Successfully provisioned {domain} for {school_name}",
-            deployed_url=login_url,
+            deployed_url=f"https://{domain}",
             domain=domain,
             subdomain=subdomain,
             school_name=school_name,
@@ -894,7 +898,7 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
         except Exception as e:
             logger.warning(f"[BG] Welcome email failed for {subdomain}: {e} (non-fatal)")
 
-        result = {"success": True, "domain": domain, "url": login_url, "vercel_domain": vercel_domain, "timestamp": datetime.now(timezone.utc).isoformat()}
+        result = {"success": True, "domain": domain, "url": f"https://{domain}", "login_url": login_url, "vercel_domain": vercel_domain, "timestamp": datetime.now(timezone.utc).isoformat()}
         provision_jobs[job_key].update({"status": "success", "result": result})
         if callback_url:
             try:
@@ -925,6 +929,38 @@ async def provision_status(subdomain: str):
         domain = f"{subdomain}.resultapp.org"
         return {"subdomain": subdomain, "status": "success", "domain": domain, "url": f"https://{domain}/admin/login"}
     raise HTTPException(status_code=404, detail=f"No job found for '{subdomain}'")
+
+
+@app.get("/api/v1/tenant/{subdomain}/readiness", tags=["provisioning"])
+async def tenant_readiness(subdomain: str):
+    """Is this tenant's public portal actually usable yet?
+
+    The registration wizard polls this instead of firing a blind redirect. A
+    subdomain becomes reachable only after Vercel verifies the domain and issues
+    a certificate; until then Cloudflare serves a 525 SSL-handshake page. Without
+    this the customer is dropped straight into that error seconds after paying,
+    which reads as "your school was deleted" rather than "hold on".
+    """
+    subdomain = subdomain.lower().strip()
+    try:
+        from services.vercel_domains import get_portal_readiness
+
+        return get_portal_readiness(subdomain)
+    except Exception as e:  # noqa: BLE001
+        # Never turn the progress indicator into an error screen.
+        logger.warning(f"[READINESS] failed for '{subdomain}': {e}")
+        return {
+            "subdomain": subdomain,
+            "domain": f"{subdomain}.resultapp.org",
+            "registered": False,
+            "domain_verified": False,
+            "reachable": False,
+            "http_status": None,
+            "error": "readiness check unavailable",
+            "stage": "Creating your school",
+            "percent": 25,
+            "ready": False,
+        }
 
 # ---------------------------------------------------------------------------
 # Global exception handler (JSON)

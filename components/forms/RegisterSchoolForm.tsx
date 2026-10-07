@@ -259,21 +259,9 @@ export function RegisterSchoolForm() {
 
   // Post-provisioning hand-off. A paid user who closes the tab at the
   // Flutterwave modal must not be stranded on a dead end, so the wizard sends
-  // them to their new portal on its own. The countdown is not decoration: the
-  // tenant is still deploying (the copy says 30-60s), so an instant redirect
-  // lands on a page that has not finished booting and reads as a second
-  // failure right after the first one.
+  // them to their new portal on its own — but only once that portal actually
+  // answers. See the readiness gate below.
   const PORTAL_HANDOFF_SECONDS = 5;
-
-  /** Portal root -> admin login. Tolerates a trailing slash on deployedUrl. */
-  const adminLoginUrl = useMemo(
-    () => (successData ? `${successData.deployedUrl.replace(/\/+$/, "")}/admin/login` : ""),
-    [successData]
-  );
-
-  function cancelHandoff() {
-    setHandoffCancelled(true);
-  }
 
   // The countdown is DERIVED from a mount timestamp rather than stored as a
   // decrementing counter. Storing it would mean setState inside the effect body,
@@ -284,6 +272,45 @@ export function RegisterSchoolForm() {
   const [handoffCancelled, setHandoffCancelled] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
+  /**
+   * Portal root -> admin login.
+   *
+   * `deployed_url` is the portal ROOT, so we append /admin/login. But the
+   * backend has shipped a login URL before, and a redirect that blindly appends
+   * produces /admin/login/admin/login — a URL the user sees and panics over even
+   * though it happens to render. Strip a trailing /admin/login first so this is
+   * correct regardless of which shape the API returned.
+   */
+  const adminLoginUrl = useMemo(() => {
+    if (!successData) return "";
+    const root = successData.deployedUrl.replace(/\/+$/, "");
+    return /\/admin\/login$/.test(root) ? root : `${root}/admin/login`;
+  }, [successData]);
+
+  function cancelHandoff() {
+    setHandoffCancelled(true);
+  }
+
+  /**
+   * Provisioning progress.
+   *
+   * A subdomain is NOT usable the moment the registry row is written: Vercel
+   * still has to verify the domain and issue a certificate, and until it does
+   * Cloudflare serves a 525 SSL-handshake page. Redirecting into that window is
+   * what made a paid registration look like a failure, so we poll the backend's
+   * readiness endpoint and only hand off once the portal actually answers.
+   *
+   * `percent` is deliberately capped below 100 until the portal genuinely
+   * responds — showing 100% and then dropping the user on a 525 is worse than
+   * an honest 85%.
+   */
+  const [progress, setProgress] = useState<{
+    percent: number;
+    stage: string;
+    ready: boolean;
+  } | null>(null);
+  const [progressTimedOut, setProgressTimedOut] = useState(false);
+
   // Armed once per success, from the event that sets successData, rather than
   // from an effect. This is the documented React escape hatch for "reset state
   // when a prop changes" and keeps the render path free of extra passes.
@@ -291,6 +318,8 @@ export function RegisterSchoolForm() {
     setHandoffStartedAt(Date.now());
     setHandoffCancelled(false);
     setNow(Date.now());
+    setProgress(null);
+    setProgressTimedOut(false);
   }
 
   const secondsElapsed = handoffStartedAt === null ? 0 : Math.floor((now - handoffStartedAt) / 1000);
@@ -299,8 +328,57 @@ export function RegisterSchoolForm() {
       ? Math.max(0, PORTAL_HANDOFF_SECONDS - secondsElapsed)
       : null;
 
+  // Poll readiness. 5s interval keeps it responsive without hammering the API;
+  // the 6-minute ceiling is generous because certificate issuance on a cold
+  // subdomain has been observed to take several minutes.
+  useEffect(() => {
+    if (!successData) return;
+    let cancelled = false;
+    const slug = successData.subdomain || "";
+    const started = Date.now();
+    const MAX_WAIT_MS = 6 * 60 * 1000;
+
+    async function tick() {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`/api/tenant/${encodeURIComponent(slug)}/readiness`, {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const percent = Number(data.percent);
+        const ready = data.ready === true;
+        setProgress({
+          percent: Number.isFinite(percent) ? Math.max(5, Math.min(100, percent)) : 40,
+          stage: String(data.stage || "Setting up your portal"),
+          ready,
+        });
+        if (Date.now() - started > MAX_WAIT_MS && !ready) {
+          setProgressTimedOut(true);
+          return;
+        }
+        if (ready) return;
+      } catch {
+        // A transient failure must not strand the wizard; keep polling.
+        if (cancelled) return;
+        setProgress((p) => p ?? { percent: 35, stage: "Setting up your portal", ready: false });
+      }
+      if (!cancelled) window.setTimeout(tick, 5000);
+    }
+
+    void tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [successData]);
+
+  const portalReady = progress?.ready === true;
+
   useEffect(() => {
     if (handoffIn === null) return;
+    // Hold until the portal genuinely answers, so the countdown is the last
+    // beat of a completed journey rather than a leap into a 525.
+    if (!portalReady && !progressTimedOut) return;
     if (handoffIn <= 0) {
       // Hard navigation: a client-side push would land on a cross-origin
       // subdomain, which Next cannot route.
@@ -309,7 +387,7 @@ export function RegisterSchoolForm() {
     }
     const id = window.setTimeout(() => setNow(Date.now()), 1000);
     return () => window.clearTimeout(id);
-  }, [handoffIn, adminLoginUrl]);
+  }, [handoffIn, adminLoginUrl, portalReady, progressTimedOut]);
 
   // Base domain fallback: NEXT_PUBLIC_BASE_DOMAIN || "resultapp.org"
   const baseDomain =
@@ -1024,14 +1102,74 @@ export function RegisterSchoolForm() {
             What happens next?
           </div>
           <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
-            <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> is deploying (30–60s)</li>
+            <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> is being issued its SSL certificate</li>
             <li>• Admin login sent to <span className="text-white">{values.adminEmail}</span></li>
             <li>• Signing in at <span className="font-mono text-purple-200">{successData.domain}/admin/login</span> as soon as it is ready</li>
           </ul>
         </div>
 
         <div aria-live="polite" className="mt-6 w-full">
-          {handoffIn !== null ? (
+          {!portalReady ? (
+            /* Readiness gate: this is the whole point of the screen. The
+               subdomain exists in the registry but Vercel has not finished
+               issuing its certificate, and until it has, Cloudflare serves a 525
+               SSL-handshake page. Showing the bar here — instead of bouncing
+               the customer into that error — is what stops a successful
+               registration from looking like a failure. */
+            <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-5 text-left">
+              <div className="flex items-center justify-between gap-3">
+                <p className="flex items-center gap-2 text-sm font-medium text-white">
+                  {!progressTimedOut && (
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                  )}
+                  {progress?.stage || "Setting up your portal"}
+                </p>
+                <span className="font-mono text-sm tabular-nums text-purple-200">
+                  {progress?.percent ?? 10}%
+                </span>
+              </div>
+
+              <div
+                className="mt-3 h-2 w-full overflow-hidden rounded-full bg-purple-950/60"
+                role="progressbar"
+                aria-valuenow={progress?.percent ?? 10}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Portal setup progress"
+              >
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-400 transition-[width] duration-700 ease-out"
+                  style={{ width: `${progress?.percent ?? 10}%` }}
+                />
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-purple-200/60">
+                {progressTimedOut
+                  ? "This is taking longer than usual — your subdomain is registered and your payment is safe. You can wait a little longer or open it now and refresh shortly."
+                  : "Your payment is confirmed and your school is registered. We are issuing the SSL certificate for your subdomain — this normally takes under a minute. You will be taken to your admin login automatically."}
+              </p>
+
+              {progressTimedOut && (
+                <a
+                  href={adminLoginUrl}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-4 py-2.5 font-semibold text-white hover:bg-purple-500"
+                >
+                  <Globe className="h-4 w-4" />
+                  Open my portal now
+                </a>
+              )}
+
+              {!progressTimedOut && (
+                <button
+                  type="button"
+                  onClick={cancelHandoff}
+                  className="mt-3 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                >
+                  Stay on this page
+                </button>
+              )}
+            </div>
+          ) : handoffIn !== null ? (
             <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-4">
               <p className="flex items-center justify-center gap-2 text-sm font-medium text-white">
                 <Loader2 className="h-4 w-4 animate-spin text-purple-400" />

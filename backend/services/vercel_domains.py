@@ -179,3 +179,79 @@ def get_domain_status(subdomain: str) -> Optional[Dict[str, Any]]:
         return resp.json()
     except Exception:  # noqa: BLE001
         return None
+
+
+def probe_portal(subdomain: str, timeout: float = 8.0) -> Dict[str, Any]:
+    """Check whether the tenant's public portal actually answers.
+
+    This is the signal the wizard waits on. A freshly provisioned subdomain is
+    not usable the moment the row is written: Vercel still has to verify the
+    domain and issue a certificate, and until it does Cloudflare answers with a
+    525 SSL-handshake error. Redirecting a paying customer into that window is
+    what made the old flow look broken.
+
+    Probed server-to-server because a browser cannot read a cross-origin status
+    code: `fetch(..., {mode:'no-cors'})` resolves opaquely for both 200 and 525.
+    """
+    slug = (subdomain or "").strip().lower()
+    domain = f"{slug}.resultapp.org"
+    url = f"https://{domain}/"
+
+    if not slug or not slug.replace("-", "").isalnum():
+        return {"reachable": False, "status": None, "error": "invalid subdomain"}
+
+    try:
+        resp = requests.get(url, timeout=timeout, allow_redirects=True)
+    except requests.RequestException as exc:
+        # A TLS failure surfaces here (SSLError) or as a connection error.
+        return {"reachable": False, "status": None, "error": exc.__class__.__name__}
+
+    return {
+        "reachable": resp.status_code < 400,
+        "status": resp.status_code,
+        "error": None,
+    }
+
+
+def get_portal_readiness(subdomain: str) -> Dict[str, Any]:
+    """Combined view used by the registration wizard's progress bar.
+
+    Returns a stage the UI can render verbatim plus a coarse percentage so the
+    customer sees movement rather than an indefinite spinner.
+    """
+    slug = (subdomain or "").strip().lower()
+    domain = f"{slug}.resultapp.org"
+
+    from services.db_manager import tenant_exists
+
+    registered = False
+    try:
+        registered = tenant_exists(slug)
+    except Exception:  # noqa: BLE001
+        registered = False
+
+    vstatus = get_domain_status(slug) or {}
+    verified = bool(vstatus.get("verified"))
+    probe = probe_portal(slug)
+
+    if probe["reachable"]:
+        stage, percent, ready = "Your portal is live", 100, True
+    elif verified:
+        stage, percent, ready = "Finishing your SSL certificate", 85, False
+    elif registered:
+        stage, percent, ready = "Issuing your SSL certificate", 60, False
+    else:
+        stage, percent, ready = "Creating your school", 25, False
+
+    return {
+        "subdomain": slug,
+        "domain": domain,
+        "registered": registered,
+        "domain_verified": verified,
+        "reachable": probe["reachable"],
+        "http_status": probe["status"],
+        "error": probe["error"],
+        "stage": stage,
+        "percent": percent,
+        "ready": ready,
+    }
