@@ -15,8 +15,19 @@ import { NextRequest, NextResponse } from "next/server";
  */
 
 const WINDOW_MS = 60 * 60 * 1000;
-const MAX_PER_WINDOW = 3;
+const MAX_PER_WINDOW = 2;
 const hits = new Map<string, number[]>();
+
+/**
+ * The browser cookie that remembers a prospect's live classroom.
+ * Domain-scoped so the landing page (resultapp.org) and the classroom
+ * (demo.resultapp.org) share it; same 1-hour TTL as the tenant itself.
+ * Script-readable by design (the launcher needs it) — the value is a public
+ * path segment, never a secret.
+ */
+export const ACTIVE_DEMO_COOKIE = "active_demo";
+export const ACTIVE_DEMO_MAX_AGE_S = 3600;
+const ACTIVE_DEMO_DOMAIN = ".resultapp.org";
 
 function clientIp(req: NextRequest): string {
   const fwd = req.headers.get("x-forwarded-for");
