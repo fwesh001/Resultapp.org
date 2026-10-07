@@ -15,8 +15,10 @@ the Brevo DKIM/SPF records. So instead every tenant subdomain is added
 individually, and Vercel issues it an ordinary certificate.
 
 Operational consequences, stated plainly:
-  * The subdomain becomes routable as soon as this call returns.
-  * TLS may take up to ~a minute after that while Vercel provisions the cert.
+  * Adding the domain only asks Vercel to route the hostname. TLS is not
+    necessarily ready when this call returns.
+  * Under Cloudflare "Full", the readiness probe must see a completed HTTPS
+    handshake and a successful response before the wizard redirects.
   * A failure here does NOT fail provisioning. The school row is already
     committed and the customer can be served once an operator reconciles the
     domain, so we surface the error rather than pretending it worked.
@@ -30,12 +32,33 @@ Env:
 
 import logging
 import os
+import socket
+import threading
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+#: Thread-local switch used to pin Cloudflare requests to IPv4. The process may
+#: serve concurrent readiness checks and unrelated requests, so the DNS policy
+#: must never be a process-wide setting that leaks from one thread to another.
+_ipv4_state = threading.local()
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _maybe_ipv4_getaddrinfo(host, port, *args, **kwargs):
+    results = _real_getaddrinfo(host, port, *args, **kwargs)
+    if getattr(_ipv4_state, "force_ipv4", False):
+        ipv4 = [result for result in results if result[0] == socket.AF_INET]
+        return ipv4 or results
+    return results
+
+
+socket.getaddrinfo = _maybe_ipv4_getaddrinfo
+requests.packages.urllib3.util.connection.socket.getaddrinfo = _maybe_ipv4_getaddrinfo
 
 VERCEL_API = "https://api.vercel.com"
 CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"
@@ -154,6 +177,43 @@ def _cf_config() -> Dict[str, str]:
     }
 
 
+@contextmanager
+def _ipv4_only():
+    """Pin Cloudflare name resolution to IPv4 for the current thread only.
+
+    The droplet has working IPv6 egress, but the Cloudflare API token is
+    allowlisted by IPv4 address. Cloudflare matches the allowlist against the
+    connecting address, so an IPv6 call is rejected with error 9109
+    ("Cannot use the access token from location") even though the token is
+    perfectly valid. The thread-local policy keeps one provisioning request
+    from changing DNS behaviour for concurrent readiness checks.
+    """
+    depth = int(getattr(_ipv4_state, "force_ipv4_depth", 0) or 0) + 1
+    _ipv4_state.force_ipv4_depth = depth
+    _ipv4_state.force_ipv4 = True
+    try:
+        yield
+    finally:
+        remaining = int(getattr(_ipv4_state, "force_ipv4_depth", 1) or 1) - 1
+        _ipv4_state.force_ipv4_depth = max(0, remaining)
+        _ipv4_state.force_ipv4 = remaining > 0
+
+
+def _cf_api(method: str, url: str, **kwargs) -> requests.Response:
+    """Call the Cloudflare API, retrying over IPv4 if the token is refused.
+
+    A 9109 from the first attempt means "wrong address family", not "bad
+    token", so retrying with IPv4 pinned is safe and is the difference between
+    provisioning working unattended and silently failing.
+    """
+    resp = requests.request(method, url, **kwargs)
+    if resp.status_code == 403 and "9109" in resp.text:
+        logger.warning("[Cloudflare] token refused over IPv6; retrying pinned to IPv4")
+        with _ipv4_only():
+            resp = requests.request(method, url, **kwargs)
+    return resp
+
+
 def publish_verification_txt(domain: str, value: str) -> Dict[str, Any]:
     """Write the `_vercel` TXT record Vercel needs to verify a domain.
 
@@ -178,26 +238,33 @@ def publish_verification_txt(domain: str, value: str) -> Dict[str, Any]:
     try:
         # Reuse the existing record when there is one, so repeated provisions do
         # not pile up duplicate TXT entries.
-        listed = requests.get(
+        listed = _cf_api(
+            "GET",
             f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
             params={"type": "TXT", "name": name},
             headers=headers,
             timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
         )
         if listed.ok:
-            for rec in listed.json().get("result", []):
-                # _vercel carries one TXT per verified domain; append, never clobber.
-                if rec.get("content") == value:
-                    return {"written": True, "reason": "already present"}
-                requests.post(
-                    f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
-                    json={"type": "TXT", "name": name, "content": value, "ttl": 300},
-                    headers=headers,
-                    timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
-                )
+            existing = listed.json().get("result", [])
+            if any(rec.get("content") == value for rec in existing):
+                return {"written": True, "reason": "already present"}
+            # Append alongside the other tenants' records. Never delete: `_vercel`
+            # holds one TXT per verified domain and removing the wrong one
+            # un-verifies a school that is already live.
+            created = _cf_api(
+                "POST",
+                f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
+                json={"type": "TXT", "name": name, "content": value, "ttl": 300},
+                headers=headers,
+                timeout=(_TIMEOUT_CONNECT, _TIMEOUT_READ),
+            )
+            if created.ok:
                 return {"written": True, "reason": "appended"}
+            return {"written": False, "reason": f"append failed HTTP {created.status_code}: {created.text[:200]}"}
 
-        resp = requests.post(
+        resp = _cf_api(
+            "POST",
             f"{CLOUDFLARE_API}/zones/{cfg['zone_id']}/dns_records",
             json={"type": "TXT", "name": name, "content": value, "ttl": 300},
             headers=headers,
@@ -205,10 +272,10 @@ def publish_verification_txt(domain: str, value: str) -> Dict[str, Any]:
         )
         if resp.ok:
             return {"written": True, "reason": "created"}
-        return {"written": False, "reason": f"HTTP {resp.status_code}"}
+        return {"written": False, "reason": f"HTTP {resp.status_code}: {resp.text[:200]}"}
     except requests.RequestException as exc:
-        logger.error("[Cloudflare] TXT publish failed for %s: %s", domain, exc.__class__.__name__)
-        return {"written": False, "reason": exc.__class__.__name__}
+        logger.error("[Cloudflare] TXT publish failed for %s: %s: %s", domain, exc.__class__.__name__, exc)
+        return {"written": False, "reason": f"{exc.__class__.__name__}: {exc}"}
 
 
 def _verification_value(payload: Dict[str, Any]) -> Optional[str]:
@@ -224,10 +291,13 @@ def _verification_value(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str, Any]:
-    """Add the domain AND publish its verification TXT, then poll until verified.
+def start_domain_verification(subdomain: str) -> Dict[str, Any]:
+    """Add the tenant domain and immediately publish the verification TXT.
 
-    Returns {verified, added, txt, domain}. Safe to call repeatedly.
+    This intentionally does not wait for Vercel to finish. The registration
+    response must return promptly so the wizard can show live progress; the
+    separate readiness endpoint reports completion when the certificate is
+    actually being served. Returns {verified, added, txt, domain}.
     """
     slug = (subdomain or "").strip().lower()
     domain = f"{slug}.resultapp.org"
@@ -253,6 +323,19 @@ def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str,
             txt = publish_verification_txt(domain, needed)
             out["txt"] = txt
             logger.info("[Vercel] Published verification TXT for '%s': %s", domain, txt.get("reason"))
+    return out
+
+
+def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str, Any]:
+    """Add the domain, publish its verification TXT, then poll until verified.
+
+    Returns {verified, added, txt, domain}. Safe to call repeatedly. This is
+    for reconciliation or one-off checks; paid provisioning uses
+    start_domain_verification() so the HTTP response is not held open while a
+    certificate is issued.
+    """
+    slug = (subdomain or "").strip().lower()
+    out = start_domain_verification(slug)
 
     # Vercel re-checks on a timer; a short bounded poll turns a multi-minute
     # human wait into a couple of seconds inside the provision request.
@@ -263,9 +346,9 @@ def ensure_domain_verified(subdomain: str, timeout_s: float = 90.0) -> Dict[str,
         out["verified"] = bool(st.get("verified"))
 
     if out["verified"]:
-        logger.info("[Vercel] '%s' verified", domain)
+        logger.info("[Vercel] '%s' verified", out["domain"])
     else:
-        logger.warning("[Vercel] '%s' still unverified after %.0fs", domain, timeout_s)
+        logger.warning("[Vercel] '%s' still unverified after %.0fs", out["domain"], timeout_s)
     return out
 
 
@@ -324,17 +407,33 @@ def probe_portal(subdomain: str, timeout: float = 8.0) -> Dict[str, Any]:
     if not slug or not slug.replace("-", "").isalnum():
         return {"reachable": False, "status": None, "error": "invalid subdomain"}
 
-    try:
-        resp = requests.get(url, timeout=timeout, allow_redirects=True)
-    except requests.RequestException as exc:
-        # A TLS failure surfaces here (SSLError) or as a connection error.
-        return {"reachable": False, "status": None, "error": exc.__class__.__name__}
+    attempts = 2
+    last_exc: Optional[Exception] = None
+    for _ in range(attempts):
+        try:
+            resp = requests.get(url, timeout=timeout, allow_redirects=True)
+            return {
+                "reachable": resp.status_code < 400,
+                "status": resp.status_code,
+                "error": None,
+                "detail": None,
+            }
+        except requests.RequestException as exc:
+            # Keep the message. Returning only the class name here is what made a
+            # real ConnectionError undiagnosable for hours: every failure looked
+            # identically like "ConnectionError" with no cause attached.
+            last_exc = exc
+            logger.warning(f"[PROBE] {url} failed: {exc.__class__.__name__}: {exc}")
 
-    return {
-        "reachable": resp.status_code < 400,
-        "status": resp.status_code,
-        "error": None,
-    }
+    exc = last_exc
+    if exc is not None:
+        return {
+            "reachable": False,
+            "status": None,
+            "error": exc.__class__.__name__,
+            "detail": str(exc)[:300],
+        }
+    return {"reachable": False, "status": None, "error": "unknown", "detail": None}
 
 
 def get_portal_readiness(subdomain: str) -> Dict[str, Any]:
@@ -354,11 +453,15 @@ def get_portal_readiness(subdomain: str) -> Dict[str, Any]:
     except Exception:  # noqa: BLE001
         registered = False
 
+    probe = probe_portal(slug, timeout=6.0)
     vstatus = get_domain_status(slug) or {}
     verified = bool(vstatus.get("verified"))
-    probe = probe_portal(slug)
 
     if probe["reachable"]:
+        # Only a completed TLS handshake and successful HTTP response count as
+        # ready. Vercel's verified flag is useful for stage reporting, but a
+        # verified domain can still briefly 525, so it must never authorize
+        # the redirect by itself.
         stage, percent, ready = "Your portal is live", 100, True
     elif verified:
         stage, percent, ready = "Finishing your SSL certificate", 85, False
@@ -375,6 +478,7 @@ def get_portal_readiness(subdomain: str) -> Dict[str, Any]:
         "reachable": probe["reachable"],
         "http_status": probe["status"],
         "error": probe["error"],
+        "detail": probe.get("detail"),
         "stage": stage,
         "percent": percent,
         "ready": ready,

@@ -1081,20 +1081,29 @@ export function RegisterSchoolForm() {
 
         <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">School provisioned!</h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
-          Your school portal is live. Please check your email at{" "}
+          {portalReady
+            ? "Your school portal is live. Please check your email at "
+            : "Your payment is confirmed and your school is registered. Please check your email at "}
           <span className="font-medium text-white">{values.adminEmail}</span> for login credentials and next steps.
         </p>
 
-        <a
-          href={adminLoginUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-600 px-5 py-2.5 font-mono text-sm font-semibold text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] transition hover:bg-purple-500"
-        >
-          <Globe className="h-4 w-4" />
-          {successData.domain}
-          <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-        </a>
+        {portalReady ? (
+          <a
+            href={adminLoginUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-600 px-5 py-2.5 font-mono text-sm font-semibold text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] transition hover:bg-purple-500"
+          >
+            <Globe className="h-4 w-4" />
+            {successData.domain}
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+          </a>
+        ) : (
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-950/60 px-5 py-2.5 font-mono text-sm font-semibold text-purple-200/70 ring-1 ring-purple-500/20">
+            <Globe className="h-4 w-4" />
+            {successData.domain}
+          </p>
+        )}
 
         <div className="mt-6 w-full rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-left backdrop-blur">
           <div className="flex items-center gap-2 text-sm font-medium text-white">
@@ -1102,9 +1111,9 @@ export function RegisterSchoolForm() {
             What happens next?
           </div>
           <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
-            <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> is being issued its SSL certificate</li>
+            <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> {portalReady ? "is live over HTTPS" : "is being issued its SSL certificate"}</li>
             <li>• Admin login sent to <span className="text-white">{values.adminEmail}</span></li>
-            <li>• Signing in at <span className="font-mono text-purple-200">{successData.domain}/admin/login</span> as soon as it is ready</li>
+            <li>• Signing in at <span className="font-mono text-purple-200">{successData.domain}/admin/login</span> {portalReady ? "now" : "as soon as it is ready"}</li>
           </ul>
         </div>
 

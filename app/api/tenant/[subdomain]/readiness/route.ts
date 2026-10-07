@@ -37,7 +37,7 @@ export async function GET(
   try {
     const r = await fetch(
       `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(subdomain)}/readiness`,
-      { cache: "no-store" },
+      { cache: "no-store", signal: AbortSignal.timeout(45000) },
     );
     if (!r.ok) {
       return NextResponse.json(

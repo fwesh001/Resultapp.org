@@ -704,9 +704,10 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Failed to grant initial credits for '{subdomain}': {e}")
 
-        # Vercel domain: register the tenant subdomain so the Next.js app can serve
-        # it. Until Vercel knows the hostname it will not answer it, so this is
-        # what actually makes the school reachable.
+        # Vercel domain: register the tenant subdomain and immediately publish
+        # the TXT Vercel needs. This starts verification; it does not wait for
+        # certificate issuance because the response must return promptly and the
+        # wizard's readiness check reports when TLS is genuinely being served.
         #
         # Best-effort by design: the school row is already committed, so a
         # Vercel outage must not fail a customer who has paid. The outcome is
@@ -714,12 +715,12 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         # not being live yet rather than redirecting into a dead subdomain.
         vercel_domain: Dict[str, Any] = {"configured": False, "success": False}
         try:
-            from services.vercel_domains import ensure_domain_verified
+            from services.vercel_domains import start_domain_verification
 
-            # Adds the domain, publishes the Cloudflare TXT that Vercel needs,
-            # then waits briefly for verification. Without the TXT step the
-            # domain sits unverified and every visitor gets a 525.
-            vercel_domain = ensure_domain_verified(subdomain)
+            # Adds the domain and publishes the Cloudflare TXT that Vercel
+            # needs. Without the TXT step the domain sits unverified and every
+            # visitor gets a 525.
+            vercel_domain = start_domain_verification(subdomain)
             vercel_domain["configured"] = True
             vercel_domain["success"] = bool(vercel_domain.get("added"))
             if vercel_domain.get("verified"):
@@ -878,13 +879,14 @@ def _background_provision_task(subdomain: str, payload: ProvisionRequest, callba
         domain = f"{subdomain}.resultapp.org"
         login_url = f"https://{domain}/admin/login"
 
-        # Register the subdomain on Vercel so the Next.js app can serve it.
-        # Best-effort: a Vercel outage must not fail an already-registered school.
+        # Register the subdomain on Vercel and immediately publish the TXT used
+        # for verification. Best-effort: a Vercel outage must not fail an
+        # already-registered school.
         vercel_domain = {"configured": False, "success": False}
         try:
-            from services.vercel_domains import add_tenant_domain
+            from services.vercel_domains import start_domain_verification
 
-            vercel_domain = add_tenant_domain(subdomain)
+            vercel_domain = start_domain_verification(subdomain)
         except Exception as e:
             vercel_domain = {"configured": True, "success": False, "error": str(e)}
             logger.warning(f"[BG] Vercel domain step failed for {subdomain}: {e}")
@@ -948,9 +950,15 @@ async def tenant_readiness(subdomain: str):
     """
     subdomain = subdomain.lower().strip()
     try:
+        from starlette.concurrency import run_in_threadpool
+
         from services.vercel_domains import get_portal_readiness
 
-        return get_portal_readiness(subdomain)
+        # get_portal_readiness() makes blocking HTTP calls (Vercel API + a probe
+        # of the tenant portal). Awaiting them directly would stall the whole
+        # event loop for the length of the probe, freezing every other request
+        # the app is serving. Offloaded to a worker thread instead.
+        return await run_in_threadpool(get_portal_readiness, subdomain)
     except Exception as e:  # noqa: BLE001
         # Never turn the progress indicator into an error screen.
         logger.warning(f"[READINESS] failed for '{subdomain}': {e}")
