@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Home, Undo2 } from "lucide-react";
 
@@ -40,10 +41,38 @@ export default function NotFound() {
   // No live tenant lookup — keeps this page instant and offline-safe.
   const segment = (pathname.split("/")[1] || "").toLowerCase();
   const subdomain = segment && !RESERVED_SEGMENTS.has(segment) ? segment : null;
-  const homeHref = subdomain ? `/${subdomain}` : "/";
   // Layout protection: subdomains run to 30 chars — clamp the giant
   // watermark to 4 chars so it can never force horizontal scrolling.
   const watermark = subdomain ? subdomain.slice(0, 4).toUpperCase() : "404";
+
+  // A 404 under a subdomain can mean two different things. If the school is
+  // live, the visitor simply mistyped a sub-page and `/{subdomain}` is the
+  // right way home. If the school is NOT live (never provisioned, purged, or
+  // soft-deleted), that link would land on this very same 404 page — a dead
+  // end. So confirm with the availability endpoint and fall back to the
+  // marketing homepage when there is nothing to go back to.
+  const [tenantGone, setTenantGone] = useState(false);
+  useEffect(() => {
+    if (!subdomain) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tenant/${encodeURIComponent(subdomain)}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json().catch(() => ({}))) as { available?: boolean };
+        // available:true means the registry has no such subdomain.
+        if (!cancelled && data.available === true) setTenantGone(true);
+      } catch {
+        /* offline: keep the tenant link, it is the better default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [subdomain]);
+
+  const homeHref = subdomain && !tenantGone ? `/${subdomain}` : "/";
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0B0514] p-4 text-purple-50">
@@ -78,7 +107,9 @@ export default function NotFound() {
         </div>
 
         <p className="mt-4 text-sm text-purple-200/80">
-          This page isn&apos;t on the register.
+          {subdomain && tenantGone
+            ? `There is no school at ${subdomain}.resultapp.org — it may never have been registered, or it may have been removed.`
+            : "This page isn't on the register."}
         </p>
 
         <Link

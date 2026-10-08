@@ -1,15 +1,20 @@
-import { getTenant } from "@/lib/tenant";
+import { getTenantStatus } from "@/lib/tenant";
+import { notFound } from "next/navigation";
 import { hasAdminSession } from "@/lib/adminAuth";
 import { toTitleCase } from "@/lib/format";
 import ResultLookupWidget from "@/components/landing/ResultLookupWidget";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
-import { ShieldCheck, GraduationCap } from "lucide-react";
+import { ShieldCheck, GraduationCap, CloudOff } from "lucide-react";
 
 /**
  * Tenant landing page — public-facing result checker for the school community.
  * Staff and admin entry points live in the Navbar and Footer.
+ *
+ * Unknown subdomains (never provisioned, or purged) return a real HTTP 404 via
+ * notFound(). A backend outage does NOT: that renders a retryable page, because
+ * a transient blip must never look to a crawler like a school disappeared.
  */
 export default async function TenantPage({
   params,
@@ -17,23 +22,39 @@ export default async function TenantPage({
   params: Promise<{ subdomain: string }>;
 }) {
   const { subdomain: routeSubdomain } = await params;
-  const school = await getTenant(routeSubdomain);
+  const lookup = await getTenantStatus(routeSubdomain);
+  const school = lookup.status === "ok" ? lookup.school : null;
 
   // `School.slug` holds the tenant subdomain (see lib/tenant normalizeSchool).
   const subdomain = school?.slug ?? routeSubdomain;
 
+  // Authoritative "no such school" — real 404 status, real 404 page.
+  if (lookup.status === "missing") {
+    notFound();
+  }
+
+  // Registry is healthy but has no row, or we could not reach it. Keep the
+  // page renderable so a transient outage is not cached as a 404.
   if (!school) {
+    const backendDown = lookup.status === "unavailable";
     return (
       <main className="min-h-screen bg-[#0B0514] text-white">
         <Navbar schoolName={routeSubdomain} subdomain={routeSubdomain} />
         <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
-          <GraduationCap className="h-12 w-12 text-purple-400" />
+          {backendDown ? (
+            <CloudOff className="h-12 w-12 text-purple-400" />
+          ) : (
+            <GraduationCap className="h-12 w-12 text-purple-400" />
+          )}
           <h1 className="mt-4 text-3xl font-bold">
-            School not found ({toTitleCase(routeSubdomain)})
+            {backendDown
+              ? "Temporarily unavailable"
+              : `Preparing ${toTitleCase(routeSubdomain)}`}
           </h1>
           <p className="mt-2 text-purple-200/70">
-            School data unavailable — backend unreachable or subdomain not
-            provisioned.
+            {backendDown
+              ? "We can't reach the school registry right now. Please refresh in a moment."
+              : "This school's portal is still being set up. Please check back shortly."}
           </p>
         </div>
         <footer className="border-t border-purple-500/20 py-6 text-center text-sm text-purple-300/60">

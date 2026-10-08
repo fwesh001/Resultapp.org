@@ -148,15 +148,39 @@ export function isDemoTenant(school: Pick<School, "demo" | "slug"> | null | unde
 export async function getTenant(
   subdomain: string,
 ): Promise<School | null> {
+  const res = await getTenantStatus(subdomain);
+  return res.status === "ok" ? res.school : null;
+}
+
+/**
+ * Outcome of a tenant lookup, with "absent" separated from "unreachable".
+ *
+ * This distinction matters for HTTP semantics. The registry answers 404 for a
+ * subdomain that was never provisioned or has been purged, and that is the only
+ * case where a 404 response is truthful. A network failure, a 5xx, or a
+ * malformed response means we simply do not know — answering 404 there would
+ * let a brief backend blip convince a crawler that real schools no longer
+ * exist. Those cases must keep rendering the page (a 503 is the ideal status,
+ * but a 200 with a retryable message is strictly better than a false 404).
+ */
+export type TenantStatus =
+  | { status: "ok"; school: School | null }
+  | { status: "missing" }
+  | { status: "unavailable" };
+
+export async function getTenantStatus(subdomain: string): Promise<TenantStatus> {
   try {
     const res = await fetch(
       `${getBackendUrl()}/api/v1/tenant/${subdomain}`,
       { cache: "no-store", next: { tags: [`school-${subdomain}`] } },
     );
-    if (!res.ok) return null;
+    // 404 is the registry's authoritative "no such school".
+    if (res.status === 404) return { status: "missing" };
+    if (!res.ok) return { status: "unavailable" };
     const data = (await res.json()) as TenantLookupResponse;
-    return normalizeSchool(data.school);
+    if (!data?.school) return { status: "missing" };
+    return { status: "ok", school: normalizeSchool(data.school) };
   } catch {
-    return null;
+    return { status: "unavailable" };
   }
 }
