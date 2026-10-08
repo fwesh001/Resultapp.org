@@ -111,7 +111,26 @@ def _count(conn, table: str, sub: str) -> int:
     return int(row[0]) if row else 0
 
 
-def _purge_tenant(conn, sub: str, tables: List[str], execute: bool) -> Dict[str, int]:
+def _tenant_id_tables(conn) -> List[str]:
+    """Tables keyed by `tenant_id` (the schools.id UUID) instead of subdomain.
+
+    These are invisible to a subdomain-only sweep. They are empty for most
+    tenants today, but a table like support_tickets or notifications can hold
+    real rows, and leaving them behind orphans a deleted school.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT table_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND column_name = 'tenant_id'
+        GROUP BY table_name ORDER BY table_name;
+        """
+    )
+    return [r[0] for r in (cur.fetchall() or [])]
+
+
+def _purge_tenant(conn, sub: str, tables: List[str], tid_tables: List[str],
+                  tenant_id: Optional[str], execute: bool) -> Dict[str, int]:
     """Delete one tenant's rows. One transaction; FK triggers disabled."""
     deleted: Dict[str, int] = {}
     cur = conn.cursor()
@@ -125,6 +144,15 @@ def _purge_tenant(conn, sub: str, tables: List[str], execute: bool) -> Dict[str,
                 deleted[table] = n
                 if execute:
                     cur.execute(f"DELETE FROM {table} WHERE subdomain = %s;", (sub,))
+        if tenant_id:
+            for table in tid_tables:
+                cur.execute(f"SELECT COUNT(*) FROM {table} WHERE tenant_id = %s;", (tenant_id,))
+                row = cur.fetchone()
+                n = int(row[0]) if row else 0
+                if n:
+                    deleted[f"{table}(tenant_id)"] = n
+                    if execute:
+                        cur.execute(f"DELETE FROM {table} WHERE tenant_id = %s;", (tenant_id,))
         if execute:
             conn.commit()
     except Exception:
@@ -215,20 +243,31 @@ def main() -> int:
             return 0
 
         tables = _tenant_scoped_tables(conn)
+        tid_tables = _tenant_id_tables(conn)
+        cur = conn.cursor()
+        cur.execute("SELECT id, subdomain FROM schools;")
+        id_by_sub = {r[1]: r[0] for r in (cur.fetchall() or [])}
         cfg = None if args.skip_domains else _vercel_cfg()
 
         mode = "EXECUTE" if args.execute else "DRY RUN"
         print(f"=== purge_tenants [{mode}] ===")
         print(f"keep     : {sorted(keep)}")
         print(f"targets  : {len(targets)} -> {targets}")
-        print(f"tables   : {len(tables)} discovered with a subdomain column")
+        print(f"tables   : {len(tables)} subdomain-keyed + {len(tid_tables)} tenant_id-keyed")
         if not args.execute:
             print("(dry run — pass --execute to actually delete)\n")
 
         purged: List[str] = []
         failed: List[str] = []
         for sub in targets:
-            deleted = _purge_tenant(conn, sub, tables, args.execute)
+            try:
+                deleted = _purge_tenant(
+                    conn, sub, tables, tid_tables, id_by_sub.get(sub), args.execute
+                )
+            except Exception as exc:
+                failed.append(sub)
+                print(f"[FAILED] {sub}: {exc.__class__.__name__}: {exc}")
+                continue
             total = sum(deleted.values())
             if args.execute:
                 print(f"[purged] {sub}: {total} rows across {len(deleted)} table(s) {deleted}")
