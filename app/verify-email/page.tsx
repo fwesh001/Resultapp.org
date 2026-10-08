@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, MailCheck, ShieldAlert } from "lucide-react";
@@ -8,7 +8,12 @@ import AuthShell from "@/components/auth/AuthShell";
 
 type Phase = "verifying" | "success" | "invalid";
 
-export default function VerifyEmailPage() {
+/**
+ * The verification token arrives in the query string, so this component reads
+ * useSearchParams() and must live inside a Suspense boundary or the static
+ * prerender of /verify-email fails. See app/reset-password/page.tsx.
+ */
+function VerifyEmailForm() {
   const searchParams = useSearchParams();
   const [phase, setPhase] = useState<Phase>("verifying");
   const [message, setMessage] = useState<string>("");
@@ -161,5 +166,22 @@ export default function VerifyEmailPage() {
         </div>
       )}
     </AuthShell>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Email verification">
+          <div className="flex items-center gap-3 text-sm text-purple-200/70">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Verifying your link…
+          </div>
+        </AuthShell>
+      }
+    >
+      <VerifyEmailForm />
+    </Suspense>
   );
 }

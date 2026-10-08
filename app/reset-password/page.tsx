@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
@@ -8,7 +8,14 @@ import AuthShell from "@/components/auth/AuthShell";
 
 type LinkState = "checking" | "valid" | "expired" | "invalid";
 
-export default function ResetPasswordPage() {
+/**
+ * The reset token arrives in the query string, so this component reads
+ * useSearchParams(). That forces a client-side bailout and therefore must sit
+ * inside a Suspense boundary or the static prerender of /reset-password fails.
+ * (This page previously relied on the app-wide app/loading.tsx, which was
+ * removed so the tenant landing page could return a real 404.)
+ */
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const [linkState, setLinkState] = useState<LinkState>("checking");
   const [password, setPassword] = useState("");
@@ -195,5 +202,21 @@ export default function ResetPasswordPage() {
         </form>
       )}
     </AuthShell>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Choose a new password">
+          <div className="flex items-center gap-3 text-sm text-purple-200/70">
+            <Loader2 className="h-4 w-4 animate-spin" /> Checking your link…
+          </div>
+        </AuthShell>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
