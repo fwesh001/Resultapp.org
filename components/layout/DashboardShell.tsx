@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar, dashboardNavItems } from "@/components/layout/Sidebar";
 
@@ -48,9 +49,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white">
-          <GraduationCap className="h-5 w-5" />
-        </span>
+        <Logo size="sm" alt="" />
         <span className="text-sm font-semibold">resultapp</span>
       </div>
 
@@ -70,9 +69,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           />
           <div className="absolute left-0 top-0 flex h-full w-64 flex-col border-r bg-white shadow-2xl">
             <div className="flex h-16 items-center gap-2 border-b px-6 font-semibold">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white">
-                <GraduationCap className="h-5 w-5" />
-              </span>
+              <Logo size="sm" alt="" />
               resultapp
             </div>
             <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
