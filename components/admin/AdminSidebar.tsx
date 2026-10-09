@@ -10,6 +10,7 @@ import {
   Settings,
   CreditCard,
   ClipboardCheck,
+  Wallet,
   Bell,
   LifeBuoy,
   LogOut,
@@ -61,6 +62,11 @@ export default function AdminSidebar({
       label: "Templates",
       href: `/${subdomain}/admin/templates`,
       icon: BookOpen,
+    },
+    {
+      label: "Clearance",
+      href: `/${subdomain}/admin/clearance`,
+      icon: Wallet,
     },
     {
       label: "Notifications",
