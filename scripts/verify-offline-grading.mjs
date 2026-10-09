@@ -85,31 +85,31 @@ function literals(file) {
   return out;
 }
 
-const hookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
+const loopHookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
 
 console.log("\nDraft key: term must be part of the scope (stale-term bug)");
 
 check("useDraftSave requires `term` in its scope", () =>
-  /term:\s*string/.test(hookSrc) && /scope\.term/.test(hookSrc)
+  /term:\s*string/.test(loopHookSrc) && /scope\.term/.test(loopHookSrc)
     ? true
     : "term is not part of the draft scope"
 );
 
 check("buildDraftKey includes the encoded term segment", () => {
-  const fn = hookSrc.slice(hookSrc.indexOf("export function buildDraftKey"));
+  const fn = loopHookSrc.slice(loopHookSrc.indexOf("export function buildDraftKey"));
   const body = fn.slice(0, fn.indexOf("\n}"));
   if (!/seg\(term\)/.test(body)) return "buildDraftKey does not emit seg(term)";
   return true;
 });
 
 check("buildDraftKey refuses an incomplete scope", () =>
-  /throw new Error/.test(hookSrc.slice(hookSrc.indexOf("export function buildDraftKey"), hookSrc.indexOf("export function buildDraftKey") + 700))
+  /throw new Error/.test(loopHookSrc.slice(loopHookSrc.indexOf("export function buildDraftKey"), loopHookSrc.indexOf("export function buildDraftKey") + 700))
     ? true
     : "incomplete scope silently produces a shared/empty key"
 );
 
 check("a draft whose term disagrees with the scope is never restored", () =>
-  /parsed\.term\s*!==\s*scope\.term/.test(hookSrc)
+  /parsed\.term\s*!==\s*scope\.term/.test(loopHookSrc)
     ? true
     : "a cross-term draft could be restored into the wrong term"
 );
@@ -117,11 +117,11 @@ check("a draft whose term disagrees with the scope is never restored", () =>
 console.log("\nLegacy compatibility: pre-v1 drafts must not crash or vanish");
 
 check("readDraft tolerates the legacy bare-object format", () =>
-  /Legacy bare object/.test(hookSrc) ? true : "no legacy-format branch in readDraft"
+  /Legacy bare object/.test(loopHookSrc) ? true : "no legacy-format branch in readDraft"
 );
 
 check("legacy drafts are flagged so the UI can warn", () =>
-  /legacy:\s*true/.test(hookSrc) ? true : "legacy drafts are not flagged"
+  /legacy:\s*true/.test(loopHookSrc) ? true : "legacy drafts are not flagged"
 );
 
 // Only the two academic grading surfaces ever wrote pre-v1 drafts. The forms
@@ -262,17 +262,17 @@ check("surfaces render the network indicator", () => {
 });
 
 check("drafts have a TTL so stale entries expire", () =>
-  /export const DRAFT_TTL_MS\s*=/.test(hookSrc) ? true : "no TTL constant — old drafts would live forever"
+  /export const DRAFT_TTL_MS\s*=/.test(loopHookSrc) ? true : "no TTL constant — old drafts would live forever"
 );
 
 check("expiry is enforced when reading", () =>
-  /now\s*-\s*savedAt\s*>\s*DRAFT_TTL_MS/.test(hookSrc)
+  /now\s*-\s*savedAt\s*>\s*DRAFT_TTL_MS/.test(loopHookSrc)
     ? true
     : "TTL constant exists but is not enforced in readDraft"
 );
 
 check("storage failures degrade instead of breaking entry", () =>
-  /catch/.test(hookSrc) && /persistenceAvailable/.test(hookSrc)
+  /catch/.test(loopHookSrc) && /persistenceAvailable/.test(loopHookSrc)
     ? true
     : "localStorage quota/private-mode failure is not handled"
 );
@@ -307,7 +307,7 @@ check("restore prompt offers both Restore and Discard", () => {
    --------------------------------------------------------------------------- */
 console.log("\nNo self-sustaining render loop (browser-verified freeze)");
 
-const loopHookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
+const looploopHookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
 
 check("every surface memoizes the draft scope", () => {
   const offenders = [];
@@ -338,7 +338,7 @@ check("every surface memoizes the draft scope", () => {
 check("hook dependencies never use the scope object itself", () => {
   // A whole-object dep changes identity every render when callers build the
   // scope inline. Only the flattened primitives may appear.
-  const bad = [...hookSrc.matchAll(/\],?\s*\[([^\]]*(?:scope|legacyKeys)[^\]]*)\]\s*\)/g)]
+  const bad = [...loopHookSrc.matchAll(/\],?\s*\[([^\]]*(?:scope|legacyKeys)[^\]]*)\]\s*\)/g)]
     .map((m) => m[1].trim())
     .filter((d) => /\bscope\b|\blegacyKeys\b/.test(d));
   return bad.length === 0
@@ -347,26 +347,26 @@ check("hook dependencies never use the scope object itself", () => {
 });
 
 check("restoring a draft cannot re-set state with a fresh object", () =>
-  /setPendingRestore\(\(prev\)/.test(hookSrc)
+  /setPendingRestore\(\(prev\)/.test(loopHookSrc)
     ? true
     : "setPendingRestore must use a functional update so an unchanged draft bails out"
 );
 
 check("persisted payload is compared before rewriting storage", () =>
-  /lastWriteRef/.test(hookSrc) && /serialized === lastWriteRef.current/.test(hookSrc)
+  /lastWriteRef/.test(loopHookSrc) && /serialized === lastWriteRef.current/.test(loopHookSrc)
     ? true
     : "flush() rewrites localStorage on every render even when nothing changed"
 );
 
 check("effect cleanup only flushes while a write is actually queued", () =>
-  /if \(timer.current \|\| failsafe.current\) flush\(value\)/.test(hookSrc)
+  /if \(timer.current \|\| failsafe.current\) flush\(value\)/.test(loopHookSrc)
     ? true
     : "cleanup flushes unconditionally, re-entering the render loop"
 );
 
 check("empty drafts are neither written nor offered", () => {
-  if (!/hasEntries/.test(hookSrc)) return "hook still treats an empty value as a draft";
-  return /some\(\(v\) => String\(v\)\.trim\(\) !== ""\)/.test(hookSrc)
+  if (!/hasEntries/.test(loopHookSrc)) return "hook still treats an empty value as a draft";
+  return /some\(\(v\) => String\(v\)\.trim\(\) !== ""\)/.test(loopHookSrc)
     ? true
     : "empty-value guard not applied";
 });
