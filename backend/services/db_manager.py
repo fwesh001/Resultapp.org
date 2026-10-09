@@ -198,6 +198,26 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS principal_signature_url TEXT;
         """)
+        # Drawn principal signature, stored inline as a base64 PNG data URI.
+        #
+        # TEXT rather than BYTEA: base64 is a string, and TEXT keeps the NULL
+        # semantics identical to the sibling principal_signature_url column so
+        # "no signature" and "signature is a zero-length string" stay
+        # distinguishable for free.
+        #
+        # Postgres TEXT is unbounded, so this column does NOT self-limit. The
+        # only thing stopping a caller storing a photograph-as-"signature"
+        # is the 64KB app-level cap enforced in the routers.
+        #
+        # Resolves the static-file half of the LEGAL_REMEDIATION.md P7 finding
+        # (served without read-time authentication) for DRAWN signatures: the
+        # bytes travel inside an authenticated API response, not from a
+        # public static path. Uploaded files still use principal_signature_url
+        # and remain under P7 until retired.
+        cur.execute(f"""
+            ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
+            ADD COLUMN IF NOT EXISTS principal_signature_data TEXT;
+        """)
         # Phase: Superadmin Command Center â€” immutable audit trail for manual ops
         cur.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -870,7 +890,7 @@ def get_school_by_subdomain(subdomain: str) -> Optional[Dict[str, Any]]:
             SELECT id, subdomain, school_name, email, phone, address, city, state, country,
                    logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                    is_verified, is_active, subscription_plan, subscription_status, student_count,
-                     credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, principal_signature_url, deleted_at, created_at, updated_at
+                     credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, principal_signature_url, principal_signature_data, deleted_at, created_at, updated_at
             FROM {SCHOOLS_REGISTRY_TABLE}
             WHERE subdomain = %s;
             """,
@@ -2476,6 +2496,11 @@ def init_roster_registry() -> None:
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
         # Report signatures: per-staff signature image (URL), self-managed.
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS signature_url TEXT;")
+        # Drawn form-teacher signature, stored inline as a base64 PNG data URI.
+        # Same rationale as schools.principal_signature_data: TEXT keeps NULL
+        # semantics identical to signature_url, and the bytes travel inside an
+        # authenticated API response rather than from a public static path.
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS signature_data TEXT;")
 
         # Allocations â€” subject â†’ staff â†’ class
         cur.execute(f"""
