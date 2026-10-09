@@ -2424,6 +2424,7 @@ TENANT_ALLOCATIONS_TABLE = "tenant_allocations"
 TENANT_SUBJECTS_TABLE = "tenant_subjects"
 TENANT_GRADES_TABLE = "tenant_grades"
 TENANT_FORM_ASSIGNMENTS_TABLE = "tenant_form_assignments"
+STUDENT_CLEARANCE_TABLE = "student_term_clearance"
 
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
 
@@ -2545,6 +2546,47 @@ def init_roster_registry() -> None:
         """)
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_subdomain ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain);")
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_FORM_ASSIGNMENTS_TABLE}_staff ON {TENANT_FORM_ASSIGNMENTS_TABLE}(subdomain, staff_id);")
+
+        # Financial Clearance / Administrative Hold (revenue recovery).
+        #
+        # SPARSE BY DESIGN: a row exists only where a bursar has explicitly
+        # acted. "Cleared" therefore means *no row* OR is_financially_cleared =
+        # TRUE, which means this table ships with no backfill and no risk of a
+        # student defaulting to owing.
+        #
+        # academic_session is part of the key on purpose. Without it a Term 1
+        # hold taken in 2025/2026 would silently carry into 2026/2027. It is
+        # matched to result_publications' key so the two stay in lockstep.
+        #
+        # student_id is a logical link to tenant_students.student_id (an
+        # admission-number STRING), not a FK — same convention as
+        # tenant_grades. Match it with LOWER() on both sides.
+        #
+        # This table MUST be added to the student-delete cascade in
+        # allocations.py and to purge_orphan_students.py DEPENDENT_TABLES, per
+        # the standing note in the tenant_grades comment above.
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {STUDENT_CLEARANCE_TABLE} (
+                id SERIAL PRIMARY KEY,
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                student_id VARCHAR(100) NOT NULL,
+                term VARCHAR(50) NOT NULL CHECK (term IN ('Term 1', 'Term 2', 'Term 3')),
+                academic_session VARCHAR(50) NOT NULL,
+                is_financially_cleared BOOLEAN NOT NULL DEFAULT TRUE,
+                hold_reason TEXT,
+                held_by VARCHAR(120),
+                held_at TIMESTAMPTZ,
+                cleared_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, student_id, term, academic_session)
+            );
+        """)
+        # The public result-checker gate reads exactly this shape.
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_clearance_lookup ON {STUDENT_CLEARANCE_TABLE} (subdomain, student_id, term);")
+        # The bursary dashboard filters by owing-within-term, so a partial index
+        # on the cleared flag keeps that count off a full table scan.
+        cur.execute(f"CREATE INDEX IF NOT EXISTS ix_clearance_owing ON {STUDENT_CLEARANCE_TABLE} (subdomain, is_financially_cleared, term);")
 
         # Remarks â€” nullable per-student per-subject per-term comment, form-teacher-only writes.
         cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS remarks TEXT;")
