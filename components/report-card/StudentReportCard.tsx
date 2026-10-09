@@ -67,6 +67,21 @@ interface GroupedTemplate {
 
 interface ReportResponse {
   student: ReportStudent | null;
+  /**
+   * Explicit server-authoritative status: "released" | "draft" | "withheld".
+   * "withheld" means the school published the result but the bursary placed the
+   * student on an Administrative Hold for unpaid fees. Consumers must read this
+   * rather than inferring status from `grades.length`, because a withheld
+   * response is a 200 with deliberately empty arrays.
+   */
+  result_status?: "released" | "draft" | "withheld";
+  /**
+   * Server-rendered, human-readable explanation shown on the locked card.
+   * Sourced from the backend rather than hardcoded here so the family-facing
+   * wording and the term name have a single source of truth.
+   */
+  withheld_message?: string | null;
+  is_financially_cleared?: boolean;
   template: GradingTemplatePayload | null;
   groupedTemplate?: GroupedTemplate | null;
   grades: GradeRow[];
@@ -143,6 +158,7 @@ type ReportState =
   | "notAvailable"
   | "noTerm"
   | "transport"
+  | "withheld"
   | "adminDraft";
 
 function gradeFromTotal(total: number): string {
