@@ -200,6 +200,40 @@ cosmetic — the bytes were already in React state and in devtools.
   than a read leak: it forwarded an arbitrary attacker-supplied JSON body to
   `create_academic_record`, an **unauthenticated score-write primitive**.
 
+  **KNOWN, ACCEPTED ENUMERATION RISK introduced later (Financial Clearance).**
+  The publication gate above deliberately makes "unknown student" and
+  "unpublished result" indistinguishable. The Financial Clearance feature
+  (see `backend/routers/clearance.py`) intentionally weakens that property for
+  one narrow case: a **published but held** student now receives an explicit
+  `result_status: "withheld"` 200 with a message confirming the result was
+  compiled. A caller who already knows an admission number can now learn that
+  the student exists, is in that term, and owes fees.
+
+  **Why it is accepted:** the family-facing UX requires the hold to be
+  actionable. A parent who has paid needs to know *why* they cannot see the
+  result; silently degrading the hold to a generic "No Published Result" would
+  read to them as "your child does not exist here" and generate support tickets
+  rather than revenue.
+
+  **Why the leak is narrow:** it discloses **existence and fee status only** —
+  never grades, class averages, ranks, or remarks. The response blanks
+  `grades`, `behavioural`, `summary`, `template`, and both signature fields.
+  Because the report also leaks class-wide aggregates via
+  `_rank_class_stats_sql`, those fields are explicitly nulled in the withheld
+  response; leaving `overallPosition` or `noInClass` in would have revealed a
+  withheld student's rank and relative standing without revealing any score.
+
+  **Residual exposure:** admission numbers are `PREFIX/NNN` with a zero-padded
+  sequence, so they are guessable and a determined caller could walk a roster.
+  This is the one place the project's information-disclosure posture is weaker
+  than ideal. Mitigations already in force: the 30 req/60s per (IP, tenant)
+  throttle on the report endpoint (too low to walk a roster quickly), and the
+  fact that the call is not anonymous-verifiable without a valid admission
+  number. If this becomes a liability, the fix is to gate the *distinguishing*
+  signal behind a second factor (e.g. an OTP issued to the guardian) so the
+  withheld status is only disclosed to someone who can prove they are the
+  right family — see `LEGAL_REMEDIATION.md` §"Possible future mitigations".
+
 ### 2. Deleting a student orphaned their grades and remarks — CLOSED
 
 `backend/routers/allocations.py` `delete_roster_record` now cascades, in the
