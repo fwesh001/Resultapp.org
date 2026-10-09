@@ -1,5 +1,6 @@
 "use client";
 
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -8,7 +9,6 @@ import {
   FileBarChart,
   CreditCard,
   Settings,
-  GraduationCap,
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,9 +31,7 @@ export function Sidebar({ creditBalance }: { creditBalance?: number | null }) {
   return (
     <aside className="hidden w-64 shrink-0 border-r bg-white md:flex md:flex-col">
       <div className="flex h-16 items-center gap-2 border-b px-6 font-semibold">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white">
-          <GraduationCap className="h-5 w-5" />
-        </span>
+        <Logo size="sm" alt="" />
         resultapp
       </div>
 
