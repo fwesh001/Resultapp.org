@@ -22,7 +22,7 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open ]);
+  }, [open]);
 
   const links = [
     // Bare hash, not a path: on a subdomain host the middleware rewrites
