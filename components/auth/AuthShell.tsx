@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
+import { LogoLockup } from "@/components/brand/Logo";
 
 /**
  * Minimal centred shell for the public auth-flow pages (verify-email,
@@ -26,10 +26,7 @@ export default function AuthShell({
     <div className="flex min-h-screen flex-col bg-[#0B0514] text-white">
       <header className="border-b border-purple-500/15 px-5 py-4">
         <Link href="/" className="inline-flex items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white">
-            <GraduationCap className="h-5 w-5" />
-          </span>
-          <span className="text-[15px] font-semibold">resultapp.org</span>
+          <LogoLockup size="sm" wordmarkClassName="text-[15px] font-semibold" />
         </Link>
       </header>
 
