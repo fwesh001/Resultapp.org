@@ -375,7 +375,11 @@ check("close control is not the animated Button (btn-anim forces position:relati
   // globals.css declares `.btn-anim { position: relative }` as a class rule,
   // which outranks the equal-specificity `absolute` utility, so the control
   // rendered top-left over the title. Verified in Chrome: 9px from the edge.
-  const btn = /<Button[\s\S]*?aria-label="Close modal"[\s\S]*?>/.exec(modalSrc);
+  // Match real JSX only: the explanatory comment above the control also names
+  // <Button>, so require the opening tag to start a line.
+  const btn = /<Button\b[\s\S]{0,400}?aria-label="Close modal"/.test(
+    modalSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, ""),
+  );
   return btn
     ? "close button still uses <Button>; btn-anim's position:relative defeats absolute"
     : true;
