@@ -335,13 +335,13 @@ check("every surface memoizes the draft scope", () => {
 
 check("hook dependencies never use the scope object itself", () => {
   // A whole-object dep changes identity every render when callers build the
-  // scope inline. Only the flattened primitives may appear.
-  const bad = [...loopHookSrc.matchAll(/\],?\s*\[([^\]]*(?:scope|legacyKeys)[^\]]*)\]\s*\)/g)]
-    .map((m) => m[1].trim())
-    .filter((d) => /\bscope\b|\blegacyKeys\b/.test(d));
+  // scope inline. Catch any dep list naming `scope` or `legacyKeys` directly.
+  const bad = [...loopHookSrc.matchAll(/\[([^\[\]]*)\]\s*\)/g)]
+    .map((m) => m[1])
+    .filter((d) => /(^|[\s,{])scope([\s,}]|$)/.test(d) || /(^|[\s,{])legacyKeys([\s,}]|$)/.test(d));
   return bad.length === 0
     ? true
-    : `dependency arrays still reference an unstable object: ${bad.join(" | ")}`;
+    : `dependency arrays still reference an unstable object: ${[...new Set(bad)].join(" | ")}`;
 });
 
 check("restoring a draft cannot re-set state with a fresh object", () =>
