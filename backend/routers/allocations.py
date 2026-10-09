@@ -1391,6 +1391,11 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
                 ("student_academic_records", "tenant_id"),
                 ("student_behavioral_records", "tenant_id"),
                 ("result_publications", "subdomain"),
+                # Financial clearance holds are per-student financial state. A
+                # withdrawn student's hold must not survive them, or a
+                # re-enrolment reusing that admission number would start life
+                # owing fees it never owed.
+                ("student_term_clearance", "subdomain"),
             ):
                 try:
                     cur.execute(
