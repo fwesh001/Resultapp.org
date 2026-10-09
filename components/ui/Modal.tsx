@@ -4,7 +4,6 @@ import * as React from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "./Button";
 
 export interface ModalProps {
   open: boolean;
@@ -144,20 +143,31 @@ export function Modal({
                 aria-hidden="true"
               />
             )}
+            {/* Native <button>, deliberately NOT the shared <Button>.
+                Button's base class list carries `btn-anim`, and
+                globals.css declares `.btn-anim { position: relative }` as a
+                class rule. A class rule beats an equal-specificity utility in
+                Tailwind's cascade, so `absolute right-4 top-4` on a <Button>
+                silently does nothing: the control falls into normal flow and
+                renders top-left, on top of the title. Measured in Chrome — the
+                button sat 9px from the modal's left edge. A plain element has
+                no competing rule, so the positioning actually applies. */}
             {dismissible && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 top-4 h-11 w-11"
+              <button
+                type="button"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close modal"
+                className="absolute right-4 top-4 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-purple-200 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
               >
-                <X className="h-4 w-4" />
-              </Button>
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             )}
 
             {(title || description) && (
-              <div className="mb-4 pr-10">
+              /* pr-16, not pr-10: the 44px control at right-4 occupies from
+                 16px to 60px measured in from the right edge, so 40px of
+                 reserved padding left the title running underneath it. */
+              <div className="mb-4 pr-16">
                 {title && <h3 className="text-lg font-semibold">{title}</h3>}
                 {description && (
                   <p className="mt-1 text-sm text-zinc-500">{description}</p>
