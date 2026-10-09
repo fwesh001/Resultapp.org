@@ -311,24 +311,24 @@ check("every surface memoizes the draft scope", () => {
   const offenders = [];
   for (const f of SURFACES) {
     const src = fs.readFileSync(f, "utf8");
-    // The useDraftSave call must read `scope: <identifier>`, never an inline
-    // object literal. An inline literal is a new object every render.
-    const call = /useDraftSave<[^>]*>\(\s*\{([\s\S]*?)\}\s*\)/.exec(src);
-    if (!call) {
-      offenders.push(`${path.basename(f)}: call shape not found`);
-      continue;
+    // Scan every useDraftSave call and read its `scope:` argument. The argument
+    // must be a bare identifier: an inline object literal is a new object on
+    // every render, which is what drove the freeze.
+    const re = /useDraftSave<[\s\S]*?\(\s*\{/g;
+    let m;
+    let sawScope = false;
+    while ((m = re.exec(src)) !== null) {
+      const arg = /scope:\s*([^,\n]+)/.exec(src.slice(m.index, m.index + 1200));
+      if (!arg) continue;
+      sawScope = true;
+      const name = arg[1].trim();
+      if (name.startsWith("{")) {
+        offenders.push(`${path.basename(f)}: inline scope object literal`);
+      } else if (!new RegExp(`useMemo\\([\\s\\S]{0,600}?${name}\\s*[,}]`).test(src)) {
+        offenders.push(`${path.basename(f)}: scope "${name}" is not memoized`);
+      }
     }
-    const scopeArg = /scope:\s*([^,\n]+)/.exec(call[1]);
-    if (!scopeArg) {
-      offenders.push(`${path.basename(f)}: no scope argument`);
-      continue;
-    }
-    const arg = scopeArg[1].trim();
-    if (/^\{/.test(arg)) {
-      offenders.push(`${path.basename(f)}: inline scope object literal`);
-    } else if (!new RegExp(`useMemo\\([\\s\\S]{0,400}${arg}\\s*\\]`).test(src)) {
-      offenders.push(`${path.basename(f)}: scope "${arg}" is not memoized`);
-    }
+    if (!sawScope) offenders.push(`${path.basename(f)}: no scope argument found`);
   }
   return offenders.length === 0 ? true : offenders.join("; ");
 });
