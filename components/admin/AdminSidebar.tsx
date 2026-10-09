@@ -1,5 +1,6 @@
 "use client";
 
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -8,7 +9,6 @@ import {
   BookOpen,
   Settings,
   CreditCard,
-  GraduationCap,
   ClipboardCheck,
   Bell,
   LifeBuoy,
@@ -101,9 +101,7 @@ export default function AdminSidebar({
         aria-label={`${toTitleCase(schoolName)} school portal`}
         className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-          <GraduationCap className="h-5 w-5 text-purple-300" />
-        </span>
+        <Logo size="sm" alt="" className="rounded-full" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold tracking-tight text-white">
             {toTitleCase(schoolName)}
