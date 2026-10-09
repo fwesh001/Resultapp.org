@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import { useParams, useSearchParams } from "next/navigation";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import {
@@ -12,7 +13,6 @@ import {
   Users,
   Save,
   ArrowLeft,
-  GraduationCap,
   ShieldCheck,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -462,9 +462,7 @@ export default function SmartStaffHubPage() {
           <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white">
-                  <GraduationCap className="h-4 w-4" />
-                </span>
+                <Logo size="sm" alt="" className="rounded-lg" />
                 Smart Staff Hub
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-purple-200/60">
