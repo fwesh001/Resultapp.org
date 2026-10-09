@@ -298,6 +298,106 @@ check("restore prompt offers both Restore and Discard", () => {
   return /onRestore/.test(src) && /onDiscard/.test(src) ? true : "prompt is missing an explicit action";
 });
 
+/* ---------------------------------------------------------------------------
+   Render-loop regressions.
+
+   The behaviour grid froze the tab: ~80% main-thread script time with a flat
+   DOM, and Chrome's "Page Unresponsive" dialog. Two independent causes, both
+   pinned below so neither can come back unnoticed.
+   --------------------------------------------------------------------------- */
+console.log("\nNo self-sustaining render loop (browser-verified freeze)");
+
+const HOOKSRC_RENAME = null;
+const loopHookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
+  const offenders = [];
+  for (const f of SURFACES) {
+    const src = fs.readFileSync(f, "utf8");
+    // The useDraftSave call must read `scope: <identifier>`, never an inline
+    // object literal. An inline literal is a new object every render.
+    const call = /useDraftSave<[^>]*>\(\s*\{([\s\S]*?)\}\s*\)/.exec(src);
+    if (!call) {
+      offenders.push(`${path.basename(f)}: call shape not found`);
+      continue;
+    }
+    const scopeArg = /scope:\s*([^,\n]+)/.exec(call[1]);
+    if (!scopeArg) {
+      offenders.push(`${path.basename(f)}: no scope argument`);
+      continue;
+    }
+    const arg = scopeArg[1].trim();
+    if (/^\{/.test(arg)) {
+      offenders.push(`${path.basename(f)}: inline scope object literal`);
+    } else if (!new RegExp(`useMemo\\([\\s\\S]{0,400}${arg}\\s*\\]`).test(src)) {
+      offenders.push(`${path.basename(f)}: scope "${arg}" is not memoized`);
+    }
+  }
+  return offenders.length === 0 ? true : offenders.join("; ");
+});
+
+check("hook dependencies never use the scope object itself", () => {
+  // A whole-object dep changes identity every render when callers build the
+  // scope inline. Only the flattened primitives may appear.
+  const bad = [...hookSrc.matchAll(/\],?\s*\[([^\]]*(?:scope|legacyKeys)[^\]]*)\]\s*\)/g)]
+    .map((m) => m[1].trim())
+    .filter((d) => /\bscope\b|\blegacyKeys\b/.test(d));
+  return bad.length === 0
+    ? true
+    : `dependency arrays still reference an unstable object: ${bad.join(" | ")}`;
+});
+
+check("restoring a draft cannot re-set state with a fresh object", () =>
+  /setPendingRestore\(\(prev\)/.test(hookSrc)
+    ? true
+    : "setPendingRestore must use a functional update so an unchanged draft bails out"
+);
+
+check("persisted payload is compared before rewriting storage", () =>
+  /lastWriteRef/.test(hookSrc) && /serialized === lastWriteRef.current/.test(hookSrc)
+    ? true
+    : "flush() rewrites localStorage on every render even when nothing changed"
+);
+
+check("effect cleanup only flushes while a write is actually queued", () =>
+  /if \(timer.current \|\| failsafe.current\) flush\(value\)/.test(hookSrc)
+    ? true
+    : "cleanup flushes unconditionally, re-entering the render loop"
+);
+
+check("empty drafts are neither written nor offered", () => {
+  if (!/hasEntries/.test(hookSrc)) return "hook still treats an empty value as a draft";
+  return /some\(\(v\) => String\(v\)\.trim\(\) !== ""\)/.test(hookSrc)
+    ? true
+    : "empty-value guard not applied";
+});
+
+console.log("\nModal close button actually lands top-right");
+const modalSrc = fs.readFileSync(path.join(root, "components", "ui", "Modal.tsx"), "utf8");
+check("close control is not the animated Button (btn-anim forces position:relative)", () => {
+  // globals.css declares `.btn-anim { position: relative }` as a class rule,
+  // which outranks the equal-specificity `absolute` utility, so the control
+  // rendered top-left over the title. Verified in Chrome: 9px from the edge.
+  const btn = /<Button[\s\S]*?aria-label="Close modal"[\s\S]*?>/.exec(modalSrc);
+  return btn
+    ? "close button still uses <Button>; btn-anim's position:relative defeats absolute"
+    : true;
+});
+check("close control keeps right-4 top-4 on a native button", () =>
+  /<button[\s\S]*?aria-label="Close modal"[\s\S]*?absolute right-4 top-4/.test(modalSrc)
+    ? true
+    : "native close button lost its positioning classes"
+);
+check("title reserves room for the 44px control (pr-16, not pr-10)", () =>
+  /mb-4 pr-16/.test(modalSrc)
+    ? true
+    : "title padding is too small; a 44px button at right-4 needs 60px reserved"
+);
+check("globals.css btn-anim keeps its load-bearing position:relative", () => {
+  const css = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
+  return /\.btn-anim\s*\{[^}]*position:\s*relative/.test(css)
+    ? true
+    : "btn-anim position was weakened; isolation:isolate depends on it";
+});
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) {
