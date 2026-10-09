@@ -150,6 +150,10 @@ interface StudentReportCardProps {
  *   notAvailable— student known, result not published (public)
  *   noTerm      — default term not published, no explicit term chosen (public)
  *   transport   — network/5xx failure, NOT an authorization signal (both)
+ *   withheld    — published but on an Administrative Hold for unpaid fees.
+ *                 Grades are absent from the response body entirely, so this
+ *                 is a locked card, never a blurred one (PUBLIC ONLY — the
+ *                 admin scope always receives the full bundle).
  *   adminDraft  — blurred draft + Result Command Center (ADMIN ONLY)
  */
 type ReportState =
@@ -218,6 +222,12 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // "the request genuinely failed" (network/5xx). A 404 is an expected,
   // authorization-shaped outcome; it must NEVER reach the admin UI.
   const [notFoundResponse, setNotFoundResponse] = useState(false);
+  // Server-authoritative "published but on Administrative Hold" flag. Distinct
+  // from notFoundResponse on purpose: a 404 means the endpoint could not
+  // confirm anything (and must stay indistinguishable from an unknown student),
+  // whereas this is a positive, explicit statement from the backend that the
+  // result exists and is being withheld for non-payment.
+  const [withheldResponse, setWithheldResponse] = useState(false);
   // Broken/dead logo URLs collapse to the text-only header (no broken icon).
   const [imgError, setImgError] = useState(false);
   // Signature images fail independently of the logo: a dead signature URL must
@@ -237,6 +247,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
       setLoading(true);
       setError(null);
       setNotFoundResponse(false);
+      setWithheldResponse(false);
       try {
         const url = `/api/report?tenant_id=${encodeURIComponent(tenantId)}&student_id=${encodeURIComponent(studentId)}&term=${encodeURIComponent(term)}`;
         const res = await fetch(url, { cache: "no-store" });
@@ -257,6 +268,14 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
         if (!cancelled) {
           const response = json as ReportResponse;
           setData(response);
+          // Trust the server's explicit status. Inferring from grades.length
+          // would misclassify a genuinely empty (not-graded) published result as
+          // a hold, and would rely on absence-of-data to drive an access state.
+          if (response.result_status === "withheld") {
+            setWithheldResponse(true);
+            announceReportReady(false);
+            return;
+          }
           announceReportReady(isPublished && !!(response.student && (response.grades?.length ?? 0) > 0));
         }
       } catch (e) {
@@ -375,9 +394,10 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   //   1. transport  — the request itself failed (no authorization meaning)
   //   2. notFound   — 404 for this viewer; never an admin signal
   //   3. adminDraft — admin scope + unpublished (the ONLY admin-draft path)
-  //   4. published  — official card
-  //   5. noTerm     — public, default term, unpublished, no explicit term
-  //   6. notAvailable— public, unpublished for the requested term
+  //   4. withheld   — public, published but on Administrative Hold (unpaid fees)
+  //   5. published  — official card
+  //   6. noTerm     — public, default term, unpublished, no explicit term
+  //   7. notAvailable— public, unpublished for the requested term
   //
   // The public scope can only ever land on published/notFound/noTerm/
   // notAvailable/transport. `adminDraft` requires viewer === "admin", which is
@@ -393,6 +413,12 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     // so this is a public-only outcome. Treat it as "not found" rather than
     // inventing a distinction the backend deliberately erased.
     state = "notFound";
+  } else if (withheldResponse) {
+    // Sits ABOVE the admin-draft check on purpose. A hold is a property of the
+    // student's account, not of the viewer's scope: the bursary needs to see
+    // the full bundle so they can run the school's business, so this branch is
+    // public-only and the admin falls through to the normal published card.
+    state = isAdmin ? "published" : "withheld";
   } else if (isAdmin && isLocked) {
     state = "adminDraft";
   } else if (isPublished) {
