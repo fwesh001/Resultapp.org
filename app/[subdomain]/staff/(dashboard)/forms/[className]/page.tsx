@@ -101,7 +101,23 @@ export default function FormGridPage() {
    * One device draft for the whole form, holding traits and remarks under
    * namespaced keys ("t::…" / "r::…"). A single scope means a single restore
    * prompt instead of two competing ones, and one key to clear on save.
+   *
+   * `formDraftScope` MUST be memoized. useDraftSave depends on the scope's
+   * fields, so an inline object literal gave it a new identity every render,
+   * which re-ran the hook's restore effect on every render and froze the tab.
+   * The two grading surfaces already memoize their scope for this reason.
    */
+  const formDraftScope = useMemo(
+    () => ({
+      tenantId,
+      term,
+      className: decodedClassName,
+      subjectName: "behavioural",
+      assessmentKey: "form",
+    }),
+    [tenantId, term, decodedClassName],
+  );
+
   const formDraftValue = useMemo(() => {
     const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(traitDrafts)) out[`t::${k}`] = v;
@@ -110,13 +126,7 @@ export default function FormGridPage() {
   }, [traitDrafts, remarkDrafts]);
 
   const formDraft = useDraftSave<Record<string, string>>({
-    scope: {
-      tenantId,
-      term,
-      className: decodedClassName,
-      subjectName: "behavioural",
-      assessmentKey: "form",
-    },
+    scope: formDraftScope,
     value: formDraftValue,
     enabled: Boolean(grid),
   });
