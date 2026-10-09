@@ -1,9 +1,11 @@
 "use client";
 
 import { Fragment } from "react";
+import { GraduationCap } from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, GraduationCap, HeartHandshake, UserCircle, Users, Bell, LogOut } from "lucide-react";
+import { LayoutDashboard, HeartHandshake, UserCircle, Users, Bell, LogOut } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffSidebarProps {
@@ -37,9 +39,7 @@ export default function StaffSidebar({ subdomain, schoolName, formClasses, onNav
         className="border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
       >
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-            <GraduationCap className="h-5 w-5 text-purple-300" />
-          </span>
+          <Logo size="sm" alt="" className="rounded-full" />
           <div>
             <p className="text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</p>
             <p className="text-xs text-purple-300/60">Staff Portal</p>
