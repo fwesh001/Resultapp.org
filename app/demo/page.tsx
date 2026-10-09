@@ -19,7 +19,19 @@ export const metadata: Metadata = {
  */
 export default function DemoLandingPage() {
   return (
-    <main className="min-h-screen bg-[#0B0514] text-white">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[#0B0514] text-white">
+      {/* Same hero-preview.avif the marketing pages use, so the demo feels
+          like the same product rather than a bare debug page. Layered behind
+          the content with -z-10 (inside this `isolate` stacking context) and
+          dimmed enough to keep the body copy at its existing contrast — the
+          demo page has no hero of its own, so the card list needs the darker
+          scrim more than the landing page does. */}
+      <div aria-hidden className="absolute inset-0 -z-10">
+        <img src="/hero-preview.avif" alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-[#0B0514]/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0514] via-transparent to-[#0B0514]/60" />
+      </div>
+
       <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
         <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
           Walk through a real school portal
