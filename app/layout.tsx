@@ -38,6 +38,13 @@ export const metadata: Metadata = {
     "school portal",
     "Resultapp",
   ],
+  icons: {
+    // Explicit PNG, because the source asset is a PNG carrying an .ico
+    // extension. Relying on the file convention leaves some crawlers picking
+    // the wrong MIME type.
+    icon: [{ url: "/logo.png", type: "image/png" }],
+    apple: [{ url: "/logo.png", type: "image/png" }],
+  },
   openGraph: {
     type: "website",
     siteName: "Resultapp.org",
