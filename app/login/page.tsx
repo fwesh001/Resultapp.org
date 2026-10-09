@@ -1,5 +1,5 @@
 import WorkspaceLocatorForm from "@/components/auth/WorkspaceLocatorForm";
-import { GraduationCap } from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -20,9 +20,7 @@ export default function RootLoginPage() {
       <div className="w-full max-w-md">
         <div className="mt-6 rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white">
-              <GraduationCap className="h-5 w-5" />
-            </span>
+            <Logo size="md" alt="" className="rounded-xl" />
             <div>
               <h1 className="text-lg font-semibold tracking-tight text-white">Sign in</h1>
               <p className="text-xs font-mono text-purple-300/60">resultapp.org</p>
