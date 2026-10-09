@@ -1098,6 +1098,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Report router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Financial Clearance — per-term administrative hold on unpaid school fees
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.clearance import router as clearance_router
+
+    app.include_router(clearance_router)
+    logger.info("[App] Clearance router mounted (/api/v1/tenant/{tenant_id}/clearance)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Clearance router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Credit & Command — token ledger + command center
 # ---------------------------------------------------------------------------
 
