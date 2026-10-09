@@ -1,6 +1,7 @@
+import { LogoLockup } from "@/components/brand/Logo";
 import { RegisterSchoolForm } from "@/components/forms/RegisterSchoolForm";
 // Phase 3: paid tier — keep side-by-side, not deleted: `SchoolRegistrationForm` remains at `@/components/forms/SchoolRegistrationForm`
-import { CheckCircle2, ShieldCheck, Zap, GraduationCap, Users, Sparkles } from "lucide-react";
+import { CheckCircle2, ShieldCheck, Zap, Users, Sparkles } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import Link from "next/link";
 
@@ -30,10 +31,7 @@ export default function RegisterPage() {
 
         <div className="relative z-10 flex h-full flex-col justify-between p-8 xl:p-10">
           <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
-              <GraduationCap className="h-5 w-5" />
-            </span>
-            <span className="text-[15px] font-semibold text-white">resultapp.org</span>
+            <LogoLockup size="sm" wordmarkClassName="text-[15px] font-semibold text-white" />
           </Link>
 
           <div>
@@ -80,10 +78,7 @@ export default function RegisterPage() {
           <div className="absolute inset-0 bg-[#0B0514]/20" />
           <div className="absolute inset-x-0 top-0 flex items-center justify-between p-5">
             <Link href="/" className="flex items-center gap-2 font-semibold">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white">
-                <GraduationCap className="h-5 w-5" />
-              </span>
-              <span className="text-sm font-semibold text-white">resultapp.org</span>
+              <LogoLockup size="sm" wordmarkClassName="text-sm font-semibold text-white" />
             </Link>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-purple-100 backdrop-blur">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" /> Secured
