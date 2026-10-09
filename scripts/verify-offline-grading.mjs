@@ -307,8 +307,9 @@ check("restore prompt offers both Restore and Discard", () => {
    --------------------------------------------------------------------------- */
 console.log("\nNo self-sustaining render loop (browser-verified freeze)");
 
-const HOOKSRC_RENAME = null;
 const loopHookSrc = fs.readFileSync(path.join(root, HOOK), "utf8");
+
+check("every surface memoizes the draft scope", () => {
   const offenders = [];
   for (const f of SURFACES) {
     const src = fs.readFileSync(f, "utf8");
