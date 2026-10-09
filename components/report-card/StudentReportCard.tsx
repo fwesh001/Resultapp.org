@@ -462,6 +462,45 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // ---- Public terminal states ---------------------------------------------
   // These are returned BEFORE any report markup, so a public viewer can never
   // reach the card body, the draft overlay, or the Command Center UI.
+  if (state === "withheld") {
+    // Financial Clearance / Administrative Hold.
+    //
+    // Reached only for a PUBLIC viewer, and only when the backend returned an
+    // explicit result_status: "withheld" on a 200. By the time this renders,
+    // the grades, class averages, ranks and remarks have already been stripped
+    // server-side — this card is disclosure of a status, not a blur over data.
+    // Never re-fetch or re-fetch-with-admin to "peek" at the withheld grades
+    // here; that would route around the hold.
+    //
+    // KNOWN, ACCEPTED TRADE-OFF: unlike the notFound card below, this copy
+    // confirms the admission number is real and the result has been compiled.
+    // That is a deliberate business decision (revenue recovery) and is
+    // documented as an accepted enumeration risk in LEGAL_REMEDIATION.md.
+    // Mitigated by the 30 req/60s per (IP, tenant) throttle on the report
+    // endpoint. Do not "fix" this by silently degrading it to a generic 404 —
+    // the family must be told why, or they will simply keep checking.
+    return (
+      <ReportErrorState
+        title="Result Withheld"
+        description={
+          <>
+            {/* Verbatim from the backend, which interpolates the real term.
+                Falls back to a neutral sentence only if an older backend
+                predates the withheld_message field. */}
+            {data?.withheld_message?.trim() ??
+              "This result is currently on an Administrative Hold due to outstanding fee balances. Please contact the school Bursary to clear your account."}
+          </>
+        }
+        icon="withheld"
+        termSelector={termSelector}
+        actions={[
+          { label: "Contact Bursary", href: mailtoHref },
+          { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
+        ]}
+      />
+    );
+  }
+
   if (state === "notFound") {
     // ENUMERATION CONTRACT (LEGAL_REMEDIATION.md P0 item 1).
     //
