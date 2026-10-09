@@ -249,6 +249,41 @@ export default function ClearanceManager({
     }
   };
 
+  /** Clear the selected students. Separate from applyPending because a
+   *  clear needs no reason dialog — it writes straight through. */
+  const clearSelected = useCallback(async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/clearance", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          term,
+          student_ids: ids,
+          is_financially_cleared: true,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast.error("Could not clear students", {
+          description: data.error || `Request failed (${res.status})`,
+        });
+      } else {
+        toast.success(`Cleared ${ids.length} student${ids.length === 1 ? "" : "s"}`, {
+          description: `${schoolName} · ${term}`,
+        });
+      }
+      await load();
+    } catch {
+      toast.error("Network error while clearing students");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [selected, tenantId, term, schoolName, load]);
+
   const allSelected = rows.length > 0 && selected.size === rows.length;
 
   return (
@@ -563,39 +598,9 @@ export default function ClearanceManager({
         confirmLabel="Yes, clear them"
         variant="danger"
         loading={submitting}
-        onConfirm={() => {
+        onConfirm={async () => {
           setConfirmBulk(false);
-          requestChange(Array.from(selected), true);
-          // Clearing needs no reason dialog — write straight through.
-          void (async () => {
-            setSubmitting(true);
-            const ids = Array.from(selected);
-            try {
-              const res = await fetch("/api/admin/clearance", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  tenantId,
-                  term,
-                  student_ids: ids,
-                  is_financially_cleared: true,
-                }),
-              });
-              const data = (await res.json().catch(() => ({}))) as { error?: string };
-              if (!res.ok) {
-                toast.error("Could not clear students", {
-                  description: data.error || `Request failed (${res.status})`,
-                });
-              } else {
-                toast.success(`Cleared ${ids.length} student${ids.length === 1 ? "" : "s"}`);
-              }
-              await load();
-            } catch {
-              toast.error("Network error while clearing students");
-            } finally {
-              setSubmitting(false);
-            }
-          })();
+          await clearSelected();
         }}
       />
     </div>
