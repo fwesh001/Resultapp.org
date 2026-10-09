@@ -15,6 +15,7 @@ export type ReportErrorIcon =
   | "term"
   | "unpublished"
   | "not-available"
+  | "withheld"
   | "transport"
   | "alert";
 
