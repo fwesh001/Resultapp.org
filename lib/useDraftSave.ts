@@ -227,11 +227,14 @@ export function clearLegacyDraftsForScope(scope: DraftScope): number {
   return removed;
 }
 
+/** Shared empty default so an omitted `legacyKeys` never churns identity. */
+const NO_LEGACY_KEYS: readonly string[] = Object.freeze([]);
+
 export function useDraftSave<T extends Record<string, string>>({
   scope,
   value,
   enabled = true,
-  legacyKeys = [],
+  legacyKeys = NO_LEGACY_KEYS as string[],
   onRestoreCandidate,
 }: UseDraftSaveOptions<T>): UseDraftSaveResult<T> {
   const [pendingRestore, setPendingRestore] = useState<DraftInfo<T> | null>(null);
@@ -241,8 +244,28 @@ export function useDraftSave<T extends Record<string, string>>({
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const failsafe = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Last serialized payload written, so an unchanged re-render is a no-op. */
+  const lastWriteRef = useRef<string | null>(null);
 
-  // A stable string key so effects don't re-run on object identity changes.
+  /**
+   * Scope fields flattened to primitives.
+   *
+   * `scope` is an object, and callers routinely build it inline. Depending on
+   * the object itself meant a new dependency identity on EVERY render, so the
+   * callbacks below were rebuilt every render and the "offer a draft" effect
+   * below re-ran every render — and because it unconditionally pushed a fresh
+   * DraftInfo object into state, React never bailed out. That was a hard
+   * render loop: measured in Chrome at ~80% main-thread script time with the
+   * DOM flat, and it froze the tab outright. Depending on the primitives makes
+   * identity change only when the actual scope changes.
+   */
+  const scopeTenantId = scope.tenantId;
+  const scopeTerm = scope.term;
+  const scopeClassName = scope.className;
+  const scopeSubjectName = scope.subjectName;
+  const scopeAssessmentKey = scope.assessmentKey;
+
+  // A stable key so effects don't re-run on object identity changes.
   const key = useMemo(() => {
     if (!enabled) return "";
     try {
@@ -250,7 +273,25 @@ export function useDraftSave<T extends Record<string, string>>({
     } catch {
       return "";
     }
-  }, [enabled, scope.tenantId, scope.term, scope.className, scope.subjectName, scope.assessmentKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, scopeTenantId, scopeTerm, scopeClassName, scopeSubjectName, scopeAssessmentKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * The scope as an object with stable identity, rebuilt only when a real field
+   * changes. `readDraft` needs an object; the effects need a stable reference.
+   */
+  const stableScope = useMemo(
+    () => ({
+      tenantId: scopeTenantId,
+      term: scopeTerm,
+      className: scopeClassName,
+      subjectName: scopeSubjectName,
+      assessmentKey: scopeAssessmentKey,
+    }),
+    [scopeTenantId, scopeTerm, scopeClassName, scopeSubjectName, scopeAssessmentKey],
+  );
+
+  /** Legacy keys joined into one comparable string, so array identity is irrelevant. */
+  const legacyKeyPath = legacyKeys.join("\u0000");
 
   const cancelTimers = useCallback(() => {
     if (timer.current) {
@@ -268,19 +309,28 @@ export function useDraftSave<T extends Record<string, string>>({
       if (!key) return;
       cancelTimers();
       try {
-        const savedAt = Date.now();
         const envelope: DraftEnvelope<T> = {
           v: DRAFT_SCHEMA_VERSION,
-          term: scope.term,
-          className: scope.className,
-          subjectName: scope.subjectName,
-          assessmentKey: scope.assessmentKey,
-          savedAt,
+          term: stableScope.term,
+          className: stableScope.className,
+          subjectName: stableScope.subjectName,
+          assessmentKey: stableScope.assessmentKey,
+          savedAt: Date.now(),
           values,
         };
-        window.localStorage.setItem(key, JSON.stringify(envelope));
+        const serialized = JSON.stringify(envelope);
+        // Bail when the payload is byte-identical to what is already stored.
+        // Without this, a re-render with unchanged values still produced a NEW
+        // savedAt, which changed state, which forced another render — a second
+        // self-sustaining loop. It also rewrote localStorage every pass, which
+        // is what pinned the CPU once the draft held real entries.
+        if (serialized === lastWriteRef.current) return;
+        lastWriteRef.current = serialized;
+        window.localStorage.setItem(key, serialized);
         setPersistenceAvailable(true);
-        setLastSavedAt(savedAt);
+        // `prev ?? savedAt` keeps the state object identical when the timestamp
+        // has not advanced, so React can bail out of the re-render.
+        setLastSavedAt((prev) => (prev && prev === envelope.savedAt ? prev : envelope.savedAt));
       } catch {
         // Quota or private mode. Persistence is best-effort: keep the UI working.
         setPersistenceAvailable(false);
@@ -288,24 +338,38 @@ export function useDraftSave<T extends Record<string, string>>({
         setIsPendingWrite(false);
       }
     },
-    [key, cancelTimers, scope.term, scope.className, scope.subjectName, scope.assessmentKey],
+    [key, cancelTimers, stableScope],
+  );
+
+  // An empty working set is not unsaved work. Writing it creates a draft that
+  // offers "Restore 0 entries" on the next visit, which is noise for the
+  // teacher and used to arm the restore prompt for no reason.
+  const hasEntries = useMemo(
+    () => Object.values(value).some((v) => String(v).trim() !== ""),
+    [value],
   );
 
   // Persist on every change (debounced). The fast timer is the battery/typing
-  // path; the failsafe guarantees a write even if the tab is throttled, and the
-  // cleanup flushes synchronously so unmount/navigation cannot lose the tail.
+  // path; the failsafe guarantees a write even if the tab is throttled.
   useEffect(() => {
-    if (!key) return;
+    if (!key || !hasEntries) {
+      cancelTimers();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsPendingWrite(false);
+      return;
+    }
     cancelTimers();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPendingWrite(true);
     timer.current = setTimeout(() => flush(value), WRITE_DEBOUNCE_MS);
     failsafe.current = setTimeout(() => flush(value), FLUSH_DEBOUNCE_MS);
     return () => {
-      // Flush synchronously rather than dropping the pending write.
-      flush(value);
+      // Flush synchronously rather than dropping the pending write, but only
+      // while a write is actually queued. An unconditional flush here ran on
+      // every unrelated re-render too, re-entering the loop above.
+      if (timer.current || failsafe.current) flush(value);
     };
-  }, [value, key, flush, cancelTimers]);
+  }, [value, key, hasEntries, flush, cancelTimers]);
 
   // Keep the latest callback in a ref without writing it during render.
   const onRestoreCandidateRef = useRef(onRestoreCandidate);
@@ -319,14 +383,15 @@ export function useDraftSave<T extends Record<string, string>>({
    */
   const findDraft = useCallback((): DraftInfo<T> | null => {
     if (!key) return null;
-    const primary = readDraft<T>(key, scope);
+    const primary = readDraft<T>(key, stableScope);
     if (primary) return primary;
-    for (const lk of legacyKeys) {
-      const found = readDraft<T>(lk, scope);
+    const keys = legacyKeyPath ? legacyKeyPath.split("\u0000") : [];
+    for (const lk of keys) {
+      const found = readDraft<T>(lk, stableScope);
       if (found) return { ...found, key: lk, legacy: true };
     }
     return null;
-  }, [key, scope, legacyKeys]);
+  }, [key, stableScope, legacyKeyPath]);
 
   // Offer an existing draft exactly once per scope opening. Deferred to a
   // microtask so this is not a synchronous setState inside the effect body.
@@ -337,8 +402,20 @@ export function useDraftSave<T extends Record<string, string>>({
       if (cancelled) return;
       const found = findDraft();
       if (cancelled) return;
-      setPendingRestore(found);
-      if (found) onRestoreCandidateRef.current?.(found);
+      // A draft with nothing in it is not worth offering: the teacher would see
+      // "Restore 0 entries" and there is nothing to restore.
+      const usable =
+        found && Object.values(found.values as Record<string, unknown>)
+          .some((v) => String(v ?? "").trim() !== "");
+      setPendingRestore((prev) => {
+        if (!usable) return prev;
+        // Idempotent by identity of meaning, not of reference: even if this
+        // effect re-runs, returning the previous object lets React bail out
+        // instead of scheduling another render.
+        if (prev && prev.key === found!.key && prev.savedAt === found!.savedAt) return prev;
+        return found!;
+      });
+      if (usable) onRestoreCandidateRef.current?.(found!);
     });
     return () => {
       cancelled = true;
@@ -355,14 +432,17 @@ export function useDraftSave<T extends Record<string, string>>({
     try {
       // Remove both formats so a legacy draft cannot resurface next time.
       window.localStorage.removeItem(key);
-      for (const lk of legacyKeys) window.localStorage.removeItem(lk);
+      for (const lk of legacyKeyPath ? legacyKeyPath.split("\u0000") : []) {
+        window.localStorage.removeItem(lk);
+      }
+      lastWriteRef.current = null;
     } catch {
       /* best effort */
     }
     setPendingRestore(null);
     setLastSavedAt(null);
     setIsPendingWrite(false);
-  }, [key, cancelTimers, legacyKeys]);
+  }, [key, cancelTimers, legacyKeyPath]);
 
   const clearEntries = useCallback(
     (matchKey: string) => {
@@ -379,23 +459,23 @@ export function useDraftSave<T extends Record<string, string>>({
       // Persist the pruned set immediately so a later unmount flush of the full
       // in-memory value cannot resurrect the cleared entries.
       try {
-        window.localStorage.setItem(
-          key,
-          JSON.stringify({
-            v: DRAFT_SCHEMA_VERSION,
-            term: scope.term,
-            className: scope.className,
-            subjectName: scope.subjectName,
-            assessmentKey: scope.assessmentKey,
-            savedAt: Date.now(),
-            values: kept,
-          } satisfies DraftEnvelope<unknown>),
-        );
+        const pruned: DraftEnvelope<unknown> = {
+          v: DRAFT_SCHEMA_VERSION,
+          term: stableScope.term,
+          className: stableScope.className,
+          subjectName: stableScope.subjectName,
+          assessmentKey: stableScope.assessmentKey,
+          savedAt: Date.now(),
+          values: kept,
+        };
+        const serialized = JSON.stringify(pruned);
+        lastWriteRef.current = serialized;
+        window.localStorage.setItem(key, serialized);
       } catch {
         /* best effort */
       }
     },
-    [key, findDraft, scope.term, scope.className, scope.subjectName, scope.assessmentKey],
+    [key, findDraft, stableScope],
   );
 
   return {
