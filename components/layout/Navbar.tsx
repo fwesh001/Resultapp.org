@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, Menu, X } from "lucide-react";
+import { LogoLockup } from "@/components/brand/Logo";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 const links = [
@@ -30,10 +31,10 @@ export function Navbar() {
     <header className="sticky top-0 z-40 w-full border-b border-purple-500/10 bg-[#0B0514]/70 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0B0514]/60">
       <div className="mx-auto flex h-[64px] max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex min-h-[44px] items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
-            <GraduationCap className="h-5 w-5" />
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight text-white">resultapp.org</span>
+          <LogoLockup
+            size="sm"
+            wordmarkClassName="text-[15px] font-semibold tracking-tight text-white"
+          />
         </Link>
 
         <nav className="hidden items-center gap-2 text-sm font-medium md:flex">
