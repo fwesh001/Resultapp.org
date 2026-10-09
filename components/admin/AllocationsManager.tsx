@@ -125,6 +125,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   // modals
   const [showStudentModal, setShowStudentModal] = useState(false);
+  /** True while the "Other…" branch of the Class field is open. */
+  const [showCustomClass, setShowCustomClass] = useState(false);
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showAllocModal, setShowAllocModal] = useState(false);
@@ -146,6 +148,20 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const availableClasses = useMemo(() => {
     return Array.from(new Set(students.map((s) => s.class_name).filter(Boolean))).sort();
   }, [students]);
+
+  // Standard classes are seeded from Nigeria's typical structure so a teacher
+  // can pick a class before the roster has any students in it. Anything the
+  // school already uses (including custom names) is merged in, because those
+  // must stay selectable regardless of what the standard list contains.
+  const CLASS_STANDARDS = ["Nursery 1", "Nursery 2", "Primary 1", "Primary 2", "Primary 3", "Primary 4", "Primary 5", "Primary 6", "JSS 1", "JSS 2", "JSS 3", "SS 1", "SS 2", "SS 3"];
+  const OTHER_CLASS = "__other__";
+  const classOptions = useMemo((): SelectOption[] => {
+    const all = new Set([...CLASS_STANDARDS, ...availableClasses]);
+    return [
+      ...Array.from(all).sort((a, b) => a.localeCompare(b)).map((c): SelectOption => ({ value: c, label: c })),
+      { value: OTHER_CLASS, label: "Other…" },
+    ];
+  }, [availableClasses]);
 
   // Group allocations by class for easy reading (filtered later)
   const allocationsByClass = useMemo(() => {
@@ -294,12 +310,19 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   function openAddStudent() {
     setEditingRecord(null);
+    setShowCustomClass(false);
     setStudentForm({ student_id: nextAdmissionNo(idPrefix, students), full_name: "", class_name: "", gender: "" });
     setShowStudentModal(true);
   }
 
   function openEditStudent(s: Student) {
     setEditingRecord(s);
+    // A stored class that is not one of the standards opens straight into the
+    // custom branch so the teacher sees the existing value, not "Other…".
+    // No custom branch needed on edit: `classOptions` merges every class
+    // already in the roster, so a stored custom name like "JSS 1 Gold" is
+    // itself a selectable option and shows as the current value.
+    setShowCustomClass(false);
     setStudentForm({ student_id: s.student_id, full_name: s.full_name, class_name: s.class_name, gender: s.gender || "" });
     setShowStudentModal(true);
   }
@@ -318,6 +341,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
 
   function closeStudentModal(open: boolean) {
     setShowStudentModal(open);
+    setShowCustomClass(false);
     if (!open) {
       setEditingRecord(null);
       setStudentForm({ student_id: "", full_name: "", class_name: "", gender: "" });
@@ -1059,16 +1083,34 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           )}
           <Input label="Full Name" value={studentForm.full_name} onChange={(e) => setStudentForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Ada Okoro" />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Class</label>
-            <input value={studentForm.class_name} onChange={(e) => setStudentForm((p) => ({ ...p, class_name: e.target.value }))} placeholder="e.g., JSS 1, SS 2A" list="class-suggestions-edit" className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
-            <datalist id="class-suggestions-edit">
-              <option value="JSS 1" />
-              <option value="JSS 2" />
-              <option value="JSS 3" />
-              <option value="SS 1" />
-              <option value="SS 2" />
-              <option value="SS 3" />
-            </datalist>
+            <Select
+              aria-label="Class"
+              label="Class"
+              value={showCustomClass ? OTHER_CLASS : studentForm.class_name}
+              onChange={(v) => {
+                if (v === OTHER_CLASS) {
+                  setShowCustomClass(true);
+                } else {
+                  setShowCustomClass(false);
+                  setStudentForm((p) => ({ ...p, class_name: v }));
+                }
+              }}
+              placeholder="Select class"
+              options={classOptions}
+            />
+            {/* Only shown for schools whose class naming doesn't fit the standard
+                list (e.g. "JSS 1 Gold", "SS 2 Science"). The entered text is
+                what lands in class_name; OTHER_CLASS is never submitted. */}
+            {showCustomClass && (
+              <input
+                autoFocus
+                value={studentForm.class_name}
+                onChange={(e) => setStudentForm((p) => ({ ...p, class_name: e.target.value }))}
+                placeholder="e.g., JSS 1 Gold"
+                aria-label="Custom class name"
+                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              />
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-purple-100">Gender (optional)</label>
