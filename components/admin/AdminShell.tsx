@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
-import { GraduationCap, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { toTitleCase } from "@/lib/format";
@@ -87,9 +88,7 @@ export default function AdminShell({
             aria-label={`${toTitleCase(schoolName)} school portal`}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition hover:opacity-90"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-              <GraduationCap className="h-4 w-4 text-purple-300" />
-            </span>
+            <Logo size="sm" alt="" className="rounded-full" />
             <span className="truncate text-sm font-semibold tracking-tight">
               {toTitleCase(schoolName)}
             </span>
