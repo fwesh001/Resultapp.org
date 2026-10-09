@@ -1169,6 +1169,112 @@ check("progress copy is non-technical", () => {
   return true;
 });
 
+/* ---------------------------------------------------------------------------
+   Unified apex sign-in + hero CTA.
+
+   The root domain has no tenant context, so sign-in asks for a role and a
+   portal ID, then hands off to the tenant's own subdomain. These pin the two
+   things that can silently break: a role pointing at the wrong surface, and
+   the apex ever collecting a password.
+   --------------------------------------------------------------------------- */
+console.log("\nUnified apex sign-in (resultapp.org/login)");
+const LOCATOR = path.join("components", "auth", "WorkspaceLocatorForm.tsx");
+const ROOT_LOGIN = path.join("app", "login", "page.tsx");
+const LANDING = path.join("app", "(landing)", "page.tsx");
+const locator = fs.readFileSync(path.join(root, LOCATOR), "utf8");
+
+check("all three roles are offered", () => {
+  const missing = ["admin", "staff", "student"].filter((r) => !new RegExp(`id:\\s*"${r}"`).test(locator));
+  return missing.length === 0 ? true : `roles missing: ${missing.join(", ")}`;
+});
+
+check("each role maps to its own isolated surface", () => {
+  const want = {
+    admin: "/admin/login",
+    staff: "/staff/login",
+    student: "#result-checker",
+  };
+  const bad = [];
+  for (const [role, path_] of Object.entries(want)) {
+    // Find the arrow function assigned to this role in ROLE_DESTINATIONS.
+    const fn = new RegExp(`${role}:\\s*\\(slug:\\s*string\\)\\s*=>\\s*\`([^\`]+)\``).exec(locator);
+    if (!fn) {
+      bad.push(`${role}: no destination`);
+      continue;
+    }
+    if (!fn[1].includes(path_)) bad.push(`${role}: "${fn[1]}" does not reach ${path_}`);
+    // Must build an absolute origin, never a site-relative path.
+    if (!/^https:\/\/\$\{slug\}\.resultapp\.org/.test(fn[1])) {
+      bad.push(`${role}: not an absolute {slug}.resultapp.org URL`);
+    }
+  }
+  return bad.length === 0 ? true : bad.join("; ");
+});
+
+check("every destination is a cross-origin handoff to the tenant host", () =>
+  /window\.location\.assign\(ROLE_DESTINATIONS\[role\]\(slug\)\)/.test(locator)
+    ? true
+    : "handoff no longer uses ROLE_DESTINATIONS via location.assign"
+);
+
+check("apex sign-in collects no credentials", () => {
+  // A password field on the shared root domain is a phishing magnet.
+  if (/type="password"/.test(locator)) return "root-domain form renders a password field";
+  if (/SignInForm/.test(locator)) return "root-domain form embeds a credential form";
+  return true;
+});
+
+check("portal id is validated before redirecting", () =>
+  /SUBDOMAIN_RE\.test\(slug\)/.test(locator) ? true : "slug is not validated against SUBDOMAIN_RE"
+);
+
+check("existence check reads the inverted available flag correctly", () => {
+  // /api/tenant returns available:false when the subdomain is TAKEN (school
+  // exists). available:true means free, i.e. NO such school — so that is the
+  // branch that must show the error.
+  const err = /if \(res\.ok && data\.available === true\)\s*\{[^}]*setError/.test(locator);
+  if (!err) return "missing-school branch not keyed on available === true";
+  return /data\.available === false/.test(locator)
+    ? "error shown on the WRONG branch — available:false means the school exists"
+    : true;
+});
+
+check("a failed availability check never blocks sign-in", () => {
+  const catchIdx = locator.indexOf("catch", locator.indexOf("/api/tenant/"));
+  const goIdx = locator.indexOf("go(slug)", catchIdx);
+  return catchIdx !== -1 && goIdx !== -1
+    ? true
+    : "network failure on the availability check does not fall through to the handoff";
+});
+
+check("role is chosen before the portal id is submitted", () =>
+  /role="radiogroup"/.test(locator) && /aria-checked/.test(locator)
+    ? true
+    : "role selector is missing radiogroup/aria-checked wiring"
+);
+
+console.log("\nHero CTA routes to the live demo");
+const landing = fs.readFileSync(path.join(root, LANDING), "utf8");
+check("hero secondary CTA points at demo.resultapp.org absolutely", () =>
+  /href="https:\/\/demo\.resultapp\.org"/.test(landing)
+    ? true
+    : "hero CTA is missing the absolute demo.resultapp.org href"
+);
+check("hero CTA is not a relative /demo link", () =>
+  /href="\/demo"/.test(landing)
+    ? "hero CTA is relative; it would misroute on a tenant host"
+    : true
+);
+check("pricing stays reachable from the hero", () =>
+  /href="\/pricing"/.test(landing) ? true : "no visible path to pricing after the CTA swap"
+);
+check("root login page explains the two-step flow", () => {
+  const src = fs.readFileSync(path.join(root, ROOT_LOGIN), "utf8");
+  return /Sign in/.test(src) && /WorkspaceLocatorForm/.test(src)
+    ? true
+    : "root login page not wired to the unified locator"
+});
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) {

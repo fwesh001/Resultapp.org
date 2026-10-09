@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, FlaskConical, Sparkles } from "lucide-react";
 import { PricingCalculator } from "@/components/ui/PricingCalculator";
 import FaqSection from "@/components/landing/FaqSection";
 import FeaturesGrid from "@/components/landing/FeaturesGrid";
@@ -63,13 +63,26 @@ export default function HomePage() {
               Register Your School
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex w-full items-center justify-center rounded-full border border-purple-500/25 bg-purple-900/15 px-7 py-[14px] text-[15px] font-medium text-purple-100 backdrop-blur transition-all hover:border-purple-400/30 hover:bg-purple-500/10 hover:text-white sm:w-auto"
+            {/* Absolute URL on purpose: a relative /demo would resolve inside
+                whatever host renders this component, so the same markup breaks
+                the moment it is reused on a tenant subdomain. */}
+            <a
+              href="https://demo.resultapp.org"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-purple-500/25 bg-purple-900/15 px-7 py-[14px] text-[15px] font-medium text-purple-100 backdrop-blur transition-all hover:border-purple-400/30 hover:bg-purple-500/10 hover:text-white sm:w-auto"
             >
-              View Pricing
-            </Link>
+              <FlaskConical className="h-4 w-4" />
+              Try Interactive Demo
+            </a>
           </div>
+
+          {/* Pricing keeps a visible path: the nav's #pricing anchor still
+              jumps to the section, but not everyone scrolls a hero to find it. */}
+          <p className="mt-4 text-center text-xs text-purple-200/50 sm:text-left">
+            Prefer to see plans first?{" "}
+            <Link href="/pricing" className="underline underline-offset-4 hover:text-white">
+              View pricing
+            </Link>
+          </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-purple-200/50">
             <span className="inline-flex items-center gap-1.5">
