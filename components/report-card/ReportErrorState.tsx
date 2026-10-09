@@ -6,6 +6,7 @@ import {
   CloudOff,
   Lock,
   SearchX,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -47,6 +48,8 @@ const ICONS: Record<ReportErrorIcon, LucideIcon> = {
   term: CalendarX,
   unpublished: Lock,
   "not-available": Lock,
+  // Wallet is the money metaphor; the unpublished states use a plain padlock.
+  withheld: Wallet,
   transport: CloudOff,
   alert: AlertCircle,
 };
