@@ -63,6 +63,7 @@ DEPENDENT_TABLES = [
     ("student_academic_records", "tenant_id"),
     ("student_behavioral_records", "tenant_id"),
     ("result_publications", "subdomain"),
+    ("student_term_clearance", "subdomain"),
 ]
 
 SAMPLE_LIMIT = 5
