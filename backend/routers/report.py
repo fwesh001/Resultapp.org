@@ -637,6 +637,45 @@ def get_report_bundle(
         if not include_draft and (student is None or not is_published):
             raise HTTPException(status_code=404, detail="Report not found")
 
+        # ---- Financial clearance gate (Administrative Hold) --------------
+        # Term-scoped soft block for unpaid school fees. Runs AFTER the
+        # publication gate, so an unpublished result is still a flat 404 and
+        # this branch can only ever apply to a result the school HAS released.
+        #
+        # is_financially_cleared defaults to True and only becomes False when a
+        # bursar has explicitly held the student. "No row" == cleared, which is
+        # why this is a LEFT-JOIN-style lookup rather than a required row.
+        #
+        # Fail-CLOSED mirrors the publication gate directly above: if the
+        # clearance table cannot be read we must not withhold a paying
+        # student's result (that would hide money already earned), and we must
+        # not 500 either. Defaulting True keeps the failure mode "shows the
+        # result" rather than "hides the result" — the hold is revenue logic,
+        # and an unreadable hold table must not become a data-loss event.
+        is_financially_cleared = True
+        if student is not None:
+            try:
+                cur.execute(
+                    "SELECT is_financially_cleared FROM student_term_clearance "
+                    "WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) "
+                    "AND term = %s AND academic_session = %s LIMIT 1",
+                    (tid, sid, term, _session),
+                )
+                _clear_row = cur.fetchone()
+                if _clear_row is not None:
+                    is_financially_cleared = bool(_clear_row[0])
+            except Exception:
+                logger.exception(
+                    f"[report] clearance check failed for {tid}/{sid}/{term} — treating as cleared"
+                )
+                is_financially_cleared = True
+
+        # A held student's grades are withheld from the PUBLIC only. The admin
+        # scope (include_draft, i.e. a valid signed admin_session for this
+        # tenant) always sees the full bundle so the school can still run its
+        # own business; the hold is a bouncer at the front door, not an erase.
+        result_withheld = bool(student is not None and is_published and not is_financially_cleared)
+
         # If student missing, still return 200 with student:null for frontend banner
         # (admin draft scope only — the gate above has already rejected anonymous
         # callers at this point, so this branch is unreachable for them).
@@ -974,8 +1013,58 @@ def get_report_bundle(
             "principal_signature_url": school_sig or None,
         }
 
+# ---- Withheld: strip everything the hold is meant to protect ------
+        # A hold that returned grades, class averages, ranks or free-text
+        # remarks about the child would not be a hold. Everything below is
+        # explicitly blanked rather than omitted, so the client shape stays
+        # stable and no consumer has to guess whether a missing key means
+        # "withheld" or "not implemented".
+        #
+        # Note the class-wide aggregates (classAverage, subjectPosition,
+        # overallPosition, noInClass) are computed across the WHOLE roster by
+        # _rank_class_stats_sql — leaving them in would reveal the withheld
+        # student's rank and how they compare to every classmate, defeating
+        # the hold entirely. Hence summary: None, not a partial summary.
+        if result_withheld and not include_draft:
+            return {
+                "student": student,
+                "result_status": "withheld",
+                "withheld_message": (
+                    f"Result Withheld: Your result for {term} has been compiled, "
+                    "but it is currently on an Administrative Hold due to "
+                    "outstanding fee balances. Please contact the school Bursary "
+                    "to clear your account."
+                ),
+                "is_published": True,
+                "is_financially_cleared": False,
+                "term": term,
+                "academic_session": _session,
+                "tenant_id": tid,
+                "student_id": sid,
+                "school": school_payload,
+                # Deliberately empty — see comment above.
+                "template": None,
+                "groupedTemplate": None,
+                "grades": [],
+                "behavioural": {},
+                "form_teacher_remark": None,
+                "principal_remark": None,
+                "published_at": None,
+                "form_teacher_name": None,
+                "form_teacher_signature_url": None,
+                "summary": None,
+                "attendance": None,
+                "termMeta": {"termEnding": None, "newTermBegins": raw_new_term or None},
+            }
+
         return {
             "student": student,
+            # Explicit status rather than letting consumers infer it from
+            # is_published — same reasoning as the is_published field above.
+            "result_status": "released" if is_published else "draft",
+            "withheld_message": None,
+            "is_published": is_published,
+            "is_financially_cleared": is_financially_cleared,
             "template": template_payload,
             "groupedTemplate": grouped_template,
             "grades": grades_out,
@@ -983,7 +1072,6 @@ def get_report_bundle(
             "form_teacher_remark": form_teacher_remark_out,
             "principal_remark": principal_remark_out,
             "published_at": published_at_out,
-            "is_published": is_published,
             "form_teacher_name": form_teacher_name_out,
             "form_teacher_signature_url": form_teacher_signature_out,
             "summary": {
