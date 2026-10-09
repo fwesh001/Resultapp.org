@@ -558,9 +558,11 @@ export default function ClearanceManager({
         open={confirmBulk}
         onOpenChange={setConfirmBulk}
         title={`Clear ${selected.size} student${selected.size === 1 ? "" : "s"}?`}
-        description="They will be able to view their published result on the public Result Checker again."
+        message="They will be able to view their published result on the public Result Checker again."
+        note="Clearing a hold never costs credits and does not alter the published result."
         confirmLabel="Yes, clear them"
         variant="danger"
+        loading={submitting}
         onConfirm={() => {
           setConfirmBulk(false);
           requestChange(Array.from(selected), true);
