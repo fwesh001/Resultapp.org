@@ -599,8 +599,40 @@ def get_report_bundle(
             (tid, sid),
         )
         row = cur.fetchone()
+
+        # ---- Legacy compact-ID fallback -------------------------------------
+        # Real, live counter-examples exist in the production DB. vhs (and any
+        # tenant onboarded before the "<prefix>/<num>" convention) stores some
+        # students as "vhs004" — prefix glued to the number, NO slash — while
+        # newer rows use "vhs/004". The public Result Checker auto-prefixes a
+        # bare number to the SLASHED form, so a legacy student who types "001"
+        # would resolve to "vhs/001" and be told "Student Not Found" even
+        # though "vhs001" is their real ID. When the slashed form misses, retry
+        # the compact form derived from the same prefix already present in sid
+        # (no id_prefix lookup needed — the prefix is embedded in the path).
+        #
+        # On a hit we REBIND sid to the stored student_id so every downstream
+        # query (publication gate, financial clearance, grades) matches the exact
+        # value in the table. Without the rebind the bio would resolve while the
+        # grades/publication lookups still used the slashed form and 404'd.
+        #
+        # This is not an enumeration oracle: a miss on BOTH forms still returns
+        # the same uniform 404 as an unpublished result.
+        if row is None and "/" in sid:
+            _lpfx, _lrest = sid.split("/", 1)
+            legacy_sid = f"{_lpfx}{_lrest}"
+            cur.execute(
+                f"SELECT student_id, full_name, class_name, gender FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) LIMIT 1",
+                (tid, legacy_sid),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                sid = legacy_sid
+
         if row is not None:
             d = _row_to_dict(row, cur)
+            # Trust the stored casing (it is what every other query matches on).
+            sid = d.get("student_id") or sid
             student = {
                 "student_id": d.get("student_id"),
                 "full_name": d.get("full_name"),
