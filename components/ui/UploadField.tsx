@@ -38,7 +38,16 @@ export interface UploadFieldProps {
   onFileSelect?: (file: File | null) => void;
 }
 
-export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * 4 MB, matching the server cap in app/api/admin/uploads.
+ *
+ * Deliberately below Vercel's 4.5 MB serverless request-body ceiling. A 5 MB
+ * limit could never succeed on this deployment: the platform rejects the body
+ * with an opaque 413 before this validation runs, so the user sees nothing they
+ * can act on. Client and server agree so the message the user reads is the one
+ * we actually enforce.
+ */
+export const DEFAULT_MAX_BYTES = 4_000_000;
 
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
