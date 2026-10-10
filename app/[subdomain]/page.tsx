@@ -142,10 +142,13 @@ export default async function TenantPage({
           >
             <h2 className="text-2xl font-semibold">Check Results Online</h2>
             <p className="mt-2 text-sm text-purple-200/70">
-              Enter a Student ID and select a term to view the report card.
+              Enter your admission number and select a term to view the report card.
             </p>
             <div className="mt-6 flex w-full justify-center">
-              <ResultLookupWidget subdomain={subdomain} />
+              <ResultLookupWidget
+                  subdomain={subdomain}
+                  idPrefix={school?.idPrefix ?? subdomain}
+                />
             </div>
           </div>
         </div>
