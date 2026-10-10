@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
 import { toTitleCase, currentAcademicSession } from "@/lib/format";
+import { ExportDataCard } from "@/components/admin/ExportDataCard";
 import {
   Users,
   UserCheck,
@@ -209,6 +210,10 @@ export default async function AdminDashboardPage({
               : "Publication stats unavailable."}
           </p>
         </div>
+
+        {/* Export Data — client component: this page is a Server Component, so
+            the modal + progress state live in the card, not here. */}
+        <ExportDataCard subdomain={subdomain} currentTerm={currentTerm} />
       </div>
     </div>
   );
