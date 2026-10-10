@@ -57,8 +57,20 @@ export default function ResultLookupWidget({
     // unambiguous bare numbers).
     const expanded = expandStudentId(trimmedId, idPrefix, subdomain);
     const normalized = normalizePrefixLower(expanded);
+    // Encode each path segment separately so the prefix separator stays a REAL
+    // slash: "/report/vhs/001", not "/report/vhs%2F001".
+    //
+    // encodeURIComponent() on the whole ID escapes "/" as "%2F", which works by
+    // accident (Next decodes catch-all segments, and app/api/report/route.ts
+    // re-splits before calling the backend) but leaks an unreadable address bar
+    // and makes the shared link look broken. This mirrors the encoder already
+    // proven in app/api/report/route.ts.
+    const encodedPath = normalized
+      .split("/")
+      .map((seg) => encodeURIComponent(seg))
+      .join("/");
     router.push(
-      `/${subdomain}/report/${encodeURIComponent(normalized)}?term=${encodeURIComponent(term)}`,
+      `/${subdomain}/report/${encodedPath}?term=${encodeURIComponent(term)}`,
     );
   }
 
