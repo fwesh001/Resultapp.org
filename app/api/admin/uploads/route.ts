@@ -1,18 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 import { requireAdminSession } from "@/lib/adminAuth";
 
 /**
  * File upload — POST /api/admin/uploads
  * FormData: { file: File, subdomain?: string, kind?: string }
  *
- * Stores validated files under public/uploads/<subdomain>/ and returns
- * the public URL. Used for branding images (logo/hero via the settings
- * form), bug-report attachments, and other shared uploads.
+ * Stores validated files in Vercel Blob and returns the CDN URL. Used for
+ * branding images (logo/hero via the settings form), bug-report attachments,
+ * and other shared uploads.
+ *
+ * WHY BLOB AND NOT THE FILESYSTEM
+ * --------------------------------
+ * This route previously did:
+ *     mkdir(process.cwd()/public/uploads/<sub>) ; writeFile(...)
+ * That worked on a traditional long-lived Node host, but this app is deployed
+ * to Vercel, where the serverless filesystem is READ-ONLY at runtime (only
+ * /tmp is writable). Every write threw `EROFS: read-only file system` and the
+ * catch surfaced "Could not store the file" — uploads were 100% broken, for
+ * branding AND for the unauthenticated "shared" bug-report bucket.
+ *
+ * It was also broken twice over: `public/uploads/` is gitignored, so nothing
+ * exists in the deployment, and Vercel only serves static files that were
+ * present AT BUILD TIME. Even a successful write would have produced a URL
+ * that 404'd.
+ *
+ * Blob gives us a real, CDN-backed, durable store. The returned URL is an
+ * absolute https URL, so every existing consumer (logo_url, hero_bg_url,
+ * principal_signature_url) keeps working unchanged — no schema change, no
+ * backend change.
+ *
+ * KNOWN, ACCEPTED RISK (LEGAL_REMEDIATION.md P7): Blob stores are PUBLIC by
+ * default, so anyone holding the URL can read the asset. That is the same
+ * exposure the old static-file approach had, so this is not a regression — but
+ * it does NOT resolve P7 either. Handwritten signatures are biometric-adjacent
+ * personal data (lib/legal/privacy.ts). The Digital Signature Pad deliberately
+ * does NOT use this route; it stores base64 inline in an authenticated API
+ * response instead.
  */
 
-const MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * 4 MB. Vercel's own request-body ceiling for serverless functions is 4.5 MB,
+ * so the previous 5 MB cap could NEVER succeed — files that size died with an
+ * opaque 413 from the platform before our own 400 ever ran. Keeping the cap
+ * under that ceiling means oversized files fail with a message we control.
+ */
+const MAX_BYTES = 4_000_000;
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": "png",
@@ -76,28 +109,32 @@ export async function POST(req: NextRequest) {
 
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { success: false, error: "File must be 5MB or less" },
+      { success: false, error: "File must be 4MB or less" },
       { status: 400 },
     );
   }
 
+  // `kind` and `subdomain` are already sanitized to [a-z0-9-] above, so the
+  // blob pathname cannot contain traversal sequences. The extension comes from
+  // a closed allow-list. Blob treats the pathname as an opaque key anyway —
+  // it is never used as a filesystem path.
   const filename = `${kind}-${Date.now()}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads", subdomain);
 
   try {
-    await mkdir(dir, { recursive: true });
     const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(dir, filename), bytes);
+    const blob = await put(`uploads/${subdomain}/${filename}`, bytes, {
+      access: "public",
+      contentType: file.type,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    return NextResponse.json({ success: true, url: blob.url }, { status: 200 });
   } catch (e) {
-    console.error("[api/admin/uploads] write failed", e);
-    return NextResponse.json(
-      { success: false, error: "Could not store the file" },
-      { status: 500 },
-    );
+    console.error("[api/admin/uploads] blob put failed", e);
+    // Surface the most actionable message we can without leaking internals.
+    const msg =
+      e instanceof Error && /token|BLOB_READ_WRITE_TOKEN/i.test(e.message)
+        ? "Upload storage is not configured. Please contact support."
+        : "Could not store the file";
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-
-  return NextResponse.json(
-    { success: true, url: `/uploads/${subdomain}/${filename}` },
-    { status: 200 },
-  );
 }
