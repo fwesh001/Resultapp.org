@@ -235,11 +235,11 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const [teacherSigError, setTeacherSigError] = useState(false);
   const [principalSigError, setPrincipalSigError] = useState(false);
 
-  useEffect(() => {
-    setImgError(false);
-    setTeacherSigError(false);
-    setPrincipalSigError(false);
-  }, [tenantId, studentId]);
+  // Image error states reset via the `key` prop on this component (set by the
+  // parent page from tenantId/studentId/term), which remounts and reinitialises
+  // all state. Resetting them in an effect here would be a synchronous setState
+  // during the render commit — the exact cascading-render pattern React warns
+  // against.
 
   useEffect(() => {
     let cancelled = false;
