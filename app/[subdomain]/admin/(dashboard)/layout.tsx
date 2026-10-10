@@ -49,7 +49,7 @@ export default async function AdminDashboardLayout({
   const suspended = school == null || school.isActive === false;
 
   return (
-    <AdminShell subdomain={slug} schoolName={schoolName}>
+    <AdminShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl}>
       {suspended && (
         <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm text-amber-200">
           Portal suspended — public, staff, and report access is paused.{" "}

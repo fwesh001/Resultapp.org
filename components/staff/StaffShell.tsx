@@ -11,11 +11,17 @@ import { toTitleCase } from "@/lib/format";
 interface StaffShellProps {
   subdomain: string;
   schoolName: string;
+  /**
+   * The tenant's uploaded crest (absolute Blob URL). Absent for a school that
+   * never uploaded one, in which case <Logo> renders a neutral cap rather than
+   * the ResultApp mark — a school with no branding must not look branded.
+   */
+  logoUrl?: string;
   formClasses?: Array<{ class_name: string }>;
   children: React.ReactNode;
 }
 
-export default function StaffShell({ subdomain, schoolName, formClasses, children }: StaffShellProps) {
+export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses, children }: StaffShellProps) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +42,7 @@ export default function StaffShell({ subdomain, schoolName, formClasses, childre
   return (
     <div className="flex h-screen bg-[#0B0514] text-white">
       <div className="hidden md:flex">
-        <StaffSidebar subdomain={subdomain} schoolName={schoolName} formClasses={formClasses} />
+        <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} />
       </div>
 
       {open && (
@@ -49,7 +55,7 @@ export default function StaffShell({ subdomain, schoolName, formClasses, childre
         >
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute left-0 top-0 h-full shadow-2xl">
-            <StaffSidebar subdomain={subdomain} schoolName={schoolName} formClasses={formClasses} onNavigate={() => setOpen(false)} />
+            <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}
@@ -70,7 +76,7 @@ export default function StaffShell({ subdomain, schoolName, formClasses, childre
             aria-label={`${toTitleCase(schoolName)} school portal`}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition hover:opacity-90"
           >
-            <Logo size="sm" alt="" className="rounded-full" />
+            <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
             <span className="truncate text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</span>
           </Link>
           <NotificationBell tenantId={subdomain} portal="staff" />

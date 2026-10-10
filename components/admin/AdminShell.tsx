@@ -11,6 +11,12 @@ import { toTitleCase } from "@/lib/format";
 interface AdminShellProps {
   subdomain: string;
   schoolName: string;
+  /**
+   * The tenant's uploaded crest (absolute Blob URL). Absent for a school that
+   * never uploaded one, in which case <Logo> renders a neutral cap rather than
+   * the ResultApp mark — a school with no branding must not look branded.
+   */
+  logoUrl?: string;
   children: React.ReactNode;
 }
 
@@ -21,6 +27,7 @@ interface AdminShellProps {
 export default function AdminShell({
   subdomain,
   schoolName,
+  logoUrl,
   children,
 }: AdminShellProps) {
   const [open, setOpen] = useState(false);
@@ -44,7 +51,11 @@ export default function AdminShell({
     <div className="flex h-screen bg-[#0B0514] text-white">
       {/* Desktop sidebar — fixed on md and up */}
       <div className="hidden md:flex">
-        <AdminSidebar subdomain={subdomain} schoolName={schoolName} />
+        <AdminSidebar
+          subdomain={subdomain}
+          schoolName={schoolName}
+          logoUrl={logoUrl}
+        />
       </div>
 
       {/* Mobile drawer overlay */}
@@ -65,6 +76,7 @@ export default function AdminShell({
             <AdminSidebar
               subdomain={subdomain}
               schoolName={schoolName}
+              logoUrl={logoUrl}
               onNavigate={() => setOpen(false)}
             />
           </div>
@@ -88,7 +100,7 @@ export default function AdminShell({
             aria-label={`${toTitleCase(schoolName)} school portal`}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition hover:opacity-90"
           >
-            <Logo size="sm" alt="" className="rounded-full" />
+            <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
             <span className="truncate text-sm font-semibold tracking-tight">
               {toTitleCase(schoolName)}
             </span>

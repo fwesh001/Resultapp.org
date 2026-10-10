@@ -11,6 +11,8 @@ import { toTitleCase } from "@/lib/format";
 interface StaffSidebarProps {
   subdomain: string;
   schoolName: string;
+  /** The tenant's uploaded crest. Absent -> neutral cap (never the ResultApp mark). */
+  logoUrl?: string;
   formClasses?: Array<{ class_name: string }>;
   onNavigate?: () => void;
 }
@@ -23,7 +25,7 @@ const nav: Array<{ label: string; href: string | ((sub: string) => string); icon
   { label: "Profile", href: "/profile", icon: UserCircle },
 ];
 
-export default function StaffSidebar({ subdomain, schoolName, formClasses, onNavigate }: StaffSidebarProps) {
+export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClasses, onNavigate }: StaffSidebarProps) {
   const pathname = usePathname();
   const base = `/${subdomain}/staff`;
   // Form-teacher link: first assigned class (1:1 enforced server-side).
@@ -39,7 +41,7 @@ export default function StaffSidebar({ subdomain, schoolName, formClasses, onNav
         className="border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
       >
         <div className="flex items-center gap-3">
-          <Logo size="sm" alt="" className="rounded-full" />
+          <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
           <div>
             <p className="text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</p>
             <p className="text-xs text-purple-300/60">Staff Portal</p>

@@ -61,7 +61,7 @@ export default async function StaffDashboardLayout({
   }
 
   return (
-    <StaffShell subdomain={slug} schoolName={schoolName} formClasses={formClasses}>
+    <StaffShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl} formClasses={formClasses}>
       {children}
     </StaffShell>
   );

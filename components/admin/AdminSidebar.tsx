@@ -20,12 +20,15 @@ import { toTitleCase } from "@/lib/format";
 interface AdminSidebarProps {
   subdomain: string;
   schoolName: string;
+  /** The tenant's uploaded crest. Absent -> neutral cap (never the ResultApp mark). */
+  logoUrl?: string;
   onNavigate?: () => void;
 }
 
 export default function AdminSidebar({
   subdomain,
   schoolName,
+  logoUrl,
   onNavigate,
 }: AdminSidebarProps) {
   const pathname = usePathname();
@@ -42,6 +45,9 @@ export default function AdminSidebar({
     router.refresh();
   }
 
+  // Order follows the admin's actual workflow: see the results you must publish
+  // and clear, then the roster data that feeds them, then templates, then the
+  // account-level settings, and only last the things you visit occasionally.
   const nav = [
     {
       label: "Dashboard",
@@ -49,19 +55,14 @@ export default function AdminSidebar({
       icon: LayoutDashboard,
     },
     {
-      label: "Allocations",
-      href: `/${subdomain}/admin/allocations`,
-      icon: Users,
-    },
-    {
       label: "Results",
       href: `/${subdomain}/admin/results`,
       icon: ClipboardCheck,
     },
     {
-      label: "Templates",
-      href: `/${subdomain}/admin/templates`,
-      icon: BookOpen,
+      label: "Allocations",
+      href: `/${subdomain}/admin/allocations`,
+      icon: Users,
     },
     {
       label: "Clearance",
@@ -69,9 +70,9 @@ export default function AdminSidebar({
       icon: Wallet,
     },
     {
-      label: "Notifications",
-      href: `/${subdomain}/admin/notifications`,
-      icon: Bell,
+      label: "Templates",
+      href: `/${subdomain}/admin/templates`,
+      icon: BookOpen,
     },
     {
       label: "Settings",
@@ -82,6 +83,11 @@ export default function AdminSidebar({
       label: "Billing",
       href: `/${subdomain}/admin/billing`,
       icon: CreditCard,
+    },
+    {
+      label: "Notifications",
+      href: `/${subdomain}/admin/notifications`,
+      icon: Bell,
     },
     // Support lives on the apex domain, so this is an absolute href rather
     // than a tenant-scoped route.
@@ -107,7 +113,7 @@ export default function AdminSidebar({
         aria-label={`${toTitleCase(schoolName)} school portal`}
         className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
       >
-        <Logo size="sm" alt="" className="rounded-full" />
+        <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold tracking-tight text-white">
             {toTitleCase(schoolName)}

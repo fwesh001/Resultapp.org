@@ -58,6 +58,18 @@ check(
   "Logo keeps intrinsic width/height to avoid layout shift",
   /width=\{1045\}/.test(logo) && /height=\{1449\}/.test(logo),
 );
+// The intrinsics above belong to the PRODUCT asset only. A tenant crest is a
+// different shape, so the product dimensions must be scoped to the product
+// branch and must NOT leak onto the crest branch — carrying 1045x1449 onto a
+// square seal would reserve a portrait box and push the layout around on load.
+check(
+  "product intrinsics are scoped to the product branch",
+  /data-logo-variant="product"/.test(logo),
+);
+check(
+  "tenant crest branch does not claim the product intrinsics",
+  /data-logo-variant="tenant"/.test(logo),
+);
 
 // Recolouring was explicitly ruled out. A hard-coded tint/filter here would
 // mean the mark no longer matches the favicon the user will re-export.
@@ -93,6 +105,82 @@ const semanticFiles = [
 for (const f of semanticFiles) {
   check(`${f} keeps its semantic GraduationCap use`, read(f).includes("GraduationCap"));
 }
+
+// ---------------------------------------------- tenant crest in the shells
+// The four portal shells are TENANT surfaces: a school that uploaded a crest
+// must see it, and a school that did not must see a neutral cap — NOT the
+// ResultApp monogram, which would make an unbranded school look branded.
+//
+// These files deliberately stay on `brandSites` above (they must import
+// brand/Logo), so they cannot be moved to `tenantCrestFiles`, which asserts the
+// opposite. The resolution is that `Logo` itself became three-way: the shells
+// keep using the shared component and pass the tenant's `src` to it.
+const shellCrestFiles = [
+  "components/admin/AdminShell.tsx",
+  "components/admin/AdminSidebar.tsx",
+  "components/staff/StaffShell.tsx",
+  "components/staff/StaffSidebar.tsx",
+];
+for (const f of shellCrestFiles) {
+  const src = read(f);
+  check(`${f} accepts a logoUrl prop`, /logoUrl\?: string/.test(src));
+  check(`${f} forwards logoUrl to Logo`, /<Logo[^>]*src=\{logoUrl\}/.test(src));
+}
+
+// The shells must forward the prop to their sidebar on EVERY render path, not
+// just the desktop one — the drawer is a second mount of the same component.
+const adminShell = read("components/admin/AdminShell.tsx");
+const staffShell = read("components/staff/StaffShell.tsx");
+check(
+  "AdminShell forwards logoUrl to both sidebar mounts",
+  (adminShell.match(/<AdminSidebar[^>]*logoUrl=\{logoUrl\}/gs) || []).length === 2,
+);
+check(
+  "StaffShell forwards logoUrl to both sidebar mounts",
+  (staffShell.match(/<StaffSidebar[^>]*logoUrl=\{logoUrl\}/gs) || []).length === 2,
+);
+
+// ...and the layouts must actually supply it. Both already call getTenant(),
+// so the data is in scope; this fails if someone drops the prop at the seam.
+const adminLayout = read("app/[subdomain]/admin/(dashboard)/layout.tsx");
+const staffLayout = read("app/[subdomain]/staff/(dashboard)/layout.tsx");
+check("admin dashboard layout passes school.logoUrl", /<AdminShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(adminLayout));
+check("staff dashboard layout passes school.logoUrl", /<StaffShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(staffLayout));
+
+// ------------------------------------------------- Logo: three-way branch
+// The heart of the white-label behaviour. If this regresses, an unbranded
+// school silently starts showing the ResultApp mark again.
+check("Logo exposes a src prop", /src\?: string \| null/.test(logo));
+check("Logo declares the canonical product asset", /export const PRODUCT_LOGO_SRC = "\/logo\.png"/.test(logo));
+check("Logo normalises an empty src to the neutral cap", /const resolved = \(src \?\? ""\)\.trim\(\)/.test(logo));
+check("Logo renders a cap when there is no crest", /data-logo-variant="cap"/.test(logo));
+check("cap branch is driven by !resolved", /if \(!resolved\)/.test(logo));
+check("product branch is selected by explicit PRODUCT_LOGO_SRC", /if \(resolved === PRODUCT_LOGO_SRC\)/.test(logo));
+// Square mode for crests: both axes pinned + object-cover, the OPPOSITE
+// trade-off to the product mark (height-only + object-contain). A crest that
+// rendered narrow beside the school name would defeat the white-label intent.
+check("tenant crests use a square sizing table", /CREST_SQUARE/.test(logo));
+check("tenant crest pins BOTH axes", /CREST_SQUARE\[size\]/.test(logo));
+check("tenant crest uses object-cover to fill the slot", /CREST_SQUARE\[size\], "rounded-full object-cover"/.test(logo));
+
+// --------------------------------------------------- dynamic tenant favicon
+const tenantLayout = read("app/[subdomain]/layout.tsx");
+check("tenant layout exports generateMetadata", /export async function generateMetadata/.test(tenantLayout));
+// One layout covers /, /admin/*, /staff/*, /report/*, /teacher/grading.
+check("generateMetadata sets per-tenant icons", /\{\s*icon: \[\{ url: icon \}\],\s*apple: \[\{ url: icon \}\]\s*\}/.test(tenantLayout));
+check("tenant title does not append the platform brand", /template: `%s \| \$\{name\}`/.test(tenantLayout));
+// metadataBase is pinned to the apex, so a relative logo_url would resolve to
+// the wrong origin on a subdomain. Non-absolute / non-http values must be
+// dropped back to the inherited product icon rather than throwing.
+check("icon URL is sanitized before use", /function sanitizeIconUrl/.test(tenantLayout));
+check("sanitizer rejects non-http protocols", /parsed\.protocol !== "http:" && parsed\.protocol !== "https:"/.test(tenantLayout));
+check("sanitizer swallows malformed URLs", /catch \{\s*\n\s*return null/.test(tenantLayout));
+// getTenant is cache:"no-store"; without cache() the layout body and
+// generateMetadata would each pay an uncached registry round-trip per render.
+check("tenant lookup is memoized with React cache()", /const getTenantOnce = cache\(/.test(tenantLayout));
+check("both the layout and metadata use the memoized lookup", (tenantLayout.match(/getTenantOnce\(subdomain\)/g) || []).length === 2);
+// Demo tenants must not present themselves as a real named school.
+check("demo tenants keep the ResultApp demo title", /Demo — ResultApp/.test(tenantLayout));
 
 // The "School badge" in the template builder is paired with the school's own
 // name, so it stays a tenant crest too.
