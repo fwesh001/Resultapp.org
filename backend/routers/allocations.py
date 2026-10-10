@@ -345,15 +345,38 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             if _srow is None:
                 raise HTTPException(status_code=422, detail=f"Unknown staff_id '{staff_id}'")
             staff_id = str(_srow[0])
+            # Seed a sensible default form-teacher remark scheme the first time a
+            # class gets a form teacher (imported lazily). On re-assignment the
+            # DO UPDATE below only re-seeds when the stored scheme is still the
+            # empty '[]' default, so a teacher's customized bands are never
+            # clobbered by reassigning the class to a different teacher.
+            import json as _json
+            from services.remark_schemes import (
+                DEFAULT_FORM_TEACHER_SCHEME as _DEFAULT_FORM_TEACHER_SCHEME,
+                validate_scheme as _validate_remark_scheme,
+            )
+
+            _form_teacher_scheme_json = _json.dumps(
+                _validate_remark_scheme(_DEFAULT_FORM_TEACHER_SCHEME)
+            )
             cur.execute(
                 f"""
-                INSERT INTO {TENANT_FORM_ASSIGNMENTS_TABLE} (subdomain, class_name, staff_id, updated_at)
-                VALUES (%s, %s, %s, NOW())
+                INSERT INTO {TENANT_FORM_ASSIGNMENTS_TABLE} AS tfa
+                    (subdomain, class_name, staff_id, teacher_remark_scheme, updated_at)
+                VALUES (%s, %s, %s, %s::jsonb, NOW())
                 ON CONFLICT (subdomain, class_name)
-                DO UPDATE SET staff_id = EXCLUDED.staff_id, updated_at = NOW()
+                DO UPDATE SET
+                    staff_id = EXCLUDED.staff_id,
+                    teacher_remark_scheme = CASE
+                        WHEN tfa.teacher_remark_scheme IS NULL
+                          OR tfa.teacher_remark_scheme = '[]'::jsonb
+                        THEN EXCLUDED.teacher_remark_scheme
+                        ELSE tfa.teacher_remark_scheme
+                    END,
+                    updated_at = NOW()
                 RETURNING id, subdomain, class_name, staff_id, created_at;
                 """,
-                (tid, class_name, staff_id),
+                (tid, class_name, staff_id, _form_teacher_scheme_json),
             )
             row = cur.fetchone()
             conn.commit()
