@@ -193,6 +193,34 @@ def init_schools_registry() -> None:
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
             ADD COLUMN IF NOT EXISTS principal_remark_scheme JSONB DEFAULT '[]'::jsonb;
         """)
+        # Onboarding backfill: give any school provisioned BEFORE the defaults
+        # shipped a working scheme so Smart Remarks is not blank on day one.
+        # Only fills NULL / '[]' rows, so a school's customized bands are never
+        # touched, and re-running is a no-op (idempotent). Follows the same
+        # null -> default pattern already used for credit_balance above.
+        try:
+            import json as _json
+            from services.remark_schemes import (
+                DEFAULT_PRINCIPAL_SCHEME as _DEFAULT_PRINCIPAL_SCHEME,
+                validate_scheme as _validate_remark_scheme,
+            )
+
+            _principal_scheme_json = _json.dumps(
+                _validate_remark_scheme(_DEFAULT_PRINCIPAL_SCHEME)
+            )
+            cur.execute(
+                f"""
+                UPDATE {SCHOOLS_REGISTRY_TABLE}
+                SET principal_remark_scheme = %s::jsonb
+                WHERE principal_remark_scheme IS NULL
+                   OR principal_remark_scheme = '[]'::jsonb;
+                """,
+                (_principal_scheme_json,),
+            )
+        except Exception:
+            logger.warning(
+                "[DB] principal_remark_scheme backfill skipped", exc_info=True
+            )
         # Report signatures: centralized principal signature image (URL).
         cur.execute(f"""
             ALTER TABLE {SCHOOLS_REGISTRY_TABLE}
@@ -2636,6 +2664,32 @@ def init_roster_registry() -> None:
         cur.execute(f"ALTER TABLE {TENANT_GRADES_TABLE} ADD COLUMN IF NOT EXISTS principal_remark TEXT;")
         # Smart Remarks: form-teacher-authored grade-band scheme per class.
         cur.execute(f"ALTER TABLE {TENANT_FORM_ASSIGNMENTS_TABLE} ADD COLUMN IF NOT EXISTS teacher_remark_scheme JSONB DEFAULT '[]'::jsonb;")
+        # Onboarding backfill for existing form assignments (per class). Same
+        # rules as the principal backfill: NULL / '[]' only, never a
+        # customized scheme, and idempotent so re-running is a no-op.
+        try:
+            import json as _json
+            from services.remark_schemes import (
+                DEFAULT_FORM_TEACHER_SCHEME as _DEFAULT_FORM_TEACHER_SCHEME,
+                validate_scheme as _validate_remark_scheme,
+            )
+
+            _form_teacher_scheme_json = _json.dumps(
+                _validate_remark_scheme(_DEFAULT_FORM_TEACHER_SCHEME)
+            )
+            cur.execute(
+                f"""
+                UPDATE {TENANT_FORM_ASSIGNMENTS_TABLE}
+                SET teacher_remark_scheme = %s::jsonb
+                WHERE teacher_remark_scheme IS NULL
+                   OR teacher_remark_scheme = '[]'::jsonb;
+                """,
+                (_form_teacher_scheme_json,),
+            )
+        except Exception:
+            logger.warning(
+                "[DB] teacher_remark_scheme backfill skipped", exc_info=True
+            )
 
         # Indexes for fast subdomain-scoped lookups
         for tbl in [TENANT_STUDENTS_TABLE, TENANT_STAFF_TABLE, TENANT_ALLOCATIONS_TABLE, TENANT_SUBJECTS_TABLE, TENANT_GRADES_TABLE]:
