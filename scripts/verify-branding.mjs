@@ -168,16 +168,18 @@ const tenantLayout = read("app/[subdomain]/layout.tsx");
 check("tenant layout exports generateMetadata", /export async function generateMetadata/.test(tenantLayout));
 // One layout covers /, /admin/*, /staff/*, /report/*, /teacher/grading.
 check("generateMetadata sets per-tenant icons", /\{\s*icon: \[\{ url: icon \}\],\s*apple: \[\{ url: icon \}\]\s*\}/.test(tenantLayout));
-// The title must be a PLAIN STRING. The root layout declares
-// `template: "%s | Resultapp.org"` and Next applies a parent's template to a
-// child's resolved title, so returning { default, template } here still emitted
-// "Victory High School | Resultapp.org". Only a string escapes the parent's
-// template and hands the tenant control of its own tab.
+// The title must use `absolute`. The root layout declares
+// `template: "%s | Resultapp.org"`, and Next applies a parent's template to
+// every descendant title — INCLUDING a plain string. Both { default, template }
+// and a bare string were tried and both still emitted
+// "Victory High School | Resultapp.org". Only `absolute` is documented to
+// ignore inherited templates, so it is the form that actually works.
 check(
-  "tenant title is an absolute string, not a template object",
-  /const title = demo\s*\n\s*\?\s*"[^"]+"\s*\n\s*:\s*name \|\| undefined;/.test(tenantLayout),
+  "tenant title uses the absolute form",
+  /absolute: "Demo — ResultApp"/.test(tenantLayout) && /\{ absolute: name \}/.test(tenantLayout),
 );
 check("tenant title never inherits the platform template", !/template: `%s \| \$\{name\}`/.test(tenantLayout));
+check("tenant title is never a bare template object", !/\{ default: name, template:/.test(tenantLayout));
 // metadataBase is pinned to the apex, so a relative logo_url would resolve to
 // the wrong origin on a subdomain. Non-absolute / non-http values must be
 // dropped back to the inherited product icon rather than throwing.

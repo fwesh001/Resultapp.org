@@ -78,23 +78,26 @@ export async function generateMetadata({
   // portal for the school named in the tab.
   const demo = isDemoTenant(school);
 
-  const title = demo
-    ? "Demo — ResultApp"
-    : name || undefined;
+  // `title.absolute` is the only form that escapes a PARENT's template.
+//
+// The root layout declares `template: "%s | Resultapp.org"`. Next applies a
+// parent's template to every descendant's resolved title — including a plain
+// string — which is why both `{ default, template }` and a bare string still
+// rendered "Victory High School | Resultapp.org". `absolute` is explicitly
+// documented as ignoring all inherited templates, so this is the form that
+// actually hands the tenant control of its own tab.
+//
+// Unnamed tenants fall through to the root title rather than a blank tab.
+const title = demo
+    ? { absolute: "Demo — ResultApp" }
+    : name
+      ? { absolute: name }
+      : undefined;
 
   const icons = icon
     ? { icon: [{ url: icon }], apple: [{ url: icon }] }
     : undefined;
 
-  // A PLAIN STRING, not { default, template }. The root layout declares
-  // `template: "%s | Resultapp.org"`, and Next applies a parent's template to a
-  // child's resolved title. Supplying an object here therefore still produced
-  // "Victory High School | Resultapp.org"; only an absolute string escapes the
-  // parent's template and gives the tenant full control of its own tab.
-  //
-  // When there is no usable name we return `title: undefined` so the root
-  // layout's own title/template stay in force — an unnamed tenant should still
-  // read as ResultApp rather than render a blank tab.
   return {
     ...(title ? { title } : {}),
     ...(icons ? { icons } : {}),
