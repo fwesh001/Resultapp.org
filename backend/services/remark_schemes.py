@@ -87,3 +87,78 @@ def evaluate_scheme(average: Optional[float], bands: Any) -> Optional[str]:
             text = str(b.get("text") or "").strip()
             return text or None
     return None
+
+
+# ---------------------------------------------------------------------------
+# Onboarding defaults
+# ---------------------------------------------------------------------------
+# A newly provisioned school used to land with an EMPTY remark scheme ('[]'),
+# which makes Smart Remarks look broken on day one: the checker computes a
+# perfectly good average, matches no band, and silently drops the remark so the
+# user concludes the feature does nothing. Seeding a sensible, editable default
+# means the first report already reads like a finished product.
+#
+# These are DEFAULTS, not policy. Both are editable per school (principal) and
+# per class (form teacher) and are only ever written where the stored value is
+# still empty, so a customized scheme is never clobbered.
+#
+# Both cover the full 0..100 range with no gaps and no overlaps, because
+# evaluate_scheme returns None for an unmatched average and a gap would read
+# exactly like the broken-on-arrival behaviour this is meant to remove.
+
+# Administrative tone: the principal speaks to the school about the student.
+DEFAULT_PRINCIPAL_SCHEME: List[Dict[str, Any]] = validate_scheme(
+    [
+        {
+            "min": 0,
+            "max": 49,
+            "text": "A poor result. You need to sit up and take your studies much more seriously.",
+        },
+        {
+            "min": 50,
+            "max": 74,
+            "text": "A fair performance, but there is plenty of room for improvement.",
+        },
+        {
+            "min": 75,
+            "max": 89,
+            "text": "A very good result. With a bit more focus, you can be the best.",
+        },
+        {
+            "min": 90,
+            "max": 100,
+            "text": "An outstanding performance this term. Keep up the excellent work!",
+        },
+    ]
+)
+
+# Academic/behavioural tone: the form teacher speaks to and about the student.
+DEFAULT_FORM_TEACHER_SCHEME: List[Dict[str, Any]] = validate_scheme(
+    [
+        {
+            "min": 0,
+            "max": 39,
+            "text": "Needs to pay more attention in class and submit assignments on time.",
+        },
+        {
+            "min": 40,
+            "max": 49,
+            "text": "Shows effort but must be more attentive and consistent with classwork.",
+        },
+        {
+            "min": 50,
+            "max": 69,
+            "text": "An acceptable result. Greater class participation will lift this further.",
+        },
+        {
+            "min": 70,
+            "max": 89,
+            "text": "A brilliant and focused student. Keep up the good work.",
+        },
+        {
+            "min": 90,
+            "max": 100,
+            "text": "A brilliant and highly focused student. An excellent term's work.",
+        },
+    ]
+)
