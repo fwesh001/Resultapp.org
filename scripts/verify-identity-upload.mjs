@@ -110,6 +110,35 @@ check("old full-ID placeholder is gone", !/e\.g\. vhs\/001/.test(widget));
 // Kept for users who already type the full ID.
 check("normalizePrefixLower retained for full-ID input", /normalizePrefixLower/.test(widget));
 
+// ---- URL encoding: the prefix separator must stay a REAL slash ----------
+// Regression guard. encodeURIComponent() on the whole expanded ID escapes "/"
+// as "%2F", producing "/report/vhs%2F001". It resolves correctly only by
+// accident (Next decodes the catch-all segment and app/api/report/route.ts
+// re-splits before calling the backend), but it puts an unreadable address bar
+// in front of the user and makes shared links look broken. The encoder below
+// mirrors the one already proven in app/api/report/route.ts.
+check(
+  "widget encodes path segments separately (real slash)",
+  /\.split\("\/"\)\s*\n\s*\.map\(\(seg\) => encodeURIComponent\(seg\)\)\s*\n\s*\.join\("\/"\)/.test(widget),
+);
+check(
+  "widget does NOT encodeURIComponent the whole ID",
+  !/report\/\$\{encodeURIComponent\(normalized\)\}/.test(widget),
+);
+check("widget pushes the joined path, not the raw ID", /\/report\/\$\{encodedPath\}/.test(widget));
+
+// ---- Legacy compact-ID fallback in the backend ---------------------------
+// Some live tenants (vhs) store students as "vhs004" (prefix glued to the
+// number) while the checker auto-prefixes to the slashed "vhs/004". Without a
+// fallback those students can never look themselves up by bare number.
+const reportPy = read("backend/routers/report.py");
+check("report retries the compact legacy form", /legacy_sid = f"\{_lpfx\}\{_lrest\}"/.test(reportPy));
+check("report fallback only fires when the slashed form missed", /if row is None and "\/" in sid:/.test(reportPy));
+// The critical bit: sid must be rebound to the STORED id, or the bio resolves
+// while the publication/clearance/grades queries still miss and 404.
+check("report rebinds sid to the stored student_id", /sid = d\.get\("student_id"\) or sid/.test(reportPy));
+check("report trusts stored casing for downstream queries", /LOWER\(student_id\) = LOWER\(%s\)/.test(reportPy));
+
 const portalPage = read("app/[subdomain]/page.tsx");
 check("portal passes idPrefix from the loaded school", /idPrefix=\{school\?\.idPrefix \?\? subdomain\}/.test(portalPage));
 
