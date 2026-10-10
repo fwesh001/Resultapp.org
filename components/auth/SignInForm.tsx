@@ -25,6 +25,20 @@ export interface SignInFormProps {
   setupHref?: string;
   setupLinkLabel?: string;
   /**
+   * Opt-in transform applied to `identifier` immediately before submit.
+   *
+   * This form is SHARED by admin, staff and root sign-in, and those do NOT all
+   * want the same treatment: admin/root identify by email and must never be
+   * rewritten. Staff are the only caller that needs bare-number expansion, so
+   * the behaviour is opt-in and off by default. Adding prefixing here
+   * unconditionally would corrupt admin email logins.
+   *
+   * Implementations must be conservative — see lib/identityPrefix.
+   */
+  transformIdentifier?: (raw: string) => string;
+  /** Hint shown under the identifier field when a transform is active. */
+  identifierHint?: string;
+  /**
    * Show the soft-login verification wall when the login response reports
    * `email_verified: false`. Leave undefined to disable (staff sign-in, where
    * accounts have no email requirement).
