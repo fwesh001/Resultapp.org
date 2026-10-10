@@ -44,7 +44,7 @@ export default async function StaffLoginPage({
           </p>
 
           <div className="mt-6">
-            <StaffLoginForm tenantId={subdomain} />
+            <StaffLoginForm tenantId={subdomain} staffIdPrefix={school?.staffIdPrefix ?? "STAFF/"} />
           </div>
 
           <p className="mt-4 rounded-xl border border-purple-500/15 bg-purple-500/10 px-3 py-2 text-xs leading-5 text-purple-200/70">

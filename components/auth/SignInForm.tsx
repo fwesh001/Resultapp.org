@@ -59,10 +59,12 @@ export default function SignInForm({
   passwordLabel = "PIN / Password",
   submitLabel = "Sign In",
   signingInLabel = "Signing in…",
-  footerHint = "Dual-login: Staff ID or Email + PIN",
+footerHint = "Dual-login: Staff ID or Email + PIN",
   requiredErrorMessage = "Staff ID or Email and PIN are required",
-setupHref,
+  setupHref,
   setupLinkLabel,
+  transformIdentifier,
+  identifierHint,
   showVerifyWall = false,
 }: SignInFormProps) {
   const router = useRouter();
@@ -86,17 +88,25 @@ setupHref,
     setErrorCode(null);
     setUnverified(null);
 
-    if (!identifier.trim() || !password.trim()) {
+    const rawIdentifier = identifier.trim();
+    if (!rawIdentifier || !password.trim()) {
       setError(requiredErrorMessage);
       return;
     }
+
+    // Expand a bare "001" into the stored "staff/001" — but only when the
+    // caller opted in (staff only; admin/root identify by email and must not
+    // be rewritten). See SignInFormProps.transformIdentifier.
+    const sendIdentifier = transformIdentifier
+      ? transformIdentifier(rawIdentifier)
+      : rawIdentifier;
 
     setLoading(true);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, identifier: identifier.trim(), password }),
+        body: JSON.stringify({ tenantId, identifier: sendIdentifier, password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -108,7 +118,7 @@ setupHref,
       const verified = (data as { email_verified?: boolean })?.email_verified;
       if (showVerifyWall && verified === false) {
         const adminEmail =
-          (data as { admin?: { email?: string } })?.admin?.email || identifier.trim();
+          (data as { admin?: { email?: string } })?.admin?.email || rawIdentifier;
         setUnverified(adminEmail);
         return;
       }
@@ -141,6 +151,9 @@ setupHref,
         required
         disabled={loading}
       />
+      {identifierHint && (
+        <p className="-mt-2 text-xs text-purple-300/50">{identifierHint}</p>
+      )}
       <Input
         label={passwordLabel}
         type="password"

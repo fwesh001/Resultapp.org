@@ -243,6 +243,12 @@ class TenantMetadata(BaseModel):
     slots_balance: int = 0
     id_prefix: Optional[str] = None
     staff_id_prefix: Optional[str] = None
+    # Drawn principal signature, base64 PNG data URI. Exposed here (rather
+    # than on every /report payload) because it is IDENTICAL for every student
+    # in the school — the report page already calls this endpoint once, so the
+    # bytes are fetched a single time per page view instead of being repeated
+    # inside every student's grades bundle.
+    principal_signature_data: Optional[str] = None
     principal_remark_scheme: Optional[list] = None
     principal_signature_url: Optional[str] = None
     deleted_at: Optional[str] = None

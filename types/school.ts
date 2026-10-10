@@ -33,6 +33,8 @@ export interface School {
   newTermBegins?: string;
   principalRemarkScheme?: RemarkBand[];
   principalSignatureUrl?: string;
+  /** Drawn principal signature, inline base64 PNG data URI. Wins over the URL. */
+  principalSignatureData?: string;
   slotsBalance?: number;
   creditBalance?: number;
   createdAt: string; // ISO date

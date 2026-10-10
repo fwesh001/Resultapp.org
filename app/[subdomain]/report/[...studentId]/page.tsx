@@ -174,6 +174,7 @@ export default async function ReportPage({
         schoolMotto={school?.motto}
         schoolEmail={school?.email}
         schoolPhone={school?.phone}
+        principalSignatureData={school?.principalSignatureData ?? null}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { requireAdminSession } from "@/lib/adminAuth";
+import { MAX_SIGNATURE_DATA_BYTES, MAX_SIGNATURE_LABEL } from "@/lib/signatureLimits";
 
 /**
  * Settings Proxy — PATCH /api/admin/settings
@@ -42,8 +43,9 @@ const PROFILE_FIELDS = [
   "hero_bg_url",
   "id_prefix",
   "staff_id_prefix",
-  "principal_signature_url",
-] as const;
+"principal_signature_url",
+    "principal_signature_data",
+  ] as const;
 
 export async function PATCH(req: NextRequest) {
   let body: unknown;
@@ -74,6 +76,7 @@ export async function PATCH(req: NextRequest) {
   if (guard) return guard;
 
   const payload: Record<string, unknown> = {};
+  let signatureDataProvided = false;
   for (const field of PROFILE_FIELDS) {
     if (record[field] !== undefined) {
       const raw = record[field];
@@ -82,11 +85,41 @@ export async function PATCH(req: NextRequest) {
       } else if (field === "staff_id_prefix" && typeof raw === "string") {
         // Uppercase preserved (e.g. STAFF/) — backend validates format.
         payload[field] = raw.trim();
+      } else if (field === "principal_signature_data") {
+        // Drawn signature: an inline base64 PNG data URI. NOT trimmed like the
+        // other strings — base64 is whitespace-sensitive and the backend
+        // normalizes/validates it. Reject an oversized payload here so the
+        // user gets our message rather than a generic backend 422.
+        if (typeof raw !== "string") {
+          return NextResponse.json(
+            { success: false, error: "principal_signature_data must be a string" },
+            { status: 422 },
+          );
+        }
+        if (raw.trim().length > MAX_SIGNATURE_DATA_BYTES) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Signature is too large (max ${MAX_SIGNATURE_LABEL})`,
+            },
+            { status: 422 },
+          );
+        }
+        payload[field] = raw.trim();
+        signatureDataProvided = true;
       } else {
         payload[field] =
           typeof raw === "string" ? (raw as string).trim() : raw;
       }
     }
+  }
+
+  // Single-signature rule, mirrored from the backend: when a drawn signature is
+  // supplied it supersedes the uploaded URL. Forward ONLY the field the caller
+  // actually set — sending both would let the URL win and silently discard a
+  // freshly drawn signature.
+  if (signatureDataProvided) {
+    delete payload.principal_signature_url;
   }
 
   if (Object.keys(payload).length === 0) {

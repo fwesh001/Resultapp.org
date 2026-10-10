@@ -91,6 +91,11 @@ interface ReportResponse {
   published_at?: string | null;
   form_teacher_name?: string | null;
   form_teacher_signature_url?: string | null;
+  /**
+   * Drawn form-teacher signature, inline base64 PNG data URI. Wins over
+   * `form_teacher_signature_url` when present.
+   */
+  form_teacher_signature_data?: string | null;
   summary: {
     totalScore: number;
     average: number;
@@ -138,6 +143,18 @@ interface StudentReportCardProps {
   schoolMotto?: string | null;
   schoolEmail?: string | null;
   schoolPhone?: string | null;
+  /**
+   * Drawn principal signature as an inline base64 PNG data URI.
+   *
+   * Passed as a PROP rather than fetched with the report bundle because it is
+   * identical for every student in the school. The report page already loads
+   * the tenant once (`getTenant`), so this costs one fetch per page view
+   * instead of repeating the bytes inside every student's grades payload.
+   *
+   * When present it WINS over `school.principal_signature_url` (see the
+   * single-signature rule in backend/routers/admin.py).
+   */
+  principalSignatureData?: string | null;
 }
 
 /**
@@ -209,7 +226,7 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isPublished = false, viewer, termWasExplicit = true, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, isPublished = false, viewer, termWasExplicit = true, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone, principalSignatureData }: StudentReportCardProps) {
   // Draft gate: anything not confirmed in result_publications renders as a
   // free preview (blurred, watermarked, unprintable). Re-prints cost 0
   // because the gate is the publication row, not a subscription flag.
@@ -300,7 +317,11 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   const principalRemark = (data?.principal_remark || "").trim();
   const publishedDisplay = data?.published_at ? formatTermDate(data.published_at) : "";
   const formTeacherName = (data?.form_teacher_name || "").trim();
-  const formTeacherSig = (data?.form_teacher_signature_url || "").trim();
+  const formTeacherSigUrl = (data?.form_teacher_signature_url || "").trim();
+  const formTeacherSigData = (data?.form_teacher_signature_data || "").trim();
+  // Drawn signature wins over an uploaded URL. Both are just a string in `src`,
+  // so the <img> below is unchanged either way — only the source differs.
+  const formTeacherSig = formTeacherSigData || formTeacherSigUrl;
   // "Contact Admin" must actually reach someone. Prefer the school's own
   // contact, then fall back to platform support so the button is never a
   // dead link back to the portal it was meant to leave.
@@ -346,7 +367,12 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // Prefer report school address, else fallback to prop schoolName's tenant address via page wrapper? For now use report
   const schoolAddress = (schoolFromReport?.address ?? "").trim() || "";
   // Logo: report payload wins, page-level tenant logo is the fallback.
-  const principalSig = (schoolFromReport?.principal_signature_url || "").trim();
+  const principalSigUrl = (schoolFromReport?.principal_signature_url || "").trim();
+  const principalSigData = (principalSignatureData || "").trim();
+  // Drawn signature wins over an uploaded URL (single-signature rule). The
+  // drawn value arrives as a PROP because it is the same for every student in
+  // the school, so it is fetched once per page rather than per report bundle.
+  const principalSig = principalSigData || principalSigUrl;
   const rawLogo = (schoolFromReport?.logo_url ?? schoolLogoUrl ?? "").trim();
   const schoolMottoText = (schoolFromReport?.motto ?? schoolMotto ?? "").trim();
   const hasLogo = Boolean(rawLogo) && !imgError;
@@ -932,7 +958,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                         <img
                           src={formTeacherSig}
                           alt="Class teacher signature"
-                          className="h-6 object-contain object-left"
+                          className="h-8 object-contain object-left"
                           onError={() => setTeacherSigError(true)}
                         />
                       ) : formTeacherName ? (
@@ -967,7 +993,7 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
                         <img
                           src={principalSig}
                           alt="Principal signature"
-                          className="h-6 object-contain object-left"
+                          className="h-8 object-contain object-left"
                           onError={() => setPrincipalSigError(true)}
                         />
                       ) : (

@@ -220,6 +220,10 @@ class TenantProfileUpdate(BaseModel):
     current_session: Optional[str] = None
     principal_remark_scheme: Optional[list] = None
     principal_signature_url: Optional[str] = None
+    # Drawn signature, stored inline as a base64 PNG data URI. Mutually
+    # exclusive with principal_signature_url — see the single-signature rule
+    # applied below.
+    principal_signature_data: Optional[str] = None
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
@@ -282,6 +286,24 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
     if "principal_signature_url" in data and isinstance(data["principal_signature_url"], str):
         if len(data["principal_signature_url"]) > 512:
             raise HTTPException(status_code=422, detail="principal_signature_url too long (max 512 chars)")
+    # Drawn signature: validate + normalize, then apply the single-signature
+    # rule. Exactly ONE signature may be active, so setting a drawn signature
+    # clears the uploaded URL and vice versa. Without this a school that
+    # uploaded a signature in 2024 and drew one in 2026 ends up with two
+    # candidate images and no defined precedence.
+    if "principal_signature_data" in data:
+        from services.signature_data import validate_signature_data as _validate_sig
+
+        try:
+            _sig = _validate_sig(data["principal_signature_data"], "principal_signature_data")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        data["principal_signature_data"] = _sig
+        # Drawn wins going forward: clear the URL so the pair cannot disagree.
+        data["principal_signature_url"] = None
+    elif "principal_signature_url" in data:
+        # An explicit URL upload clears the drawn one for the same reason.
+        data["principal_signature_data"] = None
     # Principal remark scheme: validated + normalized server-side (shared
     # helper). Stored as canonical JSON text with an explicit ::jsonb cast
     # since psycopg2 cannot parameterize a cast suffix.
@@ -297,7 +319,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             raise HTTPException(status_code=422, detail=f"Invalid principal_remark_scheme: {e}")
         _principal_scheme_jsonb = True
 
-    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme", "principal_signature_url")
+    allowed = ("school_name", "motto", "phone", "email", "address", "logo_url", "hero_bg_url", "new_term_begins", "id_prefix", "staff_id_prefix", "current_term", "current_session", "principal_remark_scheme", "principal_signature_url", "principal_signature_data")
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
@@ -325,7 +347,7 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
             RETURNING id, subdomain, school_name, email, phone, address, city, state, country,
                       logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                       is_verified, is_active, subscription_plan, subscription_status, student_count,
-                          credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, principal_signature_url, created_at, updated_at;
+                          credit_balance, slots_balance, id_prefix, staff_id_prefix, current_term, current_session, new_term_begins, principal_remark_scheme, principal_signature_url, principal_signature_data, created_at, updated_at;
             """,
             tuple(values),
         )

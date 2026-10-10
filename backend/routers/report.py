@@ -686,6 +686,9 @@ def get_report_bundle(
         published_at_out: Optional[str] = None
         form_teacher_name_out: Optional[str] = None
         form_teacher_signature_out: Optional[str] = None
+        # Drawn form-teacher signature (base64 PNG data URI). Resolved on the
+        # report card in preference to the URL variant.
+        form_teacher_signature_data_out: Optional[str] = None
 
         class_student_ids: List[str] = []
         class_name: Optional[str] = None
@@ -724,11 +727,17 @@ def get_report_bundle(
                 published_at_out = None
 
             # Form-teacher identity for the signature line: class assignment
-            # joined to staff (name + signature image, either may be null).
+            # joined to staff (name + signature, either may be null).
+            #
+            # Columns are read BY NAME via _row_to_dict, not positionally.
+            # This block sits inside a bare `except Exception: pass`, so a
+            # positional typo or a missing column would silently drop the
+            # teacher's signature from every report with no log line at all.
             try:
                 cur.execute(
                     f"""
-                    SELECT s.full_name, s.signature_url FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
+                    SELECT s.full_name, s.signature_url, s.signature_data
+                    FROM {TENANT_FORM_ASSIGNMENTS_TABLE} f
                     JOIN {TENANT_STAFF_TABLE} s
                       ON s.subdomain = f.subdomain AND LOWER(s.staff_id) = LOWER(f.staff_id)
                     WHERE f.subdomain = %s AND f.class_name = %s LIMIT 1
@@ -737,12 +746,19 @@ def get_report_bundle(
                 )
                 _ftrow = cur.fetchone()
                 if _ftrow is not None:
-                    if _ftrow[0] and str(_ftrow[0]).strip():
-                        form_teacher_name_out = str(_ftrow[0]).strip()
-                    if _ftrow[1] and str(_ftrow[1]).strip():
-                        form_teacher_signature_out = str(_ftrow[1]).strip()
+                    _ft = _row_to_dict(_ftrow, cur)
+                    if _ft.get("full_name") and str(_ft["full_name"]).strip():
+                        form_teacher_name_out = str(_ft["full_name"]).strip()
+                    if _ft.get("signature_url") and str(_ft["signature_url"]).strip():
+                        form_teacher_signature_out = str(_ft["signature_url"]).strip()
+                    if _ft.get("signature_data") and str(_ft["signature_data"]).strip():
+                        form_teacher_signature_data_out = str(_ft["signature_data"]).strip()
             except Exception:
-                pass
+                # Log it. A swallowed error here used to mean "no signature,
+                # ever, and nobody can tell why".
+                logger.exception(
+                    f"[report] form-teacher signature lookup failed for {tid}/{class_name}"
+                )
 
             # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows
             cur.execute(
@@ -1052,6 +1068,7 @@ def get_report_bundle(
                 "published_at": None,
                 "form_teacher_name": None,
                 "form_teacher_signature_url": None,
+                "form_teacher_signature_data": None,
                 "summary": None,
                 "attendance": None,
                 "termMeta": {"termEnding": None, "newTermBegins": raw_new_term or None},
@@ -1074,6 +1091,7 @@ def get_report_bundle(
             "published_at": published_at_out,
             "form_teacher_name": form_teacher_name_out,
             "form_teacher_signature_url": form_teacher_signature_out,
+            "form_teacher_signature_data": form_teacher_signature_data_out,
             "summary": {
                 "totalScore": total_score,
                 "average": average,

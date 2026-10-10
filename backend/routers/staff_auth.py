@@ -130,7 +130,7 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         # cast id to text for comparison to allow both.
         cur.execute(
             f"""
-            SELECT full_name, staff_id, id, signature_url FROM {TENANT_STAFF_TABLE}
+            SELECT full_name, staff_id, id, signature_url, signature_data FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
             LIMIT 1
             """,
@@ -176,7 +176,7 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
 
         # Also return staff profile (signature included for the profile page).
         return {
-            "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None, "signature_url": staff.get("signature_url") or None},
+            "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None, "signature_url": staff.get("signature_url") or None, "signature_data": staff.get("signature_data") or None},
             "allocations": allocs,
             "count": len(allocs),
             "form_classes": form_classes,
@@ -204,20 +204,53 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
 
 class StaffProfileUpdate(BaseModel):
     signature_url: Optional[str] = Field(default=None, max_length=512)
+    # Drawn signature, stored inline as a base64 PNG data URI. Mutually
+    # exclusive with signature_url (see the single-signature rule below).
+    #
+    # NOT Field(max_length=...): the cap is enforced in _update_staff_signature
+    # via the shared validator, which also checks the PNG magic bytes. A Pydantic
+    # length cap alone would accept an arbitrary base64 blob.
+    signature_data: Optional[str] = None
 
 
-def _update_staff_signature(tid: str, ident: str, signature_url: Optional[str]) -> dict:
+def _update_staff_signature(
+    tid: str,
+    ident: str,
+    signature_url: Optional[str],
+    signature_data: Optional[str] = None,
+) -> dict:
     from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser, _row_to_dict
+    from services.signature_data import validate_signature_data as _validate_sig
     from datetime import datetime
 
     ident = (ident or "").strip()
     if not ident:
         raise HTTPException(status_code=400, detail="identifier is required")
-    if signature_url is None:
-        raise HTTPException(status_code=400, detail="signature_url is required")
-    url = signature_url.strip()
-    if len(url) > 512:
+
+    # At least one signature field must be present in the payload.
+    if signature_url is None and signature_data is None:
+        raise HTTPException(status_code=400, detail="signature_url or signature_data is required")
+
+    # Validate the drawn payload BEFORE any DB work, so a malformed one costs
+    # nothing and can never half-apply.
+    sig_data = None
+    if signature_data is not None:
+        try:
+            sig_data = _validate_sig(signature_data, "signature_data")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    url = signature_url.strip() if isinstance(signature_url, str) else None
+    if isinstance(signature_url, str) and len(url or "") > 512:
         raise HTTPException(status_code=422, detail="signature_url too long (max 512 chars)")
+
+    # Single-signature rule: exactly one may be active. A drawn signature clears
+    # the uploaded URL and vice versa, so a teacher can never end up with two
+    # candidate images and no defined precedence at render time.
+    if signature_data is not None:
+        url = None
+    else:
+        sig_data = None
 
     conn = None
     try:
@@ -225,12 +258,14 @@ def _update_staff_signature(tid: str, ident: str, signature_url: Optional[str]) 
         cur = conn.cursor()
         cur.execute(
             f"""
-            UPDATE {TENANT_STAFF_TABLE} SET signature_url = %s
+            UPDATE {TENANT_STAFF_TABLE}
+            SET signature_url = %s, signature_data = %s
             WHERE subdomain = %s
               AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
-            RETURNING id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at;
+            RETURNING id, subdomain, staff_id, full_name, email, phone, role,
+                      signature_url, signature_data, created_at;
             """,
-            (url or None, tid, ident, ident, ident),
+            (url or None, sig_data, tid, ident, ident, ident),
         )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Staff not found")
@@ -270,14 +305,14 @@ def update_staff_profile_by_query(
     trusts the proxy under the shared secret (established pattern).
     """
     tid = _validate_tenant_id(tenant_id)
-    return _update_staff_signature(tid, staff_id or "", payload.signature_url)
+    return _update_staff_signature(tid, staff_id or "", payload.signature_url, payload.signature_data)
 
 
 @router.patch("/{identifier}/profile", summary="Update own staff profile (signature)")
 def update_staff_profile(tenant_id: str, identifier: str, payload: StaffProfileUpdate):
     """Legacy path variant — kept for backward compatibility (slash-free IDs)."""
     tid = _validate_tenant_id(tenant_id)
-    return _update_staff_signature(tid, identifier, payload.signature_url)
+    return _update_staff_signature(tid, identifier, payload.signature_url, payload.signature_data)
 
 
 @router.get("/dashboard", summary="Get staff dashboard allocations (query-param staff_id)")

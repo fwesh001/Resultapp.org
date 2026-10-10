@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readStaffSession, type StaffIdentity } from "@/lib/staffAuth";
 import { clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
+import { MAX_SIGNATURE_DATA_BYTES } from "@/lib/signatureLimits";
 
 /**
  * Staff self-service profile — PATCH /api/staff/profile
@@ -74,8 +75,25 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: "You can only edit your own profile" }, { status: 403 });
   }
   const signatureUrl = String(body.signature_url ?? "");
+  // Drawn signature: an inline base64 PNG data URI. The cap mirrors the backend
+  // so a client gets our clear 422 rather than a backend error; the authoritative
+  // check (including PNG magic bytes) lives in services/signature_data.py.
+  const signatureDataRaw =
+    typeof body.signature_data === "string" ? (body.signature_data as string) : null;
+  if (signatureDataRaw && signatureDataRaw.length > MAX_SIGNATURE_DATA_BYTES) {
+    return NextResponse.json(
+      { success: false, error: `signature_data too large (max ${MAX_SIGNATURE_DATA_BYTES} characters)` },
+      { status: 422 },
+    );
+  }
   if (signatureUrl.length > 512) {
     return NextResponse.json({ success: false, error: "signature_url too long (max 512 chars)" }, { status: 422 });
+  }
+  if (signatureDataRaw === null && !signatureUrl) {
+    return NextResponse.json(
+      { success: false, error: "Provide signature_url or signature_data" },
+      { status: 400 },
+    );
   }
 
   const secret = getSecret();
@@ -92,7 +110,13 @@ export async function PATCH(req: NextRequest) {
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
-        body: JSON.stringify({ signature_url: signatureUrl }),
+        body: JSON.stringify({
+          // Send only the field the caller actually supplied, so the backend's
+          // single-signature rule can tell "set a drawn signature" apart from
+          // "set a URL". Sending both unconditionally would make the URL win
+          // every time and silently discard a freshly drawn signature.
+          ...(signatureDataRaw !== null ? { signature_data: signatureDataRaw } : { signature_url: signatureUrl }),
+        }),
         cache: "no-store",
       },
     );

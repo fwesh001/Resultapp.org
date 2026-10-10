@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PenLine } from "lucide-react";
 import UploadField from "@/components/ui/UploadField";
 import { Select } from "@/components/ui/Select";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
 import { toast } from "@/components/ui/toast";
+import SignatureCaptureModal from "@/components/ui/SignatureCaptureModal";
 import type { RemarkBand, School } from "@/types/school";
 
 interface SettingsFormProps {
@@ -25,6 +27,31 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   // The custom Select is controlled, so the active term is held in state and
   // mirrored into the form by its hidden `name="current_term"` input.
   const [currentTerm, setCurrentTerm] = useState(school?.currentTerm ?? "Term 1");
+
+  // Drawn principal signature.
+  //
+  // Held in local state (not in the form's field list) and persisted by its
+  // OWN request the moment the modal saves. Deliberately not part of
+  // handleSubmit: a hidden input would be re-sent on every later Save, so
+  // changing an unrelated setting could silently restore a stale signature.
+  const [sigModalOpen, setSigModalOpen] = useState(false);
+  const [drawnSignature, setDrawnSignature] = useState<string | null>(
+    school?.principalSignatureData ?? null,
+  );
+
+  async function persistSignature(body: Record<string, string | null>) {
+    const subdomain = school?.slug ?? "";
+    if (!subdomain) throw new Error("Unknown school subdomain");
+    const res = await fetch("/api/admin/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subdomain, ...body }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error || `Could not save signature (${res.status})`);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -95,7 +122,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const inputClassName =
     "mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50";
 
-  return (
+  const content = (
     <form
       onSubmit={handleSubmit}
       className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6"
@@ -253,13 +280,48 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       {activeTab === "branding" && (
         <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
+      {/* Drawn signature — the primary path. Shown above the uploader so the
+          recommended option is the first thing an admin reaches for. */}
+      <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-purple-100">Principal's signature</p>
+            <p className="mt-0.5 text-xs text-purple-300/50">
+              {drawnSignature
+                ? "Using your drawn signature."
+                : school?.principalSignatureUrl
+                  ? "Using the uploaded image below."
+                  : "Not set — report cards fall back to the word “Principal”."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSigModalOpen(true)}
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+          >
+            <PenLine className="h-4 w-4" aria-hidden="true" />
+            {drawnSignature ? "Redraw signature" : "Draw signature"}
+          </button>
+        </div>
+        {drawnSignature && (
+          <div className="mt-3 flex h-20 items-end rounded-lg border border-purple-500/20 bg-white p-2">
+            {/* Preview of what will print. eslint-disable: a data URI cannot go
+                through next/image without a loader configured for it. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={drawnSignature} alt="Your saved signature preview" className="h-12 object-contain object-left" />
+          </div>
+        )}
+      </div>
+
+      {/* Uploaded-image fallback, retained per the single-signature rule: saving
+          one clears the other, and the drawn one wins. */}
       <UploadField
         id="principal-signature-url"
-        label="Principal's signature"
+        label="Or upload a signature image"
         name="principal_signature_url"
         defaultValue={school?.principalSignatureUrl ?? ""}
         extraFields={{ subdomain: school?.slug ?? "", kind: "signature" }}
-        helper="Transparent PNG works best. Printed on report cards in the Principal's signature box."
+        helper="Transparent PNG works best. Used only if no signature has been drawn above."
         preview="image"
         previewVariant="square"
       />
@@ -409,7 +471,39 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         >
           {isSubmitting ? "Saving..." : "Save Changes"}
         </button>
-      </div>
-    </form>
+</div>
+      </form>
+  );
+
+  // Mounted OUTSIDE the <form> on purpose: the drawn signature persists on its
+  // own so that pressing "Save Changes" for an unrelated field (motto, prefixes)
+  // cannot clobber a signature the admin just drew.
+  return (
+    <>
+      {content}
+
+      <SignatureCaptureModal
+        open={sigModalOpen}
+        onOpenChange={setSigModalOpen}
+        signerLabel="Principal"
+        currentSignature={drawnSignature ?? school?.principalSignatureUrl ?? null}
+        onSave={async (dataUri) => {
+          await persistSignature({ principal_signature_data: dataUri });
+          setDrawnSignature(dataUri);
+          toast.success("Signature saved", {
+            description: "It will appear on report cards from now on.",
+          });
+          // Re-read the tenant so the header/logo and any other server-derived
+          // school fields reflect the new state.
+          router.refresh();
+        }}
+        onRemove={async () => {
+          await persistSignature({ principal_signature_data: null });
+          setDrawnSignature(null);
+          toast.success("Signature removed");
+          router.refresh();
+        }}
+      />
+    </>
   );
 }
