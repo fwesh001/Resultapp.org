@@ -162,6 +162,7 @@ export default async function ReportPage({
 
       {/* Digital Paper container is rendered inside StudentReportCard for lock overlay coordination */}
       <StudentReportCard
+        key={`${tenantId}-${studentId}-${effectiveTerm}`}
         tenantId={tenantId}
         studentId={studentId}
         term={effectiveTerm}
