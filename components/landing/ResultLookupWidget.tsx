@@ -3,14 +3,23 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
+import { expandStudentId } from "@/lib/identityPrefix";
 import { Select } from "@/components/ui/Select";
 
 interface ResultLookupWidgetProps {
   subdomain: string;
+  /**
+   * Tenant's configured admission-number prefix, already resolved by
+   * lib/tenant.ts (falls back to the subdomain when the school has none set).
+   * Passed from the server component that already loaded the school, so this
+   * needs no extra fetch. Optional: we fall back to `subdomain` without it.
+   */
+  idPrefix?: string | null;
 }
 
 export default function ResultLookupWidget({
   subdomain,
+  idPrefix,
 }: ResultLookupWidgetProps) {
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
@@ -42,7 +51,12 @@ export default function ResultLookupWidget({
     e.preventDefault();
     const trimmedId = studentId.trim();
     if (!trimmedId) return;
-    const normalized = normalizePrefixLower(trimmedId);
+    // Expand a bare "001" to the stored "vhs/001". Leaves emails and
+    // already-prefixed input alone, so existing users who type the full ID
+    // keep working unchanged (see lib/identityPrefix for why we only expand
+    // unambiguous bare numbers).
+    const expanded = expandStudentId(trimmedId, idPrefix, subdomain);
+    const normalized = normalizePrefixLower(expanded);
     router.push(
       `/${subdomain}/report/${encodeURIComponent(normalized)}?term=${encodeURIComponent(term)}`,
     );
@@ -64,13 +78,22 @@ export default function ResultLookupWidget({
         type="text"
         value={studentId}
         onChange={(e) => setStudentId(normalizePrefixLower(e.target.value))}
-        placeholder="e.g. vhs/001"
+        placeholder="e.g., 001"
         required
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}
+        inputMode="numeric"
+        aria-describedby="student-id-hint"
         className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
       />
+      {/* Explains the auto-prefix, and reassures anyone who types the full ID
+          anyway — their input is still honoured verbatim. */}
+      <p id="student-id-hint" className="mt-2 text-xs text-purple-300/50">
+        Just the admission number — the school prefix{" "}
+        <span className="font-mono text-purple-200/80">{idPrefix || subdomain}/</span> is added
+        automatically.
+      </p>
 
       <label
         htmlFor="term"
