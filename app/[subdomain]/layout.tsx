@@ -79,15 +79,22 @@ export async function generateMetadata({
   const demo = isDemoTenant(school);
 
   const title = demo
-    ? { default: "Demo — ResultApp", template: "%s — Demo — ResultApp" }
-    : name
-      ? { default: name, template: `%s | ${name}` }
-      : undefined;
+    ? "Demo — ResultApp"
+    : name || undefined;
 
   const icons = icon
     ? { icon: [{ url: icon }], apple: [{ url: icon }] }
     : undefined;
 
+  // A PLAIN STRING, not { default, template }. The root layout declares
+  // `template: "%s | Resultapp.org"`, and Next applies a parent's template to a
+  // child's resolved title. Supplying an object here therefore still produced
+  // "Victory High School | Resultapp.org"; only an absolute string escapes the
+  // parent's template and gives the tenant full control of its own tab.
+  //
+  // When there is no usable name we return `title: undefined` so the root
+  // layout's own title/template stay in force — an unnamed tenant should still
+  // read as ResultApp rather than render a blank tab.
   return {
     ...(title ? { title } : {}),
     ...(icons ? { icons } : {}),
