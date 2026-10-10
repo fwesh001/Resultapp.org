@@ -10,3 +10,10 @@ sqlalchemy==2.0.36
 # Phase 2: Dynamic Grading Engine — SQLAlchemy ORM for JSONB templates/records
 # Keeps psycopg2-binary as DBAPI driver (postgresql+psycopg2)
 alembic==1.15.2  # optional: migrations (not required for Base.metadata.create_all)
+
+# Data Export Tool — multi-sheet .xlsx generation.
+# xlsxwriter (not openpyxl): we only ever WRITE, and its `constant_memory`
+# mode keeps peak RSS flat regardless of row count, which matters because the
+# export route streams from a spooled temp file while several tenants could be
+# exporting at once. openpyxl builds the whole worksheet DOM in RAM first.
+xlsxwriter==3.2.9

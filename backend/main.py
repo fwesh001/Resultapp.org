@@ -1116,6 +1116,22 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Clearance router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Data Export Tool — multi-sheet .xlsx, streamed from a spooled temp file.
+#
+# Mounted inside a try/except like every other router so a missing xlsxwriter
+# (an unpinned dependency) degrades to one warning line instead of taking the
+# whole app down at import.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.export import router as export_router
+
+    app.include_router(export_router)
+    logger.info("[App] Export router mounted (/api/v1/tenant/{tenant_id}/export/xlsx)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Export router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Credit & Command — token ledger + command center
 # ---------------------------------------------------------------------------
 
