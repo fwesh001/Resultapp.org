@@ -89,7 +89,15 @@ export async function PATCH(req: NextRequest) {
   if (signatureUrl.length > 512) {
     return NextResponse.json({ success: false, error: "signature_url too long (max 512 chars)" }, { status: 422 });
   }
-  if (signatureDataRaw === null && !signatureUrl) {
+  // Distinguish "the caller sent nothing" from "the caller asked to clear".
+  // `null` is ambiguous here: it is what a missing JSON key decodes to, so it
+  // cannot double as an explicit clear signal. An EMPTY STRING is the clear
+  // signal, and the backend validator already maps blank -> SQL NULL. Without
+  // this distinction a 400 here makes "Remove signature" impossible, and the
+  // only way a user could clear a signature would be an admin with psql.
+  const suppliedData = typeof body.signature_data === "string";
+  const suppliedUrl = typeof body.signature_url === "string";
+  if (!suppliedData && !suppliedUrl) {
     return NextResponse.json(
       { success: false, error: "Provide signature_url or signature_data" },
       { status: 400 },
@@ -115,7 +123,11 @@ export async function PATCH(req: NextRequest) {
           // single-signature rule can tell "set a drawn signature" apart from
           // "set a URL". Sending both unconditionally would make the URL win
           // every time and silently discard a freshly drawn signature.
-          ...(signatureDataRaw !== null ? { signature_data: signatureDataRaw } : { signature_url: signatureUrl }),
+          // A blank string is forwarded verbatim: it is the clear signal, and
+          // the backend turns it into NULL for BOTH columns.
+          ...(suppliedData
+            ? { signature_data: signatureDataRaw ?? "" }
+            : { signature_url: signatureUrl }),
         }),
         cache: "no-store",
       },

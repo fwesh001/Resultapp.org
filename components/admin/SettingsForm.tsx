@@ -498,7 +498,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           router.refresh();
         }}
         onRemove={async () => {
-          await persistSignature({ principal_signature_data: null });
+          // "" is the clear signal, NOT null: null decodes identically to a
+          // missing key, so the proxy cannot tell "clear it" from "not
+          // supplied" and rejects the request. Blank is normalized to SQL NULL
+          // server-side, which also clears the paired uploaded URL.
+          await persistSignature({ principal_signature_data: "" });
           setDrawnSignature(null);
           toast.success("Signature removed");
           router.refresh();

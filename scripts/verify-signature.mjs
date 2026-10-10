@@ -147,7 +147,7 @@ check("modal has a Remove affordance hook", /onRemove\?/.test(modal));
 const settings = read("components/admin/SettingsForm.tsx");
 check("admin settings mounts the modal", /SignatureCaptureModal/.test(settings));
 check("admin settings persists the drawn signature", /principal_signature_data: dataUri/.test(settings));
-check("admin settings supports removing", /principal_signature_data: null/.test(settings));
+check("admin settings supports removing", /principal_signature_data: ""/.test(settings));
 // A hidden input would be re-sent by every later Save and could restore a
 // stale signature, so the modal must live OUTSIDE the <form>.
 check("modal is mounted outside the form", /const content = \(/.test(settings));
@@ -161,8 +161,41 @@ const staffProxy = read("app/api/staff/profile/route.ts");
 check("staff proxy validates the cap", /MAX_SIGNATURE_DATA_BYTES/.test(staffProxy));
 check(
   "staff proxy sends only the field supplied",
-  /signature_data: signatureDataRaw.*signature_url: signatureUrl/s.test(staffProxy),
+  /signature_data: signatureDataRaw \?\? ""/.test(staffProxy) && /suppliedData/.test(staffProxy),
 );
+
+// ---------------------------------------------------------------- clear path
+// Regression guard. A payload of `null` decodes identically to an absent JSON
+// key, so the proxy cannot tell "clear this signature" from "you sent nothing",
+// and it rejects the request. That made Remove broken for both admin and staff
+// while the happy path (save a drawing) still worked and every save-path test
+// stayed green. The clear signal is the empty STRING, which the backend
+// validator already normalizes to SQL NULL.
+check(
+  "staff proxy distinguishes 'supplied' from 'clear'",
+  /const suppliedData = typeof body\.signature_data === "string"/.test(staffProxy) &&
+    /const suppliedUrl = typeof body\.signature_url === "string"/.test(staffProxy),
+);
+check(
+  "staff proxy rejects only a genuinely empty payload",
+  /if \(!suppliedData && !suppliedUrl\)/.test(staffProxy),
+);
+check("admin removal sends a blank string, not null", !/principal_signature_data: null/.test(settings));
+check("staff removal sends a blank string, not null", !/signature_data: null/.test(staffProfile));
+check(
+  "staff removal clears BOTH representations",
+  /signature_data: ""/.test(staffProfile) && /signature_data: ""/.test(staffProfile),
+);
+check("staff uploaded-URL removal persists server-side", /signature_url: ""/.test(staffProfile));
+// An in-component-only "Remove" that never calls the API is the exact shape of
+// the original bug: UI says removed, reload brings it back.
+check(
+  "staff Remove buttons both hit the API",
+  (staffProfile.match(/persistSignature\(\{ signature_(data|url): "" \}/g) || []).length === 2,
+);
+// And the backend must actually treat blank as NULL rather than storing "".
+const sigHelper = read("backend/services/signature_data.py");
+check("backend maps a blank string to NULL", /if not value:\s*\n\s*# Explicit blank == clear[\s\S]*?return None/.test(sigHelper));
 
 const adminProxy = read("app/api/admin/settings/route.ts");
 check("admin proxy validates the cap", /MAX_SIGNATURE_DATA_BYTES/.test(adminProxy));

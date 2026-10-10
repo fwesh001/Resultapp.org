@@ -124,7 +124,30 @@ export default function StaffProfilePage() {
   async function handleDrawnRemove() {
     setSaving(true);
     try {
-      await persistSignature({ signature_data: null }, "Signature removed");
+      // "" is the clear signal, NOT null -- see the note in the proxy: null is
+      // indistinguishable from an absent key. Blank becomes SQL NULL and, per
+      // the single-signature rule, clears the uploaded URL too.
+      await persistSignature({ signature_data: "" }, "Signature removed");
+      setSignatureData(null);
+      setSignatureUrl("");
+    } catch (err) {
+      toast.error("Could not remove signature", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Clear the UPLOADED signature. This one must persist immediately rather than
+  // stage a URL change for the Save button: leaving a signature in place with a
+  // label promising it was removed is worse than the extra round trip, and the
+  // drawn path already behaves this way.
+  async function handleUrlRemove() {
+    setSaving(true);
+    try {
+      await persistSignature({ signature_url: "" }, "Signature removed");
+      setSignatureUrl("");
       setSignatureData(null);
     } catch (err) {
       toast.error("Could not remove signature", {
@@ -238,11 +261,11 @@ export default function StaffProfilePage() {
             {signatureUrl.trim() !== "" && (
               <button
                 type="button"
-                onClick={() => setSignatureUrl("")}
+                onClick={() => void handleUrlRemove()}
                 disabled={saving}
                 className="ml-2 inline-flex min-h-[44px] items-center rounded-full border border-red-500/20 px-5 py-2.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
               >
-                Remove (applies on Save)
+                Remove
               </button>
             )}
           </div>
