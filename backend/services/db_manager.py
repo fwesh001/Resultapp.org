@@ -694,6 +694,20 @@ def register_school(subdomain: str, school_name: str, **kwargs) -> Dict[str, Any
     try:
         conn = _connect_as_superuser_transactional()
         cur = conn.cursor()
+        # Seed a sensible default principal remark scheme on first registration
+        # (imported lazily to keep module import order simple). Only ever used on
+        # INSERT — the ON CONFLICT DO UPDATE below never touches the scheme, so
+        # re-provisioning an existing school leaves a customized scheme intact.
+        import json as _json
+        from services.remark_schemes import (
+            DEFAULT_PRINCIPAL_SCHEME as _DEFAULT_PRINCIPAL_SCHEME,
+            validate_scheme as _validate_remark_scheme,
+        )
+
+        _principal_scheme_json = _json.dumps(
+            _validate_remark_scheme(_DEFAULT_PRINCIPAL_SCHEME)
+        )
+
         admin_password_hash = kwargs.get("admin_password_hash")
         if admin_password_hash:
             cur.execute(
@@ -702,10 +716,10 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     (subdomain, school_name, email, phone, address, city, state, country,
                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                      is_verified, is_active, subscription_plan, subscription_status, student_count,
-                     admin_password_hash, admin_name)
+                     admin_password_hash, admin_name, principal_remark_scheme)
                 VALUES
                     (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                     crypt(%s, gen_salt('bf')), %s)
+                     crypt(%s, gen_salt('bf')), %s, %s::jsonb)
                 ON CONFLICT (subdomain) DO UPDATE SET
                     school_name = EXCLUDED.school_name,
                     email = EXCLUDED.email,
@@ -745,6 +759,7 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     kwargs.get("student_count"),
                     admin_password_hash,
                     kwargs.get("admin_name"),
+                    _principal_scheme_json,
                 ),
             )
         else:
@@ -754,9 +769,9 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     (subdomain, school_name, email, phone, address, city, state, country,
                      logo_url, hero_bg_url, motto, proprietor_name, registration_number,
                      is_verified, is_active, subscription_plan, subscription_status, student_count,
-                     admin_name)
+                     admin_name, principal_remark_scheme)
                 VALUES
-                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 ON CONFLICT (subdomain) DO UPDATE SET
                     school_name = EXCLUDED.school_name,
                     email = EXCLUDED.email,
@@ -794,6 +809,7 @@ INSERT INTO {SCHOOLS_REGISTRY_TABLE}
                     kwargs.get("subscription_status", "unpaid"),
                     kwargs.get("student_count"),
                     kwargs.get("admin_name"),
+                    _principal_scheme_json,
                 ),
             )
         row = cur.fetchone()
