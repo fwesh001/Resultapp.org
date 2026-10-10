@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 import { readStaffSession } from "@/lib/staffAuth";
 import { clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
 
@@ -9,12 +8,25 @@ import { clearSessionCookie, SESSION_COOKIES } from "@/lib/session";
  * FormData: { file: File }
  *
  * Staff-scoped sibling of /api/admin/uploads: requires a valid HMAC-verified
- * staff_session (tenant-scoped) and stores validated signature images under
- * public/uploads/<tenant>/ with a fixed `signature` kind prefix.
+ * staff_session (tenant-scoped) and stores validated signature images in Vercel
+ * Blob with a fixed `signature` kind prefix.
  * Tightened constraints per spec: PNG/JPG only, ≤1MB.
  *
- * `tenant` becomes a filesystem path further down, so it is taken only from a
- * verified session and re-validated against the subdomain charset before use.
+ * WHY BLOB AND NOT THE FILESYSTEM
+ * --------------------------------
+ * This route previously wrote to `process.cwd()/public/uploads/<tenant>/`.
+ * That cannot work on Vercel, where the serverless filesystem is READ-ONLY at
+ * runtime (only /tmp is writable) — every write raised `EROFS` and surfaced as
+ * "Could not store the file". It was broken a second time over as well:
+ * `public/uploads/` is gitignored so nothing ships, and Vercel only serves
+ * static files present AT BUILD TIME, so even a successful write would have
+ * 404'd. See app/api/admin/uploads/route.ts for the fuller note.
+ *
+ * PRIVACY NOTE (LEGAL_REMEDIATION.md P7): Blob stores are PUBLIC — anyone
+ * holding the URL can read the asset. That is the same exposure the old static
+ * route had, so this is a storage-location fix, not a privacy fix. The Digital
+ * Signature Pad does NOT use this route; it stores base64 inline in an
+ * authenticated API response so a signature is never publicly addressable.
  */
 
 const MAX_BYTES = 1 * 1024 * 1024;
@@ -34,7 +46,7 @@ export async function POST(req: NextRequest) {
   };
 
   // readStaffSession already rejects anything outside ^[a-z0-9-]{3,30}$; this
-  // is a second, explicit guard because the value reaches a path.join below.
+  // is a second, explicit guard because the value is used to build a blob path.
   let tenant = "";
   try {
     const identity = await readStaffSession();
@@ -74,19 +86,21 @@ export async function POST(req: NextRequest) {
   }
 
   const filename = `signature-${Date.now()}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads", tenant);
 
   try {
-    await mkdir(dir, { recursive: true });
     const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(dir, filename), bytes);
+    const blob = await put(`uploads/${tenant}/${filename}`, bytes, {
+      access: "public",
+      contentType: file.type,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    return NextResponse.json({ success: true, url: blob.url }, { status: 200 });
   } catch (e) {
-    console.error("[api/staff/uploads] write failed", e);
-    return NextResponse.json({ success: false, error: "Could not store the file" }, { status: 500 });
+    console.error("[api/staff/uploads] blob put failed", e);
+    const msg =
+      e instanceof Error && /token|BLOB_READ_WRITE_TOKEN/i.test(e.message)
+        ? "Upload storage is not configured. Please contact support."
+        : "Could not store the file";
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-
-  return NextResponse.json(
-    { success: true, url: `/uploads/${tenant}/${filename}` },
-    { status: 200 },
-  );
 }
