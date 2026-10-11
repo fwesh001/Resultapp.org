@@ -43,8 +43,21 @@ const dash = read("app/[subdomain]/admin/(dashboard)/page.tsx");
 const reqs = read("backend/requirements.txt");
 
 // ============================ 1. SECURITY BOUNDARY ==========================
-check("proxy verifies a tenant-scoped admin session", /requireAdminSession\(tenantId\)/.test(proxy));
-check("proxy calls requireAdminSession BEFORE any upstream fetch", proxy.indexOf("requireAdminSession") < proxy.indexOf("await fetch("));
+check(
+  "proxy verifies a tenant-scoped admin session holding the export capability",
+  /requireAdminCapability\(tenantId,\s*["']export["']\)/.test(proxy),
+  "a signed session alone used to be enough for a full roster download",
+);
+check(
+  "proxy no longer accepts a bare session for export",
+  !/requireAdminSession\(/.test(proxy),
+);
+// The guard must still run BEFORE the upstream call, whatever its name.
+const guardAt = proxy.indexOf("requireAdminCapability");
+check(
+  "proxy calls the capability guard BEFORE any upstream fetch",
+  guardAt > -1 && guardAt < proxy.indexOf("await fetch("),
+);
 // The guard's return is a NextResponse; returning it short-circuits.
 check("proxy short-circuits on the guard", /if \(guard\) return guard;/.test(proxy));
 check("proxy resolves the tenant BEFORE guarding", /const tenantId = \(body\.tenantId \|\| ""\)\.toLowerCase\(\)\.trim\(\)/.test(proxy));
