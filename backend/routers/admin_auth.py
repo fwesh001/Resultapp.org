@@ -87,8 +87,15 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Fetch registry row first so NULL-hash (legacy) schools get a
-        # friendly PASSWORD_NOT_SET instead of a bare "invalid credentials".
+        # Fetch the registry row so NULL-hash (legacy) schools get a friendly
+        # PASSWORD_NOT_SET instead of a bare "invalid credentials".
+        #
+        # THIS IS A PEEK, NOT A GATE. It used to be a gate — `if row is None:
+        # 401` — which meant any identifier that is not a school email was
+        # rejected here before the moderator store was ever consulted, so staff
+        # credentials could never reach store 2. Now a miss simply falls through
+        # to the identity-verification query below, and only a row that EXISTS
+        # with a NULL hash returns the friendly 403.
         cur.execute(
             f"""
             SELECT subdomain, school_name, email, admin_password_hash
@@ -97,16 +104,8 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
             """,
             (tid, identifier),
         )
-        row = cur.fetchone()
-        if row is None:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        d = _row_to_dict(row, cur)
-
-        if d.get("admin_password_hash") is None:
-            raise HTTPException(
-                status_code=403,
-                detail="PASSWORD_NOT_SET: Please set up your admin password using the reset link.",
-            )
+        _registry_row = cur.fetchone()
+        registry = _row_to_dict(_registry_row, cur) if _registry_row is not None else None
 
         # -------------------------------------------------------------------
         # CREDENTIAL RESOLUTION — two stores, one endpoint, one uniform failure.
@@ -125,6 +124,12 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
         # through to the SAME 401 and the same detail string. Nothing in the
         # response distinguishes "no such staff member" from "wrong password"
         # from "staff member who is not a moderator".
+        #
+        # ORDER: the password is verified BEFORE PASSWORD_NOT_SET can fire.
+        # Otherwise a moderator's own identifier (which is not a school email)
+        # would trip the registry peek and return the legacy 403, telling the
+        # caller "this is a school with no password" instead of letting store 2
+        # run — and giving a second way to distinguish staff from admin.
         # -------------------------------------------------------------------
 
         cur.execute(
@@ -190,7 +195,17 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
                 "email_verified": True,
             }
 
-        # Both stores missed. Same message as a plain wrong admin password.
+        # Both stores missed. Before calling it "invalid credentials", keep the
+        # friendly PASSWORD_NOT_SET for the case it was built for: a REAL school
+        # admin address whose hash is NULL. Checking this only after the password
+        # failed keeps a moderator's staff_id from tripping it (a staff_id is not
+        # a school email, so `registry` is None here and we fall straight to 401).
+        if registry is not None and registry.get("admin_password_hash") is None:
+            raise HTTPException(
+                status_code=403,
+                detail="PASSWORD_NOT_SET: Please set up your admin password using the reset link.",
+            )
+
         raise HTTPException(status_code=401, detail="Invalid credentials")
     except HTTPException:
         raise
