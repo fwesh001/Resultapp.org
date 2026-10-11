@@ -1,10 +1,57 @@
 import { NextResponse } from "next/server";
 import { readSessionCookie, clearSessionCookie, SESSION_COOKIES } from "./session";
+import { ADMIN_CAPABILITIES } from "./capabilities";
 import type { SessionClaims } from "./sessionCrypto";
 
 interface AdminSession {
-  admin?: { email?: string };
+  admin?: {
+    email?: string;
+    staff_id?: string;
+    full_name?: string;
+    school_name?: string | null;
+    email_verified?: boolean;
+  };
   tenant_id?: string;
+  /**
+   * "admin" (the school's own admin) or "moderator" (a deputy promoted from a
+   * staff row). Absent on sessions minted before the RBAC work, which are
+   * treated as plain admin — see the note on normalizeRole().
+   */
+  role?: string;
+  /**
+   * What this role may reach. An allow-list, not a deny-list: a page added
+   * tomorrow is missing until someone grants it, rather than silently granted.
+   */
+  capabilities?: string[];
+}
+
+/**
+ * The viewer's authorization state for one tenant.
+ *
+ * Returned by readAdminSession. `isModerator` is kept alongside `role` because
+ * `role === "admin"` is the only condition that grants a cap the claim does not
+ * list, and that exception deserves to be visible at every call site rather
+ * than hidden in a string comparison.
+ */
+export interface AdminIdentity {
+  tenant: string;
+  email: string | null;
+  staffId: string | null;
+  fullName: string | null;
+  role: "admin" | "moderator";
+  capabilities: string[];
+  isModerator: boolean;
+}
+
+/**
+ * Sessions minted before RBAC existed carry neither field. Treat them as the
+ * full admin: revoking access from someone who already has it is the safe
+ * direction for a boolean guard, and the alternative (treat unknown as
+ * moderator) would silently strip capabilities from a real admin who has not
+ * re-logged-in since the upgrade.
+ */
+function normalizeRole(value: unknown): "admin" | "moderator" {
+  return String(value ?? "").toLowerCase() === "moderator" ? "moderator" : "admin";
 }
 
 /**
@@ -78,6 +125,107 @@ export async function hasAdminSession(subdomain: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Read the admin session as an {@link AdminIdentity}, or null.
+ *
+ * Stricter than hasAdminSession on purpose: a moderator's session claims their
+ * staff_id but may have no email, so requiring `admin?.email` would reject
+ * every moderator. A session with neither is unusable and returns null.
+ */
+export async function readAdminIdentity(subdomain: string): Promise<AdminIdentity | null> {
+  const normalized = (subdomain || "").toLowerCase().trim();
+  if (!normalized) return null;
+
+  const unauthorized = async () => {
+    // Same clearing behaviour as requireAdminSession: a rejected session is
+    // dropped so the browser stops presenting it.
+    await clearSessionCookie(SESSION_COOKIES.admin);
+    return null;
+  };
+
+  let session;
+  try {
+    session = await readSessionCookie<AdminSession>(SESSION_COOKIES.admin);
+  } catch {
+    return await unauthorized();
+  }
+  if (!session) return null;
+
+  const tenant = String(session.tenant_id || "").toLowerCase().trim();
+  if (!tenant || tenant !== normalized) return await unauthorized();
+
+  const email = String(session.admin?.email ?? "").trim().toLowerCase() || null;
+  const staffId = String(session.admin?.staff_id ?? "").trim() || null;
+  if (!email && !staffId) return await unauthorized();
+
+  const role = normalizeRole(session.role);
+  const capabilities = Array.isArray(session.capabilities)
+    ? session.capabilities.filter((c): c is string => typeof c === "string")
+    : [];
+
+  return {
+    tenant,
+    email,
+    staffId,
+    fullName: String(session.admin?.full_name ?? "").trim() || null,
+    role,
+    // An admin holds EVERY cap, including ones added after the session was
+    // minted — otherwise adding a capability would not take effect until every
+    // admin re-logged-in, which reads as a bug to the person who clicked.
+    capabilities: role === "admin" ? [...ADMIN_CAPABILITIES] : capabilities,
+    isModerator: role === "moderator",
+  };
+}
+
+/**
+ * Does this viewer hold `capability`? False for a missing/forged session, so
+ * it is safe to call from a layout or nav that must decide what to render.
+ */
+export async function adminHasCapability(
+  subdomain: string,
+  capability: string,
+): Promise<boolean> {
+  const identity = await readAdminIdentity(subdomain);
+  if (!identity) return false;
+  if (identity.role === "admin") return true;
+  return identity.capabilities.includes(capability);
+}
+
+/**
+ * Route-handler guard with a capability requirement.
+ *
+ * Returns null when the caller may proceed, otherwise the 401/403 response to
+ * return. The distinction matters: a SIGNED-OUT caller gets 401 so the login
+ * page can act, a MODERATOR missing the cap gets 403 because they are
+ * authenticated and there is nothing to log in to.
+ */
+export async function requireAdminCapability(
+  subdomain: string,
+  capability: string,
+): Promise<NextResponse | null> {
+  const normalized = (subdomain || "").toLowerCase().trim();
+  const identity = await readAdminIdentity(normalized);
+
+  if (!identity) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized — please sign in as admin" },
+      { status: 401 },
+    );
+  }
+
+  if (identity.role !== "admin" && !identity.capabilities.includes(capability)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `A moderator account cannot access ${capability}. Sign in as the school admin.`,
+      },
+      { status: 403 },
+    );
+  }
+
+  return null;
 }
 
 export type { SessionClaims };

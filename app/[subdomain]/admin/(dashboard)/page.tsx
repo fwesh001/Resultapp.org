@@ -12,6 +12,9 @@ import {
   FileBarChart,
 } from "lucide-react";
 
+
+// RBAC: the admin layout reads this to enforce the moderator boundary.
+export const requiredCapability = "dashboard";
 export const dynamic = "force-dynamic";
 
 /**

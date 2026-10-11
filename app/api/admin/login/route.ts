@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
+import { ADMIN_CAPABILITIES, MODERATOR_CAPABILITY_LIST } from "@/lib/capabilities";
 
 /**
  * POST /api/admin/login
@@ -10,6 +11,10 @@ import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
  * Graceful NULL-hash handling: legacy schools without a password get a 403
  * with code=PASSWORD_NOT_SET so the login UI can show the friendly
  * "set up your admin password" banner instead of a bare 401.
+ *
+ * The session carries `role` and `capabilities` (see lib/capabilities.ts).
+ * Those two fields are the entire authorization surface — every layout and
+ * proxy reads them, so they must be minted here and nowhere else.
  */
 
 function getSecret(): string {
@@ -92,8 +97,23 @@ export async function POST(req: NextRequest) {
   // reference, so the iat/exp claims the signer adds live only on its own copy —
   // `data` below is untouched, which is what keeps the signed token out of the
   // response body at line 104.
+  //
+  // `role` decides which capability list is minted. Anything other than the
+  // two known values is treated as "admin" — an unrecognised role from a future
+  // backend must not silently produce a session with NO capabilities, which
+  // would lock a real admin out with no obvious cause.
+  const role = String((data as { role?: unknown }).role ?? "admin").toLowerCase();
+  const caps: string[] =
+    role === "moderator" ? [...MODERATOR_CAPABILITY_LIST] : [...ADMIN_CAPABILITIES];
+
+  const claims = {
+    ...data,
+    role: role === "moderator" ? "moderator" : "admin",
+    capabilities: caps,
+  };
+
   try {
-    await setSessionCookie(SESSION_COOKIES.admin, data as Record<string, unknown>);
+    await setSessionCookie(SESSION_COOKIES.admin, claims as Record<string, unknown>);
   } catch (e) {
     // A signing failure must not hand back a success the client would then
     // treat as authenticated. Fail closed.
@@ -104,5 +124,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true, ...data }, { status: 200 });
+  return NextResponse.json({ success: true, ...claims }, { status: 200 });
 }

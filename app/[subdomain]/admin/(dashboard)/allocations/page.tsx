@@ -1,6 +1,11 @@
 import { getTenant } from "@/lib/tenant";
 import { AllocationsManager } from "@/components/admin/AllocationsManager";
 
+
+// RBAC: the admin layout reads this to enforce the moderator boundary.
+// An allow-list, not a deny-list — a new page without this constant is
+// unavailable to moderators until someone grants it.
+export const requiredCapability = "allocations";
 export const dynamic = "force-dynamic";
 
 export default async function AllocationsPage({

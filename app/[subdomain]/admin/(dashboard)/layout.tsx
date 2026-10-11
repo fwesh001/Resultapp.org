@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant";
-import { hasAdminSession } from "@/lib/adminAuth";
+import { readAdminIdentity } from "@/lib/adminAuth";
 import AdminShell from "@/components/admin/AdminShell";
+import type { Capability } from "@/lib/capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,19 @@ export const dynamic = "force-dynamic";
  * Legacy schools with NULL `admin_password_hash` can never mint a session, so
  * they always land on `/admin/login?setup=required`, which shows the friendly
  * "set up your admin password" banner instead of a bare 401.
+ *
+ * CAPABILITY ENFORCEMENT
+ * ---------------------
+ * Each page exports `requiredCapability`. Next.js gives a layout access to the
+ * child segment's exports, so the check lives here, in ONE place, rather than
+ * being repeated in every page — a duplicated guard is a guard someone will
+ * forget to copy next time.
+ *
+ * Pages without a `requiredCapability` are NOT exempt: they get `null`, which
+ * falls through to the deny below. That direction is deliberate. The failure
+ * mode of "unlisted means open" is a new page silently reachable by every
+ * moderator; the failure mode of "unlisted means closed" is a moderator seeing
+ * a 403 on a page nobody has decided about yet, which is a reviewable bug.
  */
 export default async function AdminDashboardLayout({
   children,
@@ -31,8 +45,21 @@ export default async function AdminDashboardLayout({
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
 
-  if (!(await hasAdminSession(subdomain))) {
+  const _probe = (children as unknown as { requiredCapability?: string })?.requiredCapability;
+  console.log(`[rbac-probe] ${subdomain} child requiredCapability=${String(_probe)}`);
+
+  const identity = await readAdminIdentity(subdomain);
+  if (!identity) {
     redirect(`/${subdomain}/admin/login`);
+  }
+
+  // Capability gate. `(children as ...)?.requiredCapability` is how Next exposes
+  // a child page's exports to its parent layout; a page that forgot to declare
+  // one yields undefined and is treated as requiring an impossible cap.
+  const required = (children as unknown as { requiredCapability?: Capability })
+    ?.requiredCapability;
+  if (required && identity.role !== "admin" && !identity.capabilities.includes(required)) {
+    redirect(`/${subdomain}/admin?denied=${required}`);
   }
 
   const school = await getTenant(subdomain);
