@@ -18,6 +18,7 @@ export const SESSION_COOKIES = {
   admin: "admin_session",
   staff: "staff_session",
   superadmin: "superadmin_session",
+  student: "student_session",
 } as const;
 
 export type SessionCookieName = (typeof SESSION_COOKIES)[keyof typeof SESSION_COOKIES];
@@ -27,6 +28,7 @@ export const ALL_SESSION_COOKIES: SessionCookieName[] = [
   SESSION_COOKIES.admin,
   SESSION_COOKIES.staff,
   SESSION_COOKIES.superadmin,
+  SESSION_COOKIES.student,
 ];
 
 /**

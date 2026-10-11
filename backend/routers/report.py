@@ -526,6 +526,17 @@ def get_report_bundle(
             "request, so one student can never read another's card."
         ),
     ),
+    academic_session: Optional[str] = Query(
+        None,
+        description=(
+            "Optional session override, supplied by the trusted Next.js proxy "
+            "when rendering a historical link from the student portal. Lets a "
+            "2025/2026 link resolve to that year instead of whatever session "
+            "the school is teaching now. Constrained to sessions the student "
+            "actually has a PUBLISHED result in, so this cannot be used to probe "
+            "an unpublished draft."
+        ),
+    ),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -590,6 +601,42 @@ def get_report_bundle(
     # September rollover, because _academic_session() is naive server-local
     # time while db_manager.current_academic_session() is UTC.
     _session = (school_info.get("current_session") or "").strip() or _academic_session()
+
+    # Historical link support (student portal "past results" archive).
+    #
+    # A link like /report/vhs/004?term=Term%202&academic_session=2025/2026 must
+    # render THAT year's card. Without this override the whole route pins to
+    # the school's current session, so every archived link silently rendered the
+    # present year -- an empty Term 1 with no grades, which looks like data loss.
+    #
+    # SAFETY: the override is accepted ONLY if this student has a PUBLISHED
+    # result in that exact session. That keeps it from becoming a probe for
+    # in-progress terms: asking for a session where nothing is published falls
+    # back to the current one, which is the same behaviour as sending nothing.
+    if academic_session:
+        _wanted_session = str(academic_session).strip()
+        if _wanted_session:
+            try:
+                _pub = db.query(
+                    f"""
+                    SELECT 1 FROM result_publications
+                    WHERE subdomain = :tid
+                      AND LOWER(student_id) = LOWER(:sid)
+                      AND academic_session = :ses
+                    LIMIT 1
+                    """,
+                    {"tid": tid, "sid": sid, "ses": _wanted_session},
+                ).first()
+                if _pub is not None:
+                    _session = _wanted_session
+                else:
+                    logger.info(
+                        "[report] ignoring academic_session override %r for %s (no published result)",
+                        _wanted_session,
+                        sid,
+                    )
+            except Exception:
+                logger.warning("[report] academic_session override check failed", exc_info=True)
 
     # Fetch template (may be null) — re-resolved with class below once known
     template = _get_active_template(db, tid)

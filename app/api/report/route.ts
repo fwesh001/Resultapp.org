@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasAdminSession } from "@/lib/adminAuth";
+import { studentMayView } from "@/lib/studentAuth";
 
 /**
  * Report Proxy — GET /api/report?tenant_id=&student_id=&term=Term 1
@@ -99,6 +100,10 @@ export async function GET(req: NextRequest) {
     return s.toLowerCase();
   })();
   const term = (searchParams.get("term") || "Term 1").trim() || "Term 1";
+  // Historical links from the student portal must carry BOTH term and session.
+  // Passing term alone silently resolves against whichever session the school is
+  // currently teaching, so a 2025/2026 link would render an empty Term 1 card.
+  const academicSession = (searchParams.get("academic_session") || "").trim();
 
   if (!tenantId || !studentId) {
     return NextResponse.json(
@@ -121,7 +126,23 @@ export async function GET(req: NextRequest) {
   // Preserve slash for backend :path param — encode segments individually so vhs/004 stays vhs/004 not vhs%2F004
   const encodedStudentPath = studentId.split("/").map((seg) => encodeURIComponent(seg)).join("/");
   const params = new URLSearchParams({ term });
+  if (academicSession) params.set("academic_session", academicSession);
   if (isAdmin) params.set("include_draft", "true");
+
+  // Student verification scope — this is the trust boundary that makes preview
+  // mode real.
+  //
+  // `verified_student` is derived HERE, server-side, and only ever sent when a
+  // signed student_session exists whose student_id matches the one being
+  // requested (via studentMayView, which is slash/compact tolerant). The value
+  // is never read from the query string, so a visitor cannot request
+  // ?verified_student=true to unlock a classmate's card.
+  //
+  // Admission numbers are sequential and per-school, which is exactly why the
+  // match is required rather than merely "has a student session".
+  const verifiedStudent = await studentMayView(tenantId, studentId);
+  if (verifiedStudent) params.set("verified_student", "true");
+
   const url = `${base}/api/v1/tenant/${encodeURIComponent(tenantId)}/report/${encodedStudentPath}?${params.toString()}`;
 
   try {
