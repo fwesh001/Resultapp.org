@@ -352,7 +352,11 @@ def change_student_password(
     throttle bucket with login, because "guess the current password" is the
     same attack.
     """
-    from services.db_manager import TENANT_STUDENTS_TABLE, _connect_as_superuser
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        _connect_as_superuser,
+        _row_to_dict,
+    )
 
     tid = _validate_tenant_id(tenant_id)
     sid = _normalize_student_id(payload.student_id)
@@ -397,7 +401,13 @@ def change_student_password(
             # Current password wrong, or the student does not exist. Same 401
             # for both, so this is not an existence oracle either.
             raise HTTPException(status_code=401, detail="Current password is incorrect")
-        return {"success": True, "subdomain": tid, "student_id": sid}
+
+        # Echo back the STORED id, not the normalized one. _normalize_student_id
+        # lowercases the prefix half, so vhs/004 comes back as vhs/004 but a
+        # hypothetical Vhs/004 would echo as vhs/004 -- a different string than
+        # the caller sent, which is confusing when it lands in a session claim.
+        stored_sid = _row_to_dict(row, cur).get("student_id") or sid
+        return {"success": True, "subdomain": tid, "student_id": stored_sid}
     finally:
         if conn:
             try:
