@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import StaffSidebar from "@/components/staff/StaffSidebar";
 import NotificationBell from "@/components/notifications/NotificationBell";
-import ThemeToggle from "@/components/theme/ThemeToggle";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffShellProps {
@@ -81,12 +80,10 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
             <span className="truncate text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</span>
           </Link>
           <NotificationBell tenantId={subdomain} portal="staff" />
-          <ThemeToggle />
         </div>
 
         {/* Desktop top header */}
-        <div className="relative z-40 hidden items-center justify-end gap-3 border-b border-line-1 bg-surface-0/90 px-6 py-3 backdrop-blur-md md:flex">
-          <ThemeToggle />
+        <div className="relative z-40 hidden items-center justify-end border-b border-line-1 bg-surface-0/90 px-6 py-3 backdrop-blur-md md:flex">
           <NotificationBell tenantId={subdomain} portal="staff" />
         </div>
 

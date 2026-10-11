@@ -112,9 +112,19 @@ export default function ResultLookupWidget({
   }
 
   return (
-    <form
+    // GLASSMORPHIC — restored deliberately.
+//
+// The token migration replaced this with `bg-surface-1`, which is OPAQUE, so
+// the card became a solid slab sitting on top of the Hero instead of a pane of
+// glass in front of it. At 4% opacity the original let the Hero artwork show
+// through; that translucency IS the design, not decoration, so this surface is
+// exempt from the theme-token pass along with the print surface.
+//
+// --surface-1 in dark mode is #150c24 (fully opaque) — which is why the Hero
+// disappeared rather than merely dimming.
+<form
       onSubmit={handleSubmit}
-      className="w-full max-w-xl rounded-2xl border border-line-1 bg-surface-1 p-6 shadow-lg backdrop-blur"
+      className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/40 p-6 shadow-lg shadow-purple-950/30 backdrop-blur-md"
     >
       <label
         htmlFor="student-id"
@@ -134,7 +144,7 @@ export default function ResultLookupWidget({
         spellCheck={false}
         inputMode="numeric"
         aria-describedby="student-id-hint"
-        className="mt-2 w-full rounded-xl border border-line-1 bg-surface-1 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
+        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
       />
       {/* Explains the auto-prefix, and reassures anyone who types the full ID
           anyway — their input is still honoured verbatim. */}
@@ -158,7 +168,7 @@ export default function ResultLookupWidget({
         placeholder="e.g., 123456"
         required
         autoComplete="current-password"
-        className="mt-2 w-full rounded-xl border border-line-1 bg-surface-1 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
+        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
       />
       <p className="mt-2 text-xs text-text-3">
         First time here? Use the default password{" "}

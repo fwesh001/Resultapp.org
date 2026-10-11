@@ -61,6 +61,18 @@ export default function Footer({ school, subdomain }: FooterProps) {
                 Result Checker
               </Link>
             </li>
+            {/* Student Portal: the authenticated home for a pupil. Sits beside
+                the public Result Checker because both are "student-facing",
+                but it is a separate entry point — one needs no login, the other
+                does — so they must not collapse into a single link. */}
+            <li>
+              <Link
+                href={`/${subdomain}/student`}
+                className="inline-flex min-h-[44px] items-center text-purple-200/70 transition hover:text-white"
+              >
+                Student Portal
+              </Link>
+            </li>
           </ul>
         </div>
 

@@ -1,40 +1,26 @@
 #!/usr/bin/env node
 /**
- * Light/Dark theming guard harness.
+ * Theme guard harness.
  *
  *   npm run build && node scripts/verify-theme.mjs
  *
- * Theming fails SILENTLY. A typo like `bg-surface-4` compiles, builds, deploys
- * and passes `tsc` — it just emits no CSS, so the element renders with no
- * background and nobody notices until a parent complains. These checks assert
- * on the BUILT stylesheet as well as the source, because only the built
- * artifact proves the tokens actually resolved.
+ * THE APP IS CURRENTLY LOCKED TO DARK. The Light Theme rollout is paused
+ * pending a dedicated design sprint, so these checks now assert the LOCK
+ * rather than the toggle. They still read like a theme suite because the
+ * machinery (tokens, custom variant, built CSS) stays in place and is
+ * exactly what the design sprint will resume from.
  *
- * The load-bearing invariants:
+ * The failure these guard against is subtle and was the actual bug once
+ * already: removing the toggle alone does NOT lock the theme. With
+ * `defaultTheme="dark"` alone, a returning user whose localStorage still
+ * holds "light" keeps light, and `enableSystem` re-reads the OS on every
+ * load and flips a light-mode laptop back to light. Only `forcedTheme`
+ * overrides both.
  *
- *  1. `dark:` MUST be class-based. Tailwind v4 defaults it to the OS media
- *     query, which makes an explicit Light choice unenforceable — a user in OS
- *     dark mode who picks Light would still get dark styles with no way out.
- *     This project has no tailwind.config.ts (CSS-first v4), so the variant
- *     must be declared with `@custom-variant` in globals.css.
- *
- *  2. TOKENS MUST EMIT IN BOTH SCHEMES. A token defined only under `.dark`
- *     renders as an empty string in light mode: transparent text, invisible
- *     border. Unmissable in review, invisible to the compiler.
- *
- *  3. NO HYDRATION FLASH. next-themes writes the class on <html> before paint;
- *     without `suppressHydrationWarning` React logs a mismatch on every load.
- *
- *  4. THE TOGGLE GUARDS ITSELF BEFORE MOUNTING. Reading `resolvedTheme` during
- *     first render produces server HTML the client cannot match.
- *
- *  5. THE TOGGLE APPEARS IN EXACTLY THE THREE APPROVED PLACES. The plan scoped
- *     it to the landing navbar and the admin/staff shells. A fourth toggle
- *     (e.g. on the student portal, which has no approved placement) would be
- *     scope creep that nobody reviewed.
- *
- *  6. PRINT OUTPUT IS UNTOUCHED. The report card prints on white paper; a
- *     themed surface would either waste ink or come out unreadable.
+ * On a dark-locked app a theming regression is still possible and still
+ * silent: a mistyped token like `bg-surface-4` compiles, builds, deploys and
+ * passes `tsc` while emitting no CSS at all. So the built stylesheet is
+ * asserted too.
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -58,22 +44,78 @@ const staffSidebar = read("components/staff/StaffSidebar.tsx");
 const modal = read("components/ui/Modal.tsx");
 const widget = read("components/landing/ResultLookupWidget.tsx");
 
-// ===================== 1. CLASS-BASED DARK VARIANT =========================
+// Declared up front: several checks below strip comments so that prose
+// explaining a setting is not mistaken for the setting itself.
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+const norm = (p) => p.replace(/\\/g, "/");
+
+// ===================== 1. CLASS-BASED DARK VARIANT + THE LOCK =============
 check(
   "dark variant is re-pointed at a .dark class",
   /@custom-variant dark \(&:where\(\.dark, \.dark \*\)\);/.test(globals),
-  "without this, dark: follows the OS and an explicit Light choice cannot be enforced",
+  "without this, dark: follows the OS and the lock cannot be enforced",
 );
 check(
   "no leftover prefers-color-scheme dark block",
   !/@media \(prefers-color-scheme: dark\)/.test(globals),
-  "this would fight the toggle: OS dark would re-darken a page the user set to Light",
+  "this would fight the lock: OS dark would re-darken regardless of the forced value",
 );
 check("next-themes is a declared dependency", !!(pkg.dependencies || {})["next-themes"]);
 check("provider uses attribute=class", /attribute="class"/.test(provider));
-check("provider honours the OS as a default", /defaultTheme="system"/.test(provider));
-check("provider enables system theme", /enableSystem/.test(provider));
+
+// THE LOCK. defaultTheme alone is not enough: it is only the fallback when
+// nothing is stored, so a returning user with "light" in localStorage keeps
+// light, and enableSystem re-reads the OS every load. Only forcedTheme
+// overrides both AND makes setTheme a no-op.
+check(
+  "provider FORCES dark (overrides a stored preference)",
+  /forcedTheme="dark"/.test(provider),
+  "defaultTheme alone is defeated by a stored 'light' value from before the pause",
+);
+check("provider defaults to dark", /defaultTheme="dark"/.test(provider));
+check(
+  "provider does NOT enable system theme",
+  // Strip comments first: the provider's doc block explains WHY enableSystem is
+  // omitted, and a naive substring match flags that explanation as the setting.
+  !/enableSystem/.test(stripComments(provider)),
+  "enableSystem re-reads the OS on every load and would flip a light-mode laptop back to light",
+);
 check("theme transitions are disabled on swap", /disableTransitionOnChange/.test(provider));
+
+// ===================== 1b. THE TOGGLE IS NOT RENDERED ======================
+// The toggle component itself is KEPT (the design sprint re-mounts it), so
+// assert it is not rendered anywhere and not imported by a live surface.
+const toggleRendered = [];
+const walk = (p) => {
+  for (const e of readdirSync(p, { withFileTypes: true })) {
+    const full = join(p, e.name);
+    if (e.isDirectory()) walk(full);
+    else if (e.name.endsWith(".tsx")) {
+      const src = readFileSync(full, "utf8");
+      if (stripComments(src).includes("<ThemeToggle"))
+        toggleRendered.push(norm(full.replace(root + "\\", "").replace(root + "/", "")));
+    }
+  }
+};
+for (const base of ["app", "components"]) {
+  if (existsSync(join(root, base))) walk(join(root, base));
+}
+check(
+  "no surface renders <ThemeToggle>",
+  toggleRendered.length === 0,
+  toggleRendered.length ? `still rendered in: ${toggleRendered.join(", ")}` : "",
+);
+check(
+  "the toggle component is retained for the design sprint",
+  existsSync(join(root, "components/theme/ThemeToggle.tsx")),
+);
+for (const [name, src] of [
+  ["landing Navbar", navbar],
+  ["AdminShell", adminShell],
+  ["StaffShell", staffShell],
+]) {
+  check(`${name} does not import ThemeToggle`, !/import ThemeToggle/.test(stripComments(src)));
+}
 
 // ===================== 2. TOKELS IN BOTH SCHEMES ===========================
 const TOKEN_NAMES = [
@@ -143,85 +185,78 @@ check(
   "a toast rendered outside the provider cannot read the resolved theme",
 );
 
-// ===================== 4. TOGGLE SAFETY ====================================
-check("toggle guards against hydration mismatch", /if \(!mounted\) return null|if \(!mounted\)/.test(toggle) || /if \(!mounted\)/.test(toggle));
-check("toggle renders a placeholder until mounted", /if \(!mounted\)/.test(toggle));
-check("toggle placeholder reserves space", /aria-hidden="true"/.test(toggle) && /inline-block/.test(toggle));
-check("toggle switches theme via setTheme", /setTheme\(/.test(toggle));
-check("toggle is a real button", /<button/.test(toggle));
-check("toggle has an accessible label", /aria-label=/.test(toggle));
-check("toggle exposes pressed state", /aria-pressed=/.test(toggle));
-check("toggle is keyboard focusable", /focus-visible:ring/.test(toggle));
-
-// ===================== 5. TOGGLE PLACEMENT (exactly 3) =====================
-check("landing Navbar renders the toggle", /<ThemeToggle/.test(navbar));
-check("AdminShell renders the toggle", /<ThemeToggle/.test(adminShell));
-check("StaffShell renders the toggle", /<ThemeToggle/.test(staffShell));
+// ===================== 4. TOGGLE RETAINED FOR THE SPRINT ===================
+// Unmounted, so its internals are not asserted. Asserted only so that a
+// future cleanup pass cannot delete it out from under the design sprint, which
+// will need it and would otherwise have to rewrite the mounted-state guard.
+check("ThemeToggle component still exists", existsSync(join(root, "components/theme/ThemeToggle.tsx")));
 check(
-  "navbar imports the toggle",
-  /import ThemeToggle from "@\/components\/theme\/ThemeToggle"/.test(navbar),
-);
-check(
-  "AdminShell imports the toggle",
-  /import ThemeToggle from "@\/components\/theme\/ThemeToggle"/.test(adminShell),
-);
-check(
-  "StaffShell imports the toggle",
-  /import ThemeToggle from "@\/components\/theme\/ThemeToggle"/.test(staffShell),
-);
-// No fourth, unapproved placement.
-// Normalise separators: readdirSync yields "components\\admin\\AdminShell.tsx"
-// on Windows and "components/admin/AdminShell.tsx" on POSIX, so comparing
-// against a forward-slash literal would flag every placement as unexpected.
-const norm = (p) => p.replace(/\\/g, "/");
-const togglePlacements = readdirSync(join(root, "components"), { withFileTypes: true })
-  .filter((d) => d.isDirectory())
-  .map((d) => `components/${d.name}`)
-  .filter((d) => existsSync(join(root, d)))
-  .flatMap((d) => {
-    const out = [];
-    const walk = (p) => {
-      for (const e of readdirSync(p, { withFileTypes: true })) {
-        const full = join(p, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (e.name.endsWith(".tsx") && readFileSync(full, "utf8").includes("<ThemeToggle"))
-          out.push(norm(full.replace(root + "\\", "").replace(root + "/", "")));
-      }
-    };
-    walk(join(root, d));
-    return out;
-  });
-const expected = [
-  "components/admin/AdminShell.tsx",
-  "components/staff/StaffShell.tsx",
-  "components/landing/Navbar.tsx",
-];
-const unexpected = togglePlacements.filter((f) => !expected.includes(f));
-check(
-  "toggle appears in ONLY the three approved surfaces",
-  togglePlacements.length === 3 && unexpected.length === 0,
-  `found ${togglePlacements.length}: ${togglePlacements.join(", ")}`
-    + (unexpected.length ? ` | unexpected: ${unexpected.join(", ")}` : ""),
+  "ThemeToggle still guards its own hydration",
+  /if \(!mounted\)/.test(toggle),
+  "the design sprint re-mounts this; a version without the guard flashes the wrong icon",
 );
 
-// ===================== 6. PHASE 2 SURFACES ARE TOKENIZED ==================
-// These are the components the plan named. Any hard-coded hex left in them
-// means the surface simply stays dark in light mode — a silent half-migration.
-const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+// ===================== 5. GLASSMORPHIC RESULT CHECKER ======================
+// The card sits ON TOP of a Hero background image. When the token migration
+// replaced `bg-purple-900/[0.04]` with the opaque `bg-surface-1`, the Hero
+// disappeared behind a solid slab — the exact regression this reverts.
+// Translucency here is the design, so this surface is exempt from the token
+// pass along with the print surface.
+const widgetSrc = stripComments(widget);
+check(
+  "Result Checker card is translucent (not an opaque token)",
+  /bg-black\/40/.test(widgetSrc) && !/rounded-2xl[^\n]*bg-surface-1/.test(widgetSrc),
+  "an opaque surface hides the Hero image behind it",
+);
+check("Result Checker keeps its backdrop blur", /backdrop-blur/.test(widgetSrc));
+check("Result Checker uses a translucent border", /border-white\/10|border-white\/20/.test(widgetSrc));
+check(
+  "Result Checker inputs are dark recessed wells, not light tokens",
+  /bg-\[#0B0514\]/.test(widgetSrc),
+  "an input must stay opaque so typed text never overlaps the Hero",
+);
+
+// ===================== 6. STUDENT PORTAL DISCOVERABILITY ====================
+const footer = read("components/landing/Footer.tsx");
+check(
+  "Navbar lists the Student Portal",
+  /label:\s*"Student Portal"/.test(navbar),
+  "an unlisted portal is unreachable except by typing the URL",
+);
+check(
+  "Navbar Student Portal points at /student (not /student/login)",
+  /`\/\$\{subdomain\}\/student`/.test(navbar),
+  "/student lets an existing session land on the dashboard instead of re-prompting",
+);
+check("Footer lists the Student Portal", /Student Portal/.test(footer));
+check(
+  "Footer Student Portal points at /student",
+  /href=\{`\/\$\{subdomain\}\/student`\}/.test(footer),
+);
+// The mobile drawer is driven by the same `links` array, so one entry covers
+// both; assert it rather than assuming.
+check(
+  "the mobile drawer reuses the same links array",
+  /links\.map/.test(navbar),
+);
+
+// ===================== 7. DARK-LOCKED SURFACES ==============================
+// With the app locked to dark, a themed surface must resolve to its dark
+// value. The tokens are retained for the design sprint, so assert they are
+// still wired rather than removed.
 const themed = [
   ["landing Navbar", navbar],
   ["AdminSidebar", adminSidebar],
   ["StaffSidebar", staffSidebar],
   ["AdminShell", adminShell],
   ["StaffShell", staffShell],
-  ["ResultLookupWidget", widget],
 ];
 for (const [name, src] of themed) {
   const s = stripComments(src);
   check(
     `${name} has no hard-coded brand-dark hex`,
     !/bg-\[#0B0514\]|bg-\[#150C28\]/.test(s),
-    "a fixed dark hex ignores the theme entirely",
+    "a fixed dark hex bypasses the token system entirely",
   );
 }
 check(
@@ -237,15 +272,15 @@ check(
 check(
   "Modal uses the surface token instead of the dark: variant",
   /bg-surface-1/.test(modal) && !/dark:bg-zinc-900/.test(stripComments(modal)),
-  "the old dark:bg-zinc-900 pair now follows the class toggle; a token needs no variant",
+  "the old dark:bg-zinc-900 pair only worked via the OS; a token needs no variant",
 );
 check(
   "ResultLookupWidget submit button uses the accent token",
-  /bg-accent/.test(widget) && !/bg-purple-600/.test(stripComments(widget)),
+  /bg-accent/.test(widgetSrc) && !/bg-purple-600/.test(widgetSrc),
 );
 
-// A themed shell wrapping an always-dark page frame is visibly broken: a light
-// sidebar framing a black panel.
+// The page frames inside the themed shells follow the same token, so the shell
+// and its content cannot drift apart in a future light-mode pass.
 const shellPages = [
   "app/[subdomain]/admin/(dashboard)/billing/page.tsx",
   "app/[subdomain]/admin/(dashboard)/clearance/page.tsx",
@@ -262,7 +297,7 @@ for (const p of shellPages) {
   );
 }
 
-// ===================== 7. PRINT OUTPUT UNTOUCHED ===========================
+// ===================== 8. PRINT OUTPUT UNTOUCHED ===========================
 check(
   "report card still forces a white print surface",
   /print:bg-white/.test(read("app/[subdomain]/report/[...studentId]/page.tsx")),
@@ -273,7 +308,7 @@ check(
   "the card prints on paper; theming it changes the printed artefact",
 );
 
-// ===================== 8. BUILT CSS (the real proof) =======================
+// ===================== 9. BUILT CSS (the real proof) =======================
 // Source checks cannot catch a typo that compiles to nothing. Assert on the
 // emitted stylesheet.
 const cssDir = [".next/static/chunks", ".next/static/css"].find((d) => existsSync(join(root, d)));
@@ -320,5 +355,5 @@ if (failed > 0) {
   process.exit(1);
 }
 console.log(
-  "Theme verified: class-based dark, tokens in both schemes, 3 approved toggle placements, print untouched.",
+  "Theme verified: locked to dark via forcedTheme, toggle unmounted, glass Result Checker intact, print untouched.",
 );

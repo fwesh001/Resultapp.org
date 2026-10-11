@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
-import ThemeToggle from "@/components/theme/ThemeToggle";
 
 interface NavbarProps {
   schoolName: string;
@@ -30,6 +29,11 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
     // `/<sub>` to `/<sub>/<sub>`, which matches no route. A fragment-only href
     // stays same-document on both the apex and subdomain hosts.
     { label: "Check Result", href: "#result-checker" },
+    // Student Portal sits with the other role portals, not under "Check
+    // Result": a parent looking for "where do I sign in" is not looking for the
+    // report lookup. `/student` (not `/student/login`) so an existing session
+    // lands on the dashboard rather than being asked to sign in again.
+    { label: "Student Portal", href: `/${subdomain}/student` },
     { label: "Staff Portal", href: `/${subdomain}/staff` },
     { label: "Admin", href: `/${subdomain}/admin` },
   ];
@@ -66,22 +70,18 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
               {link.label}
             </Link>
           ))}
-          <ThemeToggle />
         </div>
 
         {/* Mobile hamburger */}
-        <div className="flex items-center gap-2 md:hidden">
-          <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => setOpen((prev) => !prev)}
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2 md:hidden"
+        >
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </nav>
 
       {/* Mobile dropdown */}
