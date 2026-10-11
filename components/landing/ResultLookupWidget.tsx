@@ -114,11 +114,11 @@ export default function ResultLookupWidget({
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full max-w-xl rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-6 shadow-lg shadow-purple-950/30 backdrop-blur"
+      className="w-full max-w-xl rounded-2xl border border-line-1 bg-surface-1 p-6 shadow-lg backdrop-blur"
     >
       <label
         htmlFor="student-id"
-        className="block text-sm font-medium text-purple-200"
+        className="block text-sm font-medium text-text-1"
       >
         Student ID
       </label>
@@ -134,19 +134,19 @@ export default function ResultLookupWidget({
         spellCheck={false}
         inputMode="numeric"
         aria-describedby="student-id-hint"
-        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+        className="mt-2 w-full rounded-xl border border-line-1 bg-surface-1 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
       />
       {/* Explains the auto-prefix, and reassures anyone who types the full ID
           anyway — their input is still honoured verbatim. */}
-      <p id="student-id-hint" className="mt-2 text-xs text-purple-300/50">
+      <p id="student-id-hint" className="mt-2 text-xs text-text-3">
         Just the admission number — the school prefix{" "}
-        <span className="font-mono text-purple-200/80">{idPrefix || subdomain}/</span> is added
+        <span className="font-mono text-text-2">{idPrefix || subdomain}/</span> is added
         automatically.
       </p>
 
       <label
         htmlFor="student-password"
-        className="mt-4 block text-sm font-medium text-purple-200"
+        className="mt-4 block text-sm font-medium text-text-1"
       >
         Password
       </label>
@@ -158,12 +158,12 @@ export default function ResultLookupWidget({
         placeholder="e.g., 123456"
         required
         autoComplete="current-password"
-        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+        className="mt-2 w-full rounded-xl border border-line-1 bg-surface-1 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
       />
-      <p className="mt-2 text-xs text-purple-300/50">
+      <p className="mt-2 text-xs text-text-3">
         First time here? Use the default password{" "}
-        <span className="font-mono text-purple-200/80">123456</span>, then change it in the{" "}
-        <span className="font-medium text-purple-200/80">Student Portal</span>.
+        <span className="font-mono text-text-2">123456</span>, then change it in the{" "}
+        <span className="font-medium text-text-2">Student Portal</span>.
       </p>
 
       {error ? (
@@ -177,7 +177,7 @@ export default function ResultLookupWidget({
 
       <label
         htmlFor="term"
-        className="mt-4 block text-sm font-medium text-purple-200"
+        className="mt-4 block text-sm font-medium text-text-1"
       >
         Term
       </label>
@@ -201,7 +201,7 @@ export default function ResultLookupWidget({
       <button
         type="submit"
         disabled={busy}
-        className="mt-6 w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:opacity-60"
+        className="mt-6 w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface-0 disabled:opacity-60"
       >
         {busy ? "Checking…" : "View Report Card"}
       </button>

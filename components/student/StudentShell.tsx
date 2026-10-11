@@ -54,8 +54,8 @@ export default function StudentShell({
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[#0B0514] text-white">
-      <header className="relative z-40 flex items-center gap-3 border-b border-purple-500/20 bg-[#0B0514]/90 px-4 py-3 backdrop-blur-md sm:px-6">
+    <div className="flex h-screen flex-col bg-surface-0 text-text-1">
+      <header className="relative z-40 flex items-center gap-3 border-b border-line-1 bg-surface-0/90 px-4 py-3 backdrop-blur-md sm:px-6">
         <Link
           href={`/${subdomain}`}
           aria-label={`${toTitleCase(schoolName)} school portal`}
@@ -66,7 +66,7 @@ export default function StudentShell({
             <span className="block truncate text-sm font-semibold tracking-tight">
               {toTitleCase(schoolName)}
             </span>
-            <span className="hidden text-[0.7rem] text-purple-300/60 sm:block">
+            <span className="hidden text-[0.7rem] text-text-3 sm:block">
               Student Portal
             </span>
           </span>
@@ -75,14 +75,14 @@ export default function StudentShell({
         <div className="ml-auto flex items-center gap-2">
           <span className="hidden text-right sm:block">
             <span className="block text-xs font-medium leading-tight">{studentName}</span>
-            <span className="block font-mono text-[0.7rem] leading-tight text-purple-300/60">
+            <span className="block font-mono text-[0.7rem] leading-tight text-text-3">
               {studentId}
             </span>
           </span>
 
           <Link
             href={`/${subdomain}/student/password`}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-purple-500/20 px-3 text-xs font-medium text-purple-200 transition hover:bg-purple-900/20"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-line-1 px-3 text-xs font-medium text-text-2 transition hover:bg-surface-2"
           >
             <KeyRound className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Change password</span>
@@ -93,7 +93,7 @@ export default function StudentShell({
             onClick={handleSignOut}
             disabled={signingOut}
             aria-label="Sign out"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-purple-500/20 px-3 text-xs font-medium text-purple-200 transition hover:bg-purple-900/20 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-line-1 px-3 text-xs font-medium text-text-2 transition hover:bg-surface-2 disabled:opacity-50"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>
@@ -101,7 +101,7 @@ export default function StudentShell({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
+      <main className="flex-1 overflow-y-auto bg-surface-0">{children}</main>
     </div>
   );
 }

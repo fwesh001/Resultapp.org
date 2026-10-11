@@ -106,19 +106,19 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line-1 bg-surface-0/90 backdrop-blur-md">
       <Link
         href={`/${subdomain}`}
         onClick={onNavigate}
         aria-label={`${toTitleCase(schoolName)} school portal`}
-        className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
+        className="flex items-center gap-2.5 border-b border-line-1 px-5 py-5 transition hover:bg-surface-2"
       >
         <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight text-white">
+          <p className="truncate text-sm font-semibold tracking-tight text-text-1">
             {toTitleCase(schoolName)}
           </p>
-          <p className="text-xs text-purple-300/50">Admin Portal</p>
+          <p className="text-xs text-text-3">Admin Portal</p>
         </div>
       </Link>
 
@@ -133,8 +133,8 @@ export default function AdminSidebar({
               onClick={onNavigate}
               className={
                 active
-                  ? "flex items-center gap-3 rounded-lg border-r-2 border-purple-500 bg-purple-600/20 px-3 py-2.5 text-sm font-medium text-purple-300"
-                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  ? "flex items-center gap-3 rounded-lg border-r-2 border-accent bg-accent-soft px-3 py-2.5 text-sm font-medium text-accent"
+                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               }
             >
               <Icon className="h-5 w-5 shrink-0" />
@@ -144,18 +144,18 @@ export default function AdminSidebar({
         })}
       </nav>
 
-      <div className="space-y-1 border-t border-purple-500/20 p-4">
+      <div className="space-y-1 border-t border-line-1 p-4">
         <button
           type="button"
           onClick={() => void handleSignOut()}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
         >
           <LogOut className="h-4 w-4" /> Sign out
         </button>
         <Link
           href={`/${subdomain}`}
           onClick={onNavigate}
-          className="block rounded-lg px-3 py-2 text-xs text-zinc-500 transition hover:bg-white/5 hover:text-white"
+          className="block rounded-lg px-3 py-2 text-xs text-text-3 transition hover:bg-surface-2 hover:text-text-1"
         >
           ← Back to school portal
         </Link>

@@ -449,7 +449,7 @@ export default function SmartStaffHubPage() {
   const modalOpen = activeAssessment !== null && activeClass !== null && activeSubject !== null;
 
   return (
-    <div className="min-h-screen bg-[#0B0514] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-surface-0 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-6">

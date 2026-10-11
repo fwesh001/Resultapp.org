@@ -33,18 +33,18 @@ export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClass
   const formHref = formClassName ? `${base}/forms/${encodeURIComponent(formClassName)}` : null;
   const isFormActive = formHref !== null && pathname.startsWith(`${base}/forms`);
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line-1 bg-surface-0/90 backdrop-blur-md">
       <Link
         href={`/${subdomain}`}
         onClick={onNavigate}
         aria-label={`${toTitleCase(schoolName)} school portal`}
-        className="border-b border-purple-500/20 px-5 py-5 transition hover:bg-white/5"
+        className="border-b border-line-1 px-5 py-5 transition hover:bg-surface-2"
       >
         <div className="flex items-center gap-3">
           <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
           <div>
-            <p className="text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</p>
-            <p className="text-xs text-purple-300/60">Staff Portal</p>
+            <p className="text-sm font-semibold tracking-tight text-text-1">{toTitleCase(schoolName)}</p>
+            <p className="text-xs text-text-3">Staff Portal</p>
           </div>
         </div>
       </Link>
@@ -63,8 +63,8 @@ export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClass
               aria-current={isFormActive ? "page" : undefined}
               className={
                 isFormActive
-                  ? "flex items-center gap-3 rounded-lg border-r-2 border-emerald-500 bg-emerald-600/20 px-3 py-2.5 text-sm font-medium text-emerald-300"
-                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:bg-white/5 hover:text-white"
+                  ? "flex items-center gap-3 rounded-lg border-r-2 border-success bg-success-soft px-3 py-2.5 text-sm font-medium text-success"
+                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-2 hover:bg-surface-2 hover:text-text-1"
               }
             >
               <HeartHandshake className="h-4 w-4" />
@@ -74,7 +74,7 @@ export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClass
           if (isExternal) {
             return (
               <Fragment key={item.label}>
-                <Link href={href} onClick={onNavigate} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:bg-white/5 hover:text-white">
+                <Link href={href} onClick={onNavigate} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-2 hover:bg-surface-2 hover:text-text-1">
                   <Icon className="h-4 w-4" />
                   {item.label}
                 </Link>
@@ -89,8 +89,8 @@ export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClass
                 onClick={onNavigate}
                 className={
                   isActive
-                    ? "flex items-center gap-3 rounded-lg border-r-2 border-purple-500 bg-purple-600/20 px-3 py-2.5 text-sm font-medium text-purple-300"
-                    : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:bg-white/5 hover:text-white"
+                    ? "flex items-center gap-3 rounded-lg border-r-2 border-accent bg-accent-soft px-3 py-2.5 text-sm font-medium text-accent"
+                    : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-2 hover:bg-surface-2 hover:text-text-1"
                 }
               >
                 <Icon className="h-4 w-4" />
@@ -102,8 +102,8 @@ export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClass
         })}
       </nav>
 
-      <div className="border-t border-purple-500/20 p-4">
-        <a href={`/${subdomain}/staff/login`} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 hover:bg-white/5 hover:text-white">
+      <div className="border-t border-line-1 p-4">
+        <a href={`/${subdomain}/staff/login`} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-2 hover:bg-surface-2 hover:text-text-1">
           <LogOut className="h-4 w-4" /> Sign out
         </a>
       </div>

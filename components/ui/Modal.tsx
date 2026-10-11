@@ -127,7 +127,12 @@ export function Modal({
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 32 }}
             transition={{ duration: reduceMotion ? 0.1 : 0.25 }}
             className={cn(
-              "relative z-50 max-h-[92dvh] w-full overflow-y-auto border bg-white p-6 shadow-lg dark:bg-zinc-900",
+              // bg-surface-1 replaces the previous `bg-white dark:bg-zinc-900`
+              // pair. That pair was the one `dark:` variant in the file, and it
+              // used to mean "follow the OS"; under the class-based toggle it
+              // follows the explicit choice instead, which is the point. A
+              // token removes the need for the variant at all.
+              "relative z-50 max-h-[92dvh] w-full overflow-y-auto border border-line-1 bg-surface-1 p-6 text-text-1 shadow-lg",
               sheetOnMobile
                 ? "rounded-t-3xl pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:rounded-xl md:pb-6"
                 : "rounded-xl",
@@ -170,7 +175,7 @@ export function Modal({
               <div className="mb-4 pr-16">
                 {title && <h3 className="text-lg font-semibold">{title}</h3>}
                 {description && (
-                  <p className="mt-1 text-sm text-zinc-500">{description}</p>
+                  <p className="mt-1 text-sm text-text-2">{description}</p>
                 )}
               </div>
             )}

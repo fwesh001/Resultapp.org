@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 interface NavbarProps {
   schoolName: string;
@@ -34,7 +35,7 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-purple-500/20 bg-[#0B0514]/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-line-1 bg-surface-0/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <Link href={`/${subdomain}`} className="flex items-center gap-2.5">
           {logoUrl ? (
@@ -42,14 +43,14 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
             <img
               src={logoUrl}
               alt={`${toTitleCase(schoolName)} crest`}
-              className="h-9 w-9 rounded-full border border-purple-500/20 object-cover"
+              className="h-9 w-9 rounded-full border border-line-1 object-cover"
             />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-              <GraduationCap className="h-5 w-5 text-purple-300" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-line-1 bg-accent-soft">
+              <GraduationCap className="h-5 w-5 text-accent" />
             </span>
           )}
-          <span className="text-base font-semibold tracking-tight text-white">
+          <span className="text-base font-semibold tracking-tight text-text-1">
             {toTitleCase(schoolName)}
           </span>
         </Link>
@@ -60,35 +61,39 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
             <Link
               key={link.label}
               href={link.href}
-              className="text-sm text-purple-200/80 transition hover:text-white"
+              className="text-sm text-text-2 transition hover:text-text-1"
             >
               {link.label}
             </Link>
           ))}
+          <ThemeToggle />
         </div>
 
         {/* Mobile hamburger */}
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-purple-500/20 p-2 text-purple-200 transition hover:bg-purple-900/20 md:hidden"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </nav>
 
       {/* Mobile dropdown */}
       {open && (
-        <div className="border-t border-purple-500/20 bg-[#0B0514]/95 px-6 py-4 backdrop-blur-md md:hidden">
+        <div className="border-t border-line-1 bg-surface-0/95 px-6 py-4 backdrop-blur-md md:hidden">
           <div className="flex flex-col gap-3">
             {links.map((link) => (
               <Link
                 key={link.label}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-2 py-2 text-sm text-purple-200/90 transition hover:bg-purple-900/20 hover:text-white"
+                className="rounded-lg px-2 py-2 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               >
                 {link.label}
               </Link>

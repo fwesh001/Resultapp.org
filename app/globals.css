@@ -1,8 +1,94 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Class-based dark mode (next-themes)
+
+   Tailwind v4 defaults `dark:` to the OS media query. That is wrong for an
+   explicit toggle: a user who picks Light would still get dark styles whenever
+   their laptop is in dark mode, and would have no way to override it. This
+   variant re-points `dark:` at an ancestor `.dark` class, which next-themes
+   writes on <html>. Everything else about the default stays the same.
+
+   Defined here rather than in a tailwind.config.ts because this project is
+   CSS-first Tailwind v4 and has no config file.
+--------------------------------------------------------------------------- */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Semantic surface tokens
+
+   Phase 1 of theming: a small, closed set of tokens that Phase 2 components
+   consume instead of hard-coded hex values. Deliberately token-by-NAME
+   (--surface-1, --text-1) rather than by role (--card, --popover) — the
+   portal has two very different consumers (a dense admin table vs a family
+   landing page) and role names invite "just use --card for this" shortcuts
+   that re-couple the surfaces we are trying to decouple.
+
+   LIGHT is the default in :root. `.dark` overrides. Anything not listed here
+   deliberately keeps its current hard-coded colour until its own phase.
+--------------------------------------------------------------------------- */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Surfaces, darkest-background-first in dark mode / lightest in light. */
+  --surface-0: #f7f5fb; /* app background behind panels */
+  --surface-1: #ffffff; /* primary panel / card */
+  --surface-2: #f1edf7; /* nested panel, table header, hover row */
+  --surface-3: #e7e1f0; /* deepest inset, input wells */
+
+  /* Text, strongest-first. */
+  --text-1: #171320; /* headings, primary body */
+  --text-2: #4b4260; /* secondary body, nav links */
+  --text-3: #6f6688; /* muted meta, hints, placeholders */
+
+  /* Lines. */
+  --line-1: #ddd5ea; /* default border */
+  --line-2: #c4b8dc; /* stronger divider, focused border */
+
+  /* Accent (brand purple) and its foreground. */
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-fg: #ffffff;
+  --accent-soft: #f3eeff; /* tinted chip / active nav row */
+
+  /* Status. Kept explicit so light mode gets a legible red, not a dark-mode
+     neon that blows out on white. */
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --success: #059669;
+  --success-soft: #d1fae5;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+
+  --surface-0: #0b0514;
+  --surface-1: #150c24;
+  --surface-2: #1d1233;
+  --surface-3: #271a42;
+
+  --text-1: #ffffff;
+  --text-2: #ddd6fe;
+  --text-3: #a78bfa;
+
+  --line-1: #3b2d63;
+  --line-2: #55408c;
+
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-fg: #ffffff;
+  --accent-soft: #241640;
+
+  --danger: #f87171;
+  --danger-soft: #450a0a;
+  --success: #34d399;
+  --success-soft: #022c22;
+  --warning: #fbbf24;
+  --warning-soft: #451a03;
 }
 
 @theme inline {
@@ -10,19 +96,47 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Token aliases so components can use `bg-surface-1`, `text-text-2`, etc.
+     via Tailwind rather than raw `style={{}}` or arbitrary values. */
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-line-1: var(--line-1);
+  --color-line-2: var(--line-2);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Tell the UA to render form controls, scrollbars and the canvas in the
+   active scheme. Without this a light page still shows a dark scrollbar in
+   dark mode, which reads as "half-broken theme". */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 /* ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import StaffSidebar from "@/components/staff/StaffSidebar";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffShellProps {
@@ -40,7 +41,7 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
   }, [open ]);
 
   return (
-    <div className="flex h-screen bg-[#0B0514] text-white">
+    <div className="flex h-screen bg-surface-0 text-text-1">
       <div className="hidden md:flex">
         <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} />
       </div>
@@ -61,13 +62,13 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="relative z-40 flex items-center gap-3 border-b border-purple-500/20 bg-[#0B0514]/90 px-4 py-3 backdrop-blur-md md:hidden">
+        <div className="relative z-40 flex items-center gap-3 border-b border-line-1 bg-surface-0/90 px-4 py-3 backdrop-blur-md md:hidden">
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-purple-500/20 p-2 text-purple-200 transition hover:bg-purple-900/20"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -80,14 +81,16 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
             <span className="truncate text-sm font-semibold tracking-tight">{toTitleCase(schoolName)}</span>
           </Link>
           <NotificationBell tenantId={subdomain} portal="staff" />
+          <ThemeToggle />
         </div>
 
         {/* Desktop top header */}
-        <div className="relative z-40 hidden items-center justify-end border-b border-purple-500/20 bg-[#0B0514]/90 px-6 py-3 backdrop-blur-md md:flex">
+        <div className="relative z-40 hidden items-center justify-end gap-3 border-b border-line-1 bg-surface-0/90 px-6 py-3 backdrop-blur-md md:flex">
+          <ThemeToggle />
           <NotificationBell tenantId={subdomain} portal="staff" />
         </div>
 
-        <main className="flex-1 overflow-y-auto bg-[#0B0514]">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-surface-0">{children}</main>
       </div>
     </div>
   );

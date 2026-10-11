@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Yesteryear } from "next/font/google";
 import { Toaster } from "@/components/ui/toast";
+import ThemeProvider from "@/components/theme/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -68,11 +69,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      // next-themes writes the theme class onto <html> from a pre-paint script,
+      // which React would otherwise report as a mutated server-rendered
+      // attribute. This is the documented, required opt-out.
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${yesteryear.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

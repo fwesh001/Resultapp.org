@@ -21,7 +21,7 @@ export default async function ClearancePage({
   const school = await getTenant(tenantId);
 
   return (
-    <div className="min-h-screen bg-[#0B0514] px-4 py-10 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-surface-0 px-4 py-10 sm:px-6 lg:px-8">
       <ClearanceManager
         tenantId={tenantId}
         schoolName={school?.name ? toTitleCase(school.name) : tenantId}
