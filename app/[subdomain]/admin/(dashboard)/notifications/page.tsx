@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getTenant } from "@/lib/tenant";
 import NotificationInbox from "@/components/notifications/NotificationInbox";
+import { enforceAdminCapability } from "@/lib/enforceCapability";
 
 
 // RBAC: the admin layout reads this to enforce the moderator boundary.
@@ -16,6 +17,11 @@ export default async function AdminNotificationsPage({
   params: Promise<{ subdomain: string }>;
 }) {
   const { subdomain: routeSubdomain } = await params;
+
+    // RBAC gate. See lib/enforceCapability.ts for why this lives here
+    // rather than in the layout: Next does not expose a page's exports to
+    // its parent layout, so a layout-level check is always a silent no-op.
+    await enforceAdminCapability(params, "notifications");
   const school = await getTenant(routeSubdomain);
   const subdomain = school?.slug ?? routeSubdomain.toLowerCase().trim();
 

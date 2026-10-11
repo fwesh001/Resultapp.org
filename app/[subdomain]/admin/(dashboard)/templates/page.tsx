@@ -3,6 +3,7 @@ import { getTenant } from "@/lib/tenant";
 import { toTitleCase } from "@/lib/format";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { enforceAdminCapability } from "@/lib/enforceCapability";
 
 
 // RBAC: the admin layout reads this to enforce the moderator boundary.
@@ -17,6 +18,11 @@ export default async function AdminTemplatesPage({
   params: Promise<{ subdomain: string }>;
 }) {
   const { subdomain } = await params;
+
+    // RBAC gate. See lib/enforceCapability.ts for why this lives here
+    // rather than in the layout: Next does not expose a page's exports to
+    // its parent layout, so a layout-level check is always a silent no-op.
+    await enforceAdminCapability(params, "templates");
   const tenantId = subdomain.toLowerCase().trim();
 
   // Optional: verify tenant exists (non-blocking for builder preview)

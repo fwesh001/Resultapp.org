@@ -17,6 +17,16 @@ interface AdminShellProps {
    * the ResultApp mark — a school with no branding must not look branded.
    */
   logoUrl?: string;
+  /**
+   * RBAC. Supplied by the dashboard layout from the verified session.
+   * `isModerator` gates admin-only nav entries and the audit/settings/billing
+   * links; `capabilities` is the moderator's allow-list. Absent on a plain
+   * admin session, which the sidebar reads as "show everything".
+   */
+  isModerator?: boolean;
+  capabilities?: readonly string[];
+  /** Who is signed in — staff_id, name or email, for the moderator badge. */
+  actorLabel?: string | null;
   children: React.ReactNode;
 }
 
@@ -28,6 +38,9 @@ export default function AdminShell({
   subdomain,
   schoolName,
   logoUrl,
+  isModerator = false,
+  capabilities,
+  actorLabel,
   children,
 }: AdminShellProps) {
   const [open, setOpen] = useState(false);
@@ -55,6 +68,9 @@ export default function AdminShell({
           subdomain={subdomain}
           schoolName={schoolName}
           logoUrl={logoUrl}
+          isModerator={isModerator}
+          capabilities={capabilities}
+          actorLabel={actorLabel}
         />
       </div>
 
@@ -77,6 +93,9 @@ export default function AdminShell({
               subdomain={subdomain}
               schoolName={schoolName}
               logoUrl={logoUrl}
+              isModerator={isModerator}
+              capabilities={capabilities}
+              actorLabel={actorLabel}
               onNavigate={() => setOpen(false)}
             />
           </div>

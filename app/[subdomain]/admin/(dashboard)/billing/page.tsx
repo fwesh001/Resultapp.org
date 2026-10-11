@@ -1,6 +1,7 @@
 import { getTenant } from "@/lib/tenant";
 import { toTitleCase } from "@/lib/format";
 import BillingClient from "@/components/billing/BillingClient";
+import { enforceAdminCapability } from "@/lib/enforceCapability";
 
 
 // RBAC: the admin layout reads this to enforce the moderator boundary.
@@ -20,6 +21,11 @@ export default async function BillingPage({
   params: Promise<{ subdomain: string }>;
 }) {
   const { subdomain } = await params;
+
+    // RBAC gate. See lib/enforceCapability.ts for why this lives here
+    // rather than in the layout: Next does not expose a page's exports to
+    // its parent layout, so a layout-level check is always a silent no-op.
+    await enforceAdminCapability(params, "billing");
   const tenantId = subdomain.toLowerCase().trim();
   const school = await getTenant(tenantId);
 

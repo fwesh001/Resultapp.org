@@ -45,22 +45,31 @@ export default async function AdminDashboardLayout({
   const { subdomain: raw } = await params;
   const subdomain = raw.toLowerCase().trim();
 
-  const _probe = (children as unknown as { requiredCapability?: string })?.requiredCapability;
-  console.log(`[rbac-probe] ${subdomain} child requiredCapability=${String(_probe)}`);
-
+  // Sessions minted before RBAC, or with a role nobody recognises, are treated
+  // as the plain admin — see normalizeRole() in lib/adminAuth.
   const identity = await readAdminIdentity(subdomain);
   if (!identity) {
     redirect(`/${subdomain}/admin/login`);
   }
 
-  // Capability gate. `(children as ...)?.requiredCapability` is how Next exposes
-  // a child page's exports to its parent layout; a page that forgot to declare
-  // one yields undefined and is treated as requiring an impossible cap.
-  const required = (children as unknown as { requiredCapability?: Capability })
-    ?.requiredCapability;
-  if (required && identity.role !== "admin" && !identity.capabilities.includes(required)) {
-    redirect(`/${subdomain}/admin?denied=${required}`);
-  }
+    // THE LAYOUT DELIBERATELY DOES NOT ENFORCE CAPABILITIES, AND CANNOT.
+  //
+  // It used to try. Next 16 does NOT expose a child page's exports through the
+  // `children` prop, so `(children as {requiredCapability}).requiredCapability`
+  // is `undefined` for every page. Verified live with a probe: two different
+  // pages both logged `requiredCapability=undefined`. Had it shipped, the guard
+  // would have silently never fired and every moderator would have had full
+  // admin access while every test still passed.
+  //
+  // Capability is therefore enforced in the two places that CAN see the route:
+  //   1. every admin page calls enforceAdminCapability() from its own module
+  //   2. every app/api/admin/* proxy calls requireAdminCapability()
+  // and the sidebar hides what the server would refuse anyway. Hiding is UX;
+// enforcing is the page + the proxy.
+    //
+  // What the layout DOES do: resolve the identity once so the sidebar can filter
+  // its nav from one verified read instead of each page re-reading the cookie.
+  const viewer = identity;
 
   const school = await getTenant(subdomain);
   const schoolName = school?.name || subdomain;
@@ -76,7 +85,14 @@ export default async function AdminDashboardLayout({
   const suspended = school == null || school.isActive === false;
 
   return (
-    <AdminShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl}>
+    <AdminShell
+      subdomain={slug}
+      schoolName={schoolName}
+      logoUrl={school?.logoUrl}
+      isModerator={viewer.isModerator}
+      capabilities={viewer.capabilities}
+      actorLabel={viewer.staffId || viewer.fullName || viewer.email || null}
+    >
       {suspended && (
         <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm text-amber-200">
           Portal suspended — public, staff, and report access is paused.{" "}

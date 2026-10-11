@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminAuth";
+import { requireAdminCapability } from "@/lib/adminAuth";
+import { viewerHeaders } from "@/lib/viewerHeaders";
 
 /**
  * Data Export Tool proxy.
@@ -64,8 +65,22 @@ export async function POST(req: NextRequest) {
   }
 
   const tenantId = (body.tenantId || "").toLowerCase().trim();
-  const guard = await requireAdminSession(tenantId);
+
+  // Capability guard: a signed session alone is no longer enough for export —
+  // it must hold the `export` capability. requireAdminSession (signature +
+  // tenant scope) still runs first inside requireAdminCapability.
+  const guard = await requireAdminCapability(tenantId, "export");
   if (guard) return guard;
+
+  // Defence-in-depth: name the acting caller to the backend so the audit row
+  // can record who exported rather than "someone with the secret".
+  const viewer = await viewerHeaders(tenantId);
+  if (!viewer) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized — please sign in as admin" },
+      { status: 401 },
+    );
+  }
 
   const secret = getProxySecret();
   if (!secret) {
@@ -97,6 +112,7 @@ export async function POST(req: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           "X-API-SECRET-KEY": secret,
+          ...viewer,
         },
         body: JSON.stringify(payload),
         cache: "no-store",
