@@ -204,8 +204,12 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
         execute_values(
             cur,
             f"INSERT INTO {db.TENANT_STUDENTS_TABLE} "
-            "(subdomain, student_id, full_name, class_name, gender) VALUES %s",
+            "(subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password) VALUES %s",
             students,
+            # The default password hash is computed inside Postgres (pgcrypto),
+            # so the plaintext never travels as a bound parameter — the same
+            # reason the staff insert below uses a template.
+            template="(%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)",
         )
         counts["students"] = len(students)
 

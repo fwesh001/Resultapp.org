@@ -505,10 +505,15 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                     detail=f"Insufficient slots. Need 1, balance is {slots} ({used} slots used). Top up slots to add more students.",
                 )
             # Insert student
+            # password_hash is computed INSIDE Postgres (pgcrypto) so the
+            # default plaintext never travels as a bound parameter, matching the
+            # staff insert at the bottom of this function. must_change_password
+            # starts TRUE so the portal can nudge the student off the shared
+            # default; it is a soft prompt, never a lockout.
             cur.execute(
                 f"""
-                INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password)
+                VALUES (%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)
                 RETURNING id, subdomain, student_id, full_name, class_name, gender, created_at;
                 """,
                 (tid, student_id, full_name, class_name, gender),
@@ -881,13 +886,20 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
                 ),
             )
 
-        placeholders = ", ".join(["(%s, %s, %s, %s, %s)"] * len(fresh))
+        # Every imported student gets the same hashed default, computed inside
+        # Postgres so the plaintext never becomes a bound parameter — the same
+        # trick the staff batch uses via its `crypt('123456', gen_salt('bf'))`
+        # placeholder. must_change_password starts TRUE for the soft portal
+        # prompt.
+        placeholders = ", ".join(
+            ["(%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)"] * len(fresh)
+        )
         flat: list = []
         for c in fresh:
             flat.extend([tid, c["student_id"], c["full_name"], c["class_name"], c["gender"]])
         cur.execute(
             f"""
-            INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender)
+            INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password)
             VALUES {placeholders}
             ON CONFLICT (subdomain, student_id) DO NOTHING
             RETURNING id;

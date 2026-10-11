@@ -1132,6 +1132,18 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Export router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Student Authentication — first student identity in the platform.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.student_auth import router as student_auth_router
+
+    app.include_router(student_auth_router)
+    logger.info("[App] Student auth router mounted (/api/v1/tenant/{tenant_id}/student/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Student auth router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Credit & Command — token ledger + command center
 # ---------------------------------------------------------------------------
 

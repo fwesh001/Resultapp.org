@@ -2514,6 +2514,26 @@ def init_roster_registry() -> None:
                 UNIQUE(subdomain, student_id)
             );
         """)
+        # Student Authentication — password_hash (default 123456 hashed via
+        # pgcrypto), mirroring tenant_staff EXACTLY.
+        #
+        # The four-step order is load-bearing and is copied from the staff
+        # block below: add NULLABLE -> backfill every NULL -> then constrain.
+        # Constraining first would fail on every pre-existing student; adding
+        # and backfilling in separate statements means a student inserted
+        # between them is still NULL and therefore still receives the default,
+        # so no account can be locked out by the migration itself.
+        cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
+        cur.execute(f"UPDATE {TENANT_STUDENTS_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
+        cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
+        # Soft prompt flag, not a hard gate. Reserved at DDL time on purpose:
+        # adding a NOT NULL DEFAULT column later is a full-table rewrite, and
+        # this is exactly the moment to avoid a migration on a live roster.
+        # No behaviour reads it this sprint — the portal shows a dismissible
+        # banner instead, because a hard first-login redirect on a shared
+        # family device strands whoever did not get to change it.
+        cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT TRUE;")
+        cur.execute(f"UPDATE {TENANT_STUDENTS_TABLE} SET must_change_password = TRUE WHERE must_change_password IS NULL;")
 
         # Staff â€” with password_hash for Staff Authentication (default PIN 123456 hashed via pgcrypto)
         cur.execute(f"""

@@ -515,6 +515,17 @@ def get_report_bundle(
             "result is indistinguishable from an unknown student."
         ),
     ),
+    verified_student: bool = Query(
+        False,
+        description=(
+            "Set by the trusted Next.js proxy when the caller holds a signed "
+            "student_session whose student_id matches the one being requested. "
+            "Unlocks the FULL published bundle for a shared report link. It "
+            "must never be settable by the client: the proxy derives it from the "
+            "httpOnly cookie AND compares the session's student_id against this "
+            "request, so one student can never read another's card."
+        ),
+    ),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -1091,6 +1102,64 @@ def get_report_bundle(
                 "student_id": sid,
                 "school": school_payload,
                 # Deliberately empty — see comment above.
+                "template": None,
+                "groupedTemplate": None,
+                "grades": [],
+                "behavioural": {},
+                "form_teacher_remark": None,
+                "principal_remark": None,
+                "published_at": None,
+                "form_teacher_name": None,
+                "form_teacher_signature_url": None,
+                "form_teacher_signature_data": None,
+                "summary": None,
+                "attendance": None,
+                "termMeta": {"termEnding": None, "newTermBegins": raw_new_term or None},
+            }
+
+        # ---- Student verification gate (Option B: preview vs full) -----------
+        # A published result reached by a shared link (teacher sends a parent
+        # "school.resultapp.org/report/vhs/004") must still WORK — that is the
+        # product promise — but it may not expose scores to anyone who merely
+        # knows a sequential, guessable admission number.
+        #
+        # So an unverified visitor gets the SAME bio-and-term envelope with
+        # every grade-bearing field emptied server-side. This is deliberately
+        # NOT a client-side blur: app/api/report/route.ts forwards the upstream
+        # body verbatim, so anything left in the JSON would still be readable in
+        # devtools. Stripping here is the only real gate.
+        #
+        # Deliberately a 200, not a 404. A 404 would break the shared link that
+        # Option B exists to preserve, and would also re-open the enumeration
+        # oracle the 404-collapse above closed (the parent could tell "preview
+        # shown" from "no such student").
+        #
+        # The financial hold is checked FIRST (the withheld branch above
+        # returns first), so a student cannot use a correct password to see
+        # through an administrative hold.
+        result_locked = (
+            student is not None
+            and is_published
+            and not verified_student
+            and not include_draft
+        )
+        if result_locked:
+            return {
+                "student": student,
+                "result_status": "locked",
+                "locked_message": (
+                    "Sign in with your admission number to view this result."
+                ),
+                "is_published": True,
+                "is_financially_cleared": True,
+                "term": term,
+                "academic_session": _session,
+                "tenant_id": tid,
+                "student_id": sid,
+                "school": school_payload,
+                # Empty for the same reason as the withheld branch: the grading
+                # template reveals the weighting scheme, and the aggregates
+                # reveal this child's rank against every classmate.
                 "template": None,
                 "groupedTemplate": None,
                 "grades": [],
