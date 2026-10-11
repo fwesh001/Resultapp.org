@@ -76,7 +76,12 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
     if not identifier or not password:
         raise HTTPException(status_code=400, detail="identifier and password are required")
 
-    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser, _row_to_dict
+    from services.db_manager import (
+        SCHOOLS_REGISTRY_TABLE,
+        TENANT_STAFF_TABLE,
+        _connect_as_superuser,
+        _row_to_dict,
+    )
 
     conn = None
     try:
@@ -103,11 +108,25 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
                 detail="PASSWORD_NOT_SET: Please set up your admin password using the reset link.",
             )
 
-        # Verify password via pgcrypto crypt (same pattern as staff_auth).
-        # is_email_verified is returned so the frontend can decide whether to
-        # show the verification interstitial. It is disclosed ONLY after valid
-        # credentials are presented, which is why there is no public
-        # "is this address registered?" endpoint to probe.
+        # -------------------------------------------------------------------
+        # CREDENTIAL RESOLUTION — two stores, one endpoint, one uniform failure.
+        #
+        # Store 1: the school's own admin (schools.admin_password_hash). This is
+        #         the full, unrestricted admin.
+        # Store 2: a staff member flagged is_moderator (tenant_staff), who acts
+        #         as a deputy admin. Same login page, restricted portal.
+        #
+        # WHY THE FAILURE MUST BE IDENTICAL FOR BOTH
+        # -----------------------------------------
+        # If store 1 failing produced a different response than store 2, this
+        # endpoint would tell an attacker whether an address is a staff member
+        # before any password is supplied — a roster enumeration oracle for a
+        # platform whose students are minors. So a miss on either path falls
+        # through to the SAME 401 and the same detail string. Nothing in the
+        # response distinguishes "no such staff member" from "wrong password"
+        # from "staff member who is not a moderator".
+        # -------------------------------------------------------------------
+
         cur.execute(
             f"""
             SELECT subdomain, school_name, email, is_email_verified
@@ -117,21 +136,62 @@ def admin_login(tenant_id: str, payload: AdminLoginRequest):
             """,
             (tid, identifier, password),
         )
-        ok_row = cur.fetchone()
-        if ok_row is None:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        ok = _row_to_dict(ok_row, cur)
-        verified = bool(ok.get("is_email_verified"))
-        logger.info(f"[admin_auth] login success {tid}/{identifier} (email_verified={verified})")
-        return {
-            "admin": {
-                "email": ok.get("email"),
-                "school_name": ok.get("school_name"),
+        admin_row = cur.fetchone()
+        if admin_row is not None:
+            admin = _row_to_dict(admin_row, cur)
+            verified = bool(admin.get("is_email_verified"))
+            logger.info(f"[admin_auth] login success {tid}/{identifier} (role=admin)")
+            return {
+                "admin": {
+                    "email": admin.get("email"),
+                    "school_name": admin.get("school_name"),
+                    "email_verified": verified,
+                },
+                "role": "admin",
+                "tenant_id": tid,
                 "email_verified": verified,
-            },
-            "tenant_id": tid,
-            "email_verified": verified,
-        }
+            }
+
+        # Store 2 — moderator by staff credentials. Password checked in SQL via
+        # pgcrypto exactly like the admin and staff paths, so the plaintext is
+        # never a bound parameter and never a Python comparison.
+        cur.execute(
+            f"""
+            SELECT id, staff_id, full_name, email
+            FROM {TENANT_STAFF_TABLE}
+            WHERE subdomain = %s
+              AND is_moderator = TRUE
+              AND (LOWER(staff_id) = LOWER(%s) OR LOWER(COALESCE(email, '')) = LOWER(%s))
+              AND password_hash = crypt(%s, password_hash)
+            LIMIT 1
+            """,
+            (tid, identifier, identifier, password),
+        )
+        mod_row = cur.fetchone()
+        if mod_row is not None:
+            mod = _row_to_dict(mod_row, cur)
+            logger.info(
+                f"[admin_auth] login success {tid}/{mod.get('staff_id')} (role=moderator)"
+            )
+            return {
+                "admin": {
+                    # Deliberately the STAFF identity, not a school email. The
+                    # audit log and every capability decision key off this, so a
+                    # moderator must never be recorded as if they were the
+                    # school's admin.
+                    "email": mod.get("email") or None,
+                    "staff_id": mod.get("staff_id"),
+                    "full_name": mod.get("full_name"),
+                    "school_name": None,
+                    "email_verified": True,
+                },
+                "role": "moderator",
+                "tenant_id": tid,
+                "email_verified": True,
+            }
+
+        # Both stores missed. Same message as a plain wrong admin password.
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     except HTTPException:
         raise
     except Exception as e:

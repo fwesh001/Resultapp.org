@@ -2550,14 +2550,34 @@ def init_roster_registry() -> None:
                 UNIQUE(subdomain, staff_id)
             );
         """)
-        # Ensure existing deployments get password_hash column (NOT NULL constraint added after backfill)
+# Ensure existing deployments get password_hash column (NOT NULL constraint added after backfill)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
         # Enforce NOT NULL after backfill (idempotent)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
-        # Future-proof Active Staff flag â€” additive, defaults TRUE, counts WHERE is_active=TRUE
+        # Future-proof Active Staff flag — additive, defaults TRUE, counts WHERE is_active=TRUE
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
+        # ---------------------------------------------------------------------
+        # Moderator role (deputy admin).
+        #
+        # A SEPARATE boolean, NOT the existing `role` VARCHAR(50). `role` holds
+        # job titles that are display strings ("Teacher", "Principal") and are
+        # shown in the UI; stuffing a capability into it would conflate "what
+        # this person is called" with "what they may do", and a school renaming
+        # a role would silently change permissions.
+        #
+        # Defaults FALSE, so no existing staff member is promoted by the
+        # migration. Promotion is an explicit, audited admin action.
+        #
+        # `moderator_granted_at` (nullable) records WHERE the grant came from in
+        # the audit trail: an audit row says WHO clicked, this says WHEN it took
+        # effect, which is the only way to tell "demoted" from "never granted"
+        # when auditing months later.
+        # ---------------------------------------------------------------------
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_moderator BOOLEAN DEFAULT FALSE;")
+        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_moderator = FALSE WHERE is_moderator IS NULL;")
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS moderator_granted_at TIMESTAMPTZ;")
         # Report signatures: per-staff signature image (URL), self-managed.
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS signature_url TEXT;")
         # Drawn form-teacher signature, stored inline as a base64 PNG data URI.
