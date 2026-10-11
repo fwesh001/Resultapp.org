@@ -189,6 +189,7 @@ class StudentLoginRequest(BaseModel):
 
 
 class StudentPasswordChange(BaseModel):
+    student_id: str = Field(..., description="The authenticated student's admission number")
     current_password: str = Field(...)
     new_password: str = Field(...)
 
@@ -334,11 +335,17 @@ def student_results(tenant_id: str, student_id: str):
 @router.post("/password", summary="Change this student's password")
 def change_student_password(
     tenant_id: str,
-    student_id: str,
     payload: StudentPasswordChange,
     request: Request = None,  # type: ignore[assignment]
 ):
     """Verify the current password, then set the new one.
+
+    student_id arrives in the BODY (via StudentPasswordChange), not as a path
+    or query param. FastAPI silently promotes any untyped path-style
+    parameter to a QUERY parameter, which made an early version of this
+    endpoint reject every real request with 422 "student_id: Field required"
+    while still reading as correct. Putting it in the model keeps the whole
+    payload in one place and matches /login.
 
     The current password is required so a borrowed/left-open session cannot
     silently reassign someone else's credentials. Shares the per-account
@@ -348,7 +355,7 @@ def change_student_password(
     from services.db_manager import TENANT_STUDENTS_TABLE, _connect_as_superuser
 
     tid = _validate_tenant_id(tenant_id)
-    sid = _normalize_student_id(student_id)
+    sid = _normalize_student_id(payload.student_id)
     current = payload.current_password or ""
     new = payload.new_password or ""
 
