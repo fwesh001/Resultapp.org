@@ -23,10 +23,13 @@ export default function ResultLookupWidget({
 }: ResultLookupWidgetProps) {
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
+  const [password, setPassword] = useState("");
   const [term, setTerm] = useState("Term 1");
   // Default-plus-override: global admin term until the user picks otherwise.
   const [termTouched, setTermTouched] = useState(false);
   const globalTerm = useGlobalTerm(subdomain);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!termTouched && globalTerm && term !== globalTerm.term) {
@@ -47,16 +50,8 @@ export default function ResultLookupWidget({
     return v.toLowerCase();
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmedId = studentId.trim();
-    if (!trimmedId) return;
-    // Expand a bare "001" to the stored "vhs/001". Leaves emails and
-    // already-prefixed input alone, so existing users who type the full ID
-    // keep working unchanged (see lib/identityPrefix for why we only expand
-    // unambiguous bare numbers).
-    const expanded = expandStudentId(trimmedId, idPrefix, subdomain);
-    const normalized = normalizePrefixLower(expanded);
+  /** Shared by both paths: build the per-segment-encoded report path. */
+  function buildReportPath(normalized: string): string {
     // Encode each path segment separately so the prefix separator stays a REAL
     // slash: "/report/vhs/001", not "/report/vhs%2F001".
     //
@@ -69,9 +64,51 @@ export default function ResultLookupWidget({
       .split("/")
       .map((seg) => encodeURIComponent(seg))
       .join("/");
-    router.push(
-      `/${subdomain}/report/${encodedPath}?term=${encodeURIComponent(term)}`,
-    );
+    return `/${subdomain}/report/${encodedPath}?term=${encodeURIComponent(term)}`;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmedId = studentId.trim();
+    if (!trimmedId) return;
+
+    setError("");
+    setBusy(true);
+
+    // Expand a bare "001" to the stored "vhs/001". Leaves emails and
+    // already-prefixed input alone, so existing users who type the full ID
+    // keep working unchanged (see lib/identityPrefix for why we only expand
+    // unambiguous bare numbers).
+    const expanded = expandStudentId(trimmedId, idPrefix, subdomain);
+    const normalized = normalizePrefixLower(expanded);
+
+    try {
+      // Verify the password BEFORE navigating. The backend strips grades
+      // server-side for anyone without a verified session, so navigating first
+      // would land the student on a locked preview and require a second trip
+      // through the login form.
+      const res = await fetch("/api/student/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: subdomain, identifier: expanded, password }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error || "Invalid admission number or password.");
+        setBusy(false);
+        // Clear only the password. Re-typing the admission number after a
+        // mistyped password is exactly the wrong thing to ask a parent to do.
+        setPassword("");
+        return;
+      }
+
+      setPassword("");
+      router.push(buildReportPath(normalized));
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -108,6 +145,37 @@ export default function ResultLookupWidget({
       </p>
 
       <label
+        htmlFor="student-password"
+        className="mt-4 block text-sm font-medium text-purple-200"
+      >
+        Password
+      </label>
+      <input
+        id="student-password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="e.g., 123456"
+        required
+        autoComplete="current-password"
+        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+      />
+      <p className="mt-2 text-xs text-purple-300/50">
+        First time here? Use the default password{" "}
+        <span className="font-mono text-purple-200/80">123456</span>, then change it in the{" "}
+        <span className="font-medium text-purple-200/80">Student Portal</span>.
+      </p>
+
+      {error ? (
+        <p
+          role="alert"
+          className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-200"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <label
         htmlFor="term"
         className="mt-4 block text-sm font-medium text-purple-200"
       >
@@ -132,9 +200,10 @@ export default function ResultLookupWidget({
 
       <button
         type="submit"
-        className="mt-6 w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514]"
+        disabled={busy}
+        className="mt-6 w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:opacity-60"
       >
-        View Report Card
+        {busy ? "Checking…" : "View Report Card"}
       </button>
     </form>
   );

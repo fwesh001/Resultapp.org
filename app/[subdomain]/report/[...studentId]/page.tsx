@@ -3,6 +3,7 @@ import { ReportControlBar } from "@/components/report-card/ReportControlBar";
 import { getTenant } from "@/lib/tenant";
 import { currentAcademicSession } from "@/lib/format";
 import { hasAdminSession } from "@/lib/adminAuth";
+import { studentMayView } from "@/lib/studentAuth";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
@@ -76,10 +77,10 @@ export default async function ReportPage({
   searchParams,
 }: {
   params: Promise<{ subdomain: string; studentId: string | string[] }>;
-  searchParams: Promise<{ term?: string }>;
+  searchParams: Promise<{ term?: string; academic_session?: string }>;
 }) {
   const { subdomain, studentId: rawStudentId } = await params;
-  const { term } = await searchParams;
+  const { term, academic_session: sessionParam } = await searchParams;
 
   const tenantId = subdomain.toLowerCase().trim();
   const studentId = normalizeStudentId(rawStudentId);
@@ -93,7 +94,14 @@ export default async function ReportPage({
   // Session resolution must match the backend gate exactly: the tenant's
   // configured session wins, otherwise the derived one. The backend reads
   // schools.current_session for the same reason.
-  const effectiveSession = school?.currentSession?.trim() || derivedSession;
+  //
+  // An explicit ?academic_session wins over both, because that is how the
+  // student portal's "past results" archive links to a historical year. The
+  // backend independently re-checks that override against result_publications
+  // before honouring it, so a guessed session cannot unlock an unpublished term.
+  const requestedSession = (sessionParam || "").trim();
+  const effectiveSession =
+    requestedSession || school?.currentSession?.trim() || derivedSession;
 
   // Suspended tenants: report cards blocked for everyone except a signed-in
   // tenant admin (who keeps the billing hatch via the portal link below).
@@ -107,11 +115,27 @@ export default async function ReportPage({
   // can never disagree.
   const isAdminPreview = await hasAdminSession(tenantId);
 
+  // Student verification: is this visitor signed in AS the student whose card
+  // they are opening? Uses the same slash/compact-tolerant match the API proxy
+  // uses, so vhs004 viewing a vhs/004 link is recognized rather than being
+  // shown a locked preview of their own card.
+  const studentAuthorized = isAdminPreview
+    ? false
+    : await studentMayView(tenantId, studentId);
+
   // Single viewer scope handed to the card. This is the ONLY authority for
   // admin-only UI (the Result Command Center): it comes from the httpOnly
   // session cookie, resolved here server-side, and the client re-decides
   // nothing. Defaulting to "public" on any failure keeps the leak closed.
-  const viewer: "admin" | "public" = isAdminPreview ? "admin" : "public";
+  //
+  // "student" is NOT an authorization decision by itself — the grades in the
+  // payload are gated by /api/report independently. This value only tells the
+  // UI which affordances to offer (sign-in CTA, printing).
+  const viewer: "admin" | "student" | "public" = isAdminPreview
+    ? "admin"
+    : studentAuthorized
+      ? "student"
+      : "public";
 
   // Whether the visitor actually chose a term. When they did not, the page
   // fell back to the tenant's configured default term, which lets the public
@@ -142,6 +166,11 @@ export default async function ReportPage({
     isPublished = false;
   }
 
+  // Printing is for a VERIFIED visitor only. A locked preview has no grades to
+  // print, and letting an unverified visitor print the envelope would produce a
+  // blank card that looks like a genuine (empty) result — worse than refusing.
+  const canPrint = isPublished && (isAdminPreview || studentAuthorized);
+
   return (
     <div className="min-h-screen bg-[#0B0514] py-10 px-4 print:bg-white print:py-0">
       {/* Floating Control Bar — hidden during print */}
@@ -150,7 +179,7 @@ export default async function ReportPage({
         studentId={studentId}
         term={effectiveTerm}
         schoolName={school?.name || null}
-        canPrint={isPublished}
+        canPrint={canPrint}
       />
 {!isPublished && viewer === "admin" && (
         <div className="mx-auto mb-3 flex max-w-4xl justify-center print:hidden">
@@ -162,10 +191,11 @@ export default async function ReportPage({
 
       {/* Digital Paper container is rendered inside StudentReportCard for lock overlay coordination */}
       <StudentReportCard
-        key={`${tenantId}-${studentId}-${effectiveTerm}`}
+        key={`${tenantId}-${studentId}-${effectiveTerm}-${effectiveSession}`}
         tenantId={tenantId}
         studentId={studentId}
         term={effectiveTerm}
+        academicSession={effectiveSession}
         isPublished={isPublished}
         viewer={viewer}
         termWasExplicit={termWasExplicit}

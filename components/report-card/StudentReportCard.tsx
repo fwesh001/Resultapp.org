@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
 import { Lock, CreditCard } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { REPORT_READY_EVENT } from "@/components/report-card/ReportControlBar";
 import { ReportErrorState } from "@/components/report-card/ReportErrorState";
@@ -68,19 +69,26 @@ interface GroupedTemplate {
 interface ReportResponse {
   student: ReportStudent | null;
   /**
-   * Explicit server-authoritative status: "released" | "draft" | "withheld".
-   * "withheld" means the school published the result but the bursary placed the
-   * student on an Administrative Hold for unpaid fees. Consumers must read this
-   * rather than inferring status from `grades.length`, because a withheld
-   * response is a 200 with deliberately empty arrays.
+   * Explicit server-authoritative status:
+   *   "released" — full card, viewer cleared
+   *   "draft"    — unpublished draft (admin scope only)
+   *   "withheld" — published, but on an Administrative Hold for unpaid fees
+   *   "locked"   — published, reached by a shared link, viewer NOT signed in
+   *
+   * Consumers must read this rather than inferring status from `grades.length`,
+   * because BOTH "withheld" and "locked" are 200 responses with deliberately
+   * empty arrays. Distinguishing them from grade count alone is impossible, and
+   * guessing would render a bursary hold as a sign-in prompt.
    */
-  result_status?: "released" | "draft" | "withheld";
+  result_status?: "released" | "draft" | "withheld" | "locked";
   /**
    * Server-rendered, human-readable explanation shown on the locked card.
    * Sourced from the backend rather than hardcoded here so the family-facing
    * wording and the term name have a single source of truth.
    */
   withheld_message?: string | null;
+  /** Shown on the sign-in prompt when the visitor is not yet verified. */
+  locked_message?: string | null;
   is_financially_cleared?: boolean;
   template: GradingTemplatePayload | null;
   groupedTemplate?: GroupedTemplate | null;
@@ -131,13 +139,19 @@ interface StudentReportCardProps {
    * admin-only Result Command Center UI renders for the "admin" scope and
    * for nothing else. It is never derived from client input.
    */
-  viewer: "admin" | "public";
+  viewer: "admin" | "student" | "public";
   /**
    * True when the visitor arrived without an explicit `?term=`, i.e. the page
    * fell back to the tenant's configured default term. Used only to offer a
    * term picker on the public "Result Not Available" card.
    */
   termWasExplicit?: boolean;
+  /**
+   * Academic session resolved server-side by the report page. Forwarded to the
+   * client fetch so the card shows the same historical result the page resolved.
+   * Empty for the common "current term" case.
+   */
+  academicSession?: string | null;
   schoolName?: string | null;
   schoolLogoUrl?: string | null;
   schoolMotto?: string | null;
@@ -171,6 +185,11 @@ interface StudentReportCardProps {
  *                 Grades are absent from the response body entirely, so this
  *                 is a locked card, never a blurred one (PUBLIC ONLY — the
  *                 admin scope always receives the full bundle).
+ *   locked      — published, reached by a shared link, but the visitor has NOT
+ *                 signed in as this student. Name/class/term only; the backend
+ *                 stripped grades, remarks, ranks and the grading template.
+ *                 This card exists so shared links keep working while scores
+ *                 stay private.
  *   adminDraft  — blurred draft + Result Command Center (ADMIN ONLY)
  */
 type ReportState =
@@ -180,6 +199,7 @@ type ReportState =
   | "noTerm"
   | "transport"
   | "withheld"
+  | "locked"
   | "adminDraft";
 
 function gradeFromTotal(total: number): string {
@@ -226,7 +246,7 @@ function formatTermDate(raw: string | null | undefined): string {
   return s;
 }
 
-export function StudentReportCard({ tenantId, studentId, term, isPublished = false, viewer, termWasExplicit = true, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone, principalSignatureData }: StudentReportCardProps) {
+export function StudentReportCard({ tenantId, studentId, term, academicSession: requestedSession, isPublished = false, viewer, termWasExplicit = true, schoolName, schoolLogoUrl, schoolMotto, schoolEmail, schoolPhone, principalSignatureData }: StudentReportCardProps) {
   // Draft gate: anything not confirmed in result_publications renders as a
   // free preview (blurred, watermarked, unprintable). Re-prints cost 0
   // because the gate is the publication row, not a subscription flag.
@@ -245,6 +265,15 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
   // whereas this is a positive, explicit statement from the backend that the
   // result exists and is being withheld for non-payment.
   const [withheldResponse, setWithheldResponse] = useState(false);
+  // Server-authoritative "published, but this visitor is not signed in as the
+  // student" flag. Tracked separately from notFoundResponse (which must stay
+  // indistinguishable from an unknown student) and from withheldResponse (a
+  // bursary hold). All three are distinct real-world outcomes and must never be
+  // collapsed into one another:
+  //   notFound  — cannot confirm the student exists
+  //   withheld  — exists, on an administrative hold for fees
+  //   locked    — exists, published, needs the student's password
+  const [lockedResponse, setLockedResponse] = useState(false);
   // Broken/dead logo URLs collapse to the text-only header (no broken icon).
   const [imgError, setImgError] = useState(false);
   // Signature images fail independently of the logo: a dead signature URL must
@@ -265,8 +294,19 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
       setError(null);
       setNotFoundResponse(false);
       setWithheldResponse(false);
+      setLockedResponse(false);
       try {
-        const url = `/api/report?tenant_id=${encodeURIComponent(tenantId)}&student_id=${encodeURIComponent(studentId)}&term=${encodeURIComponent(term)}`;
+        // academic_session is forwarded so the client fetch resolves the SAME
+        // historical result the server-side page resolved. Without it the proxy
+        // falls back to the school's current session, so an archive link would
+        // render a full-size page whose card silently showed a different year.
+        const qs = new URLSearchParams({
+          tenant_id: tenantId,
+          student_id: studentId,
+          term,
+        });
+        if (requestedSession) qs.set("academic_session", requestedSession);
+        const url = `/api/report?${qs.toString()}`;
         const res = await fetch(url, { cache: "no-store" });
         const json = (await res.json().catch(() => ({}))) as ReportResponse & { error?: string; success?: boolean };
         if (res.status === 404) {
@@ -290,6 +330,15 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           // a hold, and would rely on absence-of-data to drive an access state.
           if (response.result_status === "withheld") {
             setWithheldResponse(true);
+            announceReportReady(false);
+            return;
+          }
+          // Same server-authoritative rule for the shared-link lock. The backend
+          // has already stripped every grade-bearing field, so the card can
+          // safely show the bio envelope plus a sign-in prompt — there is
+          // nothing hidden behind a blur for anyone to reveal.
+          if (response.result_status === "locked") {
+            setLockedResponse(true);
             announceReportReady(false);
             return;
           }
@@ -445,6 +494,13 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
     // the full bundle so they can run the school's business, so this branch is
     // public-only and the admin falls through to the normal published card.
     state = isAdmin ? "published" : "withheld";
+  } else if (lockedResponse) {
+    // Published, but the visitor has not signed in as this student. Like the
+    // hold above, this sits high in the chain and is public-only: an admin
+    // scope never receives it (the backend grants include_draft first), and a
+    // student scope never receives it either (the backend grants
+    // verified_student first). The data behind it is already stripped.
+    state = isAdmin ? "published" : "locked";
   } else if (isAdmin && isLocked) {
     state = "adminDraft";
   } else if (isPublished) {
@@ -524,6 +580,92 @@ export function StudentReportCard({ tenantId, studentId, term, isPublished = fal
           { label: "Back to Portal", href: `/${tenantId}`, variant: "outline" },
         ]}
       />
+    );
+  }
+
+  if (state === "locked") {
+    // Shared-link preview.
+    //
+    // Reached when the backend returned result_status: "locked" on a 200 —
+    // the result IS published and the student DOES exist, but the visitor has
+    // not proved they are that student. By the time this renders, grades,
+    // remarks, rankings, behavioural data and the grading template have already
+    // been stripped server-side, so this is a disclosure of identity, not a blur
+    // over data. There is nothing behind it for anyone to reveal.
+    //
+    // The student envelope (name, class, term) is shown deliberately: it is
+    // what makes a shared link useful to a parent who has not signed in yet,
+    // and it is the confirmation they need to know they are looking at the
+    // right child.
+    //
+    // KNOWN, ACCEPTED TRADE-OFF: like the withheld card, this confirms the
+    // admission number is real. Same documented, mitigated risk (the report
+    // endpoint's 30 req/60s per-IP throttle). Do not "fix" it by 404ing — that
+    // would break the shared link this state exists to support.
+    const signInHref =
+      `/${tenantId}/student/login` +
+      `?next=${encodeURIComponent(
+        `/${tenantId}/report/${studentId
+          .split("/")
+          .map((s) => encodeURIComponent(s))
+          .join("/")}?term=${encodeURIComponent(term)}${
+          academicSession ? `&academic_session=${encodeURIComponent(academicSession)}` : ""
+        }`,
+      )}`;
+
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-10">
+        <div className="rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 text-center shadow-lg shadow-purple-950/30 sm:p-8">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-purple-500/25 bg-purple-900/20">
+            <Lock className="h-5 w-5 text-purple-300" />
+          </div>
+
+          <h1 className="mt-4 text-xl font-bold tracking-tight text-white">
+            Result available
+          </h1>
+
+          {data?.student?.full_name ? (
+            <p className="mt-2 text-base text-white">
+              <span className="font-semibold">{data.student.full_name}</span>
+              {data.student.class_name ? (
+                <span className="text-purple-300"> · {data.student.class_name}</span>
+              ) : null}
+            </p>
+          ) : null}
+
+          <p className="mt-1 text-sm text-purple-200/70">
+            {data?.term || term}
+            {data?.academic_session ? (
+              <span className="text-purple-300/70"> ({data.academic_session})</span>
+            ) : null}
+          </p>
+
+          <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-purple-200/60">
+            {data?.locked_message?.trim() ||
+              "Sign in with the admission number and password to view this result."}
+          </p>
+
+          <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Link
+              href={signInHref}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white transition hover:bg-purple-500 sm:w-auto"
+            >
+              Sign in to view result
+            </Link>
+            <Link
+              href={`/${tenantId}`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-purple-500/25 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-900/20 sm:w-auto"
+            >
+              Back to {schoolName || tenantId}
+            </Link>
+          </div>
+
+          <p className="mt-5 text-[0.7rem] leading-5 text-purple-300/40">
+            Grades are only shown to the student. First time here? Use the default password{" "}
+            <span className="font-mono">123456</span>.
+          </p>
+        </div>
+      </div>
     );
   }
 
