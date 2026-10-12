@@ -154,7 +154,22 @@ def list_tenants(
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        # Explicit columns (avoid SELECT * fragility) — same order as get_school_by_subdomain
+
+        # Capture the CURRENT email before the UPDATE overwrites it.
+        #
+        # `RETURNING` gives the post-update row, so reading email from it would
+        # file the new address under "old_email" — an audit trail that reports
+        # the wrong value is worse than one that reports none, because it looks
+        # authoritative. Only fetched when email is actually changing.
+        old_email = None
+        if "email" in updates:
+            cur.execute(
+                f"SELECT email FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+                (tid,),
+            )
+            prior = cur.fetchone()
+            old_email = _row_to_dict(prior, cur).get("email") if prior else None
+
         cur.execute(
             f"""
             SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} {where_sql};
@@ -383,7 +398,9 @@ def update_tenant_profile(
                 # into the audit row would turn the log into a data copy.
                 details={
                     "fields": sorted(updates.keys()),
-                    "old_email": school.get("email"),
+                    # Read before the UPDATE, so this really is the address
+                    # that stopped working.
+                    "old_email": old_email,
                 } if email_changed else {"fields": sorted(updates.keys())},
                 actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
                 actor_id=x_viewer_id or None,

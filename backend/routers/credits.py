@@ -609,9 +609,10 @@ def publish_reports(
 
         # Audit row, written AFTER the mutation.
         #
-        # Deliberately NOT inside this request's transaction: log_audit() opens
-        # its own connection and is documented best-effort, so a logging failure
-        # must not roll back a publication the school already paid credits for.
+        # Deliberately NOT inside this request's transaction: log_admin_action()
+        # opens its own connection and is documented best-effort, so a logging
+        # failure must not roll back a publication the school already paid
+        # credits for.
         # The cost of that choice is a tiny window where the publish succeeded
         # and the row was never written; the reverse — losing a paid publish to
         # a logging hiccup — is the worse failure.
@@ -621,21 +622,29 @@ def publish_reports(
         published_count = int(
             result.get("published_count", result.get("published", 0)) or 0
         )
-        log_audit(
-            actor=actor,
-            action="results.publish",
-            subdomain=tid,
-            actor_id=x_viewer_id or None,
-            actor_type=(x_viewer_role or "admin"),
-            details={
-                "term": payload.term,
-                "academic_session": session,
-                "student_count": len(payload.student_ids),
-                "published": published_count,
-                "credits_spent": result.get("credits_spent"),
-                "new_balance": result.get("new_balance"),
-            },
-        )
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                "results.publish",
+                subdomain=tid,
+                details={
+                    "term": payload.term,
+                    "academic_session": session,
+                    "student_count": len(payload.student_ids),
+                    "published": published_count,
+                    "credits_spent": result.get("credits_spent"),
+                    "new_balance": result.get("new_balance"),
+                },
+                # Prefer the forwarded viewer over `published_by`, which is a
+                # free-text label the caller types into a form and can therefore
+                # put anyone else's name in. The label is kept as a fallback.
+                actor=(x_viewer_id or x_viewer_label or actor or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _ae:  # pragma: no cover - best-effort
+            _logger.warning(f"[credits] Publish audit failed for '{tid}': {_ae}")
 
         return {"success": True, **result}
     except ValueError as e:

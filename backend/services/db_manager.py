@@ -1040,8 +1040,28 @@ def log_admin_action(
     actor_id: Optional[str] = None,
     actor_type: str = "superadmin",
 ) -> None:
-    """Append-only audit record for manual superadmin operations. Best-effort (never raises)."""
+    """Append-only audit record. Best-effort — never raises.
+
+    `actor_id` is a UUID column. Tenant staff are keyed by an admission-number
+    STRING (`staff/0099`), not a UUID, so a moderator's id cannot go in that
+    column. Passing it makes Postgres reject the whole INSERT, and because this
+    function is deliberately best-effort the failure is swallowed — the audit
+    trail then silently loses every moderator action, which is the opposite of
+    what the RBAC work was for.
+
+    So `actor_id` is only sent when it is a real UUID; the human-readable
+    identifier always goes in `actor`, which is a VARCHAR and always works.
+    """
     import json as _json
+    import uuid as _uuid
+
+    # Only forward something the UUID column can actually hold.
+    safe_actor_id: Optional[str] = None
+    if actor_id:
+        try:
+            safe_actor_id = str(_uuid.UUID(str(actor_id).strip()))
+        except (ValueError, AttributeError, TypeError):
+            safe_actor_id = None
 
     conn = None
     try:
@@ -1052,7 +1072,14 @@ def log_admin_action(
             INSERT INTO {AUDIT_LOGS_TABLE} (actor, action, subdomain, details, actor_id, actor_type)
             VALUES (%s, %s, %s, %s, %s, %s);
             """,
-            (actor, action, subdomain, _json.dumps(details or {}), actor_id, actor_type or "superadmin"),
+            (
+                actor,
+                action,
+                subdomain,
+                _json.dumps(details or {}),
+                safe_actor_id,
+                actor_type or "superadmin",
+            ),
         )
         conn.commit()
     except Exception as e:

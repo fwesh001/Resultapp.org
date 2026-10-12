@@ -1,0 +1,28 @@
+fix(audit): three silent failures found by driving the live route
+
+None of these show up in the type checker, and all three were found by
+mutating real data and reading the log back.
+
+1. actor_id is a UUID column; tenant staff are keyed by a string admission
+   number. Every moderator action raised "invalid input syntax for type uuid"
+   and log_admin_action -- being best-effort -- swallowed it, so the trail
+   silently dropped exactly the deputy actions the RBAC work exists to catch.
+   actor_id is now UUID-validated before insert; the readable identifier
+   always goes in `actor`, which is a VARCHAR.
+
+2. credits.py called log_audit(), a helper that does not exist and was never
+   imported. The call was unguarded, so a NameError raised AFTER the publish
+   committed would have returned 500 for work already charged to the school.
+   Now log_admin_action, imported in-scope like every other call site, wrapped
+   in try/except.
+
+3. The profile audit read old_email from the UPDATE's RETURNING clause, so it
+   recorded the NEW address as the old one. A trail that confidently reports
+   the wrong value is worse than one that reports none. The prior email is now
+   SELECTed before the UPDATE.
+
+Plus a regression harness (42 checks) asserting each failure mode is absent
+rather than asserting a row exists, so it stays green on a quiet tenant.
+
+The harness checks call sites against imports, because an undefined helper
+is invisible until the exact branch runs.
