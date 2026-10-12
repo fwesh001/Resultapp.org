@@ -425,6 +425,56 @@ def init_schools_registry() -> None:
             CREATE INDEX IF NOT EXISTS ix_billing_ledger_created
             ON billing_ledger (created_at DESC);
         """)
+
+        # Pending registrations — the server-side hold that makes webhook-driven
+        # provisioning possible.
+        #
+        # WHY THIS EXISTS
+        # ---------------
+        # Registration collects the admin password in the browser and then hands
+        # the visitor to Flutterwave. If that tab closes, crashes, or loses
+        # signal after the charge settles, the browser callback never reaches
+        # /api/register-school, and the school has paid for a portal that does
+        # not exist.
+        #
+        # The webhook cannot rescue that on its own, because the admin password
+        # is DELIBERATELY ABSENT from the checkout `meta`: meta is transmitted
+        # to Flutterwave and retained in their transaction record, so including
+        # it would disclose a credential to a third party the school never
+        # agreed to share with. That exclusion is a remediated P0 and stays.
+        #
+        # So the details are parked HERE before checkout opens, keyed by the
+        # tx_ref both sides know, and either path can finish the job:
+        # the browser callback, or the webhook when the callback never arrives.
+        #
+        # `payload` holds the registration with the password field already
+        # encrypted by the Next tier (AES-256-GCM). The database never sees a
+        # plaintext credential, and rows are short-lived and deleted on success.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS pending_registrations (
+                id           SERIAL PRIMARY KEY,
+                tx_ref       VARCHAR(128) NOT NULL UNIQUE,
+                subdomain    VARCHAR(60) NOT NULL,
+                payload      JSONB NOT NULL,
+                status       VARCHAR(20) NOT NULL DEFAULT 'pending'
+                             CHECK (status IN ('pending','completed','expired','failed')),
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at   TIMESTAMPTZ NOT NULL,
+                completed_at TIMESTAMPTZ
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_pending_registrations_status
+            ON pending_registrations (status, expires_at);
+        """)
+        # Opportunistic cleanup. Checkout windows are minutes long, so anything
+        # still pending well past expiry is abandoned and its encrypted payload
+        # should not linger. Runs on init rather than on a timer because there is
+        # no scheduler here; the volume is negligible either way.
+        cur.execute("""
+            DELETE FROM pending_registrations
+            WHERE expires_at < NOW() - INTERVAL '1 day';
+        """)
         # Command Center: immutable NGN revenue per purchase (0 = free/legacy).
         cur.execute(f"""
             ALTER TABLE {BILLING_LEDGER_TABLE}
@@ -1029,6 +1079,10 @@ def admin_password_is_set(subdomain: str) -> bool:
 
 AUDIT_LOGS_TABLE = "audit_logs"
 PLATFORM_ADMINS_TABLE = "platform_admins"
+# Sealed registration details parked before checkout so a webhook can finish a
+# registration whose browser callback never arrived. See init_schools_registry()
+# for the full rationale.
+PENDING_REGISTRATIONS_TABLE = "pending_registrations"
 
 VALID_PLATFORM_ROLES = ("owner", "admin", "support")
 

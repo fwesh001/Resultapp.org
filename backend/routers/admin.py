@@ -1471,3 +1471,225 @@ def platform_stats():
                 conn.close()
             except Exception:
                 pass
+
+# ---------------------------------------------------------------------------
+# Pending registrations
+# ---------------------------------------------------------------------------
+#
+# The server-side hold that lets a webhook finish a registration whose browser
+# callback never arrived. See backend/services/db_manager.py for the rationale,
+# and lib/pendingRegistrations.ts for the Next-tier caller.
+#
+# The admin password is already encrypted by the Next tier before it reaches
+# this table. Nothing here decrypts it, logs it, or returns it — these endpoints
+# are a keyed mailbox, not a credential store.
+
+
+class PendingRegistrationIn(BaseModel):
+    tx_ref: str
+    subdomain: str
+    payload: dict
+    ttl_minutes: int = 45
+
+
+class TxRefIn(BaseModel):
+    tx_ref: str
+
+
+@router.post("/pending-registrations", summary="Park a registration before checkout")
+def create_pending_registration(body: PendingRegistrationIn):
+    """Store the sealed registration, keyed by tx_ref.
+
+    Idempotent on tx_ref via ON CONFLICT: a retry from the wizard must not
+    overwrite a hold that a webhook has already claimed.
+    """
+    import json as _json
+
+    from services.db_manager import _connect_as_superuser, PENDING_REGISTRATIONS_TABLE
+
+    tx_ref = (body.tx_ref or "").strip()
+    subdomain = (body.subdomain or "").strip().lower()
+    if not tx_ref or len(tx_ref) > 128:
+        raise HTTPException(status_code=400, detail="A valid tx_ref is required")
+    if not subdomain or len(subdomain) > 60:
+        raise HTTPException(status_code=400, detail="A valid subdomain is required")
+
+    ttl = max(5, min(int(body.ttl_minutes or 45), 1440))
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {PENDING_REGISTRATIONS_TABLE} (tx_ref, subdomain, payload, expires_at)
+            VALUES (%s, %s, %s::jsonb, NOW() + (%s || ' minutes')::interval)
+            ON CONFLICT (tx_ref) DO NOTHING
+            RETURNING id, status, expires_at;
+            """,
+            (tx_ref, subdomain, _json.dumps(body.payload or {}), str(ttl)),
+        )
+        row = cur.fetchone()
+        if row is None:
+            # Already exists. Report the stored row rather than replacing it:
+            # overwriting could un-claim a hold a webhook is mid-provision on.
+            cur.execute(
+                f"SELECT id, status, expires_at FROM {PENDING_REGISTRATIONS_TABLE} WHERE tx_ref = %s;",
+                (tx_ref,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return {
+            "success": True,
+            "tx_ref": tx_ref,
+            "status": row[1] if row else "pending",
+            "expires_at": row[2].isoformat() if row and row[2] else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception("[admin] pending-registration create failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not hold registration: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.get("/pending-registrations", summary="Fetch a held registration by tx_ref")
+def get_pending_registration(tx_ref: str):
+    """Returns the SEALED payload. The caller decrypts the password field."""
+    from services.db_manager import _connect_as_superuser, PENDING_REGISTRATIONS_TABLE
+
+    tx_ref = (tx_ref or "").strip()
+    if not tx_ref:
+        raise HTTPException(status_code=400, detail="tx_ref is required")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT tx_ref, subdomain, payload, status, created_at, expires_at
+            FROM {PENDING_REGISTRATIONS_TABLE}
+            WHERE tx_ref = %s;
+            """,
+            (tx_ref,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No held registration for that tx_ref")
+        return {
+            "tx_ref": row[0],
+            "subdomain": row[1],
+            "payload": row[2],
+            "status": row[3],
+            "created_at": row[4].isoformat() if row[4] else None,
+            "expires_at": row[5].isoformat() if row[5] else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("[admin] pending-registration read failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not read hold: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/pending-registrations/claim", summary="Atomically claim a hold")
+def claim_pending_registration(body: TxRefIn):
+    """Flip pending -> completed ONLY if still pending.
+
+    This is the mutual-exclusion primitive. Two runners (the browser callback
+    and the webhook) both reach this point in a healthy system; whoever wins
+    proceeds to provision and the loser gets a 409 and stops. Without it, a
+    webhook landing mid-callback would launch a second provision for a school
+    that is already being created.
+    """
+    from services.db_manager import _connect_as_superuser, PENDING_REGISTRATIONS_TABLE
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {PENDING_REGISTRATIONS_TABLE}
+            SET status = 'completed', completed_at = NOW()
+            WHERE tx_ref = %s AND status = 'pending' AND expires_at > NOW()
+            RETURNING subdomain;
+            """,
+            ((body.tx_ref or "").strip(),),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        if row is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Hold is not claimable (already claimed, failed, or expired)",
+            )
+        return {"success": True, "subdomain": row[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception("[admin] pending-registration claim failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not claim hold: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/pending-registrations/release", summary="Release a claim so a retry can proceed")
+def release_pending_registration(body: TxRefIn):
+    """Return a claimed hold to pending after a FAILED provision.
+
+    Without this, a transient FastAPI outage would permanently strand a paid
+    school: the hold is already 'completed' so neither the browser nor the
+    webhook would ever retry, and the customer has paid for nothing.
+    """
+    from services.db_manager import _connect_as_superuser, PENDING_REGISTRATIONS_TABLE
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {PENDING_REGISTRATIONS_TABLE}
+            SET status = 'pending', completed_at = NULL,
+                expires_at = NOW() + INTERVAL '30 minutes'
+            WHERE tx_ref = %s AND status = 'completed';
+            """,
+            ((body.tx_ref or "").strip(),),
+        )
+        conn.commit()
+        return {"success": True, "released": cur.rowcount}
+    except Exception as e:
+        _logger.exception("[admin] pending-registration release failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not release hold: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass

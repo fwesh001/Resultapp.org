@@ -33,11 +33,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const secretKey =
-    process.env.FLUTTERWAVE_SECRET_KEY ||
-    process.env.FLW_SECRET_KEY ||
-    process.env.FLW_SECRET_HASH ||
-    "";
+  // Canonical name only — see app/api/billing/credits/route.ts. Note that
+  // FLW_SECRET_HASH was never a hash here; it was used as a bearer secret.
+  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || "";
 
   if (!secretKey) {
     // Never claim a payment failed when we simply cannot check. The wizard

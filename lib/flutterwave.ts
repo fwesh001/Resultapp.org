@@ -7,10 +7,24 @@
  * - 500 to 999 students: ₦90 per student (10% off)
  * - 1000+ students: ₦80 per student (20% off)
  *
- * Env:
- * - FLUTTERWAVE_SECRET_KEY / FLW_SECRET_KEY (server)
- * - NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY / NEXT_PUBLIC_FLW_PUBLIC_KEY (client)
- * - FLUTTERWAVE_WEBHOOK_SECRET_HASH (server webhook verification)
+ * Env (EXACTLY these three, plus one demo-only):
+ * - NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY (client)  — LIVE public key
+ * - FLUTTERWAVE_SECRET_KEY            (server)  — LIVE secret key
+ * - FLUTTERWAVE_WEBHOOK_SECRET_HASH   (server)  — LIVE webhook hash
+ * - NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY (client) — TEST key, demo tenant ONLY
+ *
+ * ONE NAME PER SETTING. This file previously read each value through a chain of
+ * aliases (FLW_SECRET_KEY, FLW_SECRET_HASH, NEXT_PUBLIC_FLW_PUBLIC_KEY,
+ * NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY_TEST, FLUTTERWAVE_WEBHOOK_HASH). That is
+ * what let a live secret sit in .env under an unrecognised name for months while
+ * the test key carried on being used in production, and it made it impossible
+ * to tell which variable was authoritative. An alias chain is a way of losing
+ * configuration without noticing.
+ *
+ * Nothing here substitutes a placeholder for a missing key. A missing key is a
+ * deployment error and throws; it must never silently become a TEST key, because
+ * a test-key checkout looks identical to a real one until the school discovers
+ * no money moved.
  */
 
 export const PRICE_PER_STUDENT = 100;
@@ -39,6 +53,7 @@ export function calculateTotalAmount(studentCount: number): number {
   return count * pricePerStudent;
 }
 
+import crypto from "node:crypto";
 import { formatNaira as _formatNaira } from "@/lib/pricing";
 /**
  * Format NGN amount with thousand separators.
@@ -65,17 +80,36 @@ export function generateTxRef(schoolSlugOrId?: string): string {
 // Server-side helpers (secret key)
 // ---------------------------------------------------------------------------
 
+/**
+ * The live server secret key. Throws if absent.
+ *
+ * Throwing rather than returning "" is deliberate: every caller treats a
+ * falsy key as "cannot verify", which for a paying customer surfaces as a
+ * generic 402 and a support ticket. A loud, named error at the boundary is
+ * diagnosable in seconds from the logs.
+ */
 function getSecretKey(): string {
-  const key =
-    process.env.FLUTTERWAVE_SECRET_KEY ||
-    process.env.FLW_SECRET_KEY ||
-    process.env.FLW_SECRET_HASH;
+  const key = (process.env.FLUTTERWAVE_SECRET_KEY || "").trim();
   if (!key) {
     throw new Error(
-      "Flutterwave secret key is missing. Set FLUTTERWAVE_SECRET_KEY or FLW_SECRET_KEY in env."
+      "Flutterwave is not configured: FLUTTERWAVE_SECRET_KEY is missing. " +
+        "Set it on the deployment. Refusing to process payments without it, " +
+        "rather than falling back to a test key.",
     );
   }
   return key;
+}
+
+/**
+ * True when the configured secret is a Flutterwave TEST key.
+ *
+ * Used only to refuse production traffic, never to enable it: a test secret in
+ * production means no real money can ever be taken, which is a far worse
+ * failure than an outage because it looks like a working system.
+ */
+export function isTestModeSecretKey(key?: string): boolean {
+  const k = (key ?? process.env.FLUTTERWAVE_SECRET_KEY ?? "").trim();
+  return k.includes("_TEST") || k.includes("_TEST-");
 }
 
 export interface FlutterwavePaymentPayload {
@@ -229,30 +263,92 @@ export async function verifyTransactionByReference(
   return data;
 }
 
+/**
+ * Verify a Flutterwave `verif-hash` header against the configured secret hash.
+ *
+ * Flutterwave sends a PRECOMPUTED SHA-512 hash of the webhook secret, so the
+ * correct check is a straight comparison against the dashboard's "Secret Hash"
+ * — not a hash we recompute. The subtlety is that a plain `===` leaks the
+ * secret hash's bytes through timing, so this uses `timingSafeEqual` (the same
+ * posture the FastAPI tier already takes with `hmac.compare_digest`).
+ *
+ * Refuses rather than degrades. The previous version returned
+ * `NODE_ENV !== "production"` when the hash was unset, which meant a missing
+ * variable silently ACCEPTED every webhook in development — exactly the
+ * environment where you would rehearse an attack and believe it was rejected.
+ * A missing hash is now always a failure.
+ */
 export function verifyWebhookSignature(verifHashHeader: string | null): boolean {
-  const secretHash =
-    process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || process.env.FLW_WEBHOOK_HASH || "";
+  const secretHash = (process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || "").trim();
+
   if (!secretHash) {
-    console.warn(
-      "FLUTTERWAVE_WEBHOOK_SECRET_HASH not set - skipping verification (allow in dev only)"
+    console.error(
+      "[flutterwave] FLUTTERWAVE_WEBHOOK_SECRET_HASH is not set — rejecting every webhook. " +
+        "Payments will not be auto-provisioned until this is configured.",
     );
-    return process.env.NODE_ENV !== "production";
+    return false;
   }
   if (!verifHashHeader) return false;
-  return verifHashHeader === secretHash;
+
+  // timingSafeEqual throws on a length mismatch, and the incoming header's
+  // length is attacker-controlled, so compare lengths first.
+  const a = Buffer.from(verifHashHeader, "utf8");
+  const b = Buffer.from(secretHash, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 // ---------------------------------------------------------------------------
 // Client-side helpers (inline checkout)
 // ---------------------------------------------------------------------------
 
+/**
+ * The live public key. Throws if absent.
+ *
+ * The previous version walked a fallback chain and returned "" when nothing
+ * matched, and both call sites then substituted a hardcoded
+ * `FLWPUBK_TEST-dummy-...`. Net effect: a deployment with a missing or
+ * misnamed live key opened a perfectly normal-looking TEST checkout. The
+ * operator saw a working pay button, the school saw a payment form, and no
+ * money moved. Throwing turns that silent failure into an obvious one.
+ */
 export function getFlutterwavePublicKey(): string {
-  const key =
-    process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY ||
-    process.env.NEXT_PUBLIC_FLW_PUBLIC_KEY ||
-    process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY_TEST ||
-    "";
+  const key = (process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || "").trim();
+  if (!key) {
+    throw new Error(
+      "Flutterwave is not configured: NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY is missing. " +
+        "Refusing to open checkout — a missing key must never fall back to a test key.",
+    );
+  }
   return key;
+}
+
+/**
+ * The public key to actually open checkout with.
+ *
+ * The demo tenant is a teaching environment: it advertises a test card and a
+ * mock bank transfer, neither of which a live key accepts. So the demo gets its
+ * own dedicated TEST key and every real tenant is held to the live one.
+ *
+ * The demo key is a separate variable rather than a fallback, because a
+ * fallback is exactly the failure mode being removed. A real tenant can never
+ * reach the demo key: the choice is made by the registry's own demo flag
+ * (`isDemoTenant`, data-driven from subscription_status — never the hostname),
+ * not by anything the client can influence.
+ */
+export function getPublicKeyForTenant(opts?: { isDemo?: boolean }): string {
+  if (opts?.isDemo) {
+    const demoKey = (process.env.NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY || "").trim();
+    if (!demoKey) {
+      throw new Error(
+        "The demo tenant needs NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY to be set. " +
+          "It is deliberately NOT derived from the live key — a demo checkout on a " +
+          "live key cannot accept the test card we advertise.",
+      );
+    }
+    return demoKey;
+  }
+  return getFlutterwavePublicKey();
 }
 
 export interface FlutterwaveInlineCustomer {

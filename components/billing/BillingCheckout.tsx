@@ -5,13 +5,13 @@ import { useState, useMemo } from "react";
 import { Loader2, CheckCircle2, AlertCircle, CreditCard, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import {
-  formatNaira,
-  getFlutterwavePublicKey,
-  loadFlutterwaveScript,
-  initiateFlutterwaveInlinePayment,
-  generateTxRef,
-} from "@/lib/flutterwave";
+  import {
+    formatNaira,
+    getPublicKeyForTenant,
+    loadFlutterwaveScript,
+    initiateFlutterwaveInlinePayment,
+    generateTxRef,
+  } from "@/lib/flutterwave";
 import {
   getPricingTier,
   calculateTieredTotal,
@@ -36,10 +36,28 @@ interface BillingCheckoutProps {
    * Live per-unit price for credit mode (fetched by the parent from
    * /api/admin/config/credit-price). Falls back to CREDIT_PRICE.
    */
-  unitPrice?: number;
-}
+    unitPrice?: number;
+    /**
+     * Whether this tenant is the demo school. Selects the dedicated TEST public
+     * key; every real tenant is held to the live one.
+     *
+     * Derived from the registry's own demo flag by the caller rather than
+     * re-derived from the hostname here, so there is exactly one definition of
+     * "demo" in the codebase.
+     */
+    isDemo?: boolean;
+  }
 
-export function BillingCheckout({ tenantId, schoolName, customerEmail, customerName, mode = "subscription", defaultCount, unitPrice }: BillingCheckoutProps) {
+  export function BillingCheckout({
+    tenantId,
+    schoolName,
+    customerEmail,
+    customerName,
+    mode = "subscription",
+    defaultCount,
+    unitPrice,
+    isDemo,
+  }: BillingCheckoutProps) {
   const isCredit = mode === "credit";
   const isSlot = mode === "slot";
   // Single source of truth for credit pricing — parent-supplied live price.
@@ -124,8 +142,25 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
     }
 
     setIsPaying(true);
-    const publicKey = getFlutterwavePublicKey();
-    const effectiveKey = publicKey || "FLWPUBK_TEST-dummy-key-for-demo-do-not-use-in-prod";
+
+    // Resolved BEFORE any await, inside the same try/catch that surfaces errors
+    // to the user. A misconfigured deployment must produce a visible "payments
+    // are unavailable" message, never a checkout that looks real and takes no
+    // money.
+    let publicKey: string;
+    try {
+      publicKey = getPublicKeyForTenant({ isDemo });
+    } catch (e) {
+      setIsPaying(false);
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Payments are unavailable right now. Please contact support.",
+      );
+      console.error("[billing] Flutterwave key resolution failed", e);
+      return;
+    }
+
     const txRef = generateTxRef(tenantId);
 
     try {
@@ -137,13 +172,9 @@ export function BillingCheckout({ tenantId, schoolName, customerEmail, customerN
       return;
     }
 
-    if (!publicKey) {
-      console.warn("NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY not set — using dummy key");
-    }
-
     initiateFlutterwaveInlinePayment(
       {
-        publicKey: effectiveKey,
+        publicKey,
         txRef,
         amount,
         currency: "NGN",

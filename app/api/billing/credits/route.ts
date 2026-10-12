@@ -155,8 +155,14 @@ export async function POST(req: NextRequest) {
   }
   const expectedAmount = calculateCreditTotal(countNum, liveCreditPrice);
   const isMockTxRef = txId.startsWith("resultapp_");
-  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "";
+  // Canonical name only. The `|| process.env.FLW_SECRET_KEY` alias meant a
+  // deployment could be running on one variable while an operator edited
+  // another, with nothing to indicate which was live.
+  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || "";
   const isPlaceholderSecret = !secretKey || secretKey.includes("xxxx");
+  // Mock verification is a DEVELOPMENT affordance and stays behind NODE_ENV.
+  // In production this is false regardless of the other conditions, so a real
+  // payment can never be short-circuited by an unset or placeholder key.
   const allowMock = process.env.NODE_ENV !== "production" && (isMockTxRef || isPlaceholderSecret);
 
   let verification: Awaited<ReturnType<typeof verifyTransaction>>;

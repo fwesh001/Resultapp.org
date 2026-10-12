@@ -103,7 +103,10 @@ export async function POST(req: NextRequest) {
 
   const expectedAmount = calculateTieredTotal(countNum);
   const isMockTxRef = txId.startsWith("resultapp_");
-  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY || "";
+  // Canonical name only — see the note in app/api/billing/credits/route.ts.
+  // Mock verification stays behind NODE_ENV so production can never
+  // short-circuit a real payment.
+  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY || "";
   const isPlaceholderSecret = !secretKey || secretKey.includes("xxxx");
   const allowMock = process.env.NODE_ENV !== "production" && (isMockTxRef || isPlaceholderSecret);
 

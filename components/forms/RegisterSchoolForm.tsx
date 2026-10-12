@@ -19,12 +19,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import {
-  getFlutterwavePublicKey,
-  loadFlutterwaveScript,
-  initiateFlutterwaveInlinePayment,
-  generateTxRef,
-} from "@/lib/flutterwave";
+  import {
+    getFlutterwavePublicKey,
+    loadFlutterwaveScript,
+    initiateFlutterwaveInlinePayment,
+    generateTxRef,
+  } from "@/lib/flutterwave";
+  import { holdRegistration } from "@/lib/holdRegistrationClient";
 import {
   getPricingTier,
   calculateTieredTotal,
@@ -827,7 +828,7 @@ export function RegisterSchoolForm() {
   // promising credits that may be withheld.
   const qualifiesFreeCredits = orderCount >= FREE_CREDIT_MIN_STUDENTS;
 
-  function startFlutterwaveCheckout() {
+  async function startFlutterwaveCheckout() {
     setGlobalError(null);
 
     // Final gate before money moves. The Pay button already blocks on consent
@@ -837,8 +838,53 @@ export function RegisterSchoolForm() {
     // successful charge.
     if (!validateAll()) return;
 
-    const publicKey = getFlutterwavePublicKey();
-    const ref = generateTxRef(values.subdomain.trim() || "school");
+    // Registration is ALWAYS a real tenant — there is no demo path here, so
+    // this is the live key or nothing. Resolving it before any await, inside
+    // the caller's error handling, means a misconfigured deployment shows the
+    // visitor "payments are unavailable" instead of a checkout that accepts
+    // their details and takes no money.
+    let publicKey: string;
+    try {
+      publicKey = getFlutterwavePublicKey();
+    } catch (e) {
+      setGlobalError(
+        e instanceof Error
+          ? e.message
+          : "Payments are unavailable right now. Please contact support.",
+      );
+      console.error("[register] Flutterwave key resolution failed", e);
+      return;
+    }
+
+    // Park the registration server-side BEFORE opening checkout.
+    //
+    // Once the modal takes over, the browser callback is the only thing that
+    // can finish provisioning — and a closed tab, a crash, or a dead connection
+    // loses it. The hold gives the webhook everything it needs to finish the
+    // job independently. The admin password is encrypted before it is sent
+    // (lib/pendingRegistrationCrypto.ts) and is deliberately still absent from
+    // the checkout `meta` below.
+    let ref: string;
+    try {
+      ref = await holdRegistration({
+        school_name: values.schoolName.trim(),
+        subdomain: values.subdomain.trim().toLowerCase(),
+        admin_name: values.adminName.trim() || undefined,
+        admin_email: values.adminEmail.trim(),
+        admin_password: values.adminPassword,
+        student_count: orderCount,
+        accepted_terms: true,
+      });
+    } catch (e) {
+      setGlobalError(
+        e instanceof Error
+          ? `Could not start checkout: ${e.message}`
+          : "Could not start checkout. Please try again.",
+      );
+      console.error("[register] failed to hold registration", e);
+      return;
+    }
+
     const customerEmail = values.adminEmail.trim();
     // Admin Name is now collected in Step 2. The email prefix was a poor
     // fallback ("j.obi" reads as noise on a bank statement), so it is only
@@ -849,7 +895,7 @@ export function RegisterSchoolForm() {
     const openModal = () => {
       const checkout = initiateFlutterwaveInlinePayment(
         {
-          publicKey: publicKey || "FLWPUBK_TEST-dummy-key-for-demo-do-not-use-in-prod",
+            publicKey,
           txRef: ref,
           amount: orderTotal,
           currency: "NGN",
