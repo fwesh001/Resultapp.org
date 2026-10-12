@@ -56,7 +56,8 @@ echo "=== E. PUBLISH (the log_audit NameError path) ==="
 STU=$(sudo -u postgres psql -d postgres -tAc "SELECT student_id FROM tenant_students WHERE subdomain='$TID' AND full_name='Trail Student Renamed' LIMIT 1;" | tr -d ' ')
 # give the tenant credits so publish does not 402 on the credit check
 sudo -u postgres psql -d postgres -q -c "UPDATE schools SET credit_balance=credit_balance+500 WHERE subdomain='$TID';" 2>/dev/null
-PC=$(curl -s -o /tmp/pub.json -w "%{http_code}" -X POST "$API/$TID/publish" \
+# credits.py mounts at /api/v1/tenant/{tid}/credits/*, so publish lives under /credits/
+PC=$(curl -s -o /tmp/pub.json -w "%{http_code}" -X POST "$API/$TID/credits/publish" \
   -H "X-API-SECRET-KEY: $S" -H "Content-Type: application/json" "${V[@]}" \
   -d "{\"term\":\"$TERM\",\"student_ids\":[\"$STU\"]}")
 echo "  publish HTTP $PC  $(head -c 120 /tmp/pub.json)"
@@ -67,7 +68,7 @@ echo
 echo "=== F. ROWS LANDED? (searching for our marker) ==="
 COUNT=$(sudo -u postgres psql -d postgres -tAc "SELECT count(*) FROM audit_logs WHERE subdomain='$TID' AND action IN ('clearance.held','clearance.released','roster.student_updated','roster.student_deleted','roster.student_purged','tenant.profile_updated','results.publish') AND created_at > NOW() - interval '3 minutes';")
 echo "  rows written in last 3 min: $COUNT"
-[ "$COUNT" -ge 5 ] && ok "critical mutations wrote audit rows ($COUNT)" || no "expected >=5 audit rows, got $COUNT"
+[ "$COUNT" -ge 6 ] && ok "critical mutations wrote audit rows ($COUNT, incl. results.publish)" || no "expected >=6 audit rows, got $COUNT"
 
 echo
 echo "  per-action:"

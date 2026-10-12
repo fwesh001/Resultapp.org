@@ -132,11 +132,16 @@ const main = read("backend/main.py");
     "the helper the routers import must exist"
   );
   check(
-    "log_audit is never called (no such helper exists)",
-    !/(?<![\w.])log_audit\s*\(/.test(
-      credits + allocations + clearance + admin
-    ),
+    "log_audit is never CALLED (no such helper exists)",
+    !/(?<![\w.])log_audit\s*\(/.test(credits + allocations + clearance + admin),
     "credits.py previously called an undefined, unimported log_audit"
+  );
+  check(
+    "log_audit is never IMPORTED (would ImportError at request time)",
+    !/(?<![\w.])log_audit\s*(,|\n|\))/.test(
+      (credits + allocations + clearance + admin).replace(/\/\/[^\n]*/g, "")
+    ),
+    "an ImportError inside a handler 500s the whole route, not just the audit"
   );
 
   // Every audit call must import the helper in the same scope it uses it.

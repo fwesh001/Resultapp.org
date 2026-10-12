@@ -579,7 +579,6 @@ def publish_reports(
     from services.db_manager import (
         current_academic_session,
         publish_student_results,
-        log_audit,
     )
 
     tid = _validate_tenant_id(tenant_id)

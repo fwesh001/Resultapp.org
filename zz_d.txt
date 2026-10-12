@@ -1,0 +1,22 @@
+fix(credits): remove the log_audit ImportError that 500'd every publish
+
+`from services.db_manager import (current_academic_session,
+publish_student_results, log_audit,)` sat at the top of publish_reports.
+log_audit has never existed, so the import raised ImportError before any
+work began — every publish returned 500, including the ones that had
+already charged the school credits in a previous attempt's DB transaction.
+
+This is the second, separate occurrence. The first was the bare
+`log_audit(...)` call I removed last commit; the import sat in a
+multi-name import that the previous fix's grep for `log_audit(` did not
+match, which is why the regression harness passed while the route was
+still broken in production.
+
+That gap is why the harness now checks imports as well as call sites:
+a call to an undefined name is a NameError at one line, but an import of
+one fails the whole handler, so it takes down the feature rather than the
+audit line.
+
+Found by running the live publish endpoint, not by reading the file.
+
+Regression harness: 46 checks.
