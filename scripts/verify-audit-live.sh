@@ -35,7 +35,7 @@ curl -s -o /dev/null -X PUT "$API/$TID/clearance" -H "X-API-SECRET-KEY: $S" \
   -d "{\"term\":\"$TERM\",\"student_ids\":[\"$SID\"],\"is_financially_cleared\":true}"
 
 echo
-echo "=== C. roster UPDATE (motto-free field) + DELETE ==="
+echo "=== C. roster UPDATE + DELETE (throwaway student) ==="
 T2="std/$MARK"
 sudo -u postgres psql -d postgres -q -c "DELETE FROM tenant_students WHERE subdomain='$TID' AND student_id='$T2';"
 sudo -u postgres psql -d postgres -q -c \
@@ -44,7 +44,6 @@ sudo -u postgres psql -d postgres -q -c \
 RID=$(sudo -u postgres psql -d postgres -tAc "SELECT id FROM tenant_students WHERE subdomain='$TID' AND student_id='$T2';" | tr -d ' ')
 curl -s -o /dev/null -X PATCH "$API/$TID/roster/student/$RID" -H "X-API-SECRET-KEY: $S" \
   -H "Content-Type: application/json" "${V[@]}" -d "{\"full_name\":\"Trail Student Renamed\"}"
-curl -s -o /dev/null -X DELETE "$API/$TID/roster/student/$RID" -H "X-API-SECRET-KEY: $S" "${V[@]}"
 
 echo
 echo "=== D. profile UPDATE ==="
@@ -52,16 +51,20 @@ curl -s -o /dev/null -X PATCH "$API/$TID/profile" -H "X-API-SECRET-KEY: $S" \
   -H "Content-Type: application/json" "${V[@]}" -d "{\"motto\":\"$MARK\"}"
 
 echo
-echo "=== E. PUBLISH (the log_audit NameError path) ==="
-STU=$(sudo -u postgres psql -d postgres -tAc "SELECT student_id FROM tenant_students WHERE subdomain='$TID' AND full_name='Trail Student Renamed' LIMIT 1;" | tr -d ' ')
-# give the tenant credits so publish does not 402 on the credit check
+echo "=== E. PUBLISH (the ImportError path) ==="
+# Publish BEFORE the delete: publishing a purged student is a 400, which would
+# look like a routing failure rather than the audit-write failure under test.
+STU="$T2"
 sudo -u postgres psql -d postgres -q -c "UPDATE schools SET credit_balance=credit_balance+500 WHERE subdomain='$TID';" 2>/dev/null
-# credits.py mounts at /api/v1/tenant/{tid}/credits/*, so publish lives under /credits/
 PC=$(curl -s -o /tmp/pub.json -w "%{http_code}" -X POST "$API/$TID/credits/publish" \
   -H "X-API-SECRET-KEY: $S" -H "Content-Type: application/json" "${V[@]}" \
   -d "{\"term\":\"$TERM\",\"student_ids\":[\"$STU\"]}")
 echo "  publish HTTP $PC  $(head -c 120 /tmp/pub.json)"
 sudo -u postgres psql -d postgres -q -c "UPDATE schools SET credit_balance=credit_balance-500 WHERE subdomain='$TID';" 2>/dev/null
+
+echo
+echo "=== E2. roster DELETE (after publish, so the student still exists) ==="
+curl -s -o /dev/null -X DELETE "$API/$TID/roster/student/$RID" -H "X-API-SECRET-KEY: $S" "${V[@]}"
 
 sleep 1
 echo
