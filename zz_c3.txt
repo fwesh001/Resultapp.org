@@ -1,0 +1,44 @@
+feat(audit): intercept critical mutations into audit_logs, add tenant audit page
+
+Reuses the existing audit_logs table and log_admin_action() rather than
+adding a second trail. A second table would mean two query surfaces and a
+real risk of a write going to the one nobody reads.
+
+Write sites, each placed AFTER its transaction commits:
+
+  * credits.publish         -> results.publish
+  * allocations PATCH       -> roster.<type>_updated  (field NAMES only)
+  * allocations DELETE      -> roster.student_purged + roster.<type>_deleted
+  * clearance PUT           -> clearance.held / clearance.released
+  * profile PATCH           -> tenant.profile_updated
+  * profile email change    -> tenant.email_changed  (own action)
+
+Where the write sits is the deliberate part. log_audit() opens its own
+connection and is documented best-effort, so it runs OUTSIDE the request
+transaction. The failure modes are not symmetric: losing a publish the
+school already paid credits for, because a logging call hiccupped, is much
+worse than a narrow window where a mutation landed unlogged.
+
+Email gets its own action because schools.email IS the admin login
+identifier (admin_auth matches on it), so a generic "profile updated"
+would bury an account takeover inside a branding edit.
+
+Actor now prefers the forwarded X-Viewer-* over the old hardcoded
+"tenant_admin" and over body values like published_by / held_by, which are
+free-text labels typed by the caller. A moderator deputy purging a roster
+is now attributable to them, which is the whole point of the RBAC work.
+
+`details` carries field names, never values. An audit row that copied the
+new email or a pupil's grade would turn the log into a shadow copy of the
+data it exists to observe.
+
+get_audit_logs() now filters IN SQL and returns (rows, total), so a page
+200 rows deep does not pull thousands to discard them, and pagination has a
+real count. New tenant_audit router is separate from admin.py's superadmin
+/audit-logs so the two spans (one tenant vs every tenant) cannot be
+confused.
+
+The audit page is admin-only. A moderator who could read it would see
+which of their actions have been noticed and which have not, so it 403s
+rather than returning an empty list -- silence would look like "no audit of
+me yet".

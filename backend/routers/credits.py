@@ -562,13 +562,35 @@ def set_credit_price_endpoint(tenant_id: str, payload: dict):
 
 
 @router.post("/publish", summary="Publish report cards (1 credit each, re-prints free)")
-def publish_reports(tenant_id: str, payload: PublishRequest):
-    from services.db_manager import current_academic_session, publish_student_results
+def publish_reports(
+    tenant_id: str,
+    payload: PublishRequest,
+    x_viewer_role: Optional[str] = _Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = _Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = _Header(None, alias="X-Viewer-Label"),
+):
+    """Publish report cards, then append an audit row.
+
+    The viewer headers are what turn this from "report cards were published"
+    into "<person> published <n> report cards". They are forwarded by the Next
+    proxy from a verified session; see lib/viewerHeaders.ts for why they are
+    defence-in-depth rather than a hard boundary.
+    """
+    from services.db_manager import (
+        current_academic_session,
+        publish_student_results,
+        log_audit,
+    )
 
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant(tid)
     _validate_term(payload.term)
     session = (payload.academic_session or "").strip() or current_academic_session()
+
+    # Prefer the forwarded viewer over published_by: published_by is a free-text
+    # label typed by the caller, while X-Viewer-* comes from a signed session.
+    actor = (x_viewer_id or x_viewer_label or payload.published_by or "").strip() or "unknown"
+
     try:
         result = publish_student_results(
             subdomain=tid,
@@ -584,6 +606,37 @@ def publish_reports(tenant_id: str, payload: PublishRequest):
             _fire_alerts(tid, int(result.get("new_balance", 0)))
         except Exception as _ne:
             _logger.warning(f"[credits] Threshold notification failed for '{tid}': {_ne}")
+
+        # Audit row, written AFTER the mutation.
+        #
+        # Deliberately NOT inside this request's transaction: log_audit() opens
+        # its own connection and is documented best-effort, so a logging failure
+        # must not roll back a publication the school already paid credits for.
+        # The cost of that choice is a tiny window where the publish succeeded
+        # and the row was never written; the reverse — losing a paid publish to
+        # a logging hiccup — is the worse failure.
+        #
+        # `actor_type` records whether a moderator deputy did this, which is the
+        # entire point of the RBAC work.
+        published_count = int(
+            result.get("published_count", result.get("published", 0)) or 0
+        )
+        log_audit(
+            actor=actor,
+            action="results.publish",
+            subdomain=tid,
+            actor_id=x_viewer_id or None,
+            actor_type=(x_viewer_role or "admin"),
+            details={
+                "term": payload.term,
+                "academic_session": session,
+                "student_count": len(payload.student_ids),
+                "published": published_count,
+                "credits_spent": result.get("credits_spent"),
+                "new_balance": result.get("new_balance"),
+            },
+        )
+
         return {"success": True, **result}
     except ValueError as e:
         msg = str(e)

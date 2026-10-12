@@ -323,7 +323,13 @@ class ClearanceUpdate(BaseModel):
 
 
 @router.put("", summary="Bulk set financial clearance")
-def set_clearance(tenant_id: str, body: ClearanceUpdate):
+def set_clearance(
+    tenant_id: str,
+    body: ClearanceUpdate,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
     """Upsert clearance rows for many students in one transaction.
 
     Deliberately the ONLY writer of this table. Because publishing never
@@ -437,6 +443,38 @@ def set_clearance(tenant_id: str, body: ClearanceUpdate):
             logger.warning(
                 "[clearance] ignored %d student_id(s) not on tenant %s roster: %s",
                 len(missing), tid, missing[:10],
+            )
+
+        # Audit row after the transaction commits, so a logging failure cannot
+        # roll back a hold the bursar just set.
+        #
+        # The action name distinguishes HOLD from RELEASE rather than logging a
+        # generic "clearance updated": "who released the hold" and "who placed
+        # it" are different questions, and one action answers neither.
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                "clearance.released" if cleared else "clearance.held",
+                subdomain=tid,
+                details={
+                    "term": t,
+                    "academic_session": sess,
+                    "students": matched,
+                    "requested": len(unique_ids),
+                    "skipped": len(missing),
+                    "hold_reason": reason,
+                },
+                # Prefer the forwarded viewer over body.held_by: held_by is a
+                # free-text label typed by the caller, X-Viewer-* is signed.
+                actor=(x_viewer_id or x_viewer_label or actor or "unknown"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            logger.warning(
+                "[clearance] audit log failed for %s/%s/%s: %s",
+                tid, t, sess, _audit_err,
             )
 
         return {

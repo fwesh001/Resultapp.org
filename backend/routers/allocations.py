@@ -1132,7 +1132,15 @@ class RosterPatch(BaseModel):
 
 
 @router.patch("/{record_type}/{record_id}", summary="Update a roster record (partial)")
-def update_roster_record(tenant_id: str, record_type: str, record_id: str, payload: RosterPatch):
+def update_roster_record(
+    tenant_id: str,
+    record_type: str,
+    record_id: str,
+    payload: RosterPatch,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
     tid = _validate_tenant_id(tenant_id)
 
     if record_type not in ("student", "staff", "form_assignment"):
@@ -1319,6 +1327,31 @@ def update_roster_record(tenant_id: str, record_type: str, record_id: str, paylo
         d = _row_to_dict(row, cur)
         if isinstance(d.get("created_at"), datetime):
             d["created_at"] = d["created_at"].isoformat()
+
+        # Audit the edit. `fields` is the sparse allow-list actually applied, so
+        # the row says WHICH attributes changed rather than burying the new
+        # values — an audit trail that dumps full pupil data would itself be a
+        # privacy problem, and the reader rarely needs the new value to know
+        # something was altered.
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                f"roster.{record_type}_updated",
+                subdomain=tid,
+                details={
+                    "record_id": record_id,
+                    "fields": sorted(updates.keys()),
+                },
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            logger.warning(
+                "[roster] audit log failed for %s update %s/%s: %s",
+                record_type, tid, record_id, _audit_err,
+            )
         d["id"] = str(d["id"])
         return {"type": record_type, "record": d}
     except HTTPException:
@@ -1344,7 +1377,14 @@ def update_roster_record(tenant_id: str, record_type: str, record_id: str, paylo
 # ---------------------------------------------------------------------------
 
 @router.delete("/{record_type}/{record_id}", summary="Delete a roster record")
-def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
+def delete_roster_record(
+    tenant_id: str,
+    record_type: str,
+    record_id: str,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
     tid = _validate_tenant_id(tenant_id)
 
     mapping = {
@@ -1477,6 +1517,11 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
 
             # Audit trail — a destructive, irreversible operation on a minor's
             # records must be visible to the platform operator.
+            #
+            # `actor` prefers the forwarded viewer over a hardcoded
+            # "tenant_admin": a moderator deputy purging a roster must be
+            # attributable to them, or the RBAC work has no audit value.
+            # actor_type carries the same distinction downstream.
             try:
                 from services.db_manager import log_admin_action
 
@@ -1489,8 +1534,9 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
                         "cascaded_rows": cascaded,
                         "slots_refunded": 1,
                     },
-                    actor="tenant_admin",
-                    actor_type="admin",
+                    actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                    actor_id=x_viewer_id or None,
+                    actor_type=(x_viewer_role or "admin"),
                 )
             except Exception as _audit_err:
                 logger.warning(
@@ -1514,6 +1560,27 @@ def delete_roster_record(tenant_id: str, record_type: str, record_id: str):
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"{record_type} not found")
         conn.commit()
+
+        # Audit every other destructive type too. Staff, allocation, subject and
+        # form_assignment deletes were previously unaudited — the student path had
+        # a cascade worth recording, but removing a staff member clearly wasn't.
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                f"roster.{record_type}_deleted",
+                subdomain=tid,
+                details={"record_id": record_id, "record_type": record_type},
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            logger.warning(
+                "[roster] audit log failed for %s delete %s/%s: %s",
+                record_type, tid, record_id, _audit_err,
+            )
+
         return {"success": True, "deleted": record_id, "type": record_type}
     except HTTPException:
         raise

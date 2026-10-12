@@ -1395,36 +1395,73 @@ def consume_reset_token_set_password(
                 pass
 
 
-def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-    """Newest-first audit entries, optionally scoped to a tenant."""
+def get_audit_logs(
+    subdomain: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    action_prefix: Optional[str] = None,
+    actor_type: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Newest-first audit entries, optionally scoped to a tenant.
+
+    `action_prefix` and `actor_type` narrow the view for the tenant audit page:
+    filtering happens in SQL rather than in Python so a page 200 rows deep does
+    not pull thousands to throw them away.
+
+    Returns `(rows, total)` — the total is needed for real pagination. Returning
+    it rather than making the caller issue a COUNT query keeps one round trip.
+    """
     limit = max(1, min(int(limit or 50), 200))
     offset = max(0, int(offset or 0))
     conn = None
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+
+        # Separator must match how __ and count_ are bound below.
+        sep = ""
+        where = []
+        params: list = []
+
+        # Prefix match on a free column: bind the value and let LIKE do the work
+        # rather than formatting it into the SQL string.
+        if action_prefix:
+            where.append("action LIKE %s")
+            params.append(f"{action_prefix}%")
+            sep = " AND "
+        if actor_type:
+            where.append("actor_type = %s")
+            params.append(actor_type)
+
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
         if subdomain:
-            cur.execute(
-                f"""
-                SELECT id, actor, actor_id, actor_type, action, subdomain, details, created_at
-                FROM {AUDIT_LOGS_TABLE}
-                WHERE subdomain = %s
-                ORDER BY created_at DESC
-                LIMIT %s OFFSET %s;
-                """,
-                (_sanitize_subdomain(subdomain), limit, offset),
-            )
-        else:
-            cur.execute(
-                f"""
-                SELECT id, actor, actor_id, actor_type, action, subdomain, details, created_at
-                FROM {AUDIT_LOGS_TABLE}
-                ORDER BY created_at DESC
-                LIMIT %s OFFSET %s;
-                """,
-                (limit, offset),
-            )
+            if where_sql:
+                where_sql += " AND subdomain = %s"
+            else:
+                where_sql = " WHERE subdomain = %s"
+            params.append(_sanitize_subdomain(subdomain))
+
+        cur.execute(
+            f"""
+            SELECT id, actor, actor_id, actor_type, action, subdomain, details, created_at
+            FROM {AUDIT_LOGS_TABLE}
+            {where_sql}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s;
+            """,
+            (*params, limit, offset),
+        )
         rows = cur.fetchall()
+
+        # Same filter, so the total reflects what the viewer can actually see.
+        count_params = list(params)
+        cur.execute(
+            f"SELECT COUNT(*) FROM {AUDIT_LOGS_TABLE}{where_sql};",
+            tuple(count_params),
+        )
+        total = int(cur.fetchone()[0] or 0)
+
         out = []
         for r in rows:
             d = _row_to_dict(r, cur)
@@ -1433,10 +1470,10 @@ def get_audit_logs(subdomain: Optional[str] = None, limit: int = 50, offset: int
             else:
                 d["created_at"] = str(d.get("created_at") or "")
             out.append(d)
-        return out
+        return out, total
     except Exception as e:
         logger.error(f"[DB] Failed to fetch audit logs: {e}")
-        return []
+        return [], 0
     finally:
         if conn:
             try:

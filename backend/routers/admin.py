@@ -227,7 +227,13 @@ class TenantProfileUpdate(BaseModel):
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
-def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
+def update_tenant_profile(
+    tenant_id: str,
+    payload: TenantProfileUpdate,
+    x_viewer_role: Optional[str] = _Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = _Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = _Header(None, alias="X-Viewer-Label"),
+):
     """
     Update a tenant's public profile (school_name, motto, phone, email,
     address, logo_url, hero_bg_url) via raw psycopg2
@@ -357,6 +363,35 @@ def update_tenant_profile(tenant_id: str, payload: TenantProfileUpdate):
         conn.commit()
         school = _normalize_school_row(_row_to_dict(row, cur))
         _logger.info(f"[admin] Tenant {tid} profile updated ({', '.join(updates)})")
+
+        # Audit the change.
+        #
+        # `email` gets its own action, and that is the important one: the
+        # school's email IS the admin login identifier (admin_auth matches on
+        # schools.email), so recording a plain "profile.updated" would hide an
+        # account takeover inside a branding edit. A distinct action makes it
+        # findable. The OTP gate is what actually prevents the change — this is
+        # the record of one that legitimately got through.
+        try:
+            from services.db_manager import log_admin_action
+
+            email_changed = "email" in updates
+            log_admin_action(
+                "tenant.email_changed" if email_changed else "tenant.profile_updated",
+                subdomain=tid,
+                # Fields only, never the new values: dumping profile contents
+                # into the audit row would turn the log into a data copy.
+                details={
+                    "fields": sorted(updates.keys()),
+                    "old_email": school.get("email"),
+                } if email_changed else {"fields": sorted(updates.keys())},
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            _logger.warning("[admin] audit log failed for profile update %s: %s", tid, _audit_err)
+
         return {
             "success": True,
             "message": f"Tenant {tid} profile updated",
@@ -938,7 +973,8 @@ def export_ledger_csv(token_type: Optional[str] = None, subdomain: Optional[str]
 def get_audit_trail(subdomain: Optional[str] = None, limit: int = 50, offset: int = 0):
     from services.db_manager import get_audit_logs
 
-    return {"entries": get_audit_logs(subdomain, limit, offset)}
+    entries, total = get_audit_logs(subdomain, limit, offset)
+    return {"entries": entries, "total": total}
 
 
 @router.get("/notification-templates", summary="List notification templates (superadmin)")

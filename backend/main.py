@@ -1116,6 +1116,20 @@ except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Clearance router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
+# Tenant audit trail — the admin-facing read side of audit_logs.
+# Mounted separately from admin.py's superadmin /audit-logs so the two spans
+# cannot be confused for one another.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.tenant_audit import router as tenant_audit_router
+
+    app.include_router(tenant_audit_router)
+    logger.info("[App] Tenant audit router mounted (/api/v1/tenant/{tenant_id}/audit-logs)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Tenant audit router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
 # Data Export Tool — multi-sheet .xlsx, streamed from a spooled temp file.
 #
 # Mounted inside a try/except like every other router so a missing xlsxwriter
