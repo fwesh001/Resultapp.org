@@ -1454,6 +1454,13 @@ def get_audit_logs(
         )
         rows = cur.fetchall()
 
+        # The COUNT must run BEFORE _row_to_dict, because _row_to_dict reads
+        # cur.description to name the columns — and executing the COUNT replaces
+        # description with `count`, which would silently map every audit row to
+        # {"count": ..., "created_at": ...}. Fetching the rows first is not
+        # enough; the description has to be captured.
+        row_description = cur.description
+
         # Same filter, so the total reflects what the viewer can actually see.
         count_params = list(params)
         cur.execute(
@@ -1464,7 +1471,7 @@ def get_audit_logs(
 
         out = []
         for r in rows:
-            d = _row_to_dict(r, cur)
+            d = _row_to_dict(r, row_description)
             if isinstance(d.get("created_at"), datetime):
                 d["created_at"] = d["created_at"].isoformat()
             else:
