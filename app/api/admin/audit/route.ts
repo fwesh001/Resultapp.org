@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminCapability } from "@/lib/adminAuth";
-import { viewerHeaders } from "@/lib/viewerHeaders";
 
 /**
  * GET /api/admin/audit?tenant_id={tenant}&limit=&offset=&action=&actor_type=
@@ -11,8 +10,9 @@ import { viewerHeaders } from "@/lib/viewerHeaders";
  * record of what the moderators did, so a moderator who can read it can see
  * exactly which of their actions have been noticed and which have not.
  *
- * `viewerHeaders` is called for the audit WRITE path via other proxies; this one
- * is read-only, so the guard is the whole story.
+ * Read-only, so no viewer headers are forwarded: the capability guard is the
+ * whole story here. The WRITE paths (publish, roster, clearance, profile) carry
+ * X-Viewer-* so the audit row can name who acted.
  */
 
 function getBackendBase(): string {
