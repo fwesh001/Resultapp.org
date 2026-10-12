@@ -1164,9 +1164,10 @@ def list_staff(tenant_id: str):
     must not have to reason about tri-state.
     """
     # Local import, matching every other route in this module — the db_manager
-    # import at the top of the file lives INSIDE a helper function, not at
-    # module scope, so a bare `_connect_as_superuser()` here is a NameError.
-    from services.db_manager import _connect_as_superuser
+    # import near the top of the file lives INSIDE a helper function, not at
+    # module scope, so bare `_connect_as_superuser` / `TENANT_STAFF_TABLE` here
+    # are NameErrors.
+    from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser
 
     tid = _validate_tenant_id(tenant_id)
 
@@ -1248,8 +1249,9 @@ def set_staff_moderator(
         raise HTTPException(status_code=400, detail="staff_id is required")
 
     # See the note in list_staff: this module imports db_manager symbols
-    # per-function, so the connection helper has to be pulled in here too.
-    from services.db_manager import _connect_as_superuser
+    # per-function, so the connection helper AND the table constant have to be
+    # pulled in here too.
+    from services.db_manager import TENANT_STAFF_TABLE, _connect_as_superuser
 
     conn = None
     try:

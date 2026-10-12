@@ -107,6 +107,64 @@ R=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/$TID/admin/login" -H "X
 [ "$R" = "200" ] && ok "password restored" || no "restore failed ($R)"
 
 echo
+echo "=== 0. no NameError waiting in either new endpoint ==="
+# Every route in these modules imports db_manager symbols per-function, because
+# the import near the top of the file lives inside a helper. A bare
+# _connect_as_superuser / TENANT_STAFF_TABLE / _validate_tenant_id compiles fine
+# and is only a NameError once the function runs -- which is exactly how the
+# first two attempts of these endpoints failed.
+python3 - <<'PY'
+import ast, sys
+problems = []
+for path in ("/var/www/resultapp-backend/backend/routers/allocations.py",
+             "/var/www/resultapp-backend/backend/routers/admin.py"):
+    src = open(path).read()
+    tree = ast.parse(src)
+    # Collect module-level bound names
+    module_names = set(dir(__builtins__))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for a in node.names:
+                module_names.add((a.asname or a.name).split(".")[0])
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            module_names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    module_names.add(t.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            module_names.add(node.target.id)
+
+    for fn in [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        if fn.name not in ("list_staff", "set_staff_moderator", "change_tenant_admin_password"):
+            continue
+        local = set()
+        for n in ast.walk(fn):
+            if isinstance(n, (ast.Import, ast.ImportFrom)):
+                for a in n.names:
+                    local.add((a.asname or a.name).split(".")[0])
+            elif isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        local.add(t.id)
+            elif isinstance(n, (ast.arg,)):
+                local.add(n.arg)
+        # names this module's OTHER routes import locally by convention
+        sensitive = {"_connect_as_superuser", "TENANT_STAFF_TABLE",
+                     "_validate_tenant_id", "_row_to_dict", "SCHOOLS_REGISTRY_TABLE"}
+        used = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        missing = sensitive & used - local
+        if missing:
+            problems.append(f"{fn.name}: uses {sorted(missing)} without importing them")
+if problems:
+    for p in problems:
+        print("  FAIL  " + p)
+    sys.exit(1)
+print("  PASS  both endpoints import every db_manager symbol they use")
+PY
+[ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+
+echo
 echo "=== CLEANUP ==="
 sudo -u postgres psql -d postgres -q -c "DELETE FROM tenant_staff WHERE subdomain='$TID' AND staff_id='$MOD';"
 sudo -u postgres psql -d postgres -q -c "DELETE FROM audit_logs WHERE subdomain='$TID' AND action LIKE 'moderators.%';"
