@@ -1,0 +1,26 @@
+test(billing): live production checks, key-mode detection, secure cutover
+
+verify-billing-live.mjs (14 checks)
+  Asserts the DEPLOYED bundle, not the source: the free-credits config GET is
+  publicly readable, PUT is still superadmin-guarded, the hold endpoint refuses
+  sub-minimum registrations before any payment opens, and the webhook rejects
+  unsigned and wrong-signature requests with 401.
+
+verify-live-keys.mjs
+  Determines whether production is actually on live or test keys by reading the
+  deployed client bundle, extracting PREFIXES only.
+
+  This exists because "the env var is set" and "production is live" are
+  different claims: NEXT_PUBLIC_* is inlined at BUILD time, so saving the
+  variable in the dashboard changes nothing until a rebuild. Only the shipped
+  bundle settles it.
+
+flutterwave-cutover.sh
+  Pushes the canonical vars to Vercel reading .env.local directly, so no live
+  payment credential transits a transcript or an agent tool call. The correct
+  response to a secret appearing in the wrong channel is rotation, not
+  convenience.
+
+  Refuses to apply unless the public and secret keys are LIVE, the demo key is
+  TEST, and the pending-registration secret is set — and prints each key's MODE
+  without ever printing its value.
