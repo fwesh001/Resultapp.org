@@ -136,7 +136,11 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
   const creditTotal = useMemo(() => calculateCreditTotal(creditPkg, creditPrice), [creditPkg, creditPrice]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
+    // Layout lives in billing/page.tsx, which owns the single max-width and
+    // horizontal gutter for this surface. This component only spaces its own
+    // sections — adding px-4/py-8 here as well doubled the mobile inset and
+    // stacked two vertical paddings inside an already-padded shell.
+    <div className="space-y-6">
       <div>
         <Link
           href={`/${tenantId}/admin`}

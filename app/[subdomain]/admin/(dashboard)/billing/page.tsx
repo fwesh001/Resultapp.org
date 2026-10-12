@@ -30,7 +30,19 @@ export default async function BillingPage({
   const school = await getTenant(tenantId);
 
   return (
-    <div className="min-h-screen bg-surface-0 px-4 py-10 sm:px-6 lg:px-8">
+    // Matches the Dashboard wrapper exactly: one max-width, one horizontal
+    // gutter, no height of its own.
+    //
+    // This used to be `min-h-screen bg-surface-0 px-4 py-10 sm:px-6 lg:px-8`,
+    // which stacked two full-height columns: AdminShell's <main> is already
+    // `flex-1 overflow-y-auto`, so min-h-screen made the inner column at least
+    // as tall as the viewport INSIDE a box that was itself viewport-tall. On
+    // mobile that produced an inner scrollbar with the page's own scroll
+    // behind it, and the background colour stopped at the fold instead of
+    // running to the bottom. Both gutters (this one plus BillingClient's own
+    // px-4) also doubled the mobile inset, so content sat noticeably further
+    // from the edge than on the Dashboard.
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <BillingClient
         tenantId={tenantId}
         schoolName={school?.name ? toTitleCase(school.name) : tenantId}

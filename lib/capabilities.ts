@@ -24,16 +24,27 @@
 /**
  * Capabilities only the school's own admin holds.
  *
- * `notifications` is admin-only: the portal's inbox is where announcements are
- * authored and broadcast to every parent and staff member, which is a
- * school-wide speech decision rather than a deputy task.
+ * `settings`, `billing`, `audit` and `moderators` are here because each one
+ * either rewrites school-wide configuration, moves money, records the actions
+ * that must not be altered, or grants the very authority these caps protect.
+ * A deputy holding any of these could escalate, so none of them delegate.
+ *
+ * `notifications` is deliberately NOT here. Deputies do need the operational
+ * picture — a held clearance or a failing publish is exactly what they are on
+ * call to act on — so they get the inbox alongside their other duties.
+ *
+ * Granting this does NOT grant the ability to speak to the school. The
+ * tenant-facing notification API is read/receipt-only (list, unread-count,
+ * mark-read); composing and broadcasting lives behind /api/superadmin/*, which
+ * a tenant moderator's session cannot reach at any capability level. So the
+ * school-wide announcement decision stays with the platform, and a deputy
+ * holding `notifications` can observe but not publish.
  */
 export const ADMIN_ONLY_CAPABILITIES = [
   "settings",
   "billing",
   "audit",
   "moderators",
-  "notifications",
 ] as const;
 
 /** Capabilities a moderator (deputy) holds. */
@@ -44,6 +55,7 @@ export const MODERATOR_CAPABILITIES = [
   "clearance",
   "templates",
   "export",
+  "notifications",
 ] as const;
 
 export type Capability = (typeof ADMIN_CAPABILITIES)[number];

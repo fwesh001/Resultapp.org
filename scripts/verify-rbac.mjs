@@ -151,12 +151,17 @@ const adminOnly = block("ADMIN_ONLY_CAPABILITIES", capabilities);
 check("moderator capability list was located", modBlock.length > 20);
 check("admin-only capability list was located", adminOnly.length > 20);
 
-for (const cap of ["dashboard", "allocations", "results", "clearance", "templates", "export"]) {
+for (const cap of ["dashboard", "allocations", "results", "clearance", "templates", "export", "notifications"]) {
   check(`moderator holds ${cap}`, new RegExp(`"${cap}"`).test(modBlock));
 }
 for (const cap of ["settings", "billing", "audit", "moderators"]) {
   check(`admin-only: ${cap}`, new RegExp(`"${cap}"`).test(adminOnly));
 }
+check(
+  "notifications is not ALSO in the admin-only list",
+  !/"notifications"/.test(adminOnly),
+  "a cap in both lists is ambiguous about which side it is guarding",
+);
 check(
   "moderators do NOT hold settings",
   !/"settings"/.test(modBlock),
@@ -176,6 +181,30 @@ check(
   "moderators do NOT hold moderators (privilege escalation)",
   !/"moderators"/.test(modBlock),
   "a moderator who can promote staff could promote themselves out of the restriction",
+);
+
+// Granting `notifications` grants the INBOX, not the microphone.
+//
+// The tenant notification API is list / unread-count / mark-read. Composing and
+// broadcasting to every parent and staff member lives under /api/superadmin/*.
+// If a future refactor moved broadcast behind the tenant capability, a deputy
+// could speak to the whole school — so assert the split still holds.
+const notifInbox = read("app/api/notifications/inbox/route.ts");
+const notifBroadcast = read("app/api/superadmin/notifications/broadcast/route.ts");
+check(
+  "tenant notification inbox is reachable by a moderator session",
+  /admin_session|staff_session/.test(notifInbox),
+  "inbox + inbox caps are the same door",
+);
+check(
+  "broadcast lives outside the tenant capability surface",
+  notifBroadcast.length > 0 && !/requireAdminCapability\(\s*\w+\s*,\s*"notifications"/.test(notifBroadcast),
+  "broadcast must not be unlockable with the notifications capability",
+);
+check(
+  "broadcast requires superadmin identity",
+  /superadmin|platform_admin|superAdminSession|requireSuperadmin/i.test(notifBroadcast),
+  "a tenant session must not satisfy it",
 );
 
 // ===================== 5. SESSION CLAIMS ===================================
