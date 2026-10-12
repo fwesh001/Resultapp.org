@@ -76,6 +76,10 @@ const registerStatus = read(REGISTER_STATUS);
 const flw = read(FLW);
 const wall = read(WALL);
 const signin = read(SIGNIN);
+// Slot-floor parity spans four files, so the two that were not already loaded
+// are pulled in here rather than re-read inside each check.
+const pricing = read(path.join("lib", "pricing.ts"));
+const credits = read(path.join("backend", "routers", "credits.py"));
 
 console.log("\nTokens: hashed at rest, single-use, expiring");
 check("tokens are generated with `secrets` (CSPRNG)", () =>
@@ -681,6 +685,52 @@ check("adminName is threaded from the wizard to the backend", () => {
   return /kwargs\.get\("admin_name"\)/.test(db)
     ? true
     : "register_school never persists admin_name";
+});
+
+check("minimum registration slots agree across all layers", () => {
+  // Same hazard as the adminName bounds above, and higher stakes because it is
+  // a money amount: provisioning runs AFTER payment, so a client that accepts a
+  // count the backend rejects means the school is charged and then refused.
+  //
+  // Four copies must agree — the shared constant, the wizard, the proxy, and the
+  // Pydantic model. Any drift is a revenue bug, not a UX nit.
+  const c = /MIN_REGISTRATION_STUDENTS\s*=\s*(\d+)/.exec(pricing);
+  const w = /count\s*<\s*MIN_REGISTRATION_STUDENTS/.test(register);
+  const p = /studentCount\s*<\s*MIN_REGISTRATION_STUDENTS/.test(registerSchool);
+  const b = /student_count:\s*int\s*=\s*Field\(\.\.\.,\s*ge=MIN_REGISTRATION_STUDENTS/.test(main);
+  const bVal = /MIN_REGISTRATION_STUDENTS\s*=\s*(\d+)/.exec(main);
+
+  if (!c) return "lib/pricing.ts does not declare MIN_REGISTRATION_STUDENTS";
+  if (!b) return "ProvisionRequest.student_count is not bound to MIN_REGISTRATION_STUDENTS";
+  if (!bVal) return "backend/main.py does not declare MIN_REGISTRATION_STUDENTS";
+  if (c[1] !== bVal[1]) {
+    return `the floor is ${c[1]} in the frontend but ${bVal[1]} in the backend`;
+  }
+  if (!w) return "the wizard does not enforce MIN_REGISTRATION_STUDENTS";
+  if (!p) return "the proxy does not enforce MIN_REGISTRATION_STUDENTS";
+  if (c[1] !== "10") return `MIN_REGISTRATION_STUDENTS is ${c[1]}, expected 10`;
+  return true;
+});
+
+check("the Pay button is gated on the registration floor, not just non-empty", () => {
+  // An enabled button for a typed-in "5" means the visitor can pay for five
+  // slots and then be refused by the backend.
+  if (!/payDisabled[\s\S]{0,160}?orderCount\s*<\s*MIN_REGISTRATION_STUDENTS/.test(register)) {
+    return "payDisabled does not compare against MIN_REGISTRATION_STUDENTS";
+  }
+  return true;
+});
+
+check("slot TOP-UPS keep a floor of 1", () => {
+  // Registration-only rule. Blocking a one-seat top-up would strand a school
+  // that needs exactly one more place mid-term, which is a normal operation.
+  if (/slot_count[^\n]*ge=10/.test(credits)) {
+    return "SlotTopUpRequest was given the registration minimum";
+  }
+  if (!/slot_count:\s*Optional\[int\]\s*=\s*Field\(None,\s*gt=0/.test(credits)) {
+    return "SlotTopUpRequest no longer accepts gt=0";
+  }
+  return true;
 });
 
 check("adminName bounds agree across all three layers", () => {

@@ -26,13 +26,14 @@ import { Button } from "@/components/ui/Button";
     generateTxRef,
   } from "@/lib/flutterwave";
   import { holdRegistration } from "@/lib/holdRegistrationClient";
-import {
-  getPricingTier,
-  calculateTieredTotal,
-  formatNaira,
-  FREE_CREDIT_MIN_STUDENTS,
-  FREE_CREDIT_GRANT,
-} from "@/lib/pricing";
+  import {
+    getPricingTier,
+    calculateTieredTotal,
+    formatNaira,
+    FREE_CREDIT_MIN_STUDENTS,
+    FREE_CREDIT_GRANT,
+    MIN_REGISTRATION_STUDENTS,
+  } from "@/lib/pricing";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 import { fireCompletionBurst, fireMilestoneBurst } from "@/lib/celebration";
 import { friendlyStage, useSimulatedProgress } from "@/lib/progress";
@@ -589,8 +590,12 @@ export function RegisterSchoolForm() {
       next.studentCount = "Estimated student count is required";
     } else if (!Number.isFinite(count) || !Number.isInteger(count)) {
       next.studentCount = "Must be a whole number";
-    } else if (count <= 0) {
-      next.studentCount = "Must be greater than 0";
+    } else if (count < MIN_REGISTRATION_STUDENTS) {
+      // Registration floor. This is the check that actually PREVENTS the charge —
+      // startFlutterwaveCheckout calls validateAll() before opening the modal —
+      // so getting this right here is what keeps a sub-minimum school from being
+      // charged and then refused by the backend.
+      next.studentCount = `Minimum ${MIN_REGISTRATION_STUDENTS} students`;
     } else if (count > 10000) {
       next.studentCount = "Maximum 10,000 students";
     }
@@ -823,10 +828,40 @@ export function RegisterSchoolForm() {
   }, [values.studentCount]);
   const orderTier = useMemo(() => getPricingTier(orderCount), [orderCount]);
   const orderTotal = useMemo(() => calculateTieredTotal(orderCount), [orderCount]);
+  // Is the "Free 30 credits" offer currently switched on platform-wide?
+  //
+  // Defaults to TRUE, so a failed or slow fetch leaves registration behaving
+  // exactly as it does today rather than silently withdrawing a live promotion.
+  // Failing open is the right direction here: hiding a real offer is a worse
+  // error for a school than briefly showing one the superadmin has paused, and
+  // the backend remains the sole authority either way — it simply withholds the
+  // grant, so the worst outcome is copy we should not have shown.
+  const [freeCreditsEnabled, setFreeCreditsEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/config/free-credits", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        // Only an explicit `false` hides the offer. A malformed or partial
+        // response must not be read as "disabled".
+        if (typeof d.enabled === "boolean") setFreeCreditsEnabled(d.enabled);
+      })
+      .catch(() => {
+        // Deliberately silent: the default of true already applies, and a
+        // console warning about a policy fetch would be noise on every visit.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Copy-only mirror of the server's free-credit policy. The server remains the
   // sole authority — this just keeps the registration copy honest instead of
   // promising credits that may be withheld.
-  const qualifiesFreeCredits = orderCount >= FREE_CREDIT_MIN_STUDENTS;
+  const qualifiesFreeCredits =
+    freeCreditsEnabled && orderCount >= FREE_CREDIT_MIN_STUDENTS;
 
   async function startFlutterwaveCheckout() {
     setGlobalError(null);
@@ -1524,13 +1559,20 @@ export function RegisterSchoolForm() {
     // a hint rather than leaving a dead button with no explanation.
     const payBlockedByTerms = !values.acceptTerms;
     const payBlockedByEmail = !isEmailVerified;
-    const payDisabled = isSubmitting || orderCount <= 0 || payBlockedByTerms || payBlockedByEmail;
+    // Disabled on the REGISTRATION floor, not just "empty". With only an
+    // `orderCount <= 0` check the Pay button stayed live for a typed-in 5, so
+    // the visitor paid for five slots and was then refused by the backend. The
+    // hint below explains the same threshold, so the button's state and its
+    // explanation can never disagree.
+    const payDisabled = isSubmitting || orderCount < MIN_REGISTRATION_STUDENTS || payBlockedByTerms || payBlockedByEmail;
     const payHint = payBlockedByTerms
       ? "Accept the Terms of Service and Privacy Policy to continue."
       : payBlockedByEmail
         ? "Verify your admin email to unlock payment."
-        : orderCount <= 0
-          ? "Enter your estimated student count to see a total."
+        : orderCount < MIN_REGISTRATION_STUDENTS
+          ? orderCount <= 0
+            ? "Enter your estimated student count to see a total."
+            : `Minimum ${MIN_REGISTRATION_STUDENTS} students.`
           : null;
 
     return (
@@ -1570,11 +1612,19 @@ export function RegisterSchoolForm() {
             <span>Total due</span>
             <span>{formatNaira(orderTotal)}</span>
           </div>
-          <p className="mt-1 text-xs text-purple-300/50">
-            {qualifiesFreeCredits
-              ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch.`
-              : "Publishing credits are topped up separately from your portal."}
-          </p>
+          {/* Step 3 footnote. Unmounts entirely when the offer is paused —
+              including the negative branch, which said "Publishing credits are
+              topped up separately". That sentence is fine on its own, but it
+              only ever appeared as the OTHER half of an offer we are choosing
+              not to advertise, so keeping it while removing its counterpart
+              would leave a trace of the promotion with none of the substance. */}
+          {freeCreditsEnabled ? (
+            <p className="mt-1 text-xs text-purple-300/50">
+              {qualifiesFreeCredits
+                ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch.`
+                : "Publishing credits are topped up separately from your portal."}
+            </p>
+          ) : null}
         </div>
 
         {globalError && (
@@ -1661,7 +1711,7 @@ export function RegisterSchoolForm() {
           <Button
             variant="outline"
             className="mt-2 w-full gap-2 rounded-full"
-            disabled={isSubmitting || orderCount <= 0}
+              disabled={isSubmitting || orderCount < MIN_REGISTRATION_STUDENTS}
             onClick={useDevMockPayment}
           >
             Dev Mock Payment (localhost only)
@@ -2011,39 +2061,46 @@ export function RegisterSchoolForm() {
         disabled={isSubmitting}
       />
 
-      {/* Free-credit notice — conditional: only schools at/above the volume
-          threshold receive the grant, and the server decides regardless. */}
-      <div
-        className={
-          qualifiesFreeCredits
-            ? "rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
-            : "rounded-xl border border-purple-500/10 bg-purple-950/10 p-3"
-        }
-      >
-        <p
+      {/* Free-credit notice.
+          Gated on the platform toggle FIRST, then the volume threshold — and it
+          UNMOUNTS rather than swapping copy. That matters: the negative branch
+          reads "Free publishing credits start at 500 students", which
+          advertises the offer just as effectively as the positive one does.
+          Hiding only the qualifying branch would leave every sub-500 school
+          being told about an offer the superadmin has switched off. */}
+      {freeCreditsEnabled ? (
+        <div
           className={
             qualifiesFreeCredits
-              ? "flex items-center gap-2 text-xs font-medium text-emerald-200"
-              : "flex items-center gap-2 text-xs font-medium text-purple-200/80"
+              ? "rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
+              : "rounded-xl border border-purple-500/10 bg-purple-950/10 p-3"
           }
         >
-          <Sparkles className={qualifiesFreeCredits ? "h-3.5 w-3.5 text-emerald-400" : "h-3.5 w-3.5 text-purple-300/60"} />
-          {qualifiesFreeCredits
-            ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch`
-            : "Publishing credits are not included at this size"}
-        </p>
-        <p
-          className={
-            qualifiesFreeCredits
-              ? "mt-1 text-xs leading-5 text-emerald-100/60"
-              : "mt-1 text-xs leading-5 text-purple-300/50"
-          }
-        >
-          {qualifiesFreeCredits
-            ? "Enough to publish a full class. You pay once for student slots now — top up publishing credits anytime from your portal."
-            : `Free publishing credits start at ${FREE_CREDIT_MIN_STUDENTS} students. Top up anytime from your portal — credits never expire.`}
-        </p>
-      </div>
+          <p
+            className={
+              qualifiesFreeCredits
+                ? "flex items-center gap-2 text-xs font-medium text-emerald-200"
+                : "flex items-center gap-2 text-xs font-medium text-purple-200/80"
+            }
+          >
+            <Sparkles className={qualifiesFreeCredits ? "h-3.5 w-3.5 text-emerald-400" : "h-3.5 w-3.5 text-purple-300/60"} />
+            {qualifiesFreeCredits
+              ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch`
+              : "Publishing credits are not included at this size"}
+          </p>
+          <p
+            className={
+              qualifiesFreeCredits
+                ? "mt-1 text-xs leading-5 text-emerald-100/60"
+                : "mt-1 text-xs leading-5 text-purple-300/50"
+            }
+          >
+            {qualifiesFreeCredits
+              ? "Enough to publish a full class. You pay once for student slots now — top up publishing credits anytime from your portal."
+              : `Free publishing credits start at ${FREE_CREDIT_MIN_STUDENTS} students. Top up anytime from your portal — credits never expire.`}
+          </p>
+        </div>
+      ) : null}
 
       {/* Subtle helper card */}
       <div className="rounded-xl border border-purple-500/10 bg-purple-950/10 p-3">

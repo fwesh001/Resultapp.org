@@ -268,6 +268,24 @@ class TenantResponse(BaseModel):
 SUBDOMAIN_RE = re.compile(r"^[a-z0-9-]{3,30}$")
 RESERVED_SUBDOMAINS = {"www", "api", "admin", "app", "dashboard", "resultapp", "mail", "support", "help", "billing", "ops", "status"}
 
+# Minimum student slots for INITIAL REGISTRATION.
+#
+# Mirrors MIN_REGISTRATION_STUDENTS in lib/pricing.ts, which the wizard and the
+# Next proxy both read. It is duplicated rather than shared because this is a
+# separate deployment with no access to the frontend tree — so the parity is
+# enforced by scripts/verify-auth-flow.mjs, which asserts all copies agree.
+#
+# Why it matters that they agree: provisioning runs AFTER payment. If this
+# backend were stricter than the wizard, a visitor would be charged for, say,
+# five slots and then refused with a 422 they only see afterwards. The wizard's
+# check is what prevents the charge; this one guarantees the portal is never
+# created below the floor by a bypassed client.
+#
+# REGISTRATION ONLY. Slot top-ups deliberately keep a floor of 1
+# (routers/credits.py SlotTopUpRequest) — buying one extra seat mid-term is a
+# normal operation and must not be blocked by the registration minimum.
+MIN_REGISTRATION_STUDENTS = 10
+
 class ProvisionRequest(BaseModel):
     # Unknown fields are IGNORED, not rejected. This is stated explicitly
     # rather than left to the Pydantic default so the intent survives: the
@@ -293,7 +311,7 @@ class ProvisionRequest(BaseModel):
     transaction_id: Optional[str] = Field(None, min_length=1, max_length=100, description="Verified Flutterwave transaction_id (anti-replay: rejected if already redeemed)")
     amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably on the provision ledger row)")
     phone_number: Optional[str] = Field(None, max_length=20, examples=["+2348012345678"])
-    student_count: int = Field(..., gt=0, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each). Also gates the free-credit grant at >= 500 (inclusive).")
+    student_count: int = Field(..., ge=MIN_REGISTRATION_STUDENTS, le=10000, examples=[150], description="Estimated students, used for pricing (100 NGN each). Also gates the free-credit grant at >= 500 (inclusive).")
     # DEPRECATED and IGNORED. Retained only so older clients keep validating.
     # The backend is strictly authoritative: the free-credit grant is decided by
     # the superadmin toggle AND the >= FREE_CREDITS_MIN_STUDENTS threshold, never

@@ -4,7 +4,7 @@ import {
   verifyTransaction,
   verifyTransactionByReference,
 } from "@/lib/flutterwave";
-import { calculateTieredTotal } from "@/lib/pricing";
+import { calculateTieredTotal, MIN_REGISTRATION_STUDENTS } from "@/lib/pricing";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
 
 /**
@@ -259,9 +259,9 @@ export async function POST(req: NextRequest) {
     fieldErrors.studentCount = "Estimated student count is required";
   } else if (!Number.isFinite(studentCount) || !Number.isInteger(studentCount)) {
     fieldErrors.studentCount = "Student count must be a whole number";
-  } else if (studentCount <= 0) {
-    fieldErrors.studentCount = "Student count must be greater than 0";
-  } else   if (studentCount > 10000) {
+  } else if (studentCount < MIN_REGISTRATION_STUDENTS) {
+    fieldErrors.studentCount = `Minimum ${MIN_REGISTRATION_STUDENTS} students`;
+  } else if (studentCount > 10000) {
     fieldErrors.studentCount = "Maximum 10,000 students";
   }
 

@@ -35,9 +35,22 @@ function getBackendBase(): string {
 }
 
 export async function GET() {
-  // Guarded on read too: this exposes platform policy, not tenant data.
-  const guard = await requireSuperadmin();
-  if (guard) return guard;
+  // OPEN on read, like the credit-price route this file says it follows.
+  //
+  // It previously guarded the GET too, on the reasoning that it "exposes
+  // platform policy, not tenant data" — which is true, and is also the point.
+  // The registration wizard is unauthenticated by definition (it runs BEFORE
+  // anyone has an account), so a superadmin-only read left it unable to know
+  // whether the offer was on and it advertised credits the backend would then
+  // refuse to grant.
+  //
+  // What is exposed is three numbers: whether the offer is on, the student
+  // threshold, and the grant amount. All three are already printed on the
+  // public pricing page, and none identifies a tenant or an operator. The
+  // shared secret stays server-side — the client never sees it, and the
+  // backend endpoint remains secret-gated.
+  //
+  // PUT stays superadmin-only. Reading policy is not changing it.
 
   const secret = getProxySecret();
   if (!secret) {

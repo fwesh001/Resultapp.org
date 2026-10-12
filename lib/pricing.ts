@@ -41,6 +41,29 @@ export function getSliderPct(studentCount: number): number {
 export const CREDIT_PRICE = 200;
 
 /**
+ * Minimum student slots purchasable at INITIAL REGISTRATION.
+ *
+ * REGISTRATION ONLY. Post-registration slot top-ups keep a floor of 1 — buying
+ * a single extra seat mid-term is a normal, legitimate operation, and gating it
+ * behind the same minimum would block a school that needs exactly one more
+ * place. Do not "helpfully" apply this constant to the top-up paths.
+ *
+ * WHY IT MUST MATCH ON ALL THREE LAYERS
+ * -------------------------------------
+ * The wizard, the Next proxy, and the FastAPI Pydantic model each enforce this
+ * independently. They have to agree, because provisioning runs AFTER payment:
+ * if the backend alone enforced it, a visitor who bypassed the wizard (or typed
+ * a lower number in another tab) would be charged and then rejected with a 422
+ * they never see — money taken, no portal. The wizard check is what actually
+ * PREVENTS the charge; the other two are integrity checks against a bypassed
+ * client.
+ *
+ * Mirrored in backend/main.py (ProvisionRequest). scripts/verify-auth-flow.mjs
+ * asserts all four copies agree, because a silent drift here costs real money.
+ */
+export const MIN_REGISTRATION_STUDENTS = 10;
+
+/**
  * Free registration credits — display/marketing mirror of the backend policy.
  *
  * The backend (`resolve_initial_credit_grant`) is the ONLY authority: it grants

@@ -1,0 +1,62 @@
+feat(onboarding): minimum 10 registration slots, free-credit UI gating
+
+MINIMUM 10 SLOTS
+----------------
+Enforced on all three layers plus the hold endpoint, because provisioning runs
+AFTER payment: if only the backend enforced it, a visitor who bypassed the
+wizard would be charged and then refused with a 422 they never see. The wizard
+check is what actually PREVENTS the charge; the rest are integrity checks.
+
+The Pay button was previously gated on `orderCount <= 0`, which left it live
+for a typed-in "5" — so the visitor paid for five slots and was then refused.
+It now compares against the floor, and the hint text explains the same
+threshold so the button's state and its explanation cannot disagree.
+
+REGISTRATION ONLY. Slot top-ups keep a floor of 1 (SlotTopUpRequest
+gt=0, the slots proxy, and the billing route are untouched). Buying one extra
+seat mid-term is a normal operation and must not be blocked by a
+registration-time rule. A regression check now asserts the top-up path still
+accepts 1, so a future "consistency" edit cannot quietly apply the
+registration minimum there.
+
+The four copies of the constant (lib/pricing.ts, wizard, proxy, Pydantic) are
+asserted to agree in verify-auth-flow.mjs, modelled on the existing adminName
+parity check. A drift there is a revenue bug, not a UX nit.
+
+FREE-CREDITS UI
+---------------
+The backend toggle already worked — the UI simply never asked. The card
+advertised credits the backend would refuse to grant.
+
+The GET on /api/admin/config/free-credits is now open, matching the
+credit-price route this file already said it followed. Registration is
+unauthenticated by definition — it runs BEFORE anyone has an account — so a
+superadmin-only read left the wizard unable to know whether the offer was on.
+What is exposed is three numbers already printed on the public pricing page;
+none identifies a tenant. The shared secret stays server-side and PUT remains
+superadmin-guarded. Reading policy is not changing it.
+
+The card UNMOUNTS rather than swapping copy. That is the part that matters:
+the negative branch reads "Free publishing credits start at 500 students",
+which advertises the offer as effectively as the positive branch does, so
+hiding only the qualifying branch would still tell every sub-500 school about
+an offer the superadmin has switched off.
+
+The client default is `true`. A failed or slow fetch therefore leaves
+registration behaving exactly as it does today, rather than silently
+withdrawing a live promotion. Only an explicit boolean `false` hides it — a
+malformed response must not read as "disabled".
+
+ENVIRONMENT
+-----------
+.env.example documents the canonical names, the demo-only key, and
+PENDING_REGISTRATION_SECRET. The live keys were moved out of the Paystack-style
+staging block (Public_key / Secret_key / Encryption_Key) into the canonical
+names by a script that refuses to guess: it verifies the staged values are
+live and the old ones are test before writing anything, and it made a backup
+first. A case mismatch on Secret_key initially aborted the migration rather
+than dropping a live secret.
+
+Encryption_Key is unused by standard Flutterwave checkout and was removed.
+
+Regression: 853 checks across 12 node suites, plus the two Python suites.
