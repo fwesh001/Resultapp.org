@@ -137,6 +137,99 @@ export type ProvisionOutcome =
   | { status: "failed"; detail: string };
 
 /**
+ * Try to take exclusive ownership of a hold before provisioning.
+ *
+ * This is the mutual-exclusion primitive the browser callback uses, and it must
+ * be the SAME one the webhook uses. Without it both paths could provision
+ * concurrently: whichever lost the race would get a 409 from the backend and
+ * show the school "that subdomain is taken" moments after they paid. The school
+ * would still get their portal — the webhook's provision succeeds — but the
+ * error is the wrong thing to show someone who has just handed over money.
+ *
+ * Returns:
+ *   "claimed" — we own it; provision, and call releaseHold() if that fails
+ *   "taken"   — the webhook already owns it; do NOT provision, just wait
+ *   "none"    — no hold exists (an older client, or a path that skips the hold)
+ */
+export async function claimHold(
+  txRef: string,
+): Promise<"claimed" | "taken" | "none"> {
+  const base = backendBase();
+  const secret = backendSecret();
+  if (!base || !secret || !txRef) return "none";
+
+  try {
+    const res = await fetch(`${base}/api/v1/admin/pending-registrations/claim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify({ tx_ref: txRef }),
+      cache: "no-store",
+    });
+    if (res.status === 409) return "taken";
+    if (!res.ok) return "none";
+    return "claimed";
+  } catch {
+    // A hold store hiccup must not block registration: the browser path can
+    // still provision on its own, which is exactly what it did before this
+    // existed. The cost is a possible double-provision attempt, which the
+    // backend's subdomain uniqueness turns into a harmless 409.
+    return "none";
+  }
+}
+
+/** Hand a claim back so the other path (or a retry) can proceed. */
+export async function releaseHold(txRef: string): Promise<void> {
+  const base = backendBase();
+  const secret = backendSecret();
+  if (!base || !secret || !txRef) return;
+  try {
+    await fetch(`${base}/api/v1/admin/pending-registrations/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify({ tx_ref: txRef }),
+      cache: "no-store",
+    });
+  } catch {
+    /* best-effort; the TTL reaps it anyway */
+  }
+}
+
+/**
+ * Wait for a school row to appear.
+ *
+ * Used when the webhook won the claim: rather than provisioning a second time
+ * or showing "subdomain taken", we wait for the webhook's work to land and then
+ * report success. Provisioning takes tens of seconds, so this is bounded and
+ * deliberately noisy in the log — a school left waiting here is a school a
+ * human may need to check on.
+ */
+export async function waitForSchool(
+  subdomain: string,
+  timeoutMs = 90_000,
+): Promise<boolean> {
+  const base = backendBase();
+  if (!base || !subdomain) return false;
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(
+        `${base}/api/v1/tenant/${encodeURIComponent(subdomain)}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) return true;
+    } catch {
+      /* keep polling */
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  console.warn(
+    `[pending] gave up waiting ${timeoutMs}ms for ${subdomain} to appear`,
+  );
+  return false;
+}
+
+/**
  * Verify payment, then provision from the hold.
  *
  * `opts.source` is only for logging — both callers run identical logic on

@@ -23,6 +23,8 @@ import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/constants";
  * read the admin password back out of Flutterwave `meta`).
  */
 
+import { claimHold, releaseHold, waitForSchool } from "@/lib/pendingRegistrations";
+
 // ---------------------------------------------------------------------------
 // Config & helpers
 // ---------------------------------------------------------------------------
@@ -329,6 +331,11 @@ export async function POST(req: NextRequest) {
   const backendBaseForTx = rawUrl.replace(/\/api\/v1\/provision\/?$/, "").replace(/\/$/, "");
   const isMockTarget = rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1");
   let verifiedPaid = 0;
+  // The tx_ref the hold was parked under. Preferred source is the value the
+  // provider echoes back on the verified transaction, since that is literally
+  // the reference that was charged; trustedRef is the fallback for the rare
+  // case where the verify response omits it.
+  let holdTxRef = "";
   if (!isMockTarget) {
     if (!txId) {
       return NextResponse.json(
@@ -447,6 +454,9 @@ export async function POST(req: NextRequest) {
       );
     }
     verifiedPaid = paid;
+    holdTxRef = String(
+      (vData as { tx_ref?: unknown }).tx_ref ?? trustedRef ?? "",
+    ).trim();
     // 3. Anti-replay pre-check (authoritative check also runs in provision_school)
     try {
       const existsRes = await fetch(
@@ -491,6 +501,68 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ---- Exclusive claim on the hold ----
+  //
+  // Both provisioning paths (this one and the Flutterwave webhook) act on the
+  // same successful charge within seconds of each other. Claiming here, before
+  // the FastAPI call, gives us mutual exclusion: whoever claims first provisions
+  // and the other stands down. Without this, the loser got a 409 from the backend
+  // and showed the school "that subdomain is taken" moments after paying — even
+  // though the winner had just built their portal.
+  //
+  // Claiming only narrows the window. The authoritative guarantee is still
+  // FastAPI's subdomain uniqueness, which is what turns a genuine double-claim
+  // into a harmless 409 instead of two live portals.
+  let holdClaim: "claimed" | "taken" | "none" = "none";
+  if (holdTxRef) {
+    holdClaim = await claimHold(holdTxRef);
+    console.log(
+      `[register-school] hold ${holdClaim} for ${subdomain} (tx_ref=${holdTxRef})`,
+    );
+
+    if (holdClaim === "taken") {
+      // The webhook won. Do NOT provision again — wait for its work to land and
+      // report the same success the school would have seen had they not lost the
+      // race. This is the case that used to surface as a confusing error.
+      const appeared = await waitForSchool(subdomain, 90_000);
+      if (appeared) {
+        return NextResponse.json(
+          {
+            success: true,
+            message: `Successfully provisioned ${subdomain}.resultapp.org for ${schoolName}`,
+            deployed_url: `https://${subdomain}.resultapp.org`,
+            domain: `${subdomain}.resultapp.org`,
+            subdomain,
+            school_name: schoolName,
+            student_count: studentCount,
+            provisioned_by: "webhook",
+            timestamp: new Date().toISOString(),
+          },
+          { status: 200 },
+        );
+      }
+      // The webhook claimed but never landed. Fall through and provision here
+      // rather than leave a paying customer with no school and no message: the
+      // claim is stale, so we release it and take the work back.
+      console.error(
+        `[register-school] webhook claimed ${holdTxRef} but ${subdomain} never appeared; reclaiming`,
+      );
+      await releaseHold(holdTxRef);
+      holdClaim = "claimed";
+    }
+  }
+
+  // Claiming flips the hold to 'completed', which is what tells the webhook to
+  // stand down. That is correct on success and actively harmful on failure: a
+  // hold left 'completed' with no school behind it silently disables the safety
+  // net for a customer who has already paid. So every failure path below hands
+  // the claim back, letting the webhook retry and, if it also cannot finish,
+  // record the school as needing manual provisioning.
+  const releaseIfOurs = () => {
+    if (holdClaim === "claimed" && holdTxRef) return releaseHold(holdTxRef);
+    return Promise.resolve();
+  };
+
   let provisionRes: Response;
   try {
     const controller = new AbortController();
@@ -512,6 +584,7 @@ export async function POST(req: NextRequest) {
     clearTimeout(timeout);
   } catch (err) {
     console.error("[register-school] Failed to reach FastAPI:", err);
+    await releaseIfOurs();
     const isAbort = err instanceof Error && err.name === "AbortError";
     return NextResponse.json(
       {
@@ -558,6 +631,10 @@ export async function POST(req: NextRequest) {
     if (provisionRes.status === 409) {
       // Paid-but-sniped: payment succeeded but the subdomain was taken first.
       // No auto-retry (same tx would 400) — support ticket with tx reference.
+      // We still release: the webhook's job is to confirm that independently
+      // and raise the manual-provisioning flag, which is better than a hold
+      // that falsely claims to be finished.
+      await releaseIfOurs();
       if (txId) {
         console.error(`[register-school] PAID-BUT-SNIPED tx=${txId} subdomain=${subdomain} paid=${verifiedPaid}`);
         return NextResponse.json(
@@ -583,6 +660,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (provisionRes.status === 400 || provisionRes.status === 422) {
+      await releaseIfOurs();
       return NextResponse.json(
         { success: false, error: detailStr || "Invalid request", details: detailStr },
         { status: provisionRes.status }
@@ -590,6 +668,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (provisionRes.status === 401 || provisionRes.status === 403) {
+      await releaseIfOurs();
       return NextResponse.json(
         {
           success: false,
@@ -599,6 +678,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await releaseIfOurs();
     return NextResponse.json(
       { success: false, error: detailStr || "Provisioning failed. Please contact support.", raw: data },
       { status: provisionRes.status >= 400 && provisionRes.status < 600 ? provisionRes.status : 500 }

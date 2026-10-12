@@ -42,6 +42,24 @@ mode_of() {
   echo "set(non-flw)"
 }
 
+# The webhook hash has a DIFFERENT SHAPE from the API keys, so it gets its own
+# classifier. Using mode_of() here was a bug: Flutterwave derives the hash from
+# the secret key, so in test mode it carries a `FLWSECK_TEST` prefix but in LIVE
+# mode it is a bare hex string with no prefix at all. mode_of() only recognised
+# the FLWPUBK-/FLWSECK- prefixes, so every correctly-configured live hash fell
+# through to "set(non-flw)" and blocked the cutover.
+#
+# The only meaningful distinction is TEST vs not. A test-mode hash will fail every
+# LIVE webhook at the signature check, so that is the one thing worth refusing on.
+# Anything else is treated as the opaque value Flutterwave generated — we do not
+# invent a format for it, and we do not require the user to.
+webhook_hash_state() {
+  local v="$1"
+  [[ -z "$v" ]] && { echo "EMPTY"; return; }
+  [[ "$v" == *_TEST* || "$v" == *TEST* ]] && { echo "TEST-MODE"; return; }
+  echo "LIVE"
+}
+
 PUB=$(read_env NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY)
 DEMO=$(read_env NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY)
 SEC=$(read_env FLUTTERWAVE_SECRET_KEY)
@@ -52,7 +70,7 @@ echo "=== current .env.local (modes only — values are never printed) ==="
 printf "  %-42s %s\n" "NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY"      "$(mode_of "$PUB")"
 printf "  %-42s %s\n" "NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY" "$(mode_of "$DEMO")"
 printf "  %-42s %s\n" "FLUTTERWAVE_SECRET_KEY"                  "$(mode_of "$SEC")"
-printf "  %-42s %s\n" "FLUTTERWAVE_WEBHOOK_SECRET_HASH"         "$(mode_of "$HASH")"
+printf "  %-42s %s\n" "FLUTTERWAVE_WEBHOOK_SECRET_HASH"         "$(webhook_hash_state "$HASH")"
 printf "  %-42s %s\n" "PENDING_REGISTRATION_SECRET"             "$(mode_of "$PEND")"
 echo
 
@@ -60,12 +78,19 @@ BLOCKERS=0
 [[ "$(mode_of "$PUB")"  == "LIVE" ]] || { echo "!! NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY must be LIVE"; BLOCKERS=1; }
 [[ "$(mode_of "$SEC")"  == "LIVE" ]] || { echo "!! FLUTTERWAVE_SECRET_KEY must be LIVE"; BLOCKERS=1; }
 [[ "$(mode_of "$DEMO")" == "TEST" ]] || { echo "!! NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY should be TEST (demo shows card 5531...)"; BLOCKERS=1; }
-[[ "$(mode_of "$HASH")" == "LIVE" ]] || {
+[[ "$(webhook_hash_state "$HASH")" == "LIVE" ]] || {
   echo ""
-  echo ">> FLUTTERWAVE_WEBHOOK_SECRET_HASH is $(mode_of "$HASH")."
-  echo "   Copy the LIVE value from Flutterwave Dashboard -> Settings -> Webhooks."
-  echo "   Until it is replaced, every live webhook is rejected at the signature"
-  echo "   check — the safety net stays dormant, but nothing else is affected."
+  echo ">> FLUTTERWAVE_WEBHOOK_SECRET_HASH is $(webhook_hash_state "$HASH")."
+  if [[ "$(webhook_hash_state "$HASH")" == "TEST-MODE" ]]; then
+    echo "   That looks like the TEST-MODE hash. Copy the LIVE value from"
+    echo "   Flutterwave Dashboard -> Settings -> Webhooks (the same page you are"
+    echo "   on; click the eye icon to reveal it) and replace it."
+    echo "   Until you do, every live webhook is rejected at the signature check —"
+    echo "   the safety net stays dormant, but nothing else is affected."
+  else
+    echo "   Set it to the value shown on Flutterwave Dashboard -> Settings -> Webhooks."
+    echo "   It is an opaque string Flutterwave generates; do not invent your own."
+  fi
   BLOCKERS=1
 }
 [[ -n "$PEND" ]] || { echo "!! PENDING_REGISTRATION_SECRET is empty — the hold endpoint will refuse"; BLOCKERS=1; }
