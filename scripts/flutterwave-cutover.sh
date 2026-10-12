@@ -125,15 +125,33 @@ echo "=== writing to Vercel production ==="
 set_one() {
   local name="$1" value="$2" scope="${3:-production}"
   printf "  %-42s " "$name"
-  printf '%s' "$value" | npx --yes vercel env add "$name" "$scope" --force --yes - >/dev/null 2>&1 \
-    && echo "set" || echo "FAILED"
+  if printf '%s' "$value" | npx --yes vercel env add "$name" "$scope" --force --yes - >/dev/null 2>&1; then
+    echo "set"
+  else
+    echo "FAILED"
+    FAILED_VARS+=("$name")
+  fi
 }
+
+FAILED_VARS=()
 
 set_one NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY      "$PUB"
 set_one NEXT_PUBLIC_FLUTTERWAVE_DEMO_PUBLIC_KEY "$DEMO"
 set_one FLUTTERWAVE_SECRET_KEY                  "$SEC"
 set_one FLUTTERWAVE_WEBHOOK_SECRET_HASH         "$HASH"
 set_one PENDING_REGISTRATION_SECRET             "$PEND"
+
+# A partial cutover is the dangerous state here: production would run with some
+# variables live and some missing, which fails closed but looks like a success
+# if the script just returns 0. Refuse to call it done.
+if [ ${#FAILED_VARS[@]} -gt 0 ]; then
+  echo
+  echo "!! ${#FAILED_VARS[@]} variable(s) did not reach Vercel:"
+  for v in "${FAILED_VARS[@]}"; do echo "     - $v"; done
+  echo "   Nothing below will work until these are set. Most often this means"
+  echo "   the CLI is logged out — run 'npx vercel login' and try again."
+  exit 1
+fi
 
 echo
 echo "NEXT_PUBLIC_* values are inlined at BUILD time, so a rebuild is required:"
