@@ -467,7 +467,17 @@ def change_tenant_admin_password(
     `is_moderator` staff are refused: a deputy is not the credential holder, and
     letting them rotate the school's admin password would be an escalation.
     """
-    tid = _validate_tenant_id(tenant_id)
+    from services.db_manager import SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+
+    # Same validation as update_tenant_profile. This module has no shared
+    # _validate_tenant_id helper (each route imports from main directly), so
+    # calling one here would be a NameError at request time.
+    tid = (tenant_id or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid.startswith("-") or tid.endswith("-"):
+        raise HTTPException(status_code=400, detail="Invalid tenant_id")
+    if tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail=f"Tenant '{tid}' is reserved")
     # A mismatch is a 403, not a silent correction: a proxy bug that sent the
     # wrong tenant here should be loud, not quietly rewrite another school's
     # credential.
