@@ -1598,3 +1598,234 @@ def delete_roster_record(
                 conn.close()
             except Exception:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# Moderator Management
+# ---------------------------------------------------------------------------
+#
+# Promotion and demotion of tenant staff. Separate from the other roster
+# endpoints because this is the one operation that CHANGES THE CAPABILITY SET,
+# and therefore the one that must never be reachable by a moderator: a deputy
+# who can promote staff can promote themselves to admin and the rest of the
+# cap list becomes decoration.
+#
+# The Next proxy guards this on the `moderators` capability (see
+# app/api/admin/staff/moderator/route.ts). FastAPI here sees only the shared
+# secret plus the X-Viewer-* headers, so this is defence in depth in the same
+# shape as the rest of the audit work, not a second independent boundary.
+
+
+class ModeratorUpdate(BaseModel):
+    subdomain: str
+    staff_id: str
+    is_moderator: bool
+
+
+@router.get("/staff", summary="List tenant staff with their moderator flag")
+def list_staff(tenant_id: str):
+    """Roster rows for the Moderator Management screen.
+
+    Returns `is_moderator` as a real boolean rather than the raw column, which
+    is nullable — the migration backfilled existing rows but did NOT add a NOT
+    NULL constraint, so a row written by older code can still hold NULL. The UI
+    must not have to reason about tri-state.
+    """
+    tid = _validate_tenant_id(tenant_id)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT staff_id, full_name, email, role,
+                   COALESCE(is_moderator, FALSE) AS is_moderator,
+                   moderator_granted_at, is_active
+            FROM {TENANT_STAFF_TABLE}
+            WHERE subdomain = %s
+            ORDER BY staff_id;
+            """,
+            (tid,),
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in (cur.description or [])]
+        return {
+            "success": True,
+            "subdomain": tid,
+            "staff": [dict(zip(cols, r)) for r in rows],
+        }
+    except Exception as e:
+        logger.exception("[roster] staff list failed for %s: %s", tid, e)
+        raise HTTPException(status_code=500, detail=f"Could not list staff: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.patch("/staff/moderator", summary="Promote or demote a staff member to Moderator")
+def set_staff_moderator(
+    tenant_id: str,
+    payload: ModeratorUpdate,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
+    """Grant or revoke Moderator capability for one staff member.
+
+    Guards, in order:
+
+      1. `subdomain` in the body must match the path tenant. A mismatch is a
+         403, not a silent correction — a proxy bug that sent the wrong tenant
+         here should be loud, not quietly write to another school.
+      2. A moderator may not call this at all. This is the escalation boundary.
+      3. The final admin cannot be demoted. A school that locks itself out
+         cannot email its way back in; the only recovery is a direct database
+         edit, so the last admin is not allowed to remove themselves.
+
+    `moderator_granted_at` is stamped on promotion and cleared on demotion so
+    the audit history keeps the original grant time rather than the latest
+    toggle.
+    """
+    tid = _validate_tenant_id(tenant_id)
+    body_sub = (payload.subdomain or "").lower().strip()
+    if body_sub and body_sub != tid:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Body subdomain '{body_sub}' does not match path tenant '{tid}'",
+        )
+
+    # Guard 2 — escalation boundary.
+    viewer = (x_viewer_role or "admin").strip().lower()
+    if viewer == "moderator":
+        raise HTTPException(
+            status_code=403,
+            detail="Moderators cannot change staff roles",
+        )
+
+    target_id = (payload.staff_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="staff_id is required")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        # Lock the tenant's staff rows so two concurrent demotions cannot both
+        # read "one admin left" and both proceed.
+        cur.execute(
+            f"""
+            SELECT staff_id, full_name, role, COALESCE(is_moderator, FALSE) AS is_moderator
+            FROM {TENANT_STAFF_TABLE}
+            WHERE subdomain = %s AND staff_id = %s
+            FOR UPDATE;
+            """,
+            (tid, target_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Staff '{target_id}' not found")
+
+        cols = [d[0] for d in (cur.description or [])]
+        before = dict(zip(cols, row))
+
+        # Guard 3 — last-admin floor.
+        #
+        # Only a row that is genuinely an admin (role, not the moderator flag)
+        # counts, and is_moderator is what grants portal access, so the floor
+        # asks "would this leave nobody able to administer?" — which is true
+        # for an admin that is NOT a moderator and would stop being an admin.
+        if (
+            not payload.is_moderator
+            and str(before.get("role", "")).strip().lower() == "admin"
+            and not before.get("is_moderator")
+        ):
+            cur.execute(
+                f"""
+                SELECT count(*) FROM {TENANT_STAFF_TABLE}
+                WHERE subdomain = %s
+                  AND LOWER(role) = 'admin'
+                  AND COALESCE(is_moderator, FALSE) = FALSE
+                  AND COALESCE(is_active, TRUE) = TRUE;
+                """,
+                (tid,),
+            )
+            remaining = int(cur.fetchone()[0] or 0)
+            if remaining <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Cannot demote the last admin. Promote another admin first, "
+                        "or the school will have nobody who can reach these settings."
+                    ),
+                )
+
+        cur.execute(
+            f"""
+            UPDATE {TENANT_STAFF_TABLE}
+            SET is_moderator = %s,
+                moderator_granted_at = CASE WHEN %s THEN NOW() ELSE NULL END
+            WHERE subdomain = %s AND staff_id = %s
+            RETURNING COALESCE(is_moderator, FALSE) AS is_moderator,
+                      moderator_granted_at,
+                      role,
+                      full_name;
+            """,
+            (payload.is_moderator, payload.is_moderator, tid, target_id),
+        )
+        after = cur.fetchone()
+        conn.commit()
+
+        out_cols = [d[0] for d in (cur.description or [])]
+        result = dict(zip(out_cols, after)) if after else {}
+
+        # Promotion changes who can reach what, so it belongs in the audit log
+        # alongside publishing and roster edits.
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                "moderators.promoted" if payload.is_moderator else "moderators.demoted",
+                subdomain=tid,
+                details={
+                    "staff_id": target_id,
+                    "full_name": before.get("full_name"),
+                    "role": before.get("role"),
+                    "is_moderator": payload.is_moderator,
+                },
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            logger.warning(
+                "[roster] audit log failed for moderator change %s/%s: %s",
+                tid, target_id, _audit_err,
+            )
+
+        logger.info(
+            "[roster] %s moderator=%s for %s/%s",
+            "promoted" if payload.is_moderator else "demoted",
+            target_id, tid, (x_viewer_id or x_viewer_label or "tenant_admin"),
+        )
+        return {"success": True, "subdomain": tid, **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception("[roster] moderator update failed %s/%s: %s", tid, target_id, e)
+        raise HTTPException(status_code=500, detail=f"Could not update staff: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass

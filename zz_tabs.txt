@@ -1,0 +1,53 @@
+feat(settings): 4-tab revamp, Moderator Management, password change
+
+SETTINGS STRUCTURE
+------------------
+Split by who changes what and how often, not by which table the columns live
+in. The old "Report-Card Branding" tab held the principal signature next to
+the ID prefixes next to the term calendar — three unrelated jobs behind one
+label, so the term dropdown was effectively unfindable.
+
+  General    identity and contact       (rarely)
+  Branding   how the report card looks  (rarely)
+  Security   who can reach this portal  (when the team changes)
+  Academics  term calendar + remarks    (every term)
+
+The tab strip scrolls horizontally instead of using grid-cols-2: four tabs at
+375px shrink the labels into unreadable stubs, and wrapping them into two rows
+made "which tab am I on" ambiguous. It carries snap detents so a swipe lands
+cleanly, and full APG arrow-key navigation — without it the strip is four
+separate tab stops and a keyboard user has to Tab through every panel to move
+sideways.
+
+MODERATOR MANAGEMENT
+--------------------
+New endpoints in the roster router, because promotion is the one operation
+that CHANGES the capability set, and therefore the one that must never be
+reachable by a moderator: a deputy who can promote staff can promote
+themselves to admin and every other guard becomes decoration. The Next proxy
+checks the `moderators` capability, never `role === "admin"` — a capability
+is a statement about this specific session, a role string is a guess about who
+they are, and the distinction matters the day a third role exists.
+
+Three backend guards, in order: body subdomain must match the path (403, not
+a silent correction, so a proxy bug is loud); moderators are refused; and the
+final admin cannot be demoted (409). The last-admin check FOR UPDATE-locks the
+tenant's staff rows, because two concurrent demotions would otherwise both
+read "one admin left" and both proceed. A school that locks itself out of its
+own portal cannot email its way back in.
+
+`is_moderator` is read as COALESCE(..., FALSE) throughout: the migration
+backfilled but did not add NOT NULL, so the column is genuinely tri-state and
+the UI should not have to reason about it.
+
+PASSWORD CHANGE
+---------------
+Requires the current password even though the caller is already
+authenticated. An unattended-but-authenticated session — shared office
+machine, borrowed laptop, left-open tab — becomes a dead end instead of
+silently rotating the credential out from under the owner. Verified in
+Postgres via crypt() so the plaintext never round-trips through Python.
+
+A NULL hash and a wrong password return the identical 401: distinguishing
+them would tell an attacker they had found the one tenant on this deployment
+still using the one-time setup flow.

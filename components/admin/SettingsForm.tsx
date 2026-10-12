@@ -7,6 +7,8 @@ import UploadField from "@/components/ui/UploadField";
 import { Select } from "@/components/ui/Select";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
+import ModeratorManager from "@/components/admin/ModeratorManager";
+import PasswordChange from "@/components/admin/PasswordChange";
 import { toast } from "@/components/ui/toast";
 import SignatureCaptureModal from "@/components/ui/SignatureCaptureModal";
 import type { RemarkBand, School } from "@/types/school";
@@ -16,13 +18,35 @@ interface SettingsFormProps {
 }
 
 /**
+ * The four settings surfaces.
+ *
+ * Split by WHO changes them and HOW OFTEN, not by which database table the
+ * fields live in. The previous "Report-Card Branding" tab held the principal
+ * signature next to ID prefixes next to the term calendar — three unrelated
+ * jobs behind one label, so nobody could find the term dropdown.
+ *
+ *   General   — identity and contact. Changes rarely.
+ *   Branding  — how the report card LOOKS. Changes rarely.
+ *   Security  — who can reach this portal. Changes when the team does.
+ *   Academics — the term calendar and remark rules. Changes every term.
+ */
+type SettingsTab = "general" | "branding" | "security" | "academics";
+
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "branding", label: "Branding" },
+  { id: "security", label: "Security" },
+  { id: "academics", label: "Academics" },
+] as const;
+
+/**
  * Client-side school profile form.
  * PATCHes branding data through the Next.js settings proxy,
  * which forwards to FastAPI with the API secret.
  */
 export default function SettingsForm({ school }: SettingsFormProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"profile" | "branding">("profile");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The custom Select is controlled, so the active term is held in state and
@@ -134,33 +158,64 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         </p>
       )}
 
-      {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2" role="tablist" aria-label="Settings sections">
-        {(
-          [
-            { id: "profile", label: "Public Profile" },
-            { id: "branding", label: "Report-Card Branding" },
-          ] as const
-        ).map((t) => (
+      {/* Tabs.
+          Four tabs do not fit a `grid-cols-2` at 375px without shrinking the
+          labels into unreadable stubs, so this is a single row that scrolls
+          horizontally instead of wrapping.
+
+          The strip is a scroll container, not a hiding one: `snap-x` gives each
+          tab a detent so a swipe lands cleanly, and the fade on the right edge
+          signals there is more to reach rather than implying the list ends. */}
+      <div
+        className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+        aria-label="Settings sections"
+      >
+        {SETTINGS_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             role="tab"
+            id={`settings-tab-${t.id}`}
             aria-selected={activeTab === t.id}
+            aria-controls={`settings-panel-${t.id}`}
+            tabIndex={activeTab === t.id ? 0 : -1}
             onClick={() => setActiveTab(t.id)}
-            className={
+            onKeyDown={(e) => {
+              // Arrow-key navigation per the APG tabs pattern: without it the
+              // strip is four separate tab stops and a keyboard user has to
+              // Tab through every panel to move sideways.
+              const i = SETTINGS_TABS.findIndex((x) => x.id === activeTab);
+              if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                e.preventDefault();
+                const next =
+                  e.key === "ArrowRight"
+                    ? (i + 1) % SETTINGS_TABS.length
+                    : (i - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+                setActiveTab(SETTINGS_TABS[next].id);
+                document
+                  .getElementById(`settings-tab-${SETTINGS_TABS[next].id}`)
+                  ?.focus();
+              }
+            }}
+            className={`shrink-0 snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition ${
               activeTab === t.id
-                ? "rounded-xl bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white"
-                : "rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
-            }
+                ? "bg-purple-600 font-semibold text-white"
+                : "text-purple-200/70 hover:bg-white/5 hover:text-white"
+            }`}
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      {activeTab === "profile" && (
-        <div className="space-y-4" role="tabpanel" aria-label="Public Profile">
+      {activeTab === "general" && (
+        <div
+          className="space-y-4"
+          role="tabpanel"
+          id="settings-panel-general"
+          aria-labelledby="settings-tab-general"
+        >
       <div>
         <label
           htmlFor="school-name"
@@ -264,6 +319,16 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <p className="mt-1 text-xs text-purple-300/40">Shown beneath the school name on the report header.</p>
       </div>
 
+      </div>
+      )}
+
+      {activeTab === "branding" && (
+        <div
+          className="space-y-4"
+          role="tabpanel"
+          id="settings-panel-branding"
+          aria-labelledby="settings-tab-branding"
+        >
       <UploadField
         id="school-logo-url"
         label="School logo"
@@ -288,11 +353,6 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         fallbackNote="Previewing default platform artwork — upload to replace it."
       />
 
-      </div>
-      )}
-
-      {activeTab === "branding" && (
-        <div className="space-y-4" role="tabpanel" aria-label="Report-Card Branding">
       {/* Drawn signature — the primary path. Shown above the uploader so the
           recommended option is the first thing an admin reaches for. */}
       <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-4">
@@ -338,6 +398,39 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         preview="image"
         previewVariant="square"
       />
+
+        </div>
+      )}
+
+      {activeTab === "security" && (
+        <div
+          className="space-y-6"
+          role="tabpanel"
+          id="settings-panel-security"
+          aria-labelledby="settings-tab-security"
+        >
+          <PasswordChange subdomain={school?.slug ?? ""} />
+
+          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-white">Moderator Management</h3>
+            <p className="mt-1 text-xs text-purple-300/50">
+              Give trusted staff a deputy role for the day-to-day portal without
+              handing them your school settings, billing or audit log.
+            </p>
+            <div className="mt-4">
+              <ModeratorManager subdomain={school?.slug ?? ""} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "academics" && (
+        <div
+          className="space-y-4"
+          role="tabpanel"
+          id="settings-panel-academics"
+          aria-labelledby="settings-tab-academics"
+        >
       <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <label

@@ -435,6 +435,141 @@ def update_tenant_profile(
                 pass
 
 
+class AdminPasswordChange(BaseModel):
+    subdomain: str
+    current_password: str
+    new_password: str
+
+
+@profile_router.post("/api/v1/tenant/{tenant_id}/password", summary="Change the tenant admin password")
+def change_tenant_admin_password(
+    tenant_id: str,
+    payload: AdminPasswordChange,
+    x_viewer_role: Optional[str] = _Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = _Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = _Header(None, alias="X-Viewer-Label"),
+):
+    """Replace the admin password for a tenant.
+
+    WHY THE CURRENT PASSWORD IS REQUIRED EVEN THOUGH THE CALLER IS AUTHENTICATED
+    ---------------------------------------------------------------------------
+    The Next proxy has already proven a valid session. Requiring the old
+    password anyway turns an unattended-but-authenticated session (a shared
+    office machine, a borrowed laptop, a left-open tab) into a dead end: the
+    intruder can read the portal but cannot quietly rotate the credential out
+    from under the owner. Without it, a hijacked session silently becomes a
+    permanent one.
+
+    The comparison is done by Postgres (`crypt` against the stored hash) so the
+    plaintext never round-trips through Python, and a wrong password is a 401
+    with no hint about length or formatting.
+
+    `is_moderator` staff are refused: a deputy is not the credential holder, and
+    letting them rotate the school's admin password would be an escalation.
+    """
+    tid = _validate_tenant_id(tenant_id)
+    # A mismatch is a 403, not a silent correction: a proxy bug that sent the
+    # wrong tenant here should be loud, not quietly rewrite another school's
+    # credential.
+    body_sub = (payload.subdomain or "").lower().strip()
+    if body_sub and body_sub != tid:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Body subdomain '{body_sub}' does not match path tenant '{tid}'",
+        )
+
+    viewer = (x_viewer_role or "admin").strip().lower()
+    if viewer == "moderator":
+        raise HTTPException(
+            status_code=403,
+            detail="Only a school administrator can change the admin password.",
+        )
+
+    current = payload.current_password or ""
+    new = payload.new_password or ""
+    if not current or not new:
+        raise HTTPException(status_code=400, detail="Both the current and new password are required")
+    if len(new) < 8:
+        raise HTTPException(status_code=400, detail="The new password must be at least 8 characters")
+    if len(new) > 128:
+        raise HTTPException(status_code=400, detail="The new password must be at most 128 characters")
+    if current == new:
+        raise HTTPException(status_code=400, detail="The new password must differ from the current one")
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        # Verify the CURRENT password in-database. `admin_password_hash IS NULL`
+        # is the legacy pre-setup state; crypt() against NULL yields NULL, which
+        # is falsy, so it falls into the same wrong-password branch. That is
+        # correct: a school that never set one cannot "change" it here, it has
+        # to use the one-time setup flow.
+        cur.execute(
+            f"""
+            SELECT admin_password_hash IS NOT NULL
+                   AND admin_password_hash = crypt(%s, admin_password_hash) AS matches
+            FROM {SCHOOLS_REGISTRY_TABLE}
+            WHERE subdomain = %s;
+            """,
+            (current, tid),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        if not row[0]:
+            # Deliberately identical to "wrong password" — saying "that school
+            # has no password set" would tell an attacker they had found the
+            # one tenant on this deployment still using the setup flow.
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET admin_password_hash = crypt(%s, gen_salt('bf')),
+                updated_at = NOW()
+            WHERE subdomain = %s;
+            """,
+            (new, tid),
+        )
+        conn.commit()
+
+        try:
+            from services.db_manager import log_admin_action
+
+            log_admin_action(
+                "tenant.password_changed",
+                subdomain=tid,
+                # Never the values. A credential change is fully described by
+                # the fact that it happened.
+                details={"verified_current": True},
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            _logger.warning("[admin] audit log failed for password change %s: %s", tid, _audit_err)
+
+        return {"success": True, "message": "Password updated."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[admin] password change failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Could not change the password: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.get("/config/credit-price", summary="Get flat credit price (superadmin)")
 def get_credit_price_config():
     from services.db_manager import get_credit_price
