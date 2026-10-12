@@ -12,6 +12,7 @@ import {
   Plus,
 } from "lucide-react";
 import { BillingCheckout } from "@/components/billing/BillingCheckout";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 import {
   calculateTieredTotal,
   calculateCreditTotal,
@@ -148,11 +149,39 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Billing — Slots & Credits</h1>
-        <p className="mt-1 text-sm text-purple-200/60">
-          <span className="font-medium text-white">Slots</span> = student capacity (one-time, tiered) •{" "}
-          <span className="font-medium text-white">Credits</span> = publishing tokens (flat {formatNaira(creditPrice)}/credit) for {schoolName}.
-        </p>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Billing — Slots &amp; Credits</h1>
+            <p className="mt-1 text-sm text-purple-200/60">
+              <span className="font-medium text-white">Slots</span> = student capacity (one-time, tiered) •{" "}
+              <span className="font-medium text-white">Credits</span> = publishing tokens (flat {formatNaira(creditPrice)}/credit) for {schoolName}.
+            </p>
+          </div>
+          <InfoTooltip
+            label="Difference between slots and credits"
+            placement="bottom"
+            className="mt-1 shrink-0"
+          >
+            <span className="block font-semibold text-white">Slots are capacity.</span>
+            <span className="mt-1 block">
+              One slot is one seat for one student, bought once and never spent. Buy
+              more seats than you need students; the extra stays available until you
+              add a pupil.
+            </span>
+            <span className="mt-2 block font-semibold text-white">Credits are spending tokens.</span>
+            <span className="mt-1 block">
+              A credit is consumed each time a report card is first published for a
+              student in a term. Reprints of an already-published card are free.
+              Credits do not expire.
+            </span>
+            <span className="mt-2 block">
+              So: slots decide <em className="not-italic text-purple-200">how many</em>{" "}
+              students you can onboard; credits decide{" "}
+              <em className="not-italic text-purple-200">how often</em> you can
+              publish their results.
+            </span>
+          </InfoTooltip>
+        </div>
       </div>
 
       {/* Tab switcher */}
@@ -319,10 +348,24 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
 
             {/* Credits packages + top-up (flat live rate) */}
           <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
-            <h2 className="text-base font-semibold text-white">Buy credit package</h2>
-            <p className="mt-1 text-sm text-purple-200/60">
-              {formatNaira(creditPrice)} per credit — flat rate, no tiers. Credits never expire.
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-base font-semibold text-white">Buy credit package</h2>
+                <p className="mt-1 text-sm text-purple-200/60">
+                  {formatNaira(creditPrice)} per credit — flat rate, no tiers. Credits never expire.
+                </p>
+              </div>
+              <InfoTooltip
+                label="How credits work"
+                placement="bottom"
+                className="-mr-2 -mt-1 shrink-0"
+              >
+                One credit is spent each time a report card is first published for a
+                student in a term. Reprinting an already-published card is free, so
+                you are never charged twice for the same result. Credits do not
+                expire, and a credit you do not spend stays on the account.
+              </InfoTooltip>
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {CREDIT_PACKAGES.map((n) => (
                 <button

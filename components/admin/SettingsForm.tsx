@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PenLine } from "lucide-react";
 import UploadField from "@/components/ui/UploadField";
 import { Select } from "@/components/ui/Select";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
 import { toast } from "@/components/ui/toast";
 import SignatureCaptureModal from "@/components/ui/SignatureCaptureModal";
@@ -197,12 +198,24 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       </div>
 
       <div>
-        <label
-          htmlFor="school-email"
-          className="block text-sm font-medium text-purple-200"
-        >
-          Email
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label
+            htmlFor="school-email"
+            className="block text-sm font-medium text-purple-200"
+          >
+            Email
+          </label>
+          <InfoTooltip
+            label="About the admin login email"
+            placement="top"
+            className="-mr-2"
+          >
+            This is not just a contact address — it is the username you sign in to
+            this portal with. Changing it will require a one-time code sent to the
+            NEW address, so an attacker who gets into this form cannot quietly
+            redirect the school's account to a mailbox they control.
+          </InfoTooltip>
+        </div>
         <input
           id="school-email"
           name="email"
