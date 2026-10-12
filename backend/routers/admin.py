@@ -155,21 +155,6 @@ def list_tenants(
         conn = _connect_as_superuser()
         cur = conn.cursor()
 
-        # Capture the CURRENT email before the UPDATE overwrites it.
-        #
-        # `RETURNING` gives the post-update row, so reading email from it would
-        # file the new address under "old_email" — an audit trail that reports
-        # the wrong value is worse than one that reports none, because it looks
-        # authoritative. Only fetched when email is actually changing.
-        old_email = None
-        if "email" in updates:
-            cur.execute(
-                f"SELECT email FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
-                (tid,),
-            )
-            prior = cur.fetchone()
-            old_email = _row_to_dict(prior, cur).get("email") if prior else None
-
         cur.execute(
             f"""
             SELECT COUNT(*) FROM {SCHOOLS_REGISTRY_TABLE} {where_sql};
@@ -360,6 +345,24 @@ def update_tenant_profile(
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
+
+        # Read the CURRENT email BEFORE the UPDATE overwrites it.
+        #
+        # `RETURNING` yields the post-update row, so sourcing old_email from it
+        # files the new address under the old one. A trail that confidently
+        # reports the wrong value is worse than one that reports none, because
+        # it reads as authoritative. Only fetched when email is part of this
+        # change, and on the same cursor so it sees the same transaction.
+        old_email = None
+        if "email" in updates:
+            cur.execute(
+                f"SELECT email FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+                (tid,),
+            )
+            _prior = cur.fetchone()
+            if _prior is not None:
+                old_email = dict(zip([d[0] for d in cur.description], _prior)).get("email")
+
         cur.execute(
             f"""
             UPDATE {SCHOOLS_REGISTRY_TABLE}

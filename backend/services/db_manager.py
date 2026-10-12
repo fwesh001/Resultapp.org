@@ -18,6 +18,7 @@ import string
 import os
 import hmac
 import hashlib
+import json as _json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
 
@@ -1481,12 +1482,19 @@ def get_audit_logs(
         )
         rows = cur.fetchall()
 
-        # The COUNT must run BEFORE _row_to_dict, because _row_to_dict reads
-        # cur.description to name the columns — and executing the COUNT replaces
-        # description with `count`, which would silently map every audit row to
-        # {"count": ..., "created_at": ...}. Fetching the rows first is not
-        # enough; the description has to be captured.
-        row_description = cur.description
+        # Snapshot the row column names NOW, before the COUNT replaces them.
+        #
+        # Both SQL statements are individually correct, which is why reading
+        # them did not reveal this: psycopg2 exposes the current result's
+        # columns as `cursor.description`, so the second execute overwrites the
+        # description the first one left behind.
+        #
+        # This does NOT go back through _row_to_dict. That helper reads
+        # `getattr(cursor, "description", None)` -- it wants a live cursor, and
+        # a bare tuple of Column objects has no `.description` attribute, so it
+        # would quietly return {} for every row. (That is exactly what the first
+        # attempt did: `{"created_at": ""}` entries, no actor, no action.)
+        cols = [d[0] for d in (cur.description or [])]
 
         # Same filter, so the total reflects what the viewer can actually see.
         count_params = list(params)
@@ -1498,11 +1506,17 @@ def get_audit_logs(
 
         out = []
         for r in rows:
-            d = _row_to_dict(r, row_description)
-            if isinstance(d.get("created_at"), datetime):
-                d["created_at"] = d["created_at"].isoformat()
-            else:
-                d["created_at"] = str(d.get("created_at") or "")
+            d = dict(zip(cols, r))
+            # JSONB comes back parsed; created_at is a datetime that FastAPI
+            # would rather see pre-formatted, and a missing one must not render
+            # as the string "None" in the log UI.
+            ts = d.get("created_at")
+            d["created_at"] = ts.isoformat() if isinstance(ts, datetime) else str(ts or "")
+            if isinstance(d.get("details"), str):
+                try:
+                    d["details"] = _json.loads(d["details"])
+                except Exception:
+                    pass
             out.append(d)
         return out, total
     except Exception as e:

@@ -61,14 +61,29 @@ const main = read("backend/main.py");
   const body = end > 0 ? fn.slice(0, end) : fn;
 
   check(
-    "get_audit_logs captures cur.description before the COUNT",
-    /row_description\s*=\s*cur\.description/.test(body),
+    "get_audit_logs snapshots the row column names before the COUNT",
+    /cols\s*=\s*\[d\[0\]\s+for\s+d\s+in\s+\(cur\.description/.test(body),
     "description must be snapshotted before the second execute"
   );
   check(
-    "get_audit_logs does NOT pass a live cursor to _row_to_dict",
+    "get_audit_logs does NOT hand a live cursor to _row_to_dict",
     !/_row_to_dict\(\s*\w+\s*,\s*cur\s*\)/.test(body),
     "a live cursor carries the COUNT's description"
+  );
+  check(
+    "get_audit_logs does NOT hand a bare tuple to _row_to_dict",
+    !/_row_to_dict\(\s*\w+\s*,\s*row_description\s*\)/.test(body),
+    "_row_to_dict reads cursor.description; a tuple has none, so it returns {}"
+  );
+  check(
+    "get_audit_logs zips rows against the snapshot directly",
+    /dict\(zip\(\s*cols\s*,\s*r\s*\)\)/.test(body),
+    "mapping must use the captured names"
+  );
+  check(
+    "a missing created_at never renders as the string 'None'",
+    /str\(ts\s+or\s+""\)/.test(body),
+    "the log UI would show 'None' for an unset timestamp"
   );
   check(
     "get_audit_logs returns a (rows, total) tuple",

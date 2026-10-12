@@ -1,0 +1,32 @@
+fix(audit): reader returned {} per row; old_email pre-SELECT landed in the wrong function
+
+Two bugs, both from the previous fix, both found by re-running the live
+reader rather than by reading the diff.
+
+1. get_audit_logs: I passed the snapshotted description tuple to
+   _row_to_dict, which reads `getattr(cursor, "description", None)` — a bare
+   tuple has no `.description`, so it returned {} for every row. The first
+   attempt passed a live cursor (whose description the COUNT had already
+   replaced); the second passed a tuple (which has no description at all).
+   Both produced a plausible-looking response. Rows are now zipped against
+   the captured column names directly, and the harness asserts neither form
+   is used.
+
+   details is parsed from a JSON string when it arrives as one, so the UI
+   gets an object rather than a quoted blob.
+
+2. admin.py: the "read the prior email first" SELECT was inserted into
+   list_tenants, not update_tenant_profile — a repeated-text edit matched the
+   wrong `cur = conn.cursor()` block, three attempts in a row. It compiled
+   fine every time because it referenced names that only resolve at runtime,
+   and it sat harmlessly in front of a COUNT. That is why old_email audited
+   as empty: the correct code was never in the function that writes the row.
+
+   Now anchored to update_tenant_profile's own UPDATE statement, with the
+   stray block removed from list_tenants.
+
+Also adds the module-level `import json as _json` the new details-parsing
+line depends on — the file only had function-local json imports, so this
+would have been a NameError on the first audit read.
+
+Regression harness: 45 checks.
