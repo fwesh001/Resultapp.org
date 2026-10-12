@@ -107,6 +107,37 @@ echo "  demo tenant: HTTP $C, email now $NEW"
 sudo -u postgres psql -d postgres -q -c "DELETE FROM schools WHERE subdomain='gatedemo';"
 
 echo
+echo "=== 0b. no duplicated set_parts build in the profile route ==="
+# A duplicate `set_parts` loop re-appends to the SAME list, doubling both the
+# SET clauses and the bound params. psycopg2 then raises IndexError at execute
+# time -- 500 on every profile save, including the ones the gate correctly
+# allowed. It compiled fine and is invisible until the route runs, so it is
+# checked structurally here rather than trusted.
+python3 - <<'PY'
+import ast, sys
+src = open("/var/www/resultapp-backend/backend/routers/admin.py").read()
+tree = ast.parse(src)
+fn = next((n for n in tree.body
+           if isinstance(n, ast.FunctionDef) and n.name == "update_tenant_profile"), None)
+if fn is None:
+    print("  FAIL  update_tenant_profile not found")
+    sys.exit(1)
+builds = 0
+for n in ast.walk(fn):
+    # `set_parts = []` is the signal that a fresh build started.
+    if isinstance(n, ast.Assign):
+        for t in n.targets:
+            if isinstance(t, ast.Name) and t.id == "set_parts":
+                if isinstance(n.value, ast.List):
+                    builds += 1
+if builds != 1:
+    print(f"  FAIL  set_parts built {builds} times (expected exactly 1)")
+    sys.exit(1)
+print("  PASS  set_parts is built exactly once")
+PY
+[ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+
+echo
 echo "=== CLEANUP ==="
 sudo -u postgres psql -d postgres -q -c "UPDATE schools SET motto=NULL WHERE subdomain='$TID';"
 sudo -u postgres psql -d postgres -q -c "DELETE FROM email_otp_codes WHERE email IN ('$NEW_EMAIL','$OLD_EMAIL');"

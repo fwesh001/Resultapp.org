@@ -383,15 +383,6 @@ def update_tenant_profile(
         values.append(val)
     set_clause = ", ".join(set_parts)
     values = values + [tid]
-    values: list = []
-    for col, val in updates.items():
-        if col == "principal_remark_scheme" and _principal_scheme_jsonb:
-            set_parts.append(f"{col} = %s::jsonb")
-        else:
-            set_parts.append(f"{col} = %s")
-        values.append(val)
-    set_clause = ", ".join(set_parts)
-    values = values + [tid]
 
     conn = None
     try:
