@@ -31,6 +31,22 @@ export async function POST(req: NextRequest) {
   const { email } = body as { email?: string };
   if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
 
+  // Purpose is forwarded, not hardcoded to "registration".
+  //
+  // The backend keys the OTP store on (email, purpose), so a code minted for
+  // registration and one minted for an email change live in separate
+  // namespaces and neither can authorise the other. Hardcoding would make
+  // `email_change` unrequestable through this proxy — and the obvious "fix" of
+  // relaxing the backend's pattern check would then let a signup code authorise
+  // an account takeover.
+  //
+  // Allow-listed here rather than passed through, so this proxy cannot be used
+  // to mint codes into a namespace the backend does not recognise. The backend
+  // validates the same set independently; neither side trusts the other.
+  const purpose = (body as { purpose?: string }).purpose === "email_change"
+    ? "email_change"
+    : "registration";
+
   // Misconfiguration is reported as 500 with a named variable, never masked as
   // a delivery failure. resolveBackendBase() also rejects a BACKEND_URL that was
   // pasted as Markdown ("[https://…](https://…)") — that shape parses as
@@ -54,7 +70,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "X-API-SECRET-KEY": PROXY_SECRET,
       },
-      body: JSON.stringify({ email, purpose: "registration" }),
+      body: JSON.stringify({ email, purpose }),
       cache: "no-store",
     });
 

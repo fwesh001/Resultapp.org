@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PenLine } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, PenLine } from "lucide-react";
 import UploadField from "@/components/ui/UploadField";
 import { Select } from "@/components/ui/Select";
 import InfoTooltip from "@/components/ui/InfoTooltip";
@@ -64,6 +64,92 @@ export default function SettingsForm({ school }: SettingsFormProps) {
     school?.principalSignatureData ?? null,
   );
 
+  // --- Email-change OTP -----------------------------------------------------
+  //
+  // schools.email is the admin login identifier, so changing it needs proof the
+  // requester controls the NEW mailbox. The sequence is: type a new address ->
+  // the OTP panel appears -> request a code -> verify it -> only then does Save
+  // carry the proof.
+  //
+  // The verified code is kept in state and sent with the save rather than being
+  // consumed at verify time, because the backend re-consumes it on the write.
+  // That keeps the write the single place the gate lives: verifying once and
+  // saving three times does not work, because the code is burned on the first
+  // save.
+  const [emailValue, setEmailValue] = useState(school?.email ?? "");
+  const [otpState, setOtpState] = useState<"idle" | "sent" | "verified">("idle");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  const originalEmail = (school?.email ?? "").trim().toLowerCase();
+  const emailChanged =
+    emailValue.trim().toLowerCase().length > 0 &&
+    emailValue.trim().toLowerCase() !== originalEmail;
+
+  async function requestOtp() {
+    const target = emailValue.trim();
+    if (!target || !target.includes("@")) {
+      setOtpError("Enter a valid email address first.");
+      return;
+    }
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const res = await fetch("/api/auth/request-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: target, purpose: "email_change" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Could not send the code.");
+      }
+      // The endpoint is deliberately neutral (always "sent"), so reaching here
+      // does NOT prove the address exists or received anything. The wording
+      // below matches that: it tells the admin what to do next, not whether
+      // the mail arrived.
+      setOtpState("sent");
+      toast.success("If that address can receive mail, a code is on its way.");
+    } catch (e) {
+      setOtpError(e instanceof Error ? e.message : "Could not send the code.");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function verifyOtp() {
+    const target = emailValue.trim();
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const res = await fetch("/api/auth/verify-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: target,
+          code: otpCode,
+          purpose: "email_change",
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        verified?: boolean;
+        error?: string;
+      };
+      if (!res.ok || data.verified !== true) {
+        throw new Error(data.error || "That code is incorrect or has expired.");
+      }
+      setOtpState("verified");
+      toast.success("Code confirmed — save the form to apply the change.");
+    } catch (e) {
+      setOtpError(e instanceof Error ? e.message : "That code is incorrect.");
+      setOtpState("sent");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
   async function persistSignature(body: Record<string, string | null>) {
     const subdomain = school?.slug ?? "";
     if (!subdomain) throw new Error("Unknown school subdomain");
@@ -91,7 +177,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
     }
 
     const formData = new FormData(e.currentTarget);
-    const payload: Record<string, string> = { subdomain };
+    const payload: Record<string, unknown> = { subdomain };
     for (const field of [
       "school_name",
       "motto",
@@ -116,6 +202,29 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       }
     }
 
+    // Carry the proof ONLY when it is actually verified.
+    //
+    // `otp_verified` is not a claim the backend trusts on its own — it re-burns
+    // `otp_code` against the address being written. Sending the flag without a
+    // real code would be rejected server-side anyway; refusing to send it at
+    // all means a stale "verified" state can never paper over an unconfirmed
+    // change.
+    if (emailChanged && otpState === "verified" && otpCode.length === 6) {
+      payload.otp_verified = true;
+      payload.otp_code = otpCode;
+    }
+
+    // Catch the gate client-side so an admin who edited the motto AND changed
+    // the email gets told about the email, instead of the whole save silently
+    // failing on a field they may not have noticed they changed.
+    if (emailChanged && otpState !== "verified") {
+      setError(
+        "Confirm the six-digit code for the new email address before saving.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
@@ -131,6 +240,19 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to save settings.");
+      }
+
+      // The address is now the login identifier, so the session this page is
+      // rendered under is keyed to a value that no longer exists. Bouncing to
+      // login is the honest outcome — staying on Settings would leave the admin
+      // looking at a portal they can no longer sign in to.
+      const loginIdentifierMoved =
+        emailChanged && otpState === "verified" && subdomain !== "";
+
+      if (loginIdentifierMoved) {
+        toast.success("Email updated. Please sign in again with the new address.");
+        router.push(`/${subdomain}/admin/login?emailChanged=1`);
+        return;
       }
 
       toast.success(data.message || "School profile updated successfully.");
@@ -276,10 +398,118 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           name="email"
           type="email"
           autoComplete="email"
+          ref={emailRef}
+          onChange={(e) => {
+            setEmailValue(e.target.value);
+            // Any edit invalidates the proof: a code was issued for one exact
+            // address, so typing a different one must not inherit it.
+            if (otpState !== "idle") {
+              setOtpState("idle");
+              setOtpCode("");
+              setOtpError(null);
+            }
+          }}
           defaultValue={school?.email ?? ""}
           placeholder="e.g. info@school.edu"
           className={inputClassName}
         />
+
+        {/* OTP step.
+            Appears ONLY when the typed address differs from the stored one, so
+            an admin editing the motto never sees it and never has to fetch a
+            code to save an unrelated field. */}
+        {emailChanged ? (
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-4">
+            <p className="text-sm font-medium text-amber-200">
+              Confirm the new login address
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-purple-200/70">
+              This address is how you sign in. We&apos;ll email a six-digit code
+              to <span className="font-mono text-white">{emailValue.trim()}</span> —
+              you must enter it before the change is saved.
+            </p>
+
+            {otpState === "idle" ? (
+              <button
+                type="button"
+                onClick={requestOtp}
+                disabled={otpBusy}
+                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-purple-500/25 px-4 py-2 text-sm font-medium text-purple-100 transition hover:bg-white/5 disabled:opacity-60"
+              >
+                {otpBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                )}
+                {otpBusy ? "Sending…" : "Send code"}
+              </button>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[10rem] flex-1">
+                    <label
+                      htmlFor="email-otp"
+                      className="block text-xs font-medium text-purple-200"
+                    >
+                      Six-digit code
+                    </label>
+                    <input
+                      id="email-otp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void verifyOtp();
+                        }
+                      }}
+                      placeholder="000000"
+                      aria-describedby="email-otp-hint"
+                      className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 font-mono text-lg tracking-[0.3em] text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={verifyOtp}
+                    disabled={otpBusy || otpCode.length !== 6}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+                  >
+                    {otpBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Verify
+                  </button>
+                  <button
+                    type="button"
+                    onClick={requestOtp}
+                    disabled={otpBusy}
+                    className="inline-flex min-h-[44px] items-center px-3 py-2.5 text-xs font-medium text-purple-300/60 transition hover:text-white disabled:opacity-60"
+                  >
+                    Resend
+                  </button>
+                </div>
+
+                <p id="email-otp-hint" className="text-xs text-purple-300/50">
+                  {otpState === "verified"
+                    ? "Code confirmed. Save the form to apply the change."
+                    : "The code expires in a few minutes. Enter it, then press Save."}
+                </p>
+
+                {otpError ? (
+                  <p role="alert" className="text-xs text-red-300">
+                    {otpError}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div>

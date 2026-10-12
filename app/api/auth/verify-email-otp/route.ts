@@ -32,6 +32,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A 6-digit code is required" }, { status: 400 });
   }
 
+  // Forwarded, not hardcoded — see the note in request-email-otp. The purpose
+  // is part of the OTP store's lookup key, so verifying a code against the
+  // wrong namespace is not a near miss, it is a guaranteed failure. Hardcoding
+  // "registration" here would make every email-change code unverifiable.
+  const purpose = (body as { purpose?: string }).purpose === "email_change"
+    ? "email_change"
+    : "registration";
+
   const backend = resolveBackendBase();
   if (!backend.ok) {
     logBadBackendUrl("api/auth/verify-email-otp", backend);
@@ -51,7 +59,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "X-API-SECRET-KEY": PROXY_SECRET,
       },
-      body: JSON.stringify({ email, code, purpose: "registration" }),
+      body: JSON.stringify({ email, code, purpose }),
       cache: "no-store",
     });
 

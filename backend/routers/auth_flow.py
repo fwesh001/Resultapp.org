@@ -149,13 +149,15 @@ class ResetPasswordRequest(BaseModel):
 
 class RequestEmailOtpRequest(BaseModel):
     email: EmailStr
-    purpose: str = Field("registration", pattern="^registration$")
+    # Allow-list, not a free string: an unrecognised purpose must 422 rather
+    # than mint a code into a namespace nothing will ever read.
+    purpose: str = Field("registration", pattern="^(registration|email_change)$")
 
 
 class VerifyEmailOtpRequest(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6, pattern="^[0-9]{6}$")
-    purpose: str = Field("registration", pattern="^registration$")
+    purpose: str = Field("registration", pattern="^(registration|email_change)$")
 
 
 # Uniform response for anything account-scoped. Never varies with existence.
@@ -314,7 +316,7 @@ _OTP_VERIFY_MAX_HITS = 10
 _OTP_VERIFY_WINDOW_S = 300
 
 
-@router.post("/request-email-otp", summary="Issue a registration OTP (neutral response)")
+@router.post("/request-email-otp", summary="Issue an OTP for registration or email change (neutral response)")
 def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
     email = _normalise(payload.email)
     client_ip = request.client.host if request.client else "unknown"
@@ -367,7 +369,7 @@ def request_email_otp(payload: RequestEmailOtpRequest, request: Request):
     return _OTP_SENT
 
 
-@router.post("/verify-email-otp", summary="Verify a registration OTP")
+@router.post("/verify-email-otp", summary="Verify an OTP issued for registration or email change")
 def verify_email_otp(payload: VerifyEmailOtpRequest, request: Request):
     email = _normalise(payload.email)
     client_ip = request.client.host if request.client else "unknown"

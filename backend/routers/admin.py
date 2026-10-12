@@ -224,6 +224,34 @@ class TenantProfileUpdate(BaseModel):
     # exclusive with principal_signature_url — see the single-signature rule
     # applied below.
     principal_signature_data: Optional[str] = None
+    # Set by the client only after /verify-email-otp has returned success.
+    # The flag alone is NOT enough — the code is re-consumed server-side — so a
+    # client cannot simply send otp_verified=true and walk through the gate.
+    otp_verified: Optional[bool] = None
+    # The six-digit code, re-presented on the save so it can be burned for
+    # real. Carrying it here (rather than trusting the boolean) is what makes
+    # the gate a proof of mailbox possession instead of a claim.
+    otp_code: Optional[str] = None
+
+
+def _consume_email_change_otp(code: str, new_email: str) -> bool:
+    """Burn a `email_change` OTP issued for the NEW address.
+
+    Scoped to the new address on purpose. The code was mailed THERE, so it is
+    the only value the OTP store is keyed on that both exists and proves
+    possession; and because it is single-use and attempt-capped, the client
+    cannot pre-verify once and then replay the write repeatedly.
+
+    Returns False for every failure identically, so it cannot be used as an
+    oracle for "was there ever a code for this address".
+    """
+    try:
+        from services.db_manager import consume_email_otp
+
+        return bool(consume_email_otp(new_email, code, purpose="email_change"))
+    except Exception as _e:
+        _logger.warning("[admin] email_change OTP consume failed: %s", _e)
+        return False
 
 
 @profile_router.patch("/api/v1/tenant/{tenant_id}/profile", summary="Update school profile & branding")
@@ -330,7 +358,31 @@ def update_tenant_profile(
     if not updates:
         raise HTTPException(status_code=400, detail="No profile fields provided")
 
+    # EMAIL IS THE LOGIN IDENTIFIER — so it cannot be written like any other field.
+    #
+    # schools.email is what admin_auth matches on to log in. Accepting a bare
+    # `{"email": "..."}` here means anyone who reaches this form — an
+    # unattended session, a shared office machine, a CSRF'd tab — can silently
+    # redirect the school's account to a mailbox they control, and the takeover
+    # is invisible until the real owner tries to sign in and cannot.
+    #
+    # The gate itself lives below, once the connection is open, because it needs
+    # the CURRENT address to tell "changed" from "re-saved unchanged".
+    if "email" in updates:
+        requested = str(updates["email"] or "").strip().lower()
+        if not requested or "@" not in requested:
+            raise HTTPException(status_code=422, detail="Invalid email address")
+
     set_parts = []
+    values: list = []
+    for col, val in updates.items():
+        if col == "principal_remark_scheme" and _principal_scheme_jsonb:
+            set_parts.append(f"{col} = %s::jsonb")
+        else:
+            set_parts.append(f"{col} = %s")
+        values.append(val)
+    set_clause = ", ".join(set_parts)
+    values = values + [tid]
     values: list = []
     for col, val in updates.items():
         if col == "principal_remark_scheme" and _principal_scheme_jsonb:
@@ -362,6 +414,59 @@ def update_tenant_profile(
             _prior = cur.fetchone()
             if _prior is not None:
                 old_email = dict(zip([d[0] for d in cur.description], _prior)).get("email")
+
+        # EMAIL IS THE LOGIN IDENTIFIER — so it cannot be written like any other
+        # field.
+        #
+        # schools.email is what admin_auth matches on to sign in. Accepting a
+        # bare `{"email": "..."}` here means anyone who reaches this form — an
+        # unattended session, a shared office machine, a CSRF'd tab — can
+        # silently redirect the school's account to a mailbox they control, and
+        # the takeover stays invisible until the real owner tries to sign in and
+        # cannot.
+        #
+        # The proof required is POSSESSION OF THE NEW MAILBOX, delivered as a
+        # one-time code. An authenticated session is explicitly not sufficient,
+        # because a session can be borrowed.
+        #
+        # This runs on the same cursor as the UPDATE so "unchanged" is decided
+        # against the same transaction's view, and BEFORE the write so a refusal
+        # cannot leave a partial change behind.
+        if "email" in updates:
+            requested = str(updates["email"] or "").strip().lower()
+            current = str(old_email or "").strip().lower()
+
+            cur.execute(
+                f"SELECT LOWER(COALESCE(subscription_status, '')) "
+                f"FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
+                (tid,),
+            )
+            _plan_row = cur.fetchone()
+            plan = str(_plan_row[0]).lower() if _plan_row and _plan_row[0] else ""
+
+            # Data-driven exemption: the demo tenant has no mail domain worth
+            # receiving a code, and its sample data is meant to be edited freely.
+            # Keyed off the registry row, never the hostname, so it travels with
+            # the tenant rather than with a URL.
+            is_demo = plan == "demo" or tid.startswith("demo-")
+
+            # An unchanged address skips the gate entirely — re-saving the form
+            # while editing the motto must not demand a fresh code.
+            if requested != current and not is_demo:
+                if not payload.otp_verified or not (payload.otp_code or "").strip():
+                    raise HTTPException(
+                        status_code=428,
+                        detail=(
+                            "Changing the admin login email requires a verification "
+                            "code sent to the new address. Confirm the code first, "
+                            "then save again."
+                        ),
+                    )
+                if not _consume_email_change_otp(payload.otp_code.strip(), requested):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="That verification code is invalid or has expired.",
+                    )
 
         cur.execute(
             f"""

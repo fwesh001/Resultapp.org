@@ -3438,7 +3438,13 @@ EMAIL_OTP_TTL_MINUTES = int(os.getenv("EMAIL_OTP_TTL_MINUTES", "10"))
 EMAIL_OTP_MAX_ATTEMPTS = 5
 #: The only purpose currently issued. Narrow on purpose so a future
 #: password-reset OTP cannot be replayed against registration.
-EMAIL_OTP_PURPOSES = ("registration",)
+EMAIL_OTP_PURPOSES = ("registration", "email_change")
+# `email_change` exists because schools.email IS the admin login identifier
+# (admin_auth matches on it). A code minted for `registration` must never be
+# replayable to authorise an email change, and vice versa — a single shared
+# purpose would let a code captured during signup authorise an account change
+# weeks later. The purpose is part of the lookup key on both issue and consume,
+# so the two namespaces are genuinely separate.
 
 
 def generate_otp_code() -> str:

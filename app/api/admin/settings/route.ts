@@ -122,6 +122,18 @@ export async function PATCH(req: NextRequest) {
     delete payload.principal_signature_url;
   }
 
+  // Email-change proof, forwarded outside PROFILE_FIELDS because it is not a
+  // profile COLUMN — it is evidence. Keeping it out of the column allow-list is
+  // what stops it being persisted into `schools` by a future edit that widens
+  // that list to "whatever the form sends".
+  //
+  // Forwarded verbatim, untrusted. The backend re-consumes the code itself, so
+  // a client that sends otp_verified=true without a real code still fails.
+  if (record.otp_verified === true && typeof record.otp_code === "string") {
+    payload.otp_verified = true;
+    payload.otp_code = record.otp_code.trim();
+  }
+
   if (Object.keys(payload).length === 0) {
     return NextResponse.json(
       { success: false, error: "No profile fields provided" },
