@@ -116,27 +116,37 @@ echo "=== 0. no NameError waiting in either new endpoint ==="
 python3 - <<'PY'
 import ast, sys
 problems = []
-for path in ("/var/www/resultapp-backend/backend/routers/allocations.py",
-             "/var/www/resultapp-backend/backend/routers/admin.py"):
-    src = open(path).read()
-    tree = ast.parse(src)
-    # Collect module-level bound names
-    module_names = set(dir(__builtins__))
-    for node in ast.walk(tree):
+# db_manager symbols these routes must import locally (the module-level import
+# near the top of each file lives INSIDE a helper, not at module scope).
+DB_SYMBOLS = {"_connect_as_superuser", "TENANT_STAFF_TABLE", "SCHOOLS_REGISTRY_TABLE", "_row_to_dict"}
+
+def module_defined(tree):
+    """Names bound at module scope: imports, defs, classes, assignments."""
+    names = set()
+    for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             for a in node.names:
-                module_names.add((a.asname or a.name).split(".")[0])
+                names.add((a.asname or a.name).split(".")[0])
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            module_names.add(node.name)
+            names.add(node.name)          # e.g. a module-level _validate_tenant_id
         elif isinstance(node, ast.Assign):
             for t in node.targets:
                 if isinstance(t, ast.Name):
-                    module_names.add(t.id)
+                    names.add(t.id)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            module_names.add(node.target.id)
+            names.add(node.target.id)
+    return names
+
+for path, fns in (
+    ("/var/www/resultapp-backend/backend/routers/allocations.py", ("list_staff", "set_staff_moderator")),
+    ("/var/www/resultapp-backend/backend/routers/admin.py", ("change_tenant_admin_password",)),
+):
+    src = open(path).read()
+    tree = ast.parse(src)
+    mod_names = module_defined(tree)
 
     for fn in [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
-        if fn.name not in ("list_staff", "set_staff_moderator", "change_tenant_admin_password"):
+        if fn.name not in fns:
             continue
         local = set()
         for n in ast.walk(fn):
@@ -147,20 +157,21 @@ for path in ("/var/www/resultapp-backend/backend/routers/allocations.py",
                 for t in n.targets:
                     if isinstance(t, ast.Name):
                         local.add(t.id)
-            elif isinstance(n, (ast.arg,)):
+            elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name):
+                local.add(n.target.id)
+            elif isinstance(n, ast.arg):
                 local.add(n.arg)
-        # names this module's OTHER routes import locally by convention
-        sensitive = {"_connect_as_superuser", "TENANT_STAFF_TABLE",
-                     "_validate_tenant_id", "_row_to_dict", "SCHOOLS_REGISTRY_TABLE"}
         used = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
-        missing = sensitive & used - local
+        # A db_manager symbol is safe if EITHER imported locally OR defined at
+        # module scope in this file (some helpers are defined here).
+        missing = {s for s in DB_SYMBOLS if s in used} - local - mod_names
         if missing:
-            problems.append(f"{fn.name}: uses {sorted(missing)} without importing them")
+            problems.append(f"{fn.name} ({path.split('/')[-1]}): uses {sorted(missing)} without importing or module-defining them")
 if problems:
     for p in problems:
         print("  FAIL  " + p)
     sys.exit(1)
-print("  PASS  both endpoints import every db_manager symbol they use")
+print("  PASS  every db_manager symbol used is either imported locally or module-defined")
 PY
 [ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 
