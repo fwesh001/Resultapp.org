@@ -76,10 +76,18 @@ export function encryptSecret(plaintext: string): string {
  */
 export function decryptSecret(stored: string | null | undefined): string | null {
   if (!stored || typeof stored !== "string") return null;
+  // PREFIX is "enc:v1", so the serialized form is enc:v1:<iv>:<tag>:<ct> and
+  // splitting on ":" yields FIVE parts: ["enc", "v1", iv, tag, ct].
+  //
+  // This guard used to read `parts[0] !== "v1"`, which is unreachable — parts[0]
+  // is always "enc" — so every value produced by encryptSecret was rejected and
+  // decryptSecret returned null for all of them. It failed silently by design
+  // (see below), so the webhook safety net appeared healthy while never being
+  // able to read a single parked password. The prefix occupies TWO segments.
   const parts = stored.split(":");
-  if (parts.length !== 5 || parts[0] !== "v1") return null;
+  if (parts.length !== 5 || parts[0] !== "enc" || parts[1] !== "v1") return null;
   try {
-    const [, ivB64, tagB64, ctB64] = parts;
+    const [, , ivB64, tagB64, ctB64] = parts;
     const decipher = crypto.createDecipheriv(
       ALGO,
       getKey(),
