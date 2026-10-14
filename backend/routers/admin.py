@@ -1481,7 +1481,7 @@ def platform_stats():
 # and lib/pendingRegistrations.ts for the Next-tier caller.
 #
 # The admin password is already encrypted by the Next tier before it reaches
-# this table. Nothing here decrypts it, logs it, or returns it — these endpoints
+# this table. Nothing here decrypts it, logs it, or returns it ï¿½ these endpoints
 # are a keyed mailbox, not a credential store.
 
 
@@ -1490,6 +1490,19 @@ class PendingRegistrationIn(BaseModel):
     subdomain: str
     payload: dict
     ttl_minutes: int = 45
+
+    # --- Waiver binding (all optional; an unwaived hold is unaffected) -----
+    #
+    # `charge_required = False` is the 100% bypass marker. It is the single
+    # field that tells the completion path whether a Flutterwave transaction is
+    # expected to exist â€” because when it is False, one never will, and the
+    # webhook will never fire for this hold. Without it, a bypass and a failed
+    # payment are indistinguishable from the outside, and the provision step
+    # would sit forever waiting for a charge that was never going to arrive.
+    waiver_token_id: Optional[int] = None
+    charge_required: bool = True
+    charge_ngn: int = 0
+    charged_slots: int = 0
 
 
 class TxRefIn(BaseModel):
@@ -1515,6 +1528,8 @@ def create_pending_registration(body: PendingRegistrationIn):
         raise HTTPException(status_code=400, detail="A valid subdomain is required")
 
     ttl = max(5, min(int(body.ttl_minutes or 45), 1440))
+    charge_ngn = max(0, int(body.charge_ngn or 0))
+    charged_slots = max(0, int(body.charged_slots or 0))
 
     conn = None
     try:
@@ -1522,12 +1537,24 @@ def create_pending_registration(body: PendingRegistrationIn):
         cur = conn.cursor()
         cur.execute(
             f"""
-            INSERT INTO {PENDING_REGISTRATIONS_TABLE} (tx_ref, subdomain, payload, expires_at)
-            VALUES (%s, %s, %s::jsonb, NOW() + (%s || ' minutes')::interval)
+            INSERT INTO {PENDING_REGISTRATIONS_TABLE}
+                (tx_ref, subdomain, payload, expires_at,
+                 waiver_token_id, charge_required, charge_ngn, charged_slots)
+            VALUES (%s, %s, %s::jsonb, NOW() + (%s || ' minutes')::interval,
+                    %s, %s, %s, %s)
             ON CONFLICT (tx_ref) DO NOTHING
             RETURNING id, status, expires_at;
             """,
-            (tx_ref, subdomain, _json.dumps(body.payload or {}), str(ttl)),
+            (
+                tx_ref,
+                subdomain,
+                _json.dumps(body.payload or {}),
+                str(ttl),
+                body.waiver_token_id,
+                bool(body.charge_required),
+                charge_ngn,
+                charged_slots,
+            ),
         )
         row = cur.fetchone()
         if row is None:
@@ -1578,7 +1605,8 @@ def get_pending_registration(tx_ref: str):
         cur = conn.cursor()
         cur.execute(
             f"""
-            SELECT tx_ref, subdomain, payload, status, created_at, expires_at
+            SELECT tx_ref, subdomain, payload, status, created_at, expires_at,
+                   waiver_token_id, charge_required, charge_ngn, charged_slots
             FROM {PENDING_REGISTRATIONS_TABLE}
             WHERE tx_ref = %s;
             """,
@@ -1594,6 +1622,14 @@ def get_pending_registration(tx_ref: str):
             "status": row[3],
             "created_at": row[4].isoformat() if row[4] else None,
             "expires_at": row[5].isoformat() if row[5] else None,
+            # The completion path branches on charge_required. A hold with it
+            # False is the 100% bypass: no Flutterwave transaction will ever
+            # exist for it, so verification must be skipped rather than
+            # waited on forever.
+            "waiver_token_id": row[6],
+            "charge_required": bool(row[7]) if row[7] is not None else True,
+            "charge_ngn": int(row[8] or 0),
+            "charged_slots": int(row[9] or 0),
         }
     except HTTPException:
         raise
