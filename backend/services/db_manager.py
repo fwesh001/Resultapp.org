@@ -2367,40 +2367,32 @@ def set_free_credits_enabled(enabled: bool) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TECH DEBT — REMOVE THE DEFAULT. Do not let this outlive the waiver rollout.
+# TECH DEBT — CLOSED. `paid_slots` was originally Optional[int] = None, meaning
+# "fall back to total capacity", so a registration fully covered by a 100%
+# waiver would still have minted 30 free publishing credits — a repeatable,
+# unlimited farm (issue a waiver, register a throwaway subdomain, repeat).
 #
-#   TODO(waiver-rollout): once every caller of resolve_initial_credit_grant()
-#   passes a real paid_slots value, delete the `paid_slots: Optional[int] = None`
-#   parameter entirely and make it required.
+# It shipped that way so the rollout could not break an un-updated caller. It
+# then turned out there was only ever ONE caller — main.py provision_school,
+# already updated — so the default was removed rather than left armed behind a
+# TODO. An `Optional` with a permissive default is exactly the thing that gets
+# copied into a new call site a year from now by someone who has never heard of
+# waivers.
 #
-# WHY IT MUST NOT STAY
-# --------------------
-# `None` means "fall back to the historical total-capacity behaviour", which is
-# the UNSAFE reading: a registration redeemed entirely by a 100% waiver token
-# would count its full granted capacity and mint 30 free publishing credits for
-# free. That is a repeatable, unlimited farm — issue a waiver, register a
-# throwaway subdomain, repeat.
+# A caller with no waiver must now pass student_count explicitly, which is not a
+# workaround: without a discount, paid slots and granted slots are the same
+# number. The semantic is now stated in the type rather than inferred from an
+# absence.
 #
-# Today it is harmless only because exactly one caller has been updated
-# (main.py provision_school) and every other caller passes nothing. The safety
-# is entirely procedural: it depends on nobody adding a new caller before this
-# is done. An `Optional` with a permissive default is the kind of thing that
-# gets copied into a new call site three months from now by someone who has
-# never heard of waivers.
-#
-# HOW TO CLOSE IT
-# ---------------
+# TO RE-VERIFY IF THIS IS EVER TOUCHED AGAIN
+# -------------------------------------------
 #   1. `grep -rn "resolve_initial_credit_grant" backend/`
-#   2. Confirm every call site passes paid_slots explicitly.
-#   3. Change the signature to `paid_slots: int` (required, positional or
-#      keyword-only with no default) and delete the None branch below.
-#   4. Add an assertion in scripts/verify-waiver-rollback-probe.py that a
-#      registration with no waiver still grants its credits, so removing the
-#      fallback cannot silently change the paying path.
-#
-# Do not remove the paid_slots PARAMETER. Only the permissive default.
+#   2. Every call site must pass a real integer.
+#   3. scripts/waiver-rollback-probe.py section 9 pins BOTH directions: a
+#      paying 600-slot school still gets its 30 credits, and a fully-waived one
+#      gets 0. If those two ever flip, this function is wrong again.
 # ─────────────────────────────────────────────────────────────────────────────
-def resolve_initial_credit_grant(student_count: int, paid_slots: Optional[int] = None) -> int:
+def resolve_initial_credit_grant(student_count: int, paid_slots: int) -> int:
     """Authoritative decision for the registration credit grant.
 
     The backend is the only authority: the client's `initial_credits` payload is
