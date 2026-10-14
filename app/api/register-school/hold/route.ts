@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { holdRegistration, type PendingPayload } from "@/lib/pendingRegistrations";
+import { holdRegistration, newTxRef, type PendingPayload, type WaiverBinding } from "@/lib/pendingRegistrations";
+import { getBackendBase, upstreamError, requireSecret } from "../../superadmin/_lib";
 
 /**
  * POST /api/register-school/hold
@@ -16,6 +17,23 @@ import { holdRegistration, type PendingPayload } from "@/lib/pendingRegistration
  * This endpoint stores and returns a tx_ref. It does NOT provision and does NOT
  * take payment — it is a reservation, and an attacker minting holds only
  * occupies short-lived rows that expire on their own.
+ *
+ * ── WAIVERS ───────────────────────────────────────────────────────────────
+ * When a waiver code is supplied this route does three things, in this order:
+ *
+ *   1. PREVIEWS it against the backend (read-only, cannot consume anything)
+ *   2. RESERVES it under the tx_ref it is about to mint
+ *   3. Parks the hold carrying the waiver binding
+ *
+ * Reserve-before-park is the ordering that matters. If the reservation came
+ * after the hold, two tabs could each park a hold and then race to reserve, and
+ * the loser would hold a registration it can never complete — with a code it
+ * has already burned. One reference, one reservation, one hold.
+ *
+ * THE PUBLIC BRUTE-FORCE SURFACE. This route is unauthenticated, and a waiver
+ * code is a bearer credential with cash value, so the preview step is rate
+ * limited at both tiers. Without that, this endpoint is a free oracle for
+ * grinding codes.
  */
 
 export const dynamic = "force-dynamic";
@@ -39,9 +57,9 @@ function validate(p: PendingPayload): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  let body: Partial<PendingPayload>;
+  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Partial<PendingPayload>;
+    body = (await req.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
   }
@@ -61,11 +79,101 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: invalid }, { status: 400 });
   }
 
+  const { secret, error } = requireSecret();
+  if (error) return error;
+
+  const base = getBackendBase();
+  const tokenString = String(body.waiver_token ?? "").trim();
+
+  let txRef = newTxRef(payload.subdomain);
+  let waiver: WaiverBinding | undefined;
+  let split: Record<string, unknown> | null = null;
+
+  if (tokenString) {
+    // 1. Preview — read-only, so a bad code costs nothing and a school who
+    //    mistypes it is not punished by having their previous code consumed.
+    const preview = await fetch(`${base}/api/v1/waiver/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify({
+        token_string: tokenString,
+        requested_slots: payload.student_count,
+        applies_to: "REGISTRATION",
+      }),
+      cache: "no-store",
+    });
+    const previewData = await preview.json().catch(() => ({}));
+    if (!preview.ok) {
+      return NextResponse.json(
+        { success: false, error: upstreamError(previewData, "That waiver code could not be applied") },
+        { status: preview.status },
+      );
+    }
+
+    const pd = previewData as {
+      token_id?: number;
+      split?: Record<string, unknown>;
+    };
+    split = pd.split ?? null;
+    const chargedNgn = Number(split?.charged_ngn ?? 0);
+    const chargedSlots = Number(split?.charged_slots ?? 0);
+
+    // 2. Reserve under the tx_ref we are about to park, so the token's
+    //    reservation and the registration's hold are the same lifecycle.
+    const reserved = await fetch(`${base}/api/v1/waiver/reserve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify({
+        token_string: tokenString,
+        tx_ref: txRef,
+        applies_to: "REGISTRATION",
+      }),
+      cache: "no-store",
+    });
+    const reservedData = await reserved.json().catch(() => ({}));
+    if (!reserved.ok) {
+      return NextResponse.json(
+        { success: false, error: upstreamError(reservedData, "That waiver code is not available") },
+        { status: reserved.status },
+      );
+    }
+
+    waiver = {
+      token_id: pd.token_id ?? Number((reservedData as { reservation?: { id?: number } })?.reservation?.id ?? 0),
+      reservation_tx_ref: txRef,
+      // The 100% bypass marker. The backend's own split decides this, never
+      // the client, because this field decides whether the completion path
+      // waits for a charge that will never exist.
+      charge_required: chargedNgn > 0,
+      charge_ngn: chargedNgn,
+      charged_slots: chargedSlots,
+    };
+  }
+
   try {
-    const txRef = await holdRegistration(payload);
-    // No payload echoed — it contains the admin password.
-    return NextResponse.json({ success: true, tx_ref: txRef }, { status: 200 });
+    const parked = await holdRegistration(payload, { txRef, waiver });
+    // No payload echoed — it contains the admin password. The split IS echoed
+    // so the wizard can render the discounted total without a second round
+    // trip, and it is display-only: the backend recomputes it at redemption.
+    return NextResponse.json(
+      {
+        success: true,
+        tx_ref: parked,
+        waiver: waiver ? { token_id: waiver.token_id, ...split } : null,
+      },
+      { status: 200 },
+    );
   } catch (e) {
+    // Park failed, so nothing will ever claim this reservation. Give the
+    // token straight back rather than making the school wait out the TTL.
+    if (waiver) {
+      await fetch(`${base}/api/v1/waiver/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+        body: JSON.stringify({ token_id: waiver.token_id, tx_ref: txRef }),
+        cache: "no-store",
+      }).catch(() => null);
+    }
     console.error("[register/hold] failed", e);
     return NextResponse.json(
       {
