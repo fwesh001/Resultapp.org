@@ -45,6 +45,7 @@ _BACKEND = str(_ROOT / "backend")
 if _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
 
+import json  # noqa: E402
 import logging  # noqa: E402
 
 logging.disable(logging.CRITICAL)
