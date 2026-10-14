@@ -739,7 +739,6 @@ def main():
         section("CLEANUP")
         cleanup()
         print("  triggers dropped, probe rows removed")
-
     print("\n==========================================")
     print(f"  {PASS} passed, {FAIL} failed")
     print("==========================================")
