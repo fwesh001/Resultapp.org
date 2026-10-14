@@ -638,11 +638,17 @@ export function BillingCheckout({
                 name="waiverToken"
                 type="text"
                 autoComplete="off"
+                // Case-SENSITIVE base64url. See the identical fix in
+                // RegisterSchoolForm — uppercasing corrupted 10 of 27
+                // characters and the code could never match its stored hash.
+                autoCapitalize="none"
+                autoCorrect="off"
                 spellCheck={false}
                 placeholder="RW-…"
                 value={waiverToken}
                 onChange={(e) => {
-                  const v = e.target.value.toUpperCase();
+                  // Keep the value EXACTLY as typed or pasted.
+                  const v = e.target.value;
                   onWaiverChange?.({ token: v, tokenId: null, error: null });
                   setPreview(null);
                   if (error) setError(null);

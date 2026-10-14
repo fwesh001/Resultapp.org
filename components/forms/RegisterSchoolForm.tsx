@@ -2240,10 +2240,24 @@ export function RegisterSchoolForm() {
               name="waiverToken"
               type="text"
               autoComplete="off"
+              // A waiver code is base64url: case-SIGNIFICANT. Verified against
+              // the stored SHA-256 — uppercasing this input altered 10 of the
+              // token's 27 characters, so the school was told their code was
+              // invalid for one they had been given correctly and pasted intact.
+              //
+              // autoCapitalize/autoCorrect are the mobile half of the same bug
+              // and are easy to miss: iOS Safari auto-capitalises the first
+              // letter of a text input by default, which would turn "...qjy..."
+              // into "...Qjy..." with the user doing nothing at all. These are
+              // also the attributes that stop the browser's password manager
+              // offering to "save" what it thinks is a login.
+              autoCapitalize="none"
+              autoCorrect="off"
               spellCheck={false}
               placeholder="RW-…"
               value={waiverToken}
-              onChange={(e) => setWaiverToken(e.target.value.toUpperCase())}
+              // Keep the value EXACTLY as typed or pasted.
+              onChange={(e) => setWaiverToken(e.target.value)}
               error={waiverError ?? undefined}
               disabled={isSubmitting}
             />

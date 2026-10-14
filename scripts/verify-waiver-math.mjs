@@ -31,7 +31,7 @@
 
 import { registerHooks } from "node:module";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -412,6 +412,58 @@ console.log("\n=== 6. invalid input is rejected by BOTH sides ===");
   }
   if (disagree === 0) ok(`all ${INVALID.length} invalid inputs refused identically by both implementations`);
   else no(`${disagree} invalid inputs handled differently`, firstDisagree);
+}
+
+// ---------------------------------------------------------------------------
+// 7. The token is base64url and therefore CASE-SENSITIVE
+// ---------------------------------------------------------------------------
+
+console.log("\n=== 7. waiver code inputs must not alter case ===");
+// This is not math, but it is the same class of bug and it belongs in the one
+// script that gates waiver-token correctness.
+//
+// A waiver code is `RW-` + secrets.token_urlsafe(18): the base64url alphabet is
+// A-Za-z0-9-_, so case is part of the credential. An input that "helpfully"
+// uppercases what is pasted destroys it — proven against a real stored hash:
+// uppercasing altered 10 of 27 characters and the SHA-256 could never match,
+// so a school holding a perfectly valid code was told it was expired.
+//
+// The same class of corruption arrives silently on iOS, where autoCapitalize
+// rewrites the first letter of a text input with no user action at all. Those
+// attributes have to be present too, so both halves are asserted.
+{
+  const files = [
+    ["components/forms/RegisterSchoolForm.tsx", "registration wizard"],
+    ["components/billing/BillingCheckout.tsx", "billing top-up"],
+  ];
+  let bad = 0;
+  for (const [rel, label] of files) {
+    const path = join(ROOT, rel);
+    if (!existsSync(path)) {
+      no(`${label}: file missing`, rel);
+      bad++;
+      continue;
+    }
+    const src = readFileSync(path, "utf8");
+    if (/\.toUpperCase\(\)/.test(src)) {
+      no(
+        `${label} uppercases the waiver code`,
+        "a base64url token is case-sensitive; toUpperCase() makes it unredeemable",
+      );
+      bad++;
+    } else if (!/autoCapitalize\s*=\s*"none"/.test(src)) {
+      no(`${label} has no autoCapitalize="none"`, "iOS Safari would rewrite the first letter");
+      bad++;
+    } else if (!/autoCorrect\s*=\s*"off"/.test(src)) {
+      no(`${label} has no autoCorrect="off"`, "the keyboard would offer to 'fix' a credential");
+      bad++;
+    } else {
+      ok(`${label}: token preserved verbatim, mobile autocorrect disabled`);
+    }
+  }
+  if (!bad) {
+    ok("a case-preserving token can only ever match a case-sensitive hash");
+  }
 }
 
 // ---------------------------------------------------------------------------
