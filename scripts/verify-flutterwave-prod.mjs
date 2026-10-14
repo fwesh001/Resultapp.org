@@ -263,7 +263,23 @@ const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$
   );
   check(
     "amount floor is enforced server-side",
-    /charged\s*<\s*expected/.test(p),
+    /charged\s*<\s*(floor|expected)/.test(p),
+  );
+  // Stricter than the check above, and added because waivers changed the rule
+  // rather than bypassing it. The floor is `min(waiver charge, list price)` —
+  // a discount may LOWER what a registration must have paid, and nothing else.
+  // A waiver that could RAISE the floor would let a tampered hold turn a
+  // legitimate payment into "not_paid"; `Math.min` is what makes the
+  // discounted charge safe to accept and the list price the hard ceiling.
+  check(
+    "a waiver can only LOWER the floor (min of charge and list price)",
+    /Math\.min\(\s*hold\.charge_ngn\s*,\s*expected\s*\)/.test(p),
+    "without min(), a forged charge_ngn could raise the floor above the list price",
+  );
+  check(
+    "a 100% bypass skips payment verification entirely",
+    /charge_required\s*===\s*false/.test(p) && /isBypass/.test(p),
+    "otherwise a fully-waived registration waits forever for a charge that will never exist",
   );
   check(
     "currency is checked",
