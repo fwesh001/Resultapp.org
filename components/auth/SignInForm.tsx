@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, Lock, User } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 import { Button } from "@/components/ui/Button";
 import { VerifyEmailWall } from "@/components/auth/VerifyEmailWall";
 
@@ -70,6 +71,7 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -156,13 +158,20 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
       )}
       <Input
         label={passwordLabel}
-        type="password"
+        type={showPassword ? "text" : "password"}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="••••••"
         autoComplete="current-password"
         required
         disabled={loading}
+        trailing={
+          <PasswordToggle
+            label={passwordLabel}
+            visible={showPassword}
+            onToggle={() => setShowPassword((v) => !v)}
+          />
+        }
       />
 
       {error && (

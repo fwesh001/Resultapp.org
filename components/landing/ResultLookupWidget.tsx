@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useGlobalTerm } from "@/lib/useGlobalTerm";
 import { expandStudentId } from "@/lib/identityPrefix";
 import { Select } from "@/components/ui/Select";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 
 interface ResultLookupWidgetProps {
   subdomain: string;
@@ -24,6 +25,7 @@ export default function ResultLookupWidget({
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
+const [showPassword, setShowPassword] = useState(false);
   const [term, setTerm] = useState("Term 1");
   // Default-plus-override: global admin term until the user picks otherwise.
   const [termTouched, setTermTouched] = useState(false);
@@ -160,16 +162,25 @@ export default function ResultLookupWidget({
       >
         Password
       </label>
-      <input
-        id="student-password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="e.g., 123456"
-        required
-        autoComplete="current-password"
-        className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-      />
+      <div className="relative">
+        <input
+          id="student-password"
+          type={showPassword ? "text" : "password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="e.g., 123456"
+          required
+          autoComplete="current-password"
+          className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 pr-12 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+        />
+        <div className="absolute inset-y-0 right-0 mt-2">
+          <PasswordToggle
+            label="password"
+            visible={showPassword}
+            onToggle={() => setShowPassword((v) => !v)}
+          />
+        </div>
+      </div>
       <p className="mt-2 text-xs text-text-3">
         First time here? Use the default password{" "}
         <span className="font-mono text-text-2">123456</span>, then change it in the{" "}

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, Lock } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 import { Button } from "@/components/ui/Button";
 import { VerifyEmailWall } from "@/components/auth/VerifyEmailWall";
 
@@ -13,6 +14,7 @@ export default function SuperadminLoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Soft-login gate. Only applies to the per-user path — the legacy env
@@ -83,13 +85,20 @@ export default function SuperadminLoginForm() {
       />
       <Input
         label={email.trim() ? "Password" : "Superadmin Password"}
-        type="password"
+        type={showPassword ? "text" : "password"}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="••••••••"
         autoComplete="current-password"
         required
         disabled={loading}
+        trailing={
+          <PasswordToggle
+            label={email.trim() ? "password" : "superadmin password"}
+            visible={showPassword}
+            onToggle={() => setShowPassword((v) => !v)}
+          />
+        }
       />
       {error && (
         <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">

@@ -3863,8 +3863,19 @@ def issue_email_otp(email: str, purpose: str = "registration") -> Optional[Dict[
                 pass
 
 
-def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") -> bool:
-    """Verify and burn an OTP in one transaction.
+def _email_otp_pass(
+    email: str,
+    raw_code: str,
+    purpose: str,
+    *,
+    burn: bool,
+) -> bool:
+    """Validate an OTP, optionally burning it on success.
+
+    Shared core of consume_email_otp / check_email_otp. Those two differ ONLY
+    in whether a correct code is marked spent, and a second copy of this logic
+    is a second chance for the two to drift apart on something security-relevant
+    (an attempt increment, the expiry test). One implementation, one guarantee.
 
     Returns True only on an exact, unexpired, unconsumed match with attempts
     remaining. Every other outcome â€” wrong code, expired, already used,
@@ -3911,11 +3922,17 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
         exhausted = int(attempts) >= EMAIL_OTP_MAX_ATTEMPTS
 
         if matched and not expired and not exhausted:
-            cur.execute(
-                f"UPDATE {EMAIL_OTP_TABLE} SET consumed_at = NOW() WHERE id = %s;",
-                (otp_id,),
-            )
-            conn.commit()
+            if burn:
+                cur.execute(
+                    f"UPDATE {EMAIL_OTP_TABLE} SET consumed_at = NOW() WHERE id = %s;",
+                    (otp_id,),
+                )
+                conn.commit()
+                return True
+            # burn=False: give the code back. The SELECT above took a row lock,
+            # so a bare return would hold it until GC; rollback releases it and
+            # leaves the row exactly as it was, still redeemable.
+            conn.rollback()
             return True
 
         if not exhausted:
@@ -3928,7 +3945,7 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
             conn.rollback()
         return False
     except Exception as e:
-        logger.error(f"[DB] consume_email_otp failed for {email}: {e}")
+        logger.error(f"[DB] _email_otp_pass failed for {email}: {e}")
         if conn:
             try:
                 conn.rollback()
@@ -3941,3 +3958,34 @@ def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") 
                 conn.close()
             except Exception:
                 pass
+
+
+def consume_email_otp(email: str, raw_code: str, purpose: str = "registration") -> bool:
+    """Verify AND burn an OTP. The code is spent; a replay must fail.
+
+    Correct for `registration`, where verifying IS the whole job.
+
+    Wrong for `email_change`: the code must still be redeemable at the moment
+    the profile write happens, because that write is what actually changes the
+    login address. Burning here and again there meant the second burn always
+    lost, and every confirmed email change ended in
+    "That verification code is invalid or has expired."
+    Use check_email_otp for that purpose.
+    """
+    return _email_otp_pass(email, raw_code, purpose, burn=True)
+
+
+def check_email_otp(email: str, raw_code: str, purpose: str = "email_change") -> bool:
+    """Validate an OTP WITHOUT burning it. The code survives for its real burn.
+
+    For `email_change`, where the flow is verify-then-write: the verify call
+    proves the address, the profile write performs the single authoritative
+    consume. Two burns meant the second could only ever fail.
+
+    THIS IS NOT A FREE PASS. A wrong guess still spends one of the 5 attempts
+    (the shared core handles that identically), so the brute-force cap and the
+    per-IP rate limit in routers/auth_flow.py both still apply. Dropping the
+    attempt increment here would turn a 6-digit code into an unlimited oracle,
+    so the increment lives in the shared core, not in the burning branch.
+    """
+    return _email_otp_pass(email, raw_code, purpose, burn=False)

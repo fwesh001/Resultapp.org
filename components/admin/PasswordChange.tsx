@@ -26,7 +26,16 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [show, setShow] = useState(false);
+  // One flag per field, not one for the form.
+  //
+  // This used to be a single `show` driving all three inputs, with the button
+  // rendered only inside the current-password field. So revealing the current
+  // password also revealed the new one and its confirmation — which defeats the
+  // point of the confirmation box, whose whole job is to let you check a value
+  // you have not seen yet.
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -119,7 +128,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
             <input
               id="pw-current"
               name="current_password"
-              type={show ? "text" : "password"}
+              type={showCurrent ? "text" : "password"}
               autoComplete="current-password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
@@ -128,11 +137,16 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
             />
             <button
               type="button"
-              onClick={() => setShow((v) => !v)}
-              aria-label={show ? "Hide passwords" : "Show passwords"}
-              className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full p-2.5 text-purple-300/50 transition hover:text-purple-200"
+              onClick={() => setShowCurrent((v) => !v)}
+              aria-label={showCurrent ? "Hide current password" : "Show current password"}
+              aria-pressed={showCurrent}
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
             >
-              {show ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              {showCurrent ? (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              )}
             </button>
           </div>
         </div>
@@ -141,34 +155,64 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
           <label htmlFor="pw-new" className="block text-sm font-medium text-purple-200">
             New password
           </label>
-          <input
-            id="pw-new"
-            name="new_password"
-            type={show ? "text" : "password"}
-            autoComplete="new-password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            required
-            minLength={8}
-            placeholder="At least 8 characters"
-            className={inputClass}
-          />
+          <div className="relative">
+            <input
+              id="pw-new"
+              name="new_password"
+              type={showNext ? "text" : "password"}
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              required
+              minLength={8}
+              placeholder="At least 8 characters"
+              className={`${inputClass} pr-12`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowNext((v) => !v)}
+              aria-label={showNext ? "Hide new password" : "Show new password"}
+              aria-pressed={showNext}
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+            >
+              {showNext ? (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div>
           <label htmlFor="pw-confirm" className="block text-sm font-medium text-purple-200">
             Confirm new password
           </label>
-          <input
-            id="pw-confirm"
-            name="confirm_password"
-            type={show ? "text" : "password"}
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            required
-            className={inputClass}
-          />
+          <div className="relative">
+            <input
+              id="pw-confirm"
+              name="confirm_password"
+              type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              className={`${inputClass} pr-12`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              aria-label={showConfirm ? "Hide confirmed password" : "Show confirmed password"}
+              aria-pressed={showConfirm}
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+            >
+              {showConfirm ? (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

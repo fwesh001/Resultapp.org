@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 import { Button } from "@/components/ui/Button";
 
 interface Props {
@@ -20,8 +21,10 @@ interface Props {
 export default function AdminSetupForm({ tenantId, loginHref }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+const [password, setPassword] = useState("");
+const [confirm, setConfirm] = useState("");
+const [showPassword, setShowPassword] = useState(false);
+const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -94,23 +97,37 @@ export default function AdminSetupForm({ tenantId, loginHref }: Props) {
       />
       <Input
         label="New Password"
-        type="password"
+        type={showPassword ? "text" : "password"}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="Minimum 8 characters"
         autoComplete="new-password"
         required
         disabled={loading}
+        trailing={
+          <PasswordToggle
+            label="new password"
+            visible={showPassword}
+            onToggle={() => setShowPassword((v) => !v)}
+          />
+        }
       />
       <Input
         label="Confirm New Password"
-        type="password"
+        type={showConfirm ? "text" : "password"}
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
         placeholder="Repeat your password"
         autoComplete="new-password"
         required
         disabled={loading}
+        trailing={
+          <PasswordToggle
+            label="confirmed password"
+            visible={showConfirm}
+            onToggle={() => setShowConfirm((v) => !v)}
+          />
+        }
       />
 
       {error && (

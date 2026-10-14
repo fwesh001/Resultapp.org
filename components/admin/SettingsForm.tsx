@@ -68,25 +68,103 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   //
   // schools.email is the admin login identifier, so changing it needs proof the
   // requester controls the NEW mailbox. The sequence is: type a new address ->
-  // the OTP panel appears -> request a code -> verify it -> only then does Save
-  // carry the proof.
+  // the OTP panel appears -> request a code -> verify it -> the change saves
+  // itself and the admin is signed out to the new address.
   //
-  // The verified code is kept in state and sent with the save rather than being
-  // consumed at verify time, because the backend re-consumes it on the write.
-  // That keeps the write the single place the gate lives: verifying once and
-  // saving three times does not work, because the code is burned on the first
-  // save.
+  // Verify is the LAST step, not a checkpoint before one. That is why the code
+  // must survive verification: the profile write burns it. For a while the
+  // verify endpoint burned it too, so the write could never succeed and every
+  // confirmed change failed at the save with "That verification code is invalid
+  // or has expired." Exactly one burn remains, on the write.
+  //
+  // The code is still single-use: a second save with the same code fails,
+  // because the first one consumed the row.
   const [emailValue, setEmailValue] = useState(school?.email ?? "");
   const [otpState, setOtpState] = useState<"idle" | "sent" | "verified">("idle");
   const [otpCode, setOtpCode] = useState("");
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  // Needed to read the live DOM values of the profile fields. The form is
+  // uncontrolled (defaultValue), so there is no state holding them — the only
+  // way to know whether the admin has unsaved work is to ask the form.
+  const formRef = useRef<HTMLFormElement>(null);
 
   const originalEmail = (school?.email ?? "").trim().toLowerCase();
   const emailChanged =
     emailValue.trim().toLowerCase().length > 0 &&
     emailValue.trim().toLowerCase() !== originalEmail;
+
+  /**
+   * Do any fields OTHER than the email differ from what the server sent?
+   *
+   * Confirming an email now saves immediately and then bounces to login,
+   * because the session is keyed to the address that just changed. Anything the
+   * admin had half-typed in the motto or term fields dies with that redirect.
+   * Silently discarding someone's work is the kind of thing that gets a form
+   * distrusted, so we detect it and ask first.
+   */
+  function hasUnsavedOtherChanges(): boolean {
+    const form = formRef.current;
+    if (!form) return false;
+    const fd = new FormData(form);
+    const originals: Record<string, string> = {
+      school_name: school?.name ?? "",
+      motto: school?.motto ?? "",
+      phone: school?.phone ?? "",
+      address: school?.address ?? "",
+      current_term: school?.currentTerm ?? "",
+      current_session: school?.currentSession ?? "",
+      new_term_begins: school?.newTermBegins ? String(school.newTermBegins).slice(0, 10) : "",
+      logo_url: school?.logoUrl ?? "",
+      hero_bg_url: school?.heroBgUrl ?? "",
+      id_prefix: school?.idPrefix ?? "",
+      staff_id_prefix: school?.staffIdPrefix ?? "",
+    };
+    for (const [key, original] of Object.entries(originals)) {
+      const raw = fd.get(key);
+      const current = typeof raw === "string" ? raw.trim() : "";
+      if (current !== original.trim()) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Persist the email change on its own, then force a re-login.
+   *
+   * Deliberately separate from handleSubmit, which builds its payload from
+   * FormData of the whole profile. The email is the one field whose change is
+   * self-contained and independently verifiable, so verifying it writes exactly
+   * that one field. Folding it into the general save would let a confirmed
+   * address drag along whatever half-finished edits happened to be in the
+   * other tabs.
+   */
+  async function saveEmailChange(code: string): Promise<void> {
+    const subdomain = school?.slug ?? "";
+    const res = await fetch("/api/admin/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subdomain,
+        email: emailValue.trim(),
+        otp_verified: true,
+        otp_code: code,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+    };
+    if (!res.ok || data.success === false) {
+      throw new Error(data.error || "Failed to update the login address.");
+    }
+    // The address is now the login identifier, so the session this page is
+    // rendered under is keyed to a value that no longer exists. Bouncing to
+    // login is the honest outcome — staying on Settings would leave the admin
+    // looking at a portal they can no longer sign in to.
+    toast.success("Email updated. Please sign in again with the new address.");
+    router.push(`/${subdomain}/admin/login?emailChanged=1`);
+  }
 
   async function requestOtp() {
     const target = emailValue.trim();
@@ -136,12 +214,36 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       const data = (await res.json().catch(() => ({}))) as {
         verified?: boolean;
         error?: string;
+        // The backend returns a failure as `message` with a 200, deliberately
+        // keeping the endpoint neutral. Reading only `error` meant the specific
+        // "Request a new one" guidance never reached the admin.
+        message?: string;
       };
       if (!res.ok || data.verified !== true) {
-        throw new Error(data.error || "That code is incorrect or has expired.");
+        throw new Error(
+          data.error || data.message || "That code is incorrect or has expired.",
+        );
       }
+
+      // Verified. The code is still unspent at this point — the profile write
+      // is the single authoritative consume — so save immediately rather than
+      // asking the admin for a second click on a button that has nothing left
+      // to do.
+      if (hasUnsavedOtherChanges()) {
+        const proceed = window.confirm(
+          "Saving your new email signs you out immediately, and you have unsaved changes to other fields on this page that will be discarded.\n\nSave the email change anyway?",
+        );
+        if (!proceed) {
+          setOtpState("sent");
+          setOtpError(
+            "Code confirmed, but not applied. Save your other changes first, then verify again.",
+          );
+          return;
+        }
+      }
+
       setOtpState("verified");
-      toast.success("Code confirmed — save the form to apply the change.");
+      await saveEmailChange(otpCode);
     } catch (e) {
       setOtpError(e instanceof Error ? e.message : "That code is incorrect.");
       setOtpState("sent");
@@ -202,24 +304,17 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       }
     }
 
-    // Carry the proof ONLY when it is actually verified.
+    // The email is NOT saved from here any more.
     //
-    // `otp_verified` is not a claim the backend trusts on its own — it re-burns
-    // `otp_code` against the address being written. Sending the flag without a
-    // real code would be rejected server-side anyway; refusing to send it at
-    // all means a stale "verified" state can never paper over an unconfirmed
-    // change.
-    if (emailChanged && otpState === "verified" && otpCode.length === 6) {
-      payload.otp_verified = true;
-      payload.otp_code = otpCode;
-    }
-
-    // Catch the gate client-side so an admin who edited the motto AND changed
-    // the email gets told about the email, instead of the whole save silently
-    // failing on a field they may not have noticed they changed.
-    if (emailChanged && otpState !== "verified") {
+    // It used to be: the code travelled with this payload and the backend burned
+    // it on this write. But verification now writes the email itself, so by the
+    // time this button is reachable the address is either already changed (and
+    // the admin has been signed out) or still unverified. Carrying the proof
+    // here would describe a flow that no longer exists, and forwarding a flag
+    // with no matching code would be rejected server-side anyway.
+    if (emailChanged) {
       setError(
-        "Confirm the six-digit code for the new email address before saving.",
+        "Confirm the six-digit code with the Verify button first — that applies the email change.",
       );
       setIsSubmitting(false);
       return;
@@ -242,19 +337,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         throw new Error(data.error || "Failed to save settings.");
       }
 
-      // The address is now the login identifier, so the session this page is
-      // rendered under is keyed to a value that no longer exists. Bouncing to
-      // login is the honest outcome — staying on Settings would leave the admin
-      // looking at a portal they can no longer sign in to.
-      const loginIdentifierMoved =
-        emailChanged && otpState === "verified" && subdomain !== "";
-
-      if (loginIdentifierMoved) {
-        toast.success("Email updated. Please sign in again with the new address.");
-        router.push(`/${subdomain}/admin/login?emailChanged=1`);
-        return;
-      }
-
+      // No re-login check here: this path can no longer change the email (the
+      // gate above refuses when `emailChanged`), so the session's identity
+      // cannot have moved. The email path owns that redirect in saveEmailChange.
       toast.success(data.message || "School profile updated successfully.");
       router.refresh();
     } catch (err) {
@@ -269,11 +354,21 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const inputClassName =
     "mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50";
 
+  // THE SECURITY TAB IS DELIBERATELY OUTSIDE THE FORM.
+  //
+  // PasswordChange and ModeratorManager used to sit inside this <form>, and
+  // PasswordChange opened a form of its own. Nested forms are invalid HTML: the
+  // parser drops the inner start tag, so the "Change password" submit button
+  // bound to THIS form and ran handleSubmit — a profile PATCH. The admin was
+  // told the password changed and it never did. React then reported a hydration
+  // mismatch and re-rendered, which is why the bug looked intermittent.
+  //
+  // So the form now wraps only the profile fields it can actually save, and the
+  // Security panel renders as a sibling. Two independent forms, no nesting.
+  const isSecurity = activeTab === "security";
+
   const content = (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6"
-    >
+    <div className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
       {error && (
         <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
@@ -331,6 +426,12 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         ))}
       </div>
 
+      {/* The profile panels, and only those, live in the form. On the Security
+          tab there are no profile fields to save, so there is no form and no
+          Save button — rendering one would be a submit path with nothing
+          behind it. */}
+      {!isSecurity && (
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
       {activeTab === "general" && (
         <div
           className="space-y-4"
@@ -426,7 +527,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             <p className="mt-1 text-xs leading-relaxed text-purple-200/70">
               This address is how you sign in. We&apos;ll email a six-digit code
               to <span className="font-mono text-white">{emailValue.trim()}</span> —
-              you must enter it before the change is saved.
+              enter it and press Verify, and the change is applied straight
+              away. You&apos;ll be signed out and will sign in with the new
+              address.
             </p>
 
             {otpState === "idle" ? (
@@ -497,8 +600,8 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
                 <p id="email-otp-hint" className="text-xs text-purple-300/50">
                   {otpState === "verified"
-                    ? "Code confirmed. Save the form to apply the change."
-                    : "The code expires in a few minutes. Enter it, then press Save."}
+                    ? "Code confirmed — applying your new address."
+                    : "The code expires in a few minutes. Enter it, then press Verify."}
                 </p>
 
                 {otpError ? (
@@ -629,28 +732,6 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         previewVariant="square"
       />
 
-        </div>
-      )}
-
-      {activeTab === "security" && (
-        <div
-          className="space-y-6"
-          role="tabpanel"
-          id="settings-panel-security"
-          aria-labelledby="settings-tab-security"
-        >
-          <PasswordChange subdomain={school?.slug ?? ""} />
-
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-white">Moderator Management</h3>
-            <p className="mt-1 text-xs text-purple-300/50">
-              Give trusted staff a deputy role for the day-to-day portal without
-              handing them your school settings, billing or audit log.
-            </p>
-            <div className="mt-4">
-              <ModeratorManager subdomain={school?.slug ?? ""} />
-            </div>
-          </div>
         </div>
       )}
 
@@ -808,7 +889,31 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           {isSubmitting ? "Saving..." : "Save Changes"}
         </button>
 </div>
-      </form>
+        </form>
+      )}
+
+      {isSecurity && (
+        <div
+          className="space-y-6"
+          role="tabpanel"
+          id="settings-panel-security"
+          aria-labelledby="settings-tab-security"
+        >
+          <PasswordChange subdomain={school?.slug ?? ""} />
+
+          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-white">Moderator Management</h3>
+            <p className="mt-1 text-xs text-purple-300/50">
+              Give trusted staff a deputy role for the day-to-day portal without
+              handing them your school settings, billing or audit log.
+            </p>
+            <div className="mt-4">
+              <ModeratorManager subdomain={school?.slug ?? ""} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 
   // Mounted OUTSIDE the <form> on purpose: the drawn signature persists on its

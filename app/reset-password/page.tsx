@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import AuthShell from "@/components/auth/AuthShell";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 
 type LinkState = "checking" | "valid" | "expired" | "invalid";
 
@@ -20,6 +21,8 @@ function ResetPasswordForm() {
   const [linkState, setLinkState] = useState<LinkState>("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+const [showPassword, setShowPassword] = useState(false);
+const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,32 +155,50 @@ function ResetPasswordForm() {
             <label htmlFor="rp-pass" className="text-sm font-medium text-purple-100">
               New password
             </label>
-            <input
-              id="rp-pass"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-            />
+            <div className="relative">
+              <input
+                id="rp-pass"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 pr-11 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              />
+              <div className="absolute inset-y-0 right-0">
+                <PasswordToggle
+                  label="new password"
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="rp-confirm" className="text-sm font-medium text-purple-100">
               Confirm new password
             </label>
-            <input
-              id="rp-confirm"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-            />
+            <div className="relative">
+              <input
+                id="rp-confirm"
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 pr-11 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              />
+              <div className="absolute inset-y-0 right-0">
+                <PasswordToggle
+                  label="confirmed password"
+                  visible={showConfirm}
+                  onToggle={() => setShowConfirm((v) => !v)}
+                />
+              </div>
+            </div>
           </div>
 
           {error && (

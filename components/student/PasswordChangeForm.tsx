@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordToggle } from "@/components/ui/PasswordField";
 
 interface Props {
   tenantId: string;
@@ -27,6 +28,9 @@ export default function PasswordChangeForm({ tenantId }: Props) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+const [showCurrent, setShowCurrent] = useState(false);
+const [showNew, setShowNew] = useState(false);
+const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,31 +105,49 @@ export default function PasswordChangeForm({ tenantId }: Props) {
           <label htmlFor="currentPassword" className="block text-xs font-medium text-purple-200/80">
             Current password
           </label>
-          <input
-            id="currentPassword"
-            type="password"
-            autoComplete="current-password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-            className="mt-1.5 w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
-          />
+          <div className="relative mt-1.5">
+            <input
+              id="currentPassword"
+              type={showCurrent ? "text" : "password"}
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+            />
+            <div className="absolute inset-y-0 right-0">
+              <PasswordToggle
+                label="current password"
+                visible={showCurrent}
+                onToggle={() => setShowCurrent((v) => !v)}
+              />
+            </div>
+          </div>
         </div>
 
         <div>
           <label htmlFor="newPassword" className="block text-xs font-medium text-purple-200/80">
             New password
           </label>
-          <input
-            id="newPassword"
-            type="password"
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={MIN_PASSWORD}
-            className="mt-1.5 w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
-          />
+          <div className="relative mt-1.5">
+            <input
+              id="newPassword"
+              type={showNew ? "text" : "password"}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={MIN_PASSWORD}
+              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+            />
+            <div className="absolute inset-y-0 right-0">
+              <PasswordToggle
+                label="new password"
+                visible={showNew}
+                onToggle={() => setShowNew((v) => !v)}
+              />
+            </div>
+          </div>
           <p className="mt-1 text-[0.7rem] text-purple-300/50">
             At least {MIN_PASSWORD} characters.
           </p>
@@ -135,16 +157,25 @@ export default function PasswordChangeForm({ tenantId }: Props) {
           <label htmlFor="confirmPassword" className="block text-xs font-medium text-purple-200/80">
             Confirm new password
           </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={MIN_PASSWORD}
-            className="mt-1.5 w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
-          />
+          <div className="relative mt-1.5">
+            <input
+              id="confirmPassword"
+              type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={MIN_PASSWORD}
+              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+            />
+            <div className="absolute inset-y-0 right-0">
+              <PasswordToggle
+                label="confirmed password"
+                visible={showConfirm}
+                onToggle={() => setShowConfirm((v) => !v)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

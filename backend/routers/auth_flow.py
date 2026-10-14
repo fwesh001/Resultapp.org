@@ -389,9 +389,23 @@ def verify_email_otp(payload: VerifyEmailOtpRequest, request: Request):
             detail="Too many attempts. Please request a new code and wait a moment.",
         )
 
-    from services.db_manager import consume_email_otp
+    # WHY THE TWO PURPOSES DIVERGE
+    #
+    # `registration` verifying IS the whole job, so the code is burned here and
+    # a replay must fail.
+    #
+    # `email_change` is verify-then-write: this call proves the address, and the
+    # profile PATCH that follows is what actually changes the login identifier.
+    # That write performs the single authoritative consume, so burning here too
+    # guaranteed the write could never succeed — every confirmed email change
+    # died at the save with "That verification code is invalid or has expired."
+    # Only this purpose is non-consuming; registration is untouched.
+    from services.db_manager import check_email_otp, consume_email_otp
 
-    ok = consume_email_otp(email, payload.code, purpose=payload.purpose)
+    if payload.purpose == "email_change":
+        ok = check_email_otp(email, payload.code, purpose="email_change")
+    else:
+        ok = consume_email_otp(email, payload.code, purpose=payload.purpose)
     if ok:
         logger.info(f"[auth-flow] email OTP verified: {email} (client={client_ip})")
         return {"success": True, "verified": True, "email": email}
