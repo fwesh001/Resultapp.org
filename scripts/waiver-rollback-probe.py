@@ -243,6 +243,12 @@ def cleanup():
     for t in ("schools", "billing_ledger"):
         drop_trigger(t)
     exec_("DELETE FROM waiver_tokens WHERE token_prefix LIKE 'RW-rbprobe%'")
+    # Section 10 mints through the real admin endpoint, so those codes carry a
+    # genuine RW- prefix and cannot be matched by token_prefix. They are
+    # identified by their note instead — without this the probe leaks one token
+    # per run into whatever database it is pointed at.
+    exec_("DELETE FROM waiver_tokens WHERE note = 'api-probe'")
+    exec_("DELETE FROM waiver_tokens WHERE created_by = 'api-probe'")
     exec_("DELETE FROM billing_ledger WHERE subdomain LIKE 'probe-%'")
     exec_("DELETE FROM audit_logs WHERE subdomain LIKE 'probe-%'")
     exec_("DELETE FROM credit_ledger WHERE subdomain LIKE 'probe-%'")
@@ -756,42 +762,81 @@ def main():
             void_waiver_token,
         )
 
-        minted = mint_waiver_token(
-            MintWaiverRequest(discount_percentage=100, slot_allowance=80, created_by="api-probe")
-        )["token"]
-        code = minted["token_string"]
-        if not code.startswith("RW-"):
-            no("mint did not return a plaintext code", code[:12])
-        else:
-            ok("POST /admin/waivers mints a token and returns the plaintext once")
+    minted = mint_waiver_token(
+        MintWaiverRequest(discount_percentage=100, slot_allowance=80, created_by="api-probe", note="api-probe")
+    )["token"]
+    code = minted["token_string"]
+    if not code.startswith("RW-"):
+        no("mint did not return a plaintext code", code[:12])
+    else:
+        ok("POST /admin/waivers mints a token and returns the plaintext once")
 
-        # Preview must be strictly non-mutating — it is called on every keystroke.
-        st_before = token_row(minted["id"])[0]
-        pv = preview_waiver(
-            PreviewWaiverRequest(token_string=code, requested_slots=50, applies_to="REGISTRATION")
+    # Preview must be strictly non-mutating — it is called on every keystroke.
+    st_before = token_row(minted["id"])[0]
+    pv = preview_waiver(
+        PreviewWaiverRequest(token_string=code, requested_slots=50, applies_to="REGISTRATION")
+    )
+    st_after = token_row(minted["id"])[0]
+    if st_before == "open" and st_after == "open":
+        ok("preview priced a 50-slot order without moving the token off 'open'")
+    else:
+        no("PREVIEW MUTATED THE TOKEN", f"{st_before} -> {st_after}")
+    sp = pv["split"]
+    if sp["waived_slots"] == 50 and sp["charged_ngn"] == 0 and sp["bypass_gateway"] is True:
+        ok("preview reports the split correctly (50 waived, NGN 0, bypass)")
+    else:
+        no("preview split wrong", str(sp))
+
+    # Scope: a REGISTRATION-only token must be refused for a top-up, and the
+    # converse too. Both directions are asserted with real scoped tokens —
+    # checking a BOTH token and reporting the match as a pass would assert
+    # nothing at all.
+    reg_only = mint_waiver_token(
+        MintWaiverRequest(
+            discount_percentage=50, slot_allowance=50, applies_to="REGISTRATION",
+            created_by="api-probe", note="api-probe",
         )
-        st_after = token_row(minted["id"])[0]
-        if st_before == "open" and st_after == "open":
-            ok("preview priced a 50-slot order without moving the token off 'open'")
+    )["token"]
+    try:
+        preview_waiver(
+            PreviewWaiverRequest(token_string=reg_only["token_string"], requested_slots=20, applies_to="TOPUP")
+        )
+        no("A REGISTRATION-ONLY TOKEN WAS PRICED AS A TOP-UP", "")
+    except HTTPException as e:
+        if e.status_code == 409:
+            ok(f"scope enforced: {e.detail}")
         else:
-            no("PREVIEW MUTATED THE TOKEN", f"{st_before} -> {st_after}")
-        sp = pv["split"]
-        if sp["waived_slots"] == 50 and sp["charged_ngn"] == 0 and sp["bypass_gateway"] is True:
-            ok("preview reports the split correctly (50 waived, NGN 0, bypass)")
-        else:
-            no("preview split wrong", str(sp))
+            no(f"unexpected status {e.status_code}", str(e.detail))
+    top_only = mint_waiver_token(
+        MintWaiverRequest(
+            discount_percentage=50, slot_allowance=50, applies_to="TOPUP",
+            created_by="api-probe", note="api-probe",
+        )
+    )["token"]
+    try:
+        preview_waiver(
+            PreviewWaiverRequest(token_string=top_only["token_string"], requested_slots=20, applies_to="REGISTRATION")
+        )
+        no("A TOPUP-ONLY TOKEN WAS PRICED AS A REGISTRATION", "")
+    except HTTPException as e:
+        if e.status_code == 409:
+            ok("scope enforced in the other direction too")
 
-        # A REGISTRATION-only token must be refused for a top-up.
-        try:
-            preview_waiver(
-                PreviewWaiverRequest(token_string=code, requested_slots=20, applies_to="TOPUP")
+    # The registration floor: a sub-10 allowance cannot even be minted for a
+    # registration, because the buyer could never redeem it.
+    try:
+        mint_waiver_token(
+            MintWaiverRequest(
+                discount_percentage=50, slot_allowance=5, applies_to="REGISTRATION",
+                created_by="api-probe",
             )
-            ok("NOTE: a BOTH token is valid for TOPUP (expected — this one is BOTH)")
-        except HTTPException as e:
-            if e.status_code == 409:
-                ok("scope mismatch refused")
-            else:
-                no(f"unexpected status {e.status_code}", str(e.detail))
+        )
+        no("MINTED A REGISTRATION TOKEN BELOW THE 10-SLOT FLOOR", "")
+    except HTTPException as e:
+        if e.status_code == 400:
+            ok(f"floor collision blocked at issuance: {e.detail}")
+        else:
+            no(f"unexpected status {e.status_code}", str(e.detail))
 
         reservation = reserve(code, "rb_api", scope="REGISTRATION")
         rq = quote_waiver(
