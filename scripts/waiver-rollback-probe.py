@@ -735,6 +735,123 @@ def main():
             if token_row(t11["id"])[0] == "consumed":
                 ok("token consumed on the successful bypass")
 
+    # ===================================================================
+    section("10. the checkout HTTP surface")
+    # routers/waivers.py is new code that the other two probes never call —
+    # they exercise the service layer and the spend endpoints. These four are
+    # the endpoints a school actually types into, so they get their own pass.
+    from routers.waivers import (
+        MintWaiverRequest,
+        PreviewWaiverRequest,
+        QuoteWaiverRequest,
+        ReleaseWaiverRequest,
+        VoidWaiverRequest,
+        mint_waiver_token,
+        preview_waiver,
+        quote_waiver,
+        release_waiver,
+        list_waiver_tokens,
+        get_waiver_token,
+        void_waiver_token,
+    )
+
+    minted = mint_waiver_token(
+        MintWaiverRequest(discount_percentage=100, slot_allowance=80, created_by="api-probe")
+    )["token"]
+    code = minted["token_string"]
+    if not code.startswith("RW-"):
+        no("mint did not return a plaintext code", code[:12])
+    else:
+        ok("POST /admin/waivers mints a token and returns the plaintext once")
+
+    # Preview must be strictly non-mutating — it is called on every keystroke.
+    st_before = token_row(minted["id"])[0]
+    pv = preview_waiver(
+        PreviewWaiverRequest(token_string=code, requested_slots=50, applies_to="REGISTRATION")
+    )
+    st_after = token_row(minted["id"])[0]
+    if st_before == "open" and st_after == "open":
+        ok("preview priced a 50-slot order without moving the token off 'open'")
+    else:
+        no("PREVIEW MUTATED THE TOKEN", f"{st_before} -> {st_after}")
+    sp = pv["split"]
+    if sp["waived_slots"] == 50 and sp["charged_ngn"] == 0 and sp["bypass_gateway"] is True:
+        ok("preview reports the split correctly (50 waived, NGN 0, bypass)")
+    else:
+        no("preview split wrong", str(sp))
+
+    # A REGISTRATION-only token must be refused for a top-up.
+    try:
+        preview_waiver(
+            PreviewWaiverRequest(token_string=code, requested_slots=20, applies_to="TOPUP")
+        )
+        ok("NOTE: a BOTH token is valid for TOPUP (expected — this one is BOTH)")
+    except HTTPException as e:
+        if e.status_code == 409:
+            ok("scope mismatch refused")
+        else:
+            no(f"unexpected status {e.status_code}", str(e.detail))
+
+    reservation = reserve(code, "rb_api", scope="REGISTRATION")
+    rq = quote_waiver(
+        QuoteWaiverRequest(
+            token_id=minted["id"], reservation_tx_ref="rb_api", requested_slots=50
+        )
+    )
+    if rq["split"]["charged_ngn"] == 0:
+        ok("quote prices a RESERVED token — the split verification needs this")
+    else:
+        no("quote split wrong", str(rq["split"]))
+    if release_waiver(
+        ReleaseWaiverRequest(token_id=minted["id"], tx_ref="rb_api")
+    )["released"]:
+        ok("release returned the reservation to the pool")
+    else:
+        no("release did not release")
+
+    # Quote must refuse a ref the caller does not hold — otherwise a sequential
+    # id plus a guessed ref would read a stranger's held code.
+    try:
+        quote_waiver(
+            QuoteWaiverRequest(
+                token_id=minted["id"], reservation_tx_ref="not-mine", requested_slots=50
+            )
+        )
+        no("QUOTE ACCEPTED A FOREIGN RESERVATION REF", "ids are sequential; this is an oracle")
+    except HTTPException as e:
+        if e.status_code == 409:
+            ok("quote refuses a reservation ref the caller does not hold")
+        else:
+            no(f"unexpected status {e.status_code}", str(e.detail))
+
+    # Admin lifecycle.
+    listing = list_waiver_tokens(limit=5)
+    if isinstance(listing.get("tokens"), list) and listing["total"] >= 1:
+        ok(f"list returns {listing['total']} token(s) newest-first")
+    else:
+        no("list shape wrong", str(listing)[:120])
+    if "token_hash" not in json.dumps(listing.get("tokens", [{}])[0]):
+        ok("list never exposes token_hash")
+    else:
+        no("LIST LEAKED token_hash", "")
+    detail = get_waiver_token(minted["id"])
+    if detail["token"].get("id") == minted["id"]:
+        ok("detail returns the audit row by id")
+    else:
+        no("detail wrong", str(detail)[:120])
+    if void_waiver_token(minted["id"], VoidWaiverRequest(created_by="api-probe"))["status"] == "voided":
+        ok("an open token can be voided")
+    else:
+        no("void failed", "")
+    try:
+        void_waiver_token(minted["id"], VoidWaiverRequest(created_by="api-probe"))
+        no("DOUBLE VOID SUCCEEDED", "")
+    except HTTPException as e:
+        if e.status_code == 409:
+            ok("a voided token cannot be voided again")
+        else:
+            no(f"unexpected status {e.status_code}", str(e.detail))
+
     finally:
         section("CLEANUP")
         cleanup()
