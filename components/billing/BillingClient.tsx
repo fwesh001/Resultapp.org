@@ -24,7 +24,7 @@ import {
 const CREDIT_PACKAGES = [50, 100, 250, 500] as const;
 const SLOT_PACKAGES = [100, 250, 500, 1000] as const;
 
-type LedgerFilter = "all" | "PURCHASE" | "PUBLICATION_DEDUCTION" | "INITIAL_GRANT" | "INITIAL_SLOTS" | "REFUND" | "SLOT_PURCHASE" | "SLOT_CONSUMPTION" | "SLOT_REFUND" | "CREDIT_PURCHASE";
+type LedgerFilter = "all" | "PURCHASE" | "PUBLICATION_DEDUCTION" | "INITIAL_GRANT" | "INITIAL_SLOTS" | "REFUND" | "SLOT_PURCHASE" | "SLOT_CONSUMPTION" | "SLOT_REFUND" | "SLOT_WAIVER" | "CREDIT_PURCHASE";
 
 interface LedgerEntry {
   id: number;
@@ -42,6 +42,27 @@ interface BillingClientProps {
   customerName: string;
 }
 
+/**
+ * Waiver state lives HERE, not in BillingCheckout.
+ *
+ * `BillingCheckout` is rendered with `key={slot-${pkg}}` so that switching
+ * package pills resets its internal count input. React treats a changed key as
+ * a different component and throws the old instance away — so a waiver code
+ * typed into the child would VANISH every time the buyer clicked a different
+ * package size.
+ *
+ * That is not a hypothetical: the natural flow for someone with a waiver is to
+ * enter the code and then compare package sizes, which is exactly the sequence
+ * that would silently eat it. The token therefore lives in the parent and is
+ * passed down; only the split (which depends on the slot count the child owns)
+ * stays local to the child.
+ */
+export interface WaiverCodeState {
+  token: string;
+  tokenId: number | null;
+  error: string | null;
+}
+
 const TYPE_STYLES: Record<string, string> = {
   PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
   CREDIT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
@@ -51,7 +72,24 @@ const TYPE_STYLES: Record<string, string> = {
   SLOT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
   SLOT_CONSUMPTION: "border-red-500/20 bg-red-500/10 text-red-300",
   SLOT_REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+  // A waiver is money NOT taken. Cyan, matching INITIAL_SLOTS, because that is
+  // exactly what it is: capacity granted without a charge. Green would read
+  // as "purchased", which would overstate what was paid.
+  SLOT_WAIVER: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
   REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+};
+
+/** Human labels for the ledger's type badges. */
+const TYPE_LABELS: Record<string, string> = {
+  PUBLICATION_DEDUCTION: "Publication",
+  INITIAL_GRANT: "Trial grant",
+  INITIAL_SLOTS: "Initial slots",
+  SLOT_PURCHASE: "Slot purchase",
+  SLOT_WAIVER: "Waiver applied",
+  SLOT_CONSUMPTION: "Slot used",
+  SLOT_REFUND: "Slot refund",
+  CREDIT_PURCHASE: "Credit purchase",
+  PURCHASE: "Credit purchase",
 };
 
 export default function BillingClient({ tenantId, schoolName, customerEmail, customerName }: BillingClientProps) {
@@ -66,6 +104,14 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
   const [pkg, setPkg] = useState<number>(250);
   const [creditPkg, setCreditPkg] = useState<number>(100);
   const [creditPrice, setCreditPrice] = useState<number>(CREDIT_PRICE);
+
+  // Waiver code — HOISTED so it survives the child's remount-on-package-change.
+  // See the note on WaiverCodeState.
+  const [waiver, setWaiver] = useState<WaiverCodeState>({ token: "", tokenId: null, error: null });
+
+  function handleWaiverChange(next: WaiverCodeState) {
+    setWaiver(next);
+  }
 
   const fetchCredits = useCallback(async () => {
     setLoading(true);
@@ -295,6 +341,8 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                 schoolName={schoolName}
                 customerEmail={customerEmail}
                 customerName={customerName}
+                waiver={waiver}
+                onWaiverChange={handleWaiverChange}
               />
             </div>
             <p className="mt-3 text-center text-xs text-purple-300/40">
@@ -414,7 +462,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
           <div className="flex flex-wrap gap-1.5">
             {(
               activeTab === "slots"
-                ? (["all", "SLOT_PURCHASE", "SLOT_CONSUMPTION", "SLOT_REFUND", "INITIAL_SLOTS"] as LedgerFilter[])
+                ? (["all", "SLOT_PURCHASE", "SLOT_WAIVER", "SLOT_CONSUMPTION", "SLOT_REFUND", "INITIAL_SLOTS"] as LedgerFilter[])
                 : (["all", "CREDIT_PURCHASE", "PURCHASE", "PUBLICATION_DEDUCTION", "INITIAL_GRANT"] as LedgerFilter[])
             ).map((f) => (
               <button
@@ -434,9 +482,11 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                     ? "Publications"
                     : f === "INITIAL_GRANT" || f === "INITIAL_SLOTS"
                       ? "Grants"
-                      : f.includes("SLOT")
-                        ? f.replace("SLOT_", "").replace("_", " ")
-                        : "Purchases"}
+                      : f === "SLOT_WAIVER"
+                        ? "Waivers"
+                        : f.includes("SLOT")
+                          ? f.replace("SLOT_", "").replace("_", " ")
+                          : "Purchases"}
               </button>
             ))}
           </div>
@@ -468,25 +518,23 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${TYPE_STYLES[e.transaction_type] ?? "border-purple-500/15 bg-purple-900/10 text-purple-200/70"}`}>
-                        {e.transaction_type === "PUBLICATION_DEDUCTION"
-                          ? "Publication"
-                          : e.transaction_type === "INITIAL_GRANT"
-                            ? "Trial grant"
-                            : e.transaction_type === "INITIAL_SLOTS"
-                              ? "Initial slots"
-                              : e.transaction_type === "SLOT_PURCHASE"
-                                ? "Slot purchase"
-                                : e.transaction_type === "SLOT_CONSUMPTION"
-                                  ? "Slot used"
-                                  : e.transaction_type === "SLOT_REFUND"
-                                    ? "Slot refund"
-                                    : e.transaction_type === "CREDIT_PURCHASE" || e.transaction_type === "PURCHASE"
-                                      ? "Credit purchase"
-                                      : e.transaction_type}
+                        {TYPE_LABELS[e.transaction_type] ?? e.transaction_type}
                       </span>
                     </td>
-                    <td className={`whitespace-nowrap px-3 py-2.5 text-right font-semibold ${e.amount < 0 ? "text-red-300" : "text-emerald-300"}`}>
-                      {e.amount > 0 ? `+${e.amount}` : e.amount}
+                    <td className={`whitespace-nowrap px-3 py-2.5 text-right font-semibold ${
+                      // A waiver ADDS capacity that was never paid for, so it is
+                      // not money and must not read like a green revenue figure.
+                      e.transaction_type === "SLOT_WAIVER"
+                        ? "text-cyan-300"
+                        : e.amount < 0
+                          ? "text-red-300"
+                          : "text-emerald-300"
+                    }`}>
+                      {e.transaction_type === "SLOT_WAIVER"
+                        ? `+${e.amount} (free)`
+                        : e.amount > 0
+                          ? `+${e.amount}`
+                          : e.amount}
                     </td>
                     <td className="max-w-[220px] truncate px-3 py-2.5 text-xs text-purple-200/60" title={e.description || e.reference_id || ""}>
                       {e.description || e.reference_id || "—"}
