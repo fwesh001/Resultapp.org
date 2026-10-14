@@ -2366,6 +2366,40 @@ def set_free_credits_enabled(enabled: bool) -> bool:
             conn.close()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TECH DEBT — REMOVE THE DEFAULT. Do not let this outlive the waiver rollout.
+#
+#   TODO(waiver-rollout): once every caller of resolve_initial_credit_grant()
+#   passes a real paid_slots value, delete the `paid_slots: Optional[int] = None`
+#   parameter entirely and make it required.
+#
+# WHY IT MUST NOT STAY
+# --------------------
+# `None` means "fall back to the historical total-capacity behaviour", which is
+# the UNSAFE reading: a registration redeemed entirely by a 100% waiver token
+# would count its full granted capacity and mint 30 free publishing credits for
+# free. That is a repeatable, unlimited farm — issue a waiver, register a
+# throwaway subdomain, repeat.
+#
+# Today it is harmless only because exactly one caller has been updated
+# (main.py provision_school) and every other caller passes nothing. The safety
+# is entirely procedural: it depends on nobody adding a new caller before this
+# is done. An `Optional` with a permissive default is the kind of thing that
+# gets copied into a new call site three months from now by someone who has
+# never heard of waivers.
+#
+# HOW TO CLOSE IT
+# ---------------
+#   1. `grep -rn "resolve_initial_credit_grant" backend/`
+#   2. Confirm every call site passes paid_slots explicitly.
+#   3. Change the signature to `paid_slots: int` (required, positional or
+#      keyword-only with no default) and delete the None branch below.
+#   4. Add an assertion in scripts/verify-waiver-rollback-probe.py that a
+#      registration with no waiver still grants its credits, so removing the
+#      fallback cannot silently change the paying path.
+#
+# Do not remove the paid_slots PARAMETER. Only the permissive default.
+# ─────────────────────────────────────────────────────────────────────────────
 def resolve_initial_credit_grant(student_count: int, paid_slots: Optional[int] = None) -> int:
     """Authoritative decision for the registration credit grant.
 
