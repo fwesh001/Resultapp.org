@@ -30,6 +30,36 @@ interface AuditEntry {
 const LIMIT = 20;
 const TOKEN_FILTERS = ["all", "CREDIT", "SLOT"] as const;
 
+/**
+ * Ledger row badges.
+ *
+ * `SLOT_WAIVER` is the row that matters for revenue reconciliation: it is
+ * capacity granted with NO money taken, and it is deliberately NOT a
+ * `SLOT_PURCHASE`, because `platform_stats` sums `amount_ngn` over exactly the
+ * purchase types and a waiver booked as a purchase would inflate MRR by the
+ * value deliberately given away. So it needs to be visually obvious here, or
+ * nobody can reconcile "the ledger says +500 slots, where did the revenue go".
+ */
+const TYPE_BADGE: Record<string, string> = {
+  SLOT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  CREDIT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  SLOT_WAIVER: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300",
+  INITIAL_SLOTS: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
+  SLOT_CONSUMPTION: "border-red-500/20 bg-red-500/10 text-red-300",
+  PUBLICATION_DEDUCTION: "border-red-500/20 bg-red-500/10 text-red-300",
+  SLOT_REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  SLOT_PURCHASE: "Slot purchase",
+  SLOT_WAIVER: "Waiver applied",
+  INITIAL_SLOTS: "Initial slots",
+  SLOT_CONSUMPTION: "Slot used",
+  SLOT_REFUND: "Slot refund",
+  CREDIT_PURCHASE: "Credit purchase",
+  PUBLICATION_DEDUCTION: "Publication",
+};
+
 /** Ledger & Audit — global transactions, CSV export, admin-action trail. */
 export default function LedgerPage() {
   const [tab, setTab] = useState<"ledger" | "audit">("ledger");
@@ -220,7 +250,14 @@ export default function LedgerPage() {
                             {e.token_type}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-purple-300/60">{e.transaction_type}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-purple-300/60">
+                          <span
+                            className={`inline-block rounded-full border px-2.5 py-0.5 ${TYPE_BADGE[e.transaction_type] ?? "border-purple-500/15 bg-purple-900/20 text-purple-200"}`}
+                            title={e.transaction_type}
+                          >
+                            {TYPE_LABEL[e.transaction_type] ?? e.transaction_type}
+                          </span>
+                        </td>
                         <td className="max-w-48 truncate px-4 py-3 font-mono text-xs text-purple-300/40">{e.reference_id || "—"}</td>
                       </tr>
                     ))
