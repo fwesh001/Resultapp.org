@@ -108,6 +108,37 @@ export default function SuperadminWaiversPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<number | null>(null);
 
+  // Manual bypass-recovery run.
+  const [sweeping, setSweeping] = useState(false);
+  const [sweepResult, setSweepResult] = useState<{
+    scanned: number;
+    recovered: number;
+    already_done: number;
+    orphans: { tx_ref: string; subdomain: string; outcome: string; detail?: string }[];
+  } | null>(null);
+
+  async function runSweep() {
+    setSweeping(true);
+    try {
+      const res = await fetch("/api/waiver/sweep", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Sweep failed (${res.status})`);
+      }
+      setSweepResult({
+        scanned: data.scanned ?? 0,
+        recovered: data.recovered ?? 0,
+        already_done: data.already_done ?? 0,
+        orphans: Array.isArray(data.orphans) ? data.orphans : [],
+      });
+      toast.success(`Swept ${data.scanned ?? 0} orphaned registration(s)`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sweep failed");
+    } finally {
+      setSweeping(false);
+    }
+  }
+
   /** Floor/ceiling for the allowance, narrowed by scope. See allowanceBounds. */
   const bounds = useMemo(() => {
     try {
@@ -490,6 +521,74 @@ export default function SuperadminWaiversPage() {
           {minting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Generate token
         </button>
+      </div>
+
+      {/* ================================================================= */}
+      {/* BYPASS RECOVERY                                                 */}
+      {/* ================================================================= */}
+      {/*
+        A 100% waiver produces no Flutterwave charge, so `charge.completed`
+        never fires and the webhook safety net does not exist for it. The cron
+        at /api/waiver/sweep is what recovers a school whose tab closed during
+        a fully-waived registration — the people most likely to use these codes
+        are the least technical buyers on the platform.
+
+        This button is the manual equivalent: useful when an operator is told a
+        school "paid nothing and got no portal", and useful as a smoke test that
+        the cron is actually working after a deploy.
+      */}
+      <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+              <ShieldCheck className="h-4 w-4 text-cyan-300" />
+              Abandoned waiver registrations
+            </h2>
+            <p className="mt-1 text-xs text-purple-200/60">
+              Fully-waived registrations whose browser never finished. The cron
+              recovers these automatically after {3} minutes; this runs it now.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void runSweep()}
+            disabled={sweeping}
+            className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-purple-500/25 px-5 text-sm text-purple-200 hover:bg-purple-500/10 disabled:opacity-50"
+          >
+            {sweeping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Recover now
+          </button>
+        </div>
+
+        {sweepResult && (
+          <div
+            className={`mt-4 rounded-xl border p-3 text-xs ${
+              sweepResult.recovered > 0
+                ? "border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-100"
+                : "border-purple-500/15 bg-purple-900/20 text-purple-200"
+            }`}
+          >
+            <p className="font-medium">
+              Scanned {sweepResult.scanned} · recovered {sweepResult.recovered}
+              {sweepResult.already_done > 0 && ` · ${sweepResult.already_done} already completed`}
+            </p>
+            {sweepResult.orphans.length > 0 && (
+              <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-purple-200/70">
+                {sweepResult.orphans.map((o) => (
+                  <li key={o.tx_ref}>
+                    {o.subdomain} — {o.outcome}
+                    {o.detail ? ` (${o.detail.slice(0, 80)})` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {sweepResult.scanned === 0 && (
+              <p className="mt-1 text-purple-300/50">
+                Nothing to recover — every fully-waived registration completed normally.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ================================================================= */}
