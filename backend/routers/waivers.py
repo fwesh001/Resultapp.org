@@ -116,7 +116,14 @@ def _throttle(scope: str, key: str, max_hits: int, window_s: int) -> None:
 
 
 def _caller_key(x_forwarded_for: Optional[str], fallback: str = "anon") -> str:
-    return (x_forwarded_for or fallback).split(",")[0].strip()[:64] or "anon"
+    # Defensive about the type, not just the value. When FastAPI dispatches, the
+    # default is a real None; when a test (or any in-process caller) invokes the
+    # function directly, the default is still the `Header(...)` MARKER OBJECT,
+    # which has no .split. A throttle keyed on an unhashable marker would either
+    # crash or, worse, collapse every direct caller into one shared bucket.
+    if not isinstance(x_forwarded_for, str):
+        return fallback
+    return (x_forwarded_for.split(",")[0].strip()[:64]) or fallback
 
 
 # ---------------------------------------------------------------------------
