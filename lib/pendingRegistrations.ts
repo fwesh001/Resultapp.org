@@ -55,6 +55,22 @@ export interface PendingPayload {
   privacy_version?: string | null;
 }
 
+/**
+ * How the waiver reaches the hold.
+ *
+ * `reservation_tx_ref` is the hold's OWN tx_ref. That is deliberate: the
+ * token's reservation and the registration's hold are the same lifecycle, so
+ * `claimHold()` below doubles as the burn. Reusing the existing CAS rather than
+ * inventing a second one is the whole reason a bypass cannot double-spend.
+ */
+export interface WaiverBinding {
+  token_id: number;
+  reservation_tx_ref: string;
+  charge_required: boolean;
+  charge_ngn: number;
+  charged_slots: number;
+}
+
 /** Encrypt the password field in place; everything else stays queryable. */
 function seal(p: PendingPayload): Record<string, unknown> {
   const { admin_password, ...rest } = p;
@@ -91,21 +107,44 @@ function unseal(row: Record<string, unknown>): PendingPayload | null {
 }
 
 /**
+ * Mint the tx_ref a checkout will be keyed by.
+ *
+ * EXTRACTED so the waiver reservation can claim the token BEFORE the hold
+ * exists. Both need the same reference, and whichever is generated last cannot
+ * be used by whichever ran first — the original in-function generation made
+ * "reserve the token, then park the registration" impossible to express without
+ * a second round trip.
+ *
+ * The format is load-bearing: app/api/flutterwave/webhook/route.ts ignores any
+ * tx_ref that does not match `^resultapp_[a-z0-9-]+_\d+_[a-z0-9]+$`, so a
+ * waiver-backed hold MUST keep it or the webhook stops being able to rescue a
+ * split-bill registration whose callback never arrived.
+ */
+export function newTxRef(subdomain: string): string {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).substring(2, 8);
+  return `resultapp_${subdomain.toLowerCase().replace(/[^a-z0-9-]/g, "")}_${ts}_${rand}`;
+}
+
+/**
  * Park a registration. Returns the generated tx_ref.
  *
  * Called BEFORE Flutterwave opens, so the details exist no matter what the
- * browser does next.
+ * browser does next. Pass `txRef` when the caller already minted one (the
+ * waiver path does, so the token reservation and this hold share a reference);
+ * omit it and one is generated here.
  */
-export async function holdRegistration(p: PendingPayload): Promise<string> {
+export async function holdRegistration(
+  p: PendingPayload,
+  opts: { txRef?: string; waiver?: WaiverBinding } = {},
+): Promise<string> {
   const base = backendBase();
   const secret = backendSecret();
   if (!base || !secret) {
     throw new Error("Backend is not configured; cannot hold this registration.");
   }
 
-  const ts = Date.now();
-  const rand = Math.random().toString(36).substring(2, 8);
-  const txRef = `resultapp_${p.subdomain.toLowerCase().replace(/[^a-z0-9-]/g, "")}_${ts}_${rand}`;
+  const txRef = opts.txRef || newTxRef(p.subdomain);
 
   const res = await fetch(`${base}/api/v1/admin/pending-registrations`, {
     method: "POST",
@@ -115,6 +154,14 @@ export async function holdRegistration(p: PendingPayload): Promise<string> {
       subdomain: p.subdomain,
       payload: seal(p),
       ttl_minutes: HOLD_TTL_MINUTES,
+      ...(opts.waiver
+        ? {
+            waiver_token_id: opts.waiver.token_id,
+            charge_required: opts.waiver.charge_required,
+            charge_ngn: opts.waiver.charge_ngn,
+            charged_slots: opts.waiver.charged_slots,
+          }
+        : {}),
     }),
     cache: "no-store",
   });
@@ -263,6 +310,10 @@ export async function provisionHeldRegistration(
     expires_at?: string;
     subdomain?: string;
     payload?: Record<string, unknown>;
+    waiver_token_id?: number | null;
+    charge_required?: boolean;
+    charge_ngn?: number;
+    charged_slots?: number;
   };
 
   if (hold.status === "completed") {
@@ -272,6 +323,10 @@ export async function provisionHeldRegistration(
     hold.status === "expired" ||
     (hold.expires_at && new Date(hold.expires_at).getTime() < Date.now())
   ) {
+    // The school is never coming back for this one. Release the token so a
+    // fresh attempt — or another school — can use it, rather than leaving it
+    // reserved until the sweeper happens to run.
+    await releaseWaiver(hold.waiver_token_id, txRef);
     return { status: "expired" };
   }
 
@@ -279,36 +334,63 @@ export async function provisionHeldRegistration(
   if (!payload) return { status: "undecryptable" };
   if (!payload.admin_password) return { status: "undecryptable" };
 
-  // 2. Verify the payment with Flutterwave directly.
+  // 2. Verify the payment with Flutterwave directly — UNLESS this is a 100%
+  //    bypass, in which case there is no payment and none will ever exist.
   //
-  // The webhook payload is already signature-verified, but re-checking against
-  // the provider gives one authoritative amount and status for BOTH paths, and
-  // means neither caller can be talked into provisioning an unpaid school.
+  //    The webhook payload is already signature-verified, but re-checking against
+  //    the provider gives one authoritative amount and status for BOTH paths, and
+  //    means neither caller can be talked into provisioning an unpaid school.
+  //
+  //    THE BRANCH IS NOT OPTIONAL. Without it a fully-waived hold calls
+  //    verifyTransaction, finds nothing, and returns "not_paid" forever — the
+  //    school has a legitimate entitlement to a free portal and can never
+  //    obtain it. Flutterwave rejects zero-value charges, so no transaction will
+  //    ever exist for this hold to verify against.
+  //
+  //    `charge_required` is the discriminator, and it is set at hold creation
+  //    from the backend's own split — never from the client.
+  const isBypass = hold.charge_required === false;
   let charged = 0;
-  let currency = "";
-  try {
-    const v = await verifyTransaction(txRef);
-    const st = String(v.data?.status || v.status || "").toLowerCase();
-    if (st !== "successful" && st !== "completed") {
+  let transactionId: string | null = null;
+
+  if (isBypass) {
+    console.warn(
+      `[pending] ${opts.source}: hold ${txRef} is a 100% waiver bypass — ` +
+        `skipping payment verification (waiver #${hold.waiver_token_id ?? "?"})`,
+    );
+    charged = 0;
+  } else {
+    let currency = "";
+    try {
+      const v = await verifyTransaction(txRef);
+      const st = String(v.data?.status || v.status || "").toLowerCase();
+      if (st !== "successful" && st !== "completed") {
+        return { status: "not_paid" };
+      }
+      charged = Number(v.data?.charged_amount ?? v.data?.amount ?? 0);
+      transactionId = String(v.data?.id ?? txRef);
+      currency = String(v.data?.currency || "");
+      if (currency && currency.toUpperCase() !== "NGN") {
+        return { status: "failed", detail: `Unexpected currency ${currency}` };
+      }
+    } catch (e) {
+      return {
+        status: "failed",
+        detail: e instanceof Error ? e.message : "Payment verification failed",
+      };
+    }
+
+    const expected = calculateTieredTotal(payload.student_count);
+    // A floor, not equality: Flutterwave reports the settled amount, which can
+    // legitimately exceed the headline price. With a waiver the floor is the
+    // DISCOUNTED charge, not the list price — otherwise every split-bill
+    // registration would be rejected as underpaid against its own full price.
+    const floor = hold.charge_ngn && hold.charge_ngn > 0
+      ? Math.min(hold.charge_ngn, expected)
+      : expected;
+    if (charged < floor) {
       return { status: "not_paid" };
     }
-    charged = Number(v.data?.charged_amount ?? v.data?.amount ?? 0);
-    currency = String(v.data?.currency || "");
-    if (currency && currency.toUpperCase() !== "NGN") {
-      return { status: "failed", detail: `Unexpected currency ${currency}` };
-    }
-  } catch (e) {
-    return {
-      status: "failed",
-      detail: e instanceof Error ? e.message : "Payment verification failed",
-    };
-  }
-
-  const expected = calculateTieredTotal(payload.student_count);
-  // A floor, not equality: Flutterwave reports the settled amount, which can
-  // legitimately exceed the headline price.
-  if (charged < expected) {
-    return { status: "not_paid" };
   }
 
   // 3. Claim the hold. Doing this BEFORE the provision call means a second
@@ -343,8 +425,20 @@ export async function provisionHeldRegistration(
       accepted_terms: payload.accepted_terms ?? true,
       terms_version: payload.terms_version,
       privacy_version: payload.privacy_version,
-      transaction_id: txRef,
+      // Null on a bypass — there is no Flutterwave transaction, and the
+      // backend's anti-replay check keys on this, so inventing a placeholder
+      // would put a fake id into the ledger's reference column.
+      transaction_id: transactionId,
       amount_ngn: charged,
+      // The burn is scoped to THIS tx_ref, which is the same reference the
+      // token was reserved under. A late callback whose reservation the
+      // sweeper has since reassigned cannot redeem it.
+      ...(hold.waiver_token_id
+        ? {
+            waiver_token_id: hold.waiver_token_id,
+            waiver_reservation_tx_ref: txRef,
+          }
+        : {}),
       source: opts.source,
     }),
     cache: "no-store",
@@ -352,13 +446,10 @@ export async function provisionHeldRegistration(
 
   const provBody = await provRes.text().catch(() => "");
   if (!provRes.ok) {
-    // Release the claim so a retry (or the other path) can try again.
-    await fetch(`${base}/api/v1/admin/pending-registrations/release`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ tx_ref: txRef }),
-      cache: "no-store",
-    }).catch(() => null);
+    // Release the claim so a retry (or the other path) can try again. This
+    // also returns any waiver reservation, which is scoped to the same ref.
+    await releaseHold(txRef);
+    await releaseWaiver(hold.waiver_token_id, txRef);
 
     // A taken subdomain means the OTHER path already finished the job. That is
     // success, not a conflict, and must be logged as such — otherwise every
@@ -369,5 +460,45 @@ export async function provisionHeldRegistration(
     return { status: "failed", detail: `Provision failed (${provRes.status}): ${provBody.slice(0, 200)}` };
   }
 
+  // A provision that reports a slot-grant failure has created the school but
+  // NOT granted its seats, and — because the burn shares the transaction — has
+  // NOT consumed the waiver. Surfacing it as a plain success would tell a
+  // customer their portal is ready when it has zero capacity.
+  try {
+    const parsed = JSON.parse(provBody) as {
+      slot_grant_error?: string | null;
+      waiver?: unknown;
+    };
+    if (parsed.slot_grant_error) {
+      console.error(
+        `[pending] ${opts.source}: ${payload.subdomain} provisioned but the slot ` +
+          `grant failed: ${parsed.slot_grant_error}`,
+      );
+      return {
+        status: "failed",
+        detail: `Portal created but slots could not be granted: ${parsed.slot_grant_error}`,
+      };
+    }
+  } catch {
+    /* non-JSON body: the ok-check above is authoritative */
+  }
+
   return { status: "provisioned", subdomain: payload.subdomain };
+}
+
+/** Hand a waiver reservation back when provisioning fails. Best-effort. */
+async function releaseWaiver(tokenId: number | null | undefined, txRef: string): Promise<void> {
+  const base = backendBase();
+  const secret = backendSecret();
+  if (!base || !secret || !tokenId || !txRef) return;
+  try {
+    await fetch(`${base}/api/v1/waiver/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+      body: JSON.stringify({ token_id: tokenId, tx_ref: txRef }),
+      cache: "no-store",
+    });
+  } catch {
+    /* self-healing: the backend sweeper returns a lapsed reservation anyway */
+  }
 }
