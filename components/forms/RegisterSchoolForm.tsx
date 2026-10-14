@@ -16,6 +16,8 @@ import {
   MailCheck,
   ShieldCheck,
   Clock,
+  Ticket,
+  ChevronDown,
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +27,7 @@ import { Button } from "@/components/ui/Button";
     initiateFlutterwaveInlinePayment,
     generateTxRef,
   } from "@/lib/flutterwave";
-  import { holdRegistration } from "@/lib/holdRegistrationClient";
+  import { holdRegistration, type WaiverSplitShape } from "@/lib/holdRegistrationClient";
   import {
     getPricingTier,
     calculateTieredTotal,
@@ -232,6 +234,24 @@ export function RegisterSchoolForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [txRef, setTxRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
+
+  // --- Superadmin waiver code (Step 2) ------------------------------------
+  //
+  // `waiverSplit` is what the SERVER computed from the token's own row, not
+  // what the browser previewed. It is only ever set from a hold response, so
+  // the amount the customer is charged is not something this tab can talk the
+  // backend into.
+  //
+  // `waiverBypassApproved` replaces `transactionId` as the trigger for
+  // provisioning on a fully-waived order. There is no charge to produce a
+  // transaction id, so the usual "wait for a payment" gate would never open
+  // and the school would be stuck on step 3 forever.
+  const [waiverToken, setWaiverToken] = useState("");
+  const [waiverSplit, setWaiverSplit] = useState<WaiverSplitShape | null>(null);
+  const [waiverBypassApproved, setWaiverBypassApproved] = useState(false);
+  const [waiverOpen, setWaiverOpen] = useState(false);
+  const [waiverPreview, setWaiverPreview] = useState<WaiverSplitShape | null>(null);
+  const [waiverError, setWaiverError] = useState<string | null>(null);
   // A charge that exists but has not been confirmed by the provider (bank
   // transfers sit in `success-pending-validation` until settlement clears).
   // This is a waiting state, not a failure — it gets its own panel so a
@@ -828,6 +848,70 @@ export function RegisterSchoolForm() {
   }, [values.studentCount]);
   const orderTier = useMemo(() => getPricingTier(orderCount), [orderCount]);
   const orderTotal = useMemo(() => calculateTieredTotal(orderCount), [orderCount]);
+
+  /**
+   * True when a waiver code already covers the WHOLE order.
+   *
+   * Derived from the last SERVER response, never from a locally predicted
+   * split, so the decision to skip the payment provider is made on the same
+   * number the backend will charge against.
+   */
+  const waiverBypass = !!waiverSplit && waiverSplit.bypass_gateway === true;
+
+  /**
+   * Re-price the waiver whenever the code or the slot count changes.
+   *
+   * Debounced because the count is a free-text field: previewing on every
+   * keystroke would spend the public endpoint's rate-limit budget on a
+   * half-typed "1500".
+   *
+   * A cleared or invalid code clears the preview rather than leaving a stale
+   * one on screen — showing a discount that no longer applies is how a school
+   * reaches checkout expecting ₦0 and is asked for ₦7,000.
+   */
+  useEffect(() => {
+    const code = waiverToken.trim();
+    if (!code || orderCount < MIN_REGISTRATION_STUDENTS) {
+      setWaiverPreview(null);
+      setWaiverError(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/billing/waiver/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token_string: code,
+            requested_slots: orderCount,
+            applies_to: "REGISTRATION",
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          split?: WaiverSplitShape;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.split) {
+          setWaiverPreview(null);
+          setWaiverError(data.error ?? "That waiver code could not be applied");
+          return;
+        }
+        setWaiverError(null);
+        setWaiverPreview(data.split);
+      } catch {
+        if (!cancelled) {
+          setWaiverPreview(null);
+          setWaiverError("Could not check that code. Try again.");
+        }
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [waiverToken, orderCount]);
   // Is the "Free 30 credits" offer currently switched on platform-wide?
   //
   // Defaults to TRUE, so a failed or slow fetch leaves registration behaving
@@ -878,17 +962,25 @@ export function RegisterSchoolForm() {
     // the caller's error handling, means a misconfigured deployment shows the
     // visitor "payments are unavailable" instead of a checkout that accepts
     // their details and takes no money.
-    let publicKey: string;
-    try {
-      publicKey = getFlutterwavePublicKey();
-    } catch (e) {
-      setGlobalError(
-        e instanceof Error
-          ? e.message
-          : "Payments are unavailable right now. Please contact support.",
-      );
-      console.error("[register] Flutterwave key resolution failed", e);
-      return;
+    //
+    // SKIPPED ENTIRELY ON A 100% WAIVER, which is the point of that path: a
+    // school whose portal is being paid for by a superadmin goodwill code must
+    // still be able to register if Flutterwave is down. Gating the bypass on a
+    // payment provider's key being present would make free access the least
+    // reliable access.
+    let publicKey: string | null = null;
+    if (!waiverBypass) {
+      try {
+        publicKey = getFlutterwavePublicKey();
+      } catch (e) {
+        setGlobalError(
+          e instanceof Error
+            ? e.message
+            : "Payments are unavailable right now. Please contact support.",
+        );
+        console.error("[register] Flutterwave key resolution failed", e);
+        return;
+      }
     }
 
     // Park the registration server-side BEFORE opening checkout.
@@ -899,9 +991,14 @@ export function RegisterSchoolForm() {
     // job independently. The admin password is encrypted before it is sent
     // (lib/pendingRegistrationCrypto.ts) and is deliberately still absent from
     // the checkout `meta` below.
+    //
+    // With a waiver code the hold route ALSO reserves that code under this same
+    // tx_ref, so one reference ties the token, the hold and (if there is one)
+    // the charge together.
     let ref: string;
+    let waiverSplit: WaiverSplitShape | null = null;
     try {
-      ref = await holdRegistration({
+      const held = await holdRegistration({
         school_name: values.schoolName.trim(),
         subdomain: values.subdomain.trim().toLowerCase(),
         admin_name: values.adminName.trim() || undefined,
@@ -909,7 +1006,15 @@ export function RegisterSchoolForm() {
         admin_password: values.adminPassword,
         student_count: orderCount,
         accepted_terms: true,
+        ...(waiverToken ? { waiver_token: waiverToken } : {}),
       });
+      ref = held.tx_ref;
+      // The SERVER's split, not the preview the browser showed. The backend
+      // recomputes from the token's own row, and this is that answer — so a
+      // tampered preview cannot lower what the customer is asked to pay.
+      waiverSplit = held.waiver && held.waiver.charged_ngn !== undefined
+        ? (held.waiver as unknown as WaiverSplitShape)
+        : null;
     } catch (e) {
       setGlobalError(
         e instanceof Error
@@ -920,6 +1025,25 @@ export function RegisterSchoolForm() {
       return;
     }
 
+    // A fully-waived order has nothing to charge. Go straight to provisioning
+    // instead of opening a modal Flutterwave will reject for ₦0 — and there is
+    // no callback to wait on, so we seed the same state the payment path does.
+    if (waiverSplit?.bypass_gateway) {
+      try {
+        window.sessionStorage.setItem(PENDING_TX_REF_KEY, ref);
+      } catch {
+        /* private mode */
+      }
+      setIsSubmitting(true);
+      setTransactionId("");
+      setTxRef(ref);
+      setWaiverBypassApproved(true);
+      setPaidConflict(null);
+      setCurrentStep(3);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
     const customerEmail = values.adminEmail.trim();
     // Admin Name is now collected in Step 2. The email prefix was a poor
     // fallback ("j.obi" reads as noise on a bank statement), so it is only
@@ -927,17 +1051,26 @@ export function RegisterSchoolForm() {
     const customerName =
       values.adminName.trim() || customerEmail.split("@")[0] || values.schoolName.trim();
 
+    // Charged total. With a waiver this is the DISCOUNTED figure, charged at
+    // the tier of the FULL slot count — the same rule the backend applies.
+    const checkoutTotal = waiverSplit
+      ? Number(waiverSplit.charged_ngn ?? orderTotal)
+      : orderTotal;
+    const checkoutCount = waiverSplit ? Number(waiverSplit.charged_slots ?? orderCount) : orderCount;
+
     const openModal = () => {
       const checkout = initiateFlutterwaveInlinePayment(
         {
-            publicKey,
+            publicKey: publicKey!,
           txRef: ref,
-          amount: orderTotal,
+          amount: checkoutTotal,
           currency: "NGN",
            customer: { email: customerEmail, name: customerName },
           customizations: {
             title: `ResultApp • ${values.schoolName.trim()}`,
-            description: `${orderCount} slots × ${formatNaira(orderTier.pricePerStudent)} = ${formatNaira(orderTotal)}`,
+            description: waiverSplit
+              ? `${checkoutCount} of ${orderCount} slots — ${formatNaira(checkoutTotal)} after waiver`
+              : `${orderCount} slots × ${formatNaira(orderTier.pricePerStudent)} = ${formatNaira(orderTotal)}`,
             logo: "https://resultapp.org/logo.png",
           },
           // Transactional identifiers only. The admin password is
@@ -950,6 +1083,11 @@ export function RegisterSchoolForm() {
           // provisioning call instead — it is sent to /api/register-school in
           // the POST body, forwarded as admin_password, and stored as a
           // pgcrypto bcrypt hash. See LEGAL_REMEDIATION.md P0 item 3.
+          //
+          // The WAIVER CODE is excluded for the same reason and for a more
+          // specific one: it is a bearer credential with cash value. It has
+          // already been exchanged for a reservation under `ref`, which is
+          // what Flutterwave is told about and what the burn is scoped to.
           meta: {
             schoolName: values.schoolName.trim(),
             subdomain: values.subdomain.trim(),
@@ -1107,7 +1245,12 @@ export function RegisterSchoolForm() {
   // Step 3: fire the provision request exactly once (StrictMode-safe ref guard).
   // retryNonce re-arms the effect for manual retries with the same tx.
   useEffect(() => {
-    if (currentStep !== 3 || !transactionId || provisionFired.current || successData) return;
+    // The 100% bypass has no transaction id, so the trigger is "either a
+    // payment landed" OR "the waiver was confirmed to cover everything". The
+    // old `!transactionId` guard alone would strand a fully-waived school on
+    // step 3 with a spinner and nothing to wait for.
+    const ready = !!transactionId || waiverBypassApproved;
+    if (currentStep !== 3 || !ready || provisionFired.current || successData) return;
     provisionFired.current = true;
 
     const payload = {
@@ -1125,7 +1268,10 @@ export function RegisterSchoolForm() {
       acceptTerms: values.acceptTerms,
       terms_version: TERMS_VERSION,
       privacy_version: PRIVACY_VERSION,
-      transaction_id: transactionId,
+      // Null on a 100% waiver bypass — there is no Flutterwave transaction to
+      // name. The server's own split decides that, and inventing a placeholder
+      // here would put a fake reference into the ledger's anti-replay column.
+      transaction_id: transactionId || null,
       tx_ref: txRef,
     };
 
@@ -2060,6 +2206,91 @@ export function RegisterSchoolForm() {
         required
         disabled={isSubmitting}
       />
+
+      {/* ── Superadmin waiver code ──────────────────────────────────────
+          Optional and collapsed by default: almost every school registering
+          has no code, and a required-looking field for an uncommon thing
+          reads as a mistake.
+
+          The preview here is DISPLAY ONLY. The hold route re-validates against
+          the token's own row and returns the authoritative split, and the
+          backend recomputes that again when it burns the token. Nothing this
+          component displays can change what anyone is charged. */}
+      <div className="mt-2 rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4">
+        <button
+          type="button"
+          onClick={() => setWaiverOpen((v) => !v)}
+          disabled={isSubmitting}
+          aria-expanded={waiverOpen}
+          className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-50"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+            <Ticket className="h-4 w-4" />
+            Have a waiver code?
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-emerald-300/60 transition ${waiverOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {waiverOpen && (
+          <div className="mt-3 flex flex-col gap-3">
+            <Input
+              label="Waiver code"
+              name="waiverToken"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="RW-…"
+              value={waiverToken}
+              onChange={(e) => setWaiverToken(e.target.value.toUpperCase())}
+              error={waiverError ?? undefined}
+              disabled={isSubmitting}
+            />
+
+            {waiverPreview && (
+              <div
+                className={`rounded-xl border p-3 text-xs ${
+                  waiverPreview.bypass_gateway
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                    : "border-purple-500/25 bg-purple-500/[0.08] text-purple-100"
+                }`}
+              >
+                <p className="font-medium">
+                  {waiverPreview.discount_percentage}% off{" "}
+                  {waiverPreview.slot_allowance} slot
+                  {waiverPreview.slot_allowance === 1 ? "" : "s"}
+                </p>
+                <dl className="mt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <dt className="text-emerald-100/60">Covered</dt>
+                    <dd>
+                      {waiverPreview.waived_slots} of {orderCount} slots (
+                      {formatNaira(waiverPreview.waived_ngn)} off)
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-emerald-100/60">You pay</dt>
+                    <dd className="font-semibold">{formatNaira(waiverPreview.charged_ngn)}</dd>
+                  </div>
+                </dl>
+                {waiverPreview.bypass_gateway && (
+                  <p className="mt-2 text-emerald-200/80">
+                    Fully covered — no payment will be taken.
+                  </p>
+                )}
+                {waiverPreview.forfeited_slots > 0 && (
+                  <p className="mt-2 font-medium text-amber-200">
+                    Use it or lose it: {waiverPreview.forfeited_slots} slot
+                    {waiverPreview.forfeited_slots === 1 ? "" : "s"} of this code will be
+                    permanently forfeited and cannot be recovered.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Free-credit notice.
           Gated on the platform toggle FIRST, then the volume threshold — and it
