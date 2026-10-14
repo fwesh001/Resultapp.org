@@ -1,17 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo } from "react";
-import { Loader2, CheckCircle2, AlertCircle, CreditCard, Sparkles, Users } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Loader2, CheckCircle2, AlertCircle, CreditCard, Sparkles, Users, Ticket, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-  import {
-    formatNaira,
-    getPublicKeyForTenant,
-    loadFlutterwaveScript,
-    initiateFlutterwaveInlinePayment,
-    generateTxRef,
-  } from "@/lib/flutterwave";
+import { formatNaira, getPublicKeyForTenant, loadFlutterwaveScript, initiateFlutterwaveInlinePayment, generateTxRef } from "@/lib/flutterwave";
 import {
   getPricingTier,
   calculateTieredTotal,
@@ -19,7 +13,23 @@ import {
   CREDIT_PRICE,
   getSliderPct,
 } from "@/lib/pricing";
+import type { WaiverSplit as WaiverSplitShape } from "@/lib/waiverPricing";
 import { isDemoTenant } from "@/lib/tenant";
+
+/**
+ * Slot-purchase slider floor.
+ *
+ * The range input starts at 50, so a token with a smaller allowance is still
+ * VALID but cannot be reached by dragging — the buyer has to type the number.
+ * Said out loud rather than left to be discovered at checkout.
+ */
+const SLOT_SLIDER_FLOOR = 50;
+
+export interface WaiverCodeState {
+  token: string;
+  tokenId: number | null;
+  error: string | null;
+}
 
 interface BillingCheckoutProps {
   tenantId: string;
@@ -46,9 +56,19 @@ interface BillingCheckoutProps {
      * "demo" in the codebase.
      */
     isDemo?: boolean;
-  }
+  /**
+   * Superadmin waiver code — OWNED BY THE PARENT.
+   *
+   * This component is mounted with `key={slot-${pkg}}`, so React discards it
+   * and its entire local state every time the buyer clicks a different package
+   * size. Holding the code here would delete it on the single most likely
+   * action for someone using a waiver: enter code, then compare packages.
+   */
+  waiver?: WaiverCodeState;
+  onWaiverChange?: (next: WaiverCodeState) => void;
+}
 
-  export function BillingCheckout({
+export function BillingCheckout({
     tenantId,
     schoolName,
     customerEmail,
@@ -57,6 +77,8 @@ interface BillingCheckoutProps {
     defaultCount,
     unitPrice,
     isDemo,
+    waiver,
+    onWaiverChange,
   }: BillingCheckoutProps) {
   const isCredit = mode === "credit";
   const isSlot = mode === "slot";
@@ -73,19 +95,115 @@ interface BillingCheckoutProps {
     restoredFromSuspension?: boolean;
   } | null>(null);
 
+  // --- Waiver (slot mode only) -------------------------------------------
+  const [waiverOpen, setWaiverOpen] = useState(false);
+  const [preview, setPreview] = useState<WaiverSplitShape | null>(null);
+  // Which (code, quantity) pair `preview` was computed FOR. Deriving staleness
+  // from this is better than a `setPreviewing(true)` inside the effect: that is
+  // a synchronous setState on every keystroke, and it only knows "am I
+  // loading" — it cannot tell the difference between "loading" and "showing a
+  // split priced for the number the buyer typed two seconds ago", which is the
+  // case that actually matters when the charge is about to be taken.
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
+
+  // Held locally rather than in the parent because it is derived from the
+  // count, which the parent does not own.
+  const waiverToken = waiver?.token ?? "";
+  const waiverTokenId = waiver?.tokenId ?? null;
+
   const countNum = useMemo(() => {
     const n = parseInt(studentCount, 10);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [studentCount]);
 
+  const previewKey = `${waiverToken.trim()}|${countNum}`;
+  const previewing = isSlot && !!waiverToken.trim() && previewFor !== previewKey;
+  /**
+   * The preview, ONLY if it was priced for what is currently in the form.
+   *
+   * Derived rather than synchronised, so clearing the code or changing the
+   * quantity invalidates it by construction — there is no window in which a
+   * split priced for 100 slots is on screen next to a form asking for 500, and
+   * therefore no window in which the wrong number can be charged.
+   */
+  const activePreview = previewFor === previewKey ? preview : null;
+
   const { pricePerStudent, badge, badgeStyle } = useMemo(
     () => (isCredit ? { pricePerStudent: price, badge: null as string | null, badgeStyle: "" } : getPricingTier(countNum)),
     [countNum, isCredit, price],
   );
-  const total = useMemo(
+  const listTotal = useMemo(
     () => (isCredit ? calculateCreditTotal(countNum, price) : calculateTieredTotal(countNum)),
     [countNum, isCredit, price],
   );
+
+  /**
+   * The number actually charged.
+   *
+   * The SERVER's split when a waiver applies, otherwise the list price. The
+   * preview shown to the buyer is display-only — /api/billing/slots re-quotes
+   * from the backend before verifying anything, so tampering with this value
+   * changes nothing but the number on screen.
+   */
+  const total = useMemo(
+    () => (activePreview && isSlot ? activePreview.charged_ngn : listTotal),
+    [activePreview, isSlot, listTotal],
+  );
+  const isBypass = !!(activePreview && isSlot && activePreview.bypass_gateway);
+
+  // Re-quote whenever the code or the quantity changes. Debounced because the
+  // count is a free-text field, and previewing per keystroke would burn the
+  // public endpoint's rate-limit budget on a half-typed "1500".
+  useEffect(() => {
+    if (!isSlot || !waiverToken.trim()) return; // nothing to price, nothing to do
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/billing/waiver/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token_string: waiverToken.trim(),
+            requested_slots: countNum,
+            applies_to: "TOPUP",
+            tenant_id: tenantId,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          token_id?: number;
+          split?: WaiverSplitShape;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.split) {
+          // Clear the token id too: leaving a stale id next to a rejected code
+          // would let a later purchase try to reserve a code that is no longer
+          // valid, and fail confusingly at checkout.
+          setPreview(null);
+          setPreviewFor(previewKey);
+          onWaiverChange?.({ token: waiverToken, tokenId: null, error: data.error ?? "That code could not be applied" });
+          return;
+        }
+        onWaiverChange?.({ token: waiverToken, tokenId: data.token_id ?? null, error: null });
+        setPreview(data.split);
+        setPreviewFor(previewKey);
+      } catch {
+        if (!cancelled) {
+          setPreview(null);
+          setPreviewFor(previewKey);
+          onWaiverChange?.({ token: waiverToken, tokenId: null, error: "Could not check that code." });
+        }
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // previewKey already encodes both inputs; depending on the pieces as well
+    // would just re-fire the timer on identical renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey, isSlot, tenantId, onWaiverChange]);
+
   // Slider bounds are mode-specific: credits 1–10,000, slots 50–2,000.
   const sliderMin = isCredit ? 1 : 50;
   const sliderMax = isCredit ? 10000 : 2000;
@@ -135,13 +253,125 @@ interface BillingCheckoutProps {
     if (!validate()) return;
 
     const n = parseInt(studentCount, 10);
-    const amount = isCredit ? calculateCreditTotal(n, price) : calculateTieredTotal(n);
-    if (amount <= 0) {
+    const listAmount = isCredit ? calculateCreditTotal(n, price) : calculateTieredTotal(n);
+    if (listAmount <= 0) {
       setError("Invalid amount");
       return;
     }
 
+    // A waiver that is being applied but has not finished pricing is treated as
+    // "no waiver" rather than "charge full price silently". Better to ask the
+    // buyer to wait than to take money for something they expected discounted.
+    const applyWaiver = isSlot && !!waiverToken.trim() && !!waiverTokenId;
+    if (applyWaiver && !activePreview) {
+      setError("Still checking your waiver code — one moment.");
+      return;
+    }
+    const amount = applyWaiver ? activePreview!.charged_ngn : listAmount;
+    const bypass = applyWaiver && activePreview!.bypass_gateway;
+
     setIsPaying(true);
+
+    /**
+     * RESERVE BEFORE CHECKOUT, NOT AFTER PAYMENT.
+     *
+     * A token burned only at purchase time has a hole: two tabs, one code, both
+     * pay, one loses and is charged for nothing. Reserving first means the
+     * loser never reaches a payment page at all.
+     *
+     * `txRef` is minted here rather than by Flutterwave so the reservation and
+     * the charge share one reference — the burn is scoped to it, and a late or
+     * duplicated callback cannot redeem a token the sweeper has since handed
+     * to somebody else.
+     */
+    const txRef = generateTxRef(tenantId);
+    if (applyWaiver) {
+      try {
+        const res = await fetch("/api/billing/waiver/reserve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token_string: waiverToken.trim(),
+            tx_ref: txRef,
+            applies_to: "TOPUP",
+            tenant_id: tenantId,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setIsPaying(false);
+          const msg = (data as { error?: string })?.error || "That waiver code is not available";
+          // The code is spent or held elsewhere — stop offering it rather than
+          // letting them retry into the same 409.
+          onWaiverChange?.({ token: "", tokenId: null, error: msg });
+          setPreview(null);
+          setError(msg);
+          return;
+        }
+      } catch {
+        setIsPaying(false);
+        // Hand the reservation back if we opened one and then failed. Failing
+        // closed here means a stranded token for RESERVATION_TTL_SECONDS, and a
+        // school whose payment failed would find their code "already in use".
+        setError("Could not reserve that waiver code. Try again.");
+        return;
+      }
+    }
+
+    const releaseWaiver = () => {
+      if (!applyWaiver) return;
+      void fetch("/api/billing/waiver/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token_id: waiverTokenId, tx_ref: txRef }),
+      }).catch(() => null);
+    };
+
+    /**
+     * THE 100% BYPASS. Flutterwave is never opened for a ₦0 charge — it would
+     * reject it, and a school whose portal is being paid for by a goodwill code
+     * should not be at the mercy of a payment provider being up.
+     */
+    if (bypass) {
+      setUpgrading(true);
+      try {
+        const res = await fetch("/api/billing/slots", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId,
+            slotCount: n,
+            waiverTokenId,
+            waiverReservationTxRef: txRef,
+            // No transactionId at all. The backend rejects one here, and a
+            // placeholder would put a fake reference into the ledger.
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || (data as { success?: boolean }).success === false) {
+          throw new Error((data as { error?: string })?.error || `Top-up failed (${res.status})`);
+        }
+        setSuccess({
+          studentCount: n,
+          total: 0,
+          restoredFromSuspension: (data as { restored_from_suspension?: boolean }).restored_from_suspension === true,
+        });
+        setTimeout(() => {
+          window.location.href = `/${tenantId}/admin/billing`;
+        }, 1500);
+      } catch (e) {
+        // The grant failed, so the burn rolled back with it. Release the
+        // reservation so the school can simply try again.
+        releaseWaiver();
+        setError(
+          (e instanceof Error ? e.message : "Top-up failed.") + " Your waiver code has not been used.",
+        );
+      } finally {
+        setIsPaying(false);
+        setUpgrading(false);
+      }
+      return;
+    }
 
     // Resolved BEFORE any await, inside the same try/catch that surfaces errors
     // to the user. A misconfigured deployment must produce a visible "payments
@@ -152,6 +382,7 @@ interface BillingCheckoutProps {
       publicKey = getPublicKeyForTenant({ isDemo });
     } catch (e) {
       setIsPaying(false);
+      releaseWaiver();
       setError(
         e instanceof Error
           ? e.message
@@ -161,12 +392,11 @@ interface BillingCheckoutProps {
       return;
     }
 
-    const txRef = generateTxRef(tenantId);
-
     try {
       await loadFlutterwaveScript();
     } catch (e) {
       setIsPaying(false);
+      releaseWaiver();
       setError("Could not load Flutterwave checkout. Check connection.");
       console.error(e);
       return;
@@ -187,7 +417,9 @@ interface BillingCheckoutProps {
           description: isCredit
             ? `${n} credits × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Credit top-up`
             : isSlot
-              ? `${n} slots × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Slot purchase`
+              ? applyWaiver
+                ? `${n} slots — ${formatNaira(amount)} after waiver`
+                : `${n} slots × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Slot purchase`
               : `${n} students × ${formatNaira(pricePerStudent)} = ${formatNaira(amount)} — Upgrade to active`,
           logo: "https://resultapp.org/logo.png",
         },
@@ -195,6 +427,11 @@ interface BillingCheckoutProps {
           tenantId,
           studentCount: n,
           pricePerStudent,
+          // The waiver CODE is deliberately absent. `meta` is transmitted to
+          // Flutterwave and retained in their transaction metadata, so putting a
+          // live bearer credential there would disclose it to a third party the
+          // school never authorised. The token was already exchanged for a
+          // reservation under `txRef`, which is what this actually sends.
           source: isCredit ? "credit_topup" : isSlot ? "slot_purchase" : "billing_upgrade",
         },
       },
@@ -224,7 +461,10 @@ interface BillingCheckoutProps {
 
           if (!isSuccess) {
             setIsPaying(false);
-            setError("Payment was not successful. Please try again.");
+            // Cancelled at the gateway. The token is NOT spent, so give it
+            // back rather than making a retry look like a double-spend.
+            releaseWaiver();
+            setError("Payment was not successful. Your waiver code has not been used.");
             return;
           }
 
@@ -241,6 +481,9 @@ interface BillingCheckoutProps {
                 creditCount: n,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 transactionId: res.transaction_id || (res as any).id || res.tx_ref,
+                ...(applyWaiver
+                  ? { waiverTokenId, waiverReservationTxRef: txRef }
+                  : {}),
               }),
             });
             const data = await upgradeRes.json().catch(() => ({}));
@@ -281,7 +524,12 @@ interface BillingCheckoutProps {
         onClose: () => {
           setIsPaying(false);
           if (!upgrading && !success) {
-            setError("Payment was cancelled. You can try again when ready.");
+            // Checkout abandoned. The token was reserved but never spent, so
+            // hand it straight back — otherwise the school is told their code
+            // "is already in use" for the next 15 minutes and blames the
+            // platform for their own closed tab.
+            releaseWaiver();
+            setError("Payment was cancelled. Your waiver code has not been used.");
           }
         },
         onError: (err) => {
@@ -365,6 +613,115 @@ interface BillingCheckoutProps {
         disabled={isPaying || upgrading}
       />
 
+      {isSlot && (
+        <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.03] p-4">
+          <button
+            type="button"
+            onClick={() => setWaiverOpen((v) => !v)}
+            disabled={isPaying || upgrading}
+            aria-expanded={waiverOpen}
+            className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-50"
+          >
+            <span className="flex items-center gap-2 text-sm font-medium text-cyan-200">
+              <Ticket className="h-4 w-4" />
+              Have a waiver code?
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-cyan-300/60 transition ${waiverOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {waiverOpen && (
+            <div className="mt-3 flex flex-col gap-3">
+              <Input
+                label="Waiver code"
+                name="waiverToken"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="RW-…"
+                value={waiverToken}
+                onChange={(e) => {
+                  const v = e.target.value.toUpperCase();
+                  onWaiverChange?.({ token: v, tokenId: null, error: null });
+                  setPreview(null);
+                  if (error) setError(null);
+                }}
+                error={waiver?.error ?? undefined}
+                disabled={isPaying || upgrading}
+              />
+
+              {previewing && (
+                <p className="flex items-center gap-2 text-xs text-cyan-200/60">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking code…
+                </p>
+              )}
+
+              {activePreview && !previewing && (
+                <div
+                  className={`rounded-xl border p-3 text-xs ${
+                    activePreview.bypass_gateway
+                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                      : "border-purple-500/25 bg-purple-500/[0.08] text-purple-100"
+                  }`}
+                >
+                  <p className="font-medium">
+                    {activePreview.discount_percentage}% off {activePreview.slot_allowance.toLocaleString()} slot
+                    {activePreview.slot_allowance === 1 ? "" : "s"}
+                  </p>
+                  <dl className="mt-2 space-y-1">
+                    <div className="flex justify-between">
+                      <dt className="text-cyan-100/60">Covered</dt>
+                      <dd>
+                        {activePreview.waived_slots} of {countNum} slots ({formatNaira(activePreview.waived_ngn)} off)
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-cyan-100/60">You pay</dt>
+                      <dd className="font-semibold">{formatNaira(activePreview.charged_ngn)}</dd>
+                    </div>
+                  </dl>
+
+                  {activePreview.bypass_gateway && (
+                    <p className="mt-2 text-cyan-200/80">
+                      Fully covered — no payment will be taken.
+                    </p>
+                  )}
+
+                  {/*
+                    THE SLIDER FLOOR COLLISION. A token covering fewer slots
+                    than the slider's minimum is still perfectly valid; it just
+                    cannot be reached by dragging, so the buyer has to type the
+                    number. Said here rather than left to be discovered at
+                    checkout.
+                  */}
+                  {activePreview.slot_allowance < SLOT_SLIDER_FLOOR && (
+                    <p className="mt-2 flex items-start gap-1.5 text-amber-200/90">
+                      <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                      <span>
+                        This code covers {activePreview.slot_allowance} slot
+                        {activePreview.slot_allowance === 1 ? "" : "s"} but the slider starts at{" "}
+                        {SLOT_SLIDER_FLOOR}. Type the quantity above — the code works
+                        either way.
+                      </span>
+                    </p>
+                  )}
+
+                  {activePreview.forfeited_slots > 0 && (
+                    <p className="mt-2 font-medium text-amber-200">
+                      Use it or lose it: {activePreview.forfeited_slots} slot
+                      {activePreview.forfeited_slots === 1 ? "" : "s"} of this code will be
+                      permanently forfeited if you buy fewer than{" "}
+                      {activePreview.slot_allowance} slots.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Slider — bounds depend on mode */}
       <div className="rounded-2xl border border-purple-500/10 bg-purple-950/15 p-4 backdrop-blur">
         <div className="flex items-center justify-between text-xs font-medium text-purple-300">
@@ -424,17 +781,25 @@ interface BillingCheckoutProps {
               <CreditCard className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">Total Amount</p>
+              <p className="text-sm font-medium text-white">
+                Total Amount{isBypass ? " — fully waived" : ""}
+              </p>
               <p className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-purple-300/60">
-                  {countNum || 0} × {formatNaira(pricePerStudent)}
-                </span>
-                {badge && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeStyle}`}>{badge}</span>}
+                {preview && isSlot && listTotal !== total ? (
+                  <span className="text-cyan-300/70 line-through">{formatNaira(listTotal)}</span>
+                ) : (
+                  <span className="text-purple-300/60">
+                    {countNum || 0} × {formatNaira(pricePerStudent)}
+                  </span>
+                )}
+                {badge && !activePreview && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeStyle}`}>{badge}</span>}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold tracking-tight text-white">{countNum > 0 ? formatNaira(total) : "—"}</p>
+            <p className={`text-lg font-bold tracking-tight ${isBypass ? "text-cyan-300" : "text-white"}`}>
+              {countNum > 0 ? (isBypass ? "Free" : formatNaira(total)) : "—"}
+            </p>
             <p className="text-xs text-purple-300/50">{isCredit ? "One-time • Adds to balance" : "One-time • Unlocks printing"}</p>
           </div>
         </div>
@@ -448,10 +813,18 @@ interface BillingCheckoutProps {
               <span>Price per {unitNoun}</span>
               <span className="text-purple-200">{formatNaira(pricePerStudent)}</span>
             </div>
-            <div className="my-2 border-t border-purple-500/10" />
+            {activePreview && isSlot && (
+              <>
+                <div className="flex justify-between text-cyan-300/80">
+                  <span>Waiver ({activePreview.waived_slots} slot{activePreview.waived_slots === 1 ? "" : "s"})</span>
+                  <span>−{formatNaira(activePreview.waived_ngn)}</span>
+                </div>
+                <div className="my-2 border-t border-purple-500/10" />
+              </>
+            )}
             <div className="flex justify-between font-semibold text-white">
               <span>Total payable</span>
-              <span>{formatNaira(total)}</span>
+              <span>{isBypass ? formatNaira(0) : formatNaira(total)}</span>
             </div>
           </div>
         )}
@@ -488,19 +861,28 @@ interface BillingCheckoutProps {
 
       <Button
         onClick={handlePay}
-        disabled={isPaying || upgrading || countNum <= 0}
+        disabled={isPaying || upgrading || countNum <= 0 || (isSlot && !!waiverToken.trim() && !waiverTokenId)}
         size="lg"
-        className="w-full gap-2 rounded-full bg-red-600 font-semibold text-white shadow-[0_0_28px_rgba(239,68,68,0.35)] hover:bg-red-500 disabled:opacity-60"
+        className={`w-full gap-2 rounded-full font-semibold text-white disabled:opacity-60 ${
+          isBypass
+            ? "bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_28px_rgba(8,145,178,0.35)]"
+            : "bg-red-600 hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.35)]"
+        }`}
       >
         {isPaying || upgrading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            {upgrading ? "Upgrading…" : "Waiting for payment…"}
+            {upgrading ? "Applying…" : "Waiting for payment…"}
+          </>
+        ) : isBypass ? (
+          <>
+            <Ticket className="h-4 w-4" />
+            Apply {countNum} free slots — no payment
           </>
         ) : (
           <>
             <CreditCard className="h-4 w-4" />
-            {countNum > 0 ? (isCredit ? `Pay ${formatNaira(total)} — Buy ${countNum} Credits` : `Pay ${formatNaira(total)} — Upgrade to Active`) : "Pay with Flutterwave"}
+            {countNum > 0 ? (isCredit ? `Pay ${formatNaira(total)} — Buy ${countNum} Credits` : `Pay ${formatNaira(total)} — Add ${countNum} Slots`) : "Pay with Flutterwave"}
           </>
         )}
       </Button>
