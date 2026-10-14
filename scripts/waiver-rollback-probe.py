@@ -677,12 +677,14 @@ def main():
             resolve_initial_credit_grant,
         )
 
-        # Backwards compatibility: an un-updated caller must be unaffected.
-        legacy = resolve_initial_credit_grant(600)
-        if legacy == 30:
-            ok(f"legacy call resolve_initial_credit_grant({600}) still grants 30 — rollout safe")
+        # `paid_slots` is REQUIRED now, so "the paying path is unchanged" is
+        # asserted the only way it can be: a caller with no waiver passes the
+        # full capacity, and must still get its credits.
+        no_waiver = resolve_initial_credit_grant(600, paid_slots=600)
+        if no_waiver == 30:
+            ok("no waiver -> paid_slots == capacity -> still grants 30 (paying path intact)")
         else:
-            no("legacy behaviour changed during rollout", str(legacy))
+            no("removing the default changed the paying path", str(no_waiver))
 
         full_waiver = resolve_initial_credit_grant(600, paid_slots=0)
         if full_waiver == 0:
