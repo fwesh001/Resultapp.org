@@ -145,7 +145,7 @@ def _init_waiver_tokens(cur) -> None:
             -- The commercial terms, exactly as the superadmin defined them.
             discount_percentage  INTEGER NOT NULL CHECK (discount_percentage BETWEEN 1 AND 100),
             slot_allowance       INTEGER NOT NULL CHECK (slot_allowance BETWEEN 1 AND 10000),
-            applies_to           VARCHAR(10) NOT NULL DEFAULT 'BOTH'
+            applies_to           VARCHAR(12) NOT NULL DEFAULT 'BOTH'
                                  CHECK (applies_to IN ('REGISTRATION','TOPUP','BOTH')),
             locked_to_tenant     VARCHAR(60) REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE SET NULL,
             restores_suspension  BOOLEAN NOT NULL DEFAULT FALSE,
