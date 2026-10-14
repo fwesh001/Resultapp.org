@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   const base = getBackendBase();
   const tokenString = String(body.waiver_token ?? "").trim();
 
-  let txRef = newTxRef(payload.subdomain);
+  const txRef = newTxRef(payload.subdomain);
   let waiver: WaiverBinding | undefined;
   let split: Record<string, unknown> | null = null;
 
