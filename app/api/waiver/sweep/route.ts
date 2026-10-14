@@ -64,8 +64,9 @@ export async function POST(req: NextRequest) {
 }
 
 async function sweep(req: NextRequest, mode: "cron" | "manual") {
-  if (!isAuthorized(req, mode)) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const auth = checkAuth(req, mode);
+  if (!auth.ok) {
+    return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }
 
   const { secret, error } = requireSecret();
@@ -188,25 +189,85 @@ async function sweep(req: NextRequest, mode: "cron" | "manual") {
 /**
  * Cron auth, or an authenticated superadmin.
  *
- * Vercel attaches `Authorization: Bearer $CRON_SECRET` to scheduled
- * invocations. In development `CRON_SECRET` is unset, so the route is
- * unreachable by cron there — deliberately. A dev machine must not be
- * provisioning schools on a timer.
+ * WAYS A CALLER CAN AUTHENTICATE, in the order they are checked:
+ *
+ *   1. `Authorization: Bearer <CRON_SECRET>`  — Vercel Cron's native form.
+ *   2. `x-cron-secret: <CRON_SECRET>` header  — cron services that CAN set
+ *      custom headers but not Authorization.
+ *   3. `?key=<CRON_SECRET>` query parameter    — cron-job.org and most other
+ *      external schedulers. Their free tiers CANNOT set custom headers at all,
+ *      so this is the only mechanism available to them.
+ *
+ * The query parameter puts a secret in a URL, which means it lands in access
+ * logs. That is an accepted trade for a low-value, single-purpose, revocable
+ * token that only unlocks a recovery sweep — and the alternative is a scheduler
+ * that simply cannot authenticate at all. Revoke it by rotating CRON_SECRET.
+ *
+ * `CRON_SECRET` unset is a 503, NOT a 401. A 401 says "you are not allowed";
+ * a 503 says "I am not configured". Conflating them sends an operator hunting
+ * for an auth problem that does not exist.
  */
-function isAuthorized(req: NextRequest, mode: "cron" | "manual"): boolean {
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  if (mode === "cron") {
-    if (!cronSecret) return false;
-    const header = req.headers.get("authorization") ?? "";
-    const expected = `Bearer ${cronSecret}`;
-    // Constant-time-ish comparison; these are fixed-length ASCII in practice.
-    if (header.length !== expected.length) return false;
-    let diff = 0;
-    for (let i = 0; i < header.length; i++) diff |= header.charCodeAt(i) ^ expected.charCodeAt(i);
-    return diff === 0;
+function checkAuth(
+  req: NextRequest,
+  mode: "cron" | "manual",
+): { ok: true } | { ok: false; status: number; error: string } {
+  if (mode === "manual") {
+    // Manual triggers come from the superadmin console, which carries its own
+    // session cookie. Presence-checked rather than verified here; the page and
+    // the API route both sit behind requireSuperadmin's own checks.
+    if (req.cookies.get("superadmin_session")?.value !== undefined) return { ok: true };
+    return {
+      ok: false,
+      status: 401,
+      error: "Sign in as a superadmin to trigger the sweep manually.",
+    };
   }
-  // Manual triggers come from the superadmin console, which carries its own
-  // session cookie. Checked without throwing so a missing cookie is a 401 from
-  // the route rather than an exception.
-  return req.cookies.get("superadmin_session")?.value !== undefined;
+
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (!cronSecret) {
+    console.error(
+      "[waiver/sweep] CRON_SECRET is not set — abandoned 100% waiver registrations " +
+        "CANNOT be recovered on this deployment. Set it in the Vercel environment variables.",
+    );
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "CRON_SECRET is not configured on this deployment, so the sweep cannot run. " +
+        "Add it to the Vercel environment variables (any random string), then retry with " +
+        "?key=<that value>.",
+    };
+  }
+
+  const supplied =
+    (() => {
+      const auth = req.headers.get("authorization") ?? "";
+      return auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    })() ||
+    req.headers.get("x-cron-secret")?.trim() ||
+    req.nextUrl.searchParams.get("key")?.trim() ||
+    "";
+
+  if (!supplied) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Missing credential. Call this URL with ?key=<CRON_SECRET>.",
+    };
+  }
+
+  // Length check first, then a full-length XOR accumulate. Same shape as
+  // lib/flutterwave's timingSafeEqual wrapper: comparing only equal-length
+  // strings keeps the loop from leaking the secret's length through timing.
+  if (supplied.length !== cronSecret.length) {
+    return { ok: false, status: 401, error: "Invalid credential." };
+  }
+  let diff = 0;
+  for (let i = 0; i < supplied.length; i++) {
+    diff |= supplied.charCodeAt(i) ^ cronSecret.charCodeAt(i);
+  }
+  if (diff !== 0) {
+    return { ok: false, status: 401, error: "Invalid credential." };
+  }
+  return { ok: true };
 }
