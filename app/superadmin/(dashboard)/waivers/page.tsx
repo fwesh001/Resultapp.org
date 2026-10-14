@@ -12,7 +12,7 @@ import {
   Info,
 } from "lucide-react";
 import { formatNaira, getPricingTier, MIN_REGISTRATION_STUDENTS } from "@/lib/pricing";
-import { allowanceBounds, MAX_SLOTS, MIN_TOPUP_SLOTS } from "@/lib/waiverPricing";
+import { allowanceBounds, MAX_SLOTS } from "@/lib/waiverPricing";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -113,7 +113,7 @@ export default function SuperadminWaiversPage() {
     try {
       return allowanceBounds(appliesTo);
     } catch {
-      return { min: MIN_REGISTRATION_STUDERS, max: MAX_SLOTS };
+      return { min: MIN_REGISTRATION_STUDENTS, max: MAX_SLOTS };
     }
   }, [appliesTo]);
 
@@ -309,7 +309,7 @@ export default function SuperadminWaiversPage() {
             <p className="text-xs text-purple-300/50">
               {appliesTo === "TOPUP"
                 ? "Top-ups have no minimum, so any allowance from 1 is valid."
-                : `Registration has a ${MIN_REGISTRATION_STUDERS}-slot floor, so the allowance must be at least ${bounds.min} — below that the code would fail validation at checkout, after the buyer entered their card details.`}
+                : `Registration has a ${MIN_REGISTRATION_STUDENTS}-slot floor, so the allowance must be at least ${bounds.min} — below that the code would fail validation at checkout, after the buyer entered their card details.`}
             </p>
           </div>
 
