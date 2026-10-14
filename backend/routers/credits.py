@@ -99,6 +99,47 @@ def _ensure_tenant(tid: str) -> None:
         raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
 
 
+def _ledger_reference_exists(reference_ids: list) -> bool:
+    """True if ANY of these idempotency keys already has a ledger row.
+
+    Used by the waived top-up to recognise its own replay before judging the
+    token's state. Read-only, and the in-transaction
+    `INSERT ... ON CONFLICT (reference_id) DO NOTHING` remains the authoritative
+    guard — this is the early, cheap, correctly-ordered half of the same check.
+    """
+    from services.db_manager import BILLING_LEDGER_TABLE, _connect_as_superuser
+
+    keys = [r for r in (reference_ids or []) if r]
+    if not keys:
+        return False
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT 1 FROM {BILLING_LEDGER_TABLE}
+            WHERE reference_id = ANY(%s)
+            LIMIT 1;
+            """,
+            (keys,),
+        )
+        return cur.fetchone() is not None
+    except Exception as e:
+        # Fail OPEN. A replay that slips through to the transaction does no
+        # harm — the ON CONFLICT guard catches it there — whereas failing
+        # closed here would turn a transient read error into "your token is
+        # invalid" for a customer who already paid.
+        _logger.warning(f"[credits] ledger reference probe failed, assuming not applied: {e}")
+        return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 #: Suspension causes that a payment MUST NOT clear.
 #: A tenant suspended for abuse, legal process or security risk has to stay
 #: down until a human lifts it — otherwise paying ₦100 would buy your way out
@@ -426,6 +467,296 @@ class SlotTopUpRequest(BaseModel):
     student_count: Optional[int] = Field(None, gt=0, le=10000)
     transaction_id: str = Field(..., min_length=1)
     amount_ngn: Optional[int] = Field(None, ge=0, description="Verified NGN paid (recorded immutably for revenue)")
+
+
+class WaivedSlotTopUpRequest(BaseModel):
+    """Slot top-up redeemed against a superadmin waiver token.
+
+    A SEPARATE MODEL, not a loosened SlotTopUpRequest. SlotTopUpRequest makes
+    `transaction_id` mandatory, and that is correct for its path: every
+    unwaived top-up charges money, so there is always a transaction id. A 100%
+    waiver has none — Flutterwave rejects a zero-value charge, so the gateway
+    is bypassed entirely.
+
+    Making the field optional on the shared model would have let an unwaived
+    top-up arrive with no transaction id, which is precisely the request that
+    grants slots for free. The discriminator has to be structural.
+    """
+
+    waiver_token_id: int = Field(..., ge=1)
+    #: The tx_ref this checkout reserved the token under. Must match, or the
+    #: burn is refused — see consume_token. This is what closes the sweeper race
+    #: where an abandoned checkout's token has been re-reserved by someone else.
+    reservation_tx_ref: str = Field(..., min_length=1, max_length=128)
+    requested_slots: int = Field(..., ge=1, le=10000)
+    #: Required IFF the split produces a non-zero charge. Enforced in the
+    #: handler, because the split is only known once the token is loaded.
+    transaction_id: Optional[str] = Field(None, min_length=1, max_length=100)
+    #: Verified NGN received. Used for revenue, floored at the computed charge.
+    amount_ngn: Optional[int] = Field(None, ge=0)
+
+
+@router.post(
+    "/slots/topup/with-waiver",
+    summary="Purchase slots with a waiver token — split bill, or 100% bypass",
+)
+def topup_slots_with_waiver(tenant_id: str, payload: WaivedSlotTopUpRequest):
+    """Slot purchase where part (or all) of the cost is covered by a waiver.
+
+    ONE transaction covers: the token burn, the MRR-bearing paid row, the
+    zero-revenue waiver row, the capacity grant, and the suspension restore.
+    A failure anywhere rolls back all of it, and the token returns to its
+    reserved state for a retry rather than being silently consumed.
+
+    The split is recomputed HERE, from the token's own row. The caller sends a
+    token id and a slot count, never a price — see compute_waiver_split().
+    """
+    from services.db_manager import (
+        BILLING_LEDGER_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        _connect_as_superuser_transactional,
+    )
+    from services.waivers import (
+        WaiverValidationError,
+        compute_waiver_split,
+        consume_token,
+        peek_token_by_id,
+    )
+
+    tid = _validate_tenant_id(tenant_id)
+    _ensure_tenant(tid)
+
+    requested = int(payload.requested_slots)
+    if not (1 <= requested <= 10000):
+        raise HTTPException(status_code=400, detail="requested_slots must be 1-10000")
+
+    tx_id = (payload.transaction_id or "").strip()
+    paid_ref = f"flw-slot:{tx_id}" if tx_id else None
+    waiver_ref = f"waiver:{payload.waiver_token_id}"
+
+    # --- idempotency FIRST, before the token is even looked at ------------
+    #
+    # Order matters more than it looks. A browser callback and the webhook both
+    # arrive in a healthy system, and whichever loses must get a benign, honest
+    # answer — not a 409 the customer sees as a failed payment. So the replay
+    # has to be recognised BEFORE the token's state is judged, because by the
+    # time the second copy arrives the token is legitimately 'consumed' and the
+    # obvious "is this token still valid?" check would reject a request that
+    # actually succeeded minutes earlier.
+    #
+    # The idempotency key is whichever ledger row this purchase wrote:
+    # `flw-slot:{tx_id}` when money moved, `waiver:{token_id}` on a bypass.
+    # Both are UNIQUE, so neither a replay nor a second tab can produce a
+    # second set of seats.
+    from services.db_manager import get_slots_balance
+
+    already_applied = _ledger_reference_exists([paid_ref, waiver_ref])
+    if already_applied:
+        _logger.info(
+            f"[slots] waived top-up replay for '{tid}' (already applied) — returning current state"
+        )
+        return {
+            "success": True,
+            "duplicate": True,
+            "subdomain": tid,
+            "slots_balance": get_slots_balance(tid),
+            "entry": {},
+        }
+
+    # --- resolve the token BEFORE opening a transaction -------------------
+    # Non-mutating, so a bad token costs nothing and fails cleanly.
+    try:
+        terms = peek_token_by_id(payload.waiver_token_id)
+        if terms["applies_to"] not in ("TOPUP", "BOTH"):
+            raise WaiverValidationError(
+                f"This waiver code is only valid for {terms['applies_to'].lower()} purchases"
+            )
+        split = compute_waiver_split(
+            requested_slots=requested,
+            slot_allowance=terms["slot_allowance"],
+            discount_percentage=terms["discount_percentage"],
+        )
+    except WaiverValidationError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    charged_ngn = int(split["charged_ngn"])
+
+    # The 100% bypass. Flutterwave was never opened, so there is nothing to
+    # verify and nothing to reconcile — but a transaction id is still REQUIRED
+    # whenever money is involved, because without one this endpoint would grant
+    # slots on a bare assertion from the proxy.
+    if charged_ngn > 0 and not tx_id:
+        raise HTTPException(
+            status_code=400,
+            detail="transaction_id is required when a waiver does not cover the full amount",
+        )
+    if charged_ngn == 0 and tx_id:
+        # A charge on a fully-waived order means either a mis-built client or a
+        # tampered one. Either way the money is unaccounted for, so refuse
+        # rather than swallow it.
+        _logger.warning(
+            f"[slots] waived top-up for '{tid}': token covers the full amount but a "
+            f"transaction id was supplied ({tx_id}) — refusing"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="A fully-waived purchase must not carry a transaction id",
+        )
+
+    conn = None
+    try:
+        conn = _connect_as_superuser_transactional()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+
+        # --- 1. duplicate guard, BEFORE anything is consumed ---------------
+        # If the paid row already exists this transaction id has been redeemed.
+        # Returning early here is what stops a double-posted callback from
+        # burning the token and re-granting slots on the way past.
+        if paid_ref:
+            cur.execute(
+                f"""
+                INSERT INTO {BILLING_LEDGER_TABLE}
+                    (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+                VALUES (%s, 'SLOT', %s, 'SLOT_PURCHASE', %s, %s, %s)
+                ON CONFLICT (reference_id) DO NOTHING
+                RETURNING id;
+                """,
+                (
+                    tid,
+                    int(split["charged_slots"]),
+                    paid_ref,
+                    f"Slot purchase: {requested} slots via Flutterwave {tx_id} "
+                    f"(waiver #{payload.waiver_token_id} covered {split['waived_slots']})",
+                    max(int(payload.amount_ngn or 0), charged_ngn),
+                ),
+            )
+            if cur.fetchone() is None:
+                conn.rollback()
+                from services.db_manager import get_slots_balance
+
+                return {
+                    "success": True,
+                    "duplicate": True,
+                    "subdomain": tid,
+                    "slots_balance": get_slots_balance(tid),
+                    "entry": {},
+                }
+
+        # --- 2. burn the waiver (same cursor, same transaction) -------------
+        consume_token(
+            cur,
+            token_id=payload.waiver_token_id,
+            reservation_tx_ref=payload.reservation_tx_ref,
+            split=split,
+            tenant_id=tid,
+            transaction_ref=tx_id or None,
+        )
+
+        # --- 3. the free portion --------------------------------------------
+        # transaction_type SLOT_WAIVER, amount_ngn 0 — so platform_stats()'
+        # MRR sum over ('CREDIT_PURCHASE','SLOT_PURCHASE') is untouched.
+        if split["waived_slots"] > 0:
+            cur.execute(
+                f"""
+                INSERT INTO {BILLING_LEDGER_TABLE}
+                    (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+                VALUES (%s, 'SLOT', %s, 'SLOT_WAIVER', %s, %s, 0)
+                ON CONFLICT (reference_id) DO NOTHING
+                """,
+                (
+                    tid,
+                    int(split["waived_slots"]),
+                    waiver_ref,
+                    f"Waiver applied: {split['waived_slots']} of {requested} slots at "
+                    f"{split['discount_percentage']}% off (NGN {split['waived_ngn']})",
+                ),
+            )
+
+        # --- 4. grant capacity ----------------------------------------------
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = COALESCE(slots_balance, 0) + %s,
+                student_count = GREATEST(COALESCE(student_count,0), COALESCE(slots_balance,0) + %s),
+                updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (requested, requested, tid),
+        )
+        row = cur.fetchone()
+        if row is None:
+            # Cannot happen (the tenant was verified above) but if it does, the
+            # rollback below is the right answer rather than a committed burn.
+            raise RuntimeError(f"Tenant '{tid}' vanished mid-transaction")
+        new_balance = int(row[0] or 0)
+
+        # --- 5. suspension restore, ONLY when money actually moved ----------
+        #
+        # A waiver is not a payment. Gating on charged_ngn > 0 is what stops a
+        # 100%-waived top-up from un-suspending a tenant that was cut off for
+        # non-payment — otherwise a goodwill code becomes a free way out of a
+        # suspension, for a school that owes money and has chosen not to pay it.
+        restored = False
+        if charged_ngn > 0:
+            restored = _restore_if_payment_clears_suspension(cur, tid)
+
+        cur.execute("COMMIT;")
+        _logger.info(
+            f"[slots] waived top-up {requested} slots for '{tid}' via token "
+            f"#{payload.waiver_token_id} ({split['waived_slots']} waived, "
+            f"{split['charged_slots']} charged NGN {charged_ngn}, balance {new_balance})"
+        )
+        return {
+            "success": True,
+            "duplicate": False,
+            "subdomain": tid,
+            "credited": requested,
+            "slots_balance": new_balance,
+            "restored_from_suspension": restored,
+            "waiver": {
+                "token_id": payload.waiver_token_id,
+                "slots_waived": split["waived_slots"],
+                "slots_forfeited": split["forfeited_slots"],
+                "discount_ngn": split["waived_ngn"],
+                "charged_slots": split["charged_slots"],
+                "charged_ngn": charged_ngn,
+                "bypass_gateway": split["bypass_gateway"],
+            },
+        }
+    except HTTPException:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    except WaiverValidationError as e:
+        # The token lost its reservation race, or the ref does not match.
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.warning(f"[slots] waived top-up refused for '{tid}': {e}")
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        # Rollback covers the burn, both ledger rows and the capacity grant.
+        # After this the token is back to 'reserved' and retryable.
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        _logger.exception(f"[slots] waived top-up failed for '{tid}': {e}")
+        raise HTTPException(status_code=500, detail=f"Waived slot top-up failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @router.post("/slots/topup", summary="Purchase slots (capacity) — tiered pricing")
