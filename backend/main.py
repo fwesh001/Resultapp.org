@@ -324,6 +324,27 @@ class ProvisionRequest(BaseModel):
     accepted_terms: bool = Field(..., description="Must be true — the registrant ticked the acceptance box")
     consent_ip: Optional[str] = Field(None, max_length=64, description="Registrant IP, retained as evidence of acceptance under NDPR s.41(3)")
 
+    # --- Superadmin waiver token (optional) -------------------------------
+    #
+    # A waiver token discounts a slot purchase. It is NOT a price: the caller
+    # never says what it is paying, it only names the token, and the server
+    # recomputes the split from the token's own row via compute_waiver_split().
+    # That inversion is the whole point — the FastAPI tier records `amount_ngn`
+    # verbatim for every other flow, because there the caller and the price
+    # agree. Here they cannot be allowed to, because a discount is an incentive
+    # to lie about it.
+    #
+    # `waiver_reservation_tx_ref` must match the reservation the token was
+    # claimed under. It is what stops a late callback from a checkout that was
+    # abandoned — and whose reservation the sweeper has since handed to somebody
+    # else — from redeeming a token that is no longer its own.
+    waiver_token_id: Optional[int] = Field(
+        None, ge=1, description="Superadmin waiver token to redeem, if any. Recomputed server-side."
+    )
+    waiver_reservation_tx_ref: Optional[str] = Field(
+        None, max_length=128, description="The tx_ref this checkout reserved the token under"
+    )
+
     @field_validator("subdomain")
     @classmethod
     def validate_subdomain(cls, v: str) -> str:
@@ -367,6 +388,14 @@ class ProvisionResponse(BaseModel):
     #: in the registry either way; success=false means the portal is not
     #: routable yet and must be reconciled before it is advertised to the buyer.
     vercel_domain: Dict[str, Any] = {}
+    #: Set when the transactional slot grant failed — which now also means any
+    #: waiver token on this provision was NOT consumed, because the burn shares
+    #: the transaction. Non-null means the school exists with NO slots: an
+    #: operator must grant them, and the customer must not be told it is live.
+    slot_grant_error: Optional[str] = None
+    #: What the waiver actually did, for the response and the audit trail.
+    #: Null when no token was applied.
+    waiver: Optional[Dict[str, Any]] = None
 
 # ---------------------------------------------------------------------------
 # Health / root
@@ -704,6 +733,49 @@ async def provision_school(payload: ProvisionRequest, request: Request):
                 f"[PROVISION] Verification email step failed for '{admin_email}': {e} (non-fatal)"
             )
 
+        # --- Resolve the waiver (once, before anything spends it) ---------
+        #
+        # Hoisted out of the slot block on purpose, because the free-credit
+        # grant below also needs the split, and two computations of "how many
+        # slots did they actually pay for" is exactly how those two drift.
+        #
+        # On failure we do NOT silently proceed without the token. The customer
+        # may already have paid the DISCOUNTED amount through Flutterwave;
+        # quietly granting full slots for a partial payment is worse than
+        # granting none, and none is visible — it comes back as
+        # slot_grant_error for an operator to reconcile.
+        split: Optional[Dict[str, Any]] = None
+        waiver_terms: Optional[Dict[str, Any]] = None
+        slot_grant_error: Optional[str] = None
+        if payload.waiver_token_id:
+            from services.waivers import WaiverValidationError, peek_token_by_id
+
+            try:
+                waiver_terms = peek_token_by_id(payload.waiver_token_id)
+                if waiver_terms["applies_to"] not in ("REGISTRATION", "BOTH"):
+                    raise WaiverValidationError(
+                        f"This waiver code is only valid for "
+                        f"{waiver_terms['applies_to'].lower()} purchases"
+                    )
+                from services.waivers import compute_waiver_split
+
+                split = compute_waiver_split(
+                    requested_slots=student_count,
+                    slot_allowance=waiver_terms["slot_allowance"],
+                    discount_percentage=waiver_terms["discount_percentage"],
+                )
+                logger.info(
+                    f"[PROVISION] Waiver #{payload.waiver_token_id} resolved for "
+                    f"'{subdomain}': {split['waived_slots']} waived, "
+                    f"{split['charged_slots']} charged "
+                    f"(NGN {split['charged_ngn']}), "
+                    f"{split['forfeited_slots']} forfeited, "
+                    f"bypass={split['bypass_gateway']}"
+                )
+            except WaiverValidationError as e:
+                slot_grant_error = f"Waiver token rejected: {e}"
+                logger.warning(f"[PROVISION] {slot_grant_error}")
+
         # Credit & Command: conditional free-credit grant.
         #
         # The backend is strictly authoritative: `initial_credits` from the
@@ -711,16 +783,23 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         # the superadmin toggle is ON *and* the school's initial capacity is at
         # least FREE_CREDITS_MIN_STUDENTS (inclusive). Otherwise 0, which makes
         # grant_initial_credits a no-op that leaves `init:<subdomain>` unclaimed.
+        #
+        # The threshold counts PAID slots, not total ones. Keyed on capacity it
+        # is a free-credit farm: one 100%-waiver token with a 500-slot allowance
+        # mints a brand-new school with 500 free seats AND 30 free publishing
+        # credits, for nothing, repeatably. See resolve_initial_credit_grant.
         _credit_grant = 0
         try:
             from services.db_manager import grant_initial_credits, resolve_initial_credit_grant
 
-            _credit_grant = int(resolve_initial_credit_grant(student_count))
+            _paid_slots = int(split["charged_slots"]) if split else None
+            _credit_grant = int(resolve_initial_credit_grant(student_count, paid_slots=_paid_slots))
             grant_result = grant_initial_credits(subdomain, _credit_grant)
             if _credit_grant > 0:
                 logger.info(
                     f"[PROVISION] Free-credit grant of {_credit_grant} credits for "
-                    f"'{subdomain}' (capacity {student_count} >= threshold)"
+                    f"'{subdomain}' (paid capacity {_paid_slots if _paid_slots is not None else student_count} "
+                    f">= threshold)"
                 )
             else:
                 logger.info(
@@ -779,61 +858,195 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         except Exception as e:
             logger.warning(f"[PROVISION] Onboarding notification failed for '{subdomain}': {e}")
 
-        # Dual-ledger: initial slot capacity = student_count (free trial capacity, no payment)
+        # --- Dual-ledger + slots: ONE transaction -------------------------
+        #
+        # This used to run on the autocommit connection with no BEGIN and a
+        # bare `except: logger.warning`, which made "school exists, zero slots,
+        # nobody told anyone" a tolerated outcome. It cannot carry a token burn:
+        # a waiver consumed here would vanish if the slot UPDATE failed, and the
+        # customer would have handed over a real code for nothing.
+        #
+        # Everything below is one atomic unit on a real transaction:
+        #
+        #   1. consume_token        (burn the waiver — scoped to THIS tx_ref)
+        #   2. UPDATE schools       (grant capacity)
+        #   3. INSERT SLOT_PURCHASE (MRR-bearing, only if a charge was taken)
+        #   4. INSERT SLOT_WAIVER   (the free portion, always amount_ngn = 0)
+        #
+        # THE BURN GOES FIRST, DELIBERATELY. If the slot UPDATE ran first, a
+        # failure there could never roll back a burn that had not happened yet,
+        # and "the token is released if the slot grant fails" would be true only
+        # by accident of ordering. Burning first means the statement that can
+        # fail after the burn is the one whose rollback we actually care about.
+        #
+        # It also handles the re-provision case correctly: the UPDATE's
+        # `AND COALESCE(slots_balance,0) = 0` predicate returns no row for a
+        # tenant that already has capacity, and then we roll the WHOLE
+        # transaction back — no seats for the token to have paid for, so the
+        # token goes back to reserved rather than being burned for nothing.
+        waiver_summary: Optional[Dict[str, Any]] = None
         try:
-            from services.db_manager import _connect_as_superuser, BILLING_LEDGER_TABLE, SCHOOLS_REGISTRY_TABLE
-
-            conn2 = _connect_as_superuser()
-            cur2 = conn2.cursor()
-            # Ensure slots_balance reflects initial capacity if not already set
-            cur2.execute(
-                f"""
-                UPDATE {SCHOOLS_REGISTRY_TABLE}
-                SET slots_balance = GREATEST(COALESCE(slots_balance,0), %s),
-                    student_count = GREATEST(COALESCE(student_count,0), %s),
-                    updated_at = NOW()
-                WHERE subdomain = %s AND COALESCE(slots_balance,0) = 0
-                RETURNING slots_balance;
-                """,
-                (int(student_count), int(student_count), subdomain),
+            from services.db_manager import (
+                BILLING_LEDGER_TABLE,
+                SCHOOLS_REGISTRY_TABLE,
+                _connect_as_superuser_transactional,
             )
-            row2 = cur2.fetchone()
-            if row2 is not None:
-                # Paid flows redeem under provision:{tx} (MRR-counted SLOT_PURCHASE);
-                # free/trial flows keep the legacy init-slot row (₦0, excluded).
-                paid_ngn = max(0, int(payload.amount_ngn or 0)) if payload.amount_ngn else 0
-                if provision_ref and paid_ngn > 0:
-                    slot_ref = provision_ref
-                    slot_txn = "SLOT_PURCHASE"
-                    slot_desc = f"Paid provision: {student_count} slots for {subdomain} (₦{paid_ngn})"
-                else:
-                    slot_ref = f"init-slot:{subdomain}"
-                    slot_txn = "INITIAL_SLOTS"
-                    slot_desc = f"Initial slot capacity {student_count} for {subdomain}"
-                    paid_ngn = 0
+
+            if slot_grant_error:
+                # The token never resolved, so there is nothing safe to grant.
+                # Re-raise into the handler below so the response still carries
+                # the reason rather than looking like a successful provision.
+                raise RuntimeError(slot_grant_error)
+
+            conn2 = _connect_as_superuser_transactional()
+            cur2 = conn2.cursor()
+            try:
+                cur2.execute("BEGIN;")
+
+                # --- 1. burn the waiver -------------------------------------
+                if split is not None:
+                    from services.waivers import consume_token
+
+                    consume_token(
+                        cur2,
+                        token_id=payload.waiver_token_id,
+                        reservation_tx_ref=payload.waiver_reservation_tx_ref or "",
+                        split=split,
+                        tenant_id=subdomain,
+                        transaction_ref=tx_id or None,
+                    )
+                    waiver_summary = {
+                        "token_id": payload.waiver_token_id,
+                        "slots_waived": split["waived_slots"],
+                        "slots_forfeited": split["forfeited_slots"],
+                        "discount_ngn": split["waived_ngn"],
+                        "charged_slots": split["charged_slots"],
+                        "charged_ngn": split["charged_ngn"],
+                        "bypass_gateway": split["bypass_gateway"],
+                    }
+
+                # --- 2. grant capacity ---------------------------------------
                 cur2.execute(
                     f"""
-                    INSERT INTO {BILLING_LEDGER_TABLE}
-                        (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
-                    VALUES (%s, 'SLOT', %s, %s, %s, %s, %s)
-                    ON CONFLICT (reference_id) DO NOTHING;
+                    UPDATE {SCHOOLS_REGISTRY_TABLE}
+                    SET slots_balance = GREATEST(COALESCE(slots_balance,0), %s),
+                        student_count = GREATEST(COALESCE(student_count,0), %s),
+                        updated_at = NOW()
+                    WHERE subdomain = %s AND COALESCE(slots_balance,0) = 0
+                    RETURNING slots_balance;
                     """,
-                    (subdomain, int(student_count), slot_txn, slot_ref, slot_desc, paid_ngn),
+                    (int(student_count), int(student_count), subdomain),
                 )
-                conn2.commit()
-                logger.info(f"[PROVISION] Initial slots {student_count} for '{subdomain}' ({slot_txn})")
-            else:
-                conn2.commit()
-            cur2.close()
-            conn2.close()
-        except Exception as e:
-            logger.warning(f"[PROVISION] Failed to grant initial slots for '{subdomain}': {e}")
-            try:
-                if 'conn2' in locals() and conn2:
+                row2 = cur2.fetchone()
+
+                if row2 is None:
+                    # The tenant already had capacity, so this provision granted
+                    # nothing. ROLL BACK THE WHOLE TRANSACTION — including the
+                    # burn — because there were no seats for the token to have
+                    # paid for. The sweeper returns it to the pool afterwards.
                     conn2.rollback()
-                    conn2.close()
+                    logger.warning(
+                        f"[PROVISION] '{subdomain}' already had slot capacity at provision "
+                        f"time — no slots granted, waiver token rolled back and left unconsumed"
+                    )
+                else:
+                    new_balance = int(row2[0] or 0)
+
+                    # The paid portion. amount_ngn is what actually came in, not
+                    # the list price: Flutterwave may settle above the headline
+                    # (tips, fees) and MRR must reflect revenue, not entitlement.
+                    # The split's charged_ngn is the floor — recording less than
+                    # the token's own terms say was owed would quietly understate
+                    # revenue on every discounted sale.
+                    paid_ngn = max(0, int(payload.amount_ngn or 0)) if payload.amount_ngn else 0
+                    if split is not None:
+                        paid_ngn = max(paid_ngn, int(split["charged_ngn"]))
+
+                    if provision_ref and paid_ngn > 0:
+                        slot_ref = provision_ref
+                        slot_txn = "SLOT_PURCHASE"
+                        slot_desc = (
+                            f"Paid provision: {student_count} slots for {subdomain} "
+                            f"(NGN {paid_ngn})"
+                        )
+                    else:
+                        # No charge at all: either a 100% waiver (bypass), or a
+                        # free/trial provision. Both are MRR-exempt by design.
+                        slot_ref = f"waiver:{payload.waiver_token_id}" if split else f"init-slot:{subdomain}"
+                        slot_txn = "INITIAL_SLOTS"
+                        slot_desc = f"Initial slot capacity {student_count} for {subdomain}"
+                        paid_ngn = 0
+
+                    cur2.execute(
+                        f"""
+                        INSERT INTO {BILLING_LEDGER_TABLE}
+                            (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+                        VALUES (%s, 'SLOT', %s, %s, %s, %s, %s)
+                        ON CONFLICT (reference_id) DO NOTHING;
+                        """,
+                        (subdomain, int(student_count), slot_txn, slot_ref, slot_desc, paid_ngn),
+                    )
+
+                    # The waived portion. Deliberately NOT 'SLOT_PURCHASE':
+                    # platform_stats() sums amount_ngn over exactly those two
+                    # types, so a discount booked as a purchase would inflate
+                    # MRR by the value we chose to give away.
+                    if split is not None and split["waived_slots"] > 0:
+                        cur2.execute(
+                            f"""
+                            INSERT INTO {BILLING_LEDGER_TABLE}
+                                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+                            VALUES (%s, 'SLOT', %s, 'SLOT_WAIVER', %s, %s, 0)
+                            ON CONFLICT (reference_id) DO NOTHING;
+                            """,
+                            (
+                                subdomain,
+                                int(split["waived_slots"]),
+                                f"waiver:{payload.waiver_token_id}",
+                                f"Waiver applied: {split['waived_slots']} of {student_count} slots "
+                                f"at {split['discount_percentage']}% off (NGN {split['waived_ngn']})",
+                            ),
+                        )
+
+                    conn2.commit()
+                    logger.info(
+                        f"[PROVISION] Initial slots {student_count} for '{subdomain}' "
+                        f"({slot_txn}, balance {new_balance})"
+                        + (
+                            f" — waiver #{payload.waiver_token_id}: "
+                            f"{split['waived_slots']} waived / {split['forfeited_slots']} forfeited"
+                            if split
+                            else ""
+                        )
+                    )
             except Exception:
-                pass
+                # One rollback covers the burn, both ledger rows and the slot
+                # UPDATE. This is the whole reason they share a transaction.
+                try:
+                    conn2.rollback()
+                except Exception:
+                    pass
+                raise
+            finally:
+                try:
+                    cur2.close()
+                except Exception:
+                    pass
+                conn2.close()
+        except Exception as e:
+            # The school row and its consent record are already committed by
+            # register_school() and are independent of this block, so the tenant
+            # itself is fine. What is NOT fine is a silent zero-slot school, and
+            # a waiver that was rolled back must be reported as unconsumed.
+            # An existing message (the token rejection raised above) is kept —
+            # "Slot grant failed: Waiver token rejected: ..." buries the part
+            # an operator actually needs.
+            if not slot_grant_error:
+                slot_grant_error = f"Slot grant failed: {e}"
+            logger.exception(
+                f"[PROVISION] Failed to grant initial slots for '{subdomain}' "
+                f"(waiver NOT consumed, transaction rolled back): {e}"
+            )
 
         # `deployed_url` is the PORTAL ROOT, not the login page. The Next.js
         # wizard appends "/admin/login" itself, so returning the full login URL
@@ -855,6 +1068,11 @@ async def provision_school(payload: ProvisionRequest, request: Request):
             # success=false here means "registered but not yet reachable", which
             # the caller must not present to a customer as a live portal.
             vercel_domain=vercel_domain,
+            # Non-null means the school exists with NO slots and, if a waiver was
+            # applied, the token is still reserved and unconsumed. The caller
+            # must surface it rather than reporting a clean success.
+            slot_grant_error=slot_grant_error,
+            waiver=waiver_summary,
         )
 
     except HTTPException:
@@ -1247,6 +1465,24 @@ try:
     logger.info("[App] Auth flow router mounted (POST /api/v1/auth/*)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Auth flow router not mounted: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Waiver tokens — superadmin lifecycle + the untrusted checkout surface.
+#
+# Two routers, two trust levels, from one module: the admin half is guarded by
+# the superadmin secret, the checkout half only by the shared API secret and
+# must therefore be rate limited. See routers/waivers.py for why they are split.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.waivers import waiver_admin as waiver_admin_router, waiver_public as waiver_public_router
+
+    app.include_router(waiver_admin_router)
+    app.include_router(waiver_public_router)
+    logger.info("[App] Waiver router mounted (/api/v1/admin/waivers/*, /api/v1/waiver/*)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Waiver router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Entrypoint
