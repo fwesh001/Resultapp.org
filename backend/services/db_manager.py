@@ -189,6 +189,22 @@ def _init_waiver_tokens(cur) -> None:
                 CHECK ((status = 'reserved') = (reservation_tx_ref IS NOT NULL))
         );
     """)
+    # WIDEN applies_to. It shipped as VARCHAR(10) while the CHECK constraint
+    # listed 'REGISTRATION' — 12 characters. The constraint said the value was
+    # legal and the column silently refused it, so EVERY registration-only
+    # token failed to mint with "value too long for type character varying(10)".
+    # The scope was unreachable from the moment the table was created, and no
+    # test exercised minting one, which is how it survived.
+    #
+    # CREATE TABLE IF NOT EXISTS does not alter an existing table, so this has
+    # to be an explicit ALTER to reach a database that already has the narrow
+    # column. Widening a VARCHAR cannot lose data, so it is safe to run on
+    # every boot alongside the rest of this function.
+    cur.execute(f"""
+        ALTER TABLE {WAIVER_TOKENS_TABLE}
+        ALTER COLUMN applies_to TYPE VARCHAR(12);
+    """)
+
     cur.execute(f"""
         CREATE INDEX IF NOT EXISTS ix_waiver_tokens_status
         ON {WAIVER_TOKENS_TABLE} (status, expires_at);
