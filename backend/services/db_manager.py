@@ -2402,9 +2402,9 @@ def resolve_initial_credit_grant(student_count: int, paid_slots: int) -> int:
 
     PAID SLOTS, NOT TOTAL SLOTS
     ---------------------------
-    `paid_slots` is the number of slots the school actually bought rather than
-    the number it was granted. The distinction is the whole point of the
-    parameter:
+    `paid_slots` is REQUIRED, not optional. It is the number of slots the
+    school actually bought rather than the number it was granted, and the
+    distinction is the whole point of the parameter:
 
     With the threshold keyed on TOTAL capacity, a single 100% waiver token with
     a 500-slot allowance mints a brand-new school that gets 500 free seats AND
@@ -2416,13 +2416,8 @@ def resolve_initial_credit_grant(student_count: int, paid_slots: int) -> int:
     which is the honest reading of "you paid nothing, you get the slots you
     paid nothing for, and nothing else".
 
-    THE DEFAULT IS LOAD-BEARING. `paid_slots=None` means "fall back to the
-    historical total-capacity behaviour". That is deliberate: this function is
-    called from more than one place, and a caller that has not been updated must
-    keep its current behaviour rather than silently start granting zero. It
-    will not default to None forever — once every caller passes the real
-    figure, the parameter should become required so the unsafe reading cannot
-    be taken by accident. Tracked with the waiver rollout, not forgotten.
+    A caller with no waiver passes `student_count` — without a discount those
+    are the same number, so nothing about the paying path changes.
 
     Note this intentionally re-reads the toggle at call time rather than
     caching it, so a superadmin toggle takes effect on the next registration.
@@ -2431,12 +2426,14 @@ def resolve_initial_credit_grant(student_count: int, paid_slots: int) -> int:
         count = max(0, int(student_count or 0))
     except (TypeError, ValueError):
         count = 0
-    qualifying = count
-    if paid_slots is not None:
-        try:
-            qualifying = max(0, int(paid_slots))
-        except (TypeError, ValueError):
-            qualifying = 0
+    try:
+        qualifying = max(0, int(paid_slots))
+    except (TypeError, ValueError):
+        # No waiver and a caller that passed nothing: the paid capacity IS the
+        # requested capacity. Falling back here is safe — unlike the old
+        # signature, arriving here means an explicit non-integer, not an
+        # absent argument.
+        qualifying = count
     if not get_free_credits_enabled():
         return 0
     if qualifying < FREE_CREDITS_MIN_STUDENTS:
