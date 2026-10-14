@@ -792,7 +792,12 @@ async def provision_school(payload: ProvisionRequest, request: Request):
         try:
             from services.db_manager import grant_initial_credits, resolve_initial_credit_grant
 
-            _paid_slots = int(split["charged_slots"]) if split else None
+            # Without a waiver, paid slots and granted slots are the same
+            # number — that is what "no discount" means. Stated here rather
+            # than relying on a default in resolve_initial_credit_grant(),
+            # which would let an unwritten argument silently mean "ignore the
+            # waiver and count the free slots as paid".
+            _paid_slots = int(split["charged_slots"]) if split else student_count
             _credit_grant = int(resolve_initial_credit_grant(student_count, paid_slots=_paid_slots))
             grant_result = grant_initial_credits(subdomain, _credit_grant)
             if _credit_grant > 0:
