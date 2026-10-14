@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   LogOut,
+  Ticket,
 } from "lucide-react";
 
 interface Props {
@@ -23,6 +24,10 @@ const nav = [
   { label: "Tenants", href: "/superadmin/tenants", icon: Building2 },
   { label: "Tickets", href: "/superadmin/tickets", icon: LifeBuoy },
   { label: "Ledger & Audit", href: "/superadmin/ledger", icon: ReceiptText },
+  // Beside Ledger rather than under Settings: a waiver token is a revenue
+  // instrument, so it belongs next to the ledger where the MRR it gives away
+  // is visible, not buried in platform tunables.
+  { label: "Waiver Tokens", href: "/superadmin/waivers", icon: Ticket },
   { label: "Notifications", href: "/superadmin/notifications", icon: Bell },
   { label: "Platform Vitals", href: "/superadmin/vitals", icon: Activity },
   { label: "Settings", href: "/superadmin/settings", icon: Settings },
