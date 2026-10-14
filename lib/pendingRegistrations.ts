@@ -279,13 +279,18 @@ export async function waitForSchool(
 /**
  * Verify payment, then provision from the hold.
  *
- * `opts.source` is only for logging — both callers run identical logic on
- * purpose, so there is no way for the webhook and the callback to disagree
- * about whether something counts as paid.
+ * `opts.source` is only for logging — every caller runs identical logic on
+ * purpose, so there is no way for the webhook, the browser and the bypass
+ * sweeper to disagree about what counts as paid.
+ *
+ * The sweeper is a third caller, and it is why `charge_required` exists. On a
+ * 100% waiver there is no charge and therefore no webhook, so this function is
+ * the ONLY thing that can ever finish that hold. If it dies mid-call the school
+ * is lost — hence the cron route that calls it for orphans.
  */
 export async function provisionHeldRegistration(
   txRef: string,
-  opts: { source: "browser" | "webhook" },
+  opts: { source: "browser" | "webhook" | "sweeper" },
 ): Promise<ProvisionOutcome> {
   const base = backendBase();
   const secret = backendSecret();
