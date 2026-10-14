@@ -242,13 +242,14 @@ def reserve(code, ref, scope="BOTH", tenant=None):
 def cleanup():
     for t in ("schools", "billing_ledger"):
         drop_trigger(t)
-    exec_("DELETE FROM waiver_tokens WHERE token_prefix LIKE 'RW-rbprobe%'")
-    # Section 10 mints through the real admin endpoint, so those codes carry a
-    # genuine RW- prefix and cannot be matched by token_prefix. They are
-    # identified by their note instead — without this the probe leaks one token
-    # per run into whatever database it is pointed at.
-    exec_("DELETE FROM waiver_tokens WHERE note = 'api-probe'")
-    exec_("DELETE FROM waiver_tokens WHERE created_by = 'api-probe'")
+    # Match on created_by, NOT on token_prefix.
+    #
+    # token_prefix is deliberately truncated to 8 characters, so a pattern like
+    # "RW-rbprobe%" (10 chars) matches nothing and the probe silently leaks a
+    # token per mint on every run — which looks exactly like "the assertions
+    # pass". created_by is set on every token this probe mints, at both call
+    # sites, and is not length-sensitive.
+    exec_("DELETE FROM waiver_tokens WHERE created_by LIKE '%probe%'")
     exec_("DELETE FROM billing_ledger WHERE subdomain LIKE 'probe-%'")
     exec_("DELETE FROM audit_logs WHERE subdomain LIKE 'probe-%'")
     exec_("DELETE FROM credit_ledger WHERE subdomain LIKE 'probe-%'")
