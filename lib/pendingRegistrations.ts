@@ -224,9 +224,55 @@ export async function claimHold(
   }
 }
 
-/** Hand a claim back so the other path (or a retry) can proceed. */
-export async function releaseHold(txRef: string): Promise<void> {
+/**
+ * What a hold expects to happen next — read WITHOUT the sealed payload.
+ *
+ * Deliberately does not decrypt the hold: this exists so the 402 gate in
+ * /api/register-school can answer "does this registration still owe money?"
+ * before it decides whether to demand a transaction id.
+ *
+ * WHY THE HOLD IS THE AUTHORITY HERE
+ * ---------------------------------
+ * `charge_required` is written when the hold is parked, from the BACKEND's own
+ * waiver split — never from the browser. So "skip payment verification" cannot
+ * be forged by a client that simply omits its transaction_id: the flag it would
+ * have to forge lives on a row the client cannot write.
+ *
+ * That is the whole reason the gate reads the hold instead of trusting a
+ * request field. A `bypass: true` in the POST body would be a free-registration
+ * endpoint.
+ */
+export interface HoldChargeSummary {
+  status?: string;
+  charge_required?: boolean;
+  waiver_token_id?: number | null;
+  charge_ngn?: number;
+  subdomain?: string;
+}
+
+export async function getHoldChargeSummary(txRef: string): Promise<HoldChargeSummary | null> {
   const base = backendBase();
+  const secret = backendSecret();
+  if (!base || !secret || !txRef) return null;
+  try {
+    const res = await fetch(
+      `${base}/api/v1/admin/pending-registrations?tx_ref=${encodeURIComponent(txRef)}`,
+      {
+        headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return null;
+    const d = (await res.json().catch(() => ({}))) as HoldChargeSummary;
+    return d && typeof d === "object" ? d : null;
+  } catch {
+    // Fail closed: a hold we cannot read must NOT look like a bypass.
+    return null;
+  }
+}
+
+/** Hand a claim back so the other path (or a retry) can proceed. */
+export async function releaseHold(txRef: string): Promise<void> {  const base = backendBase();
   const secret = backendSecret();
   if (!base || !secret || !txRef) return;
   try {

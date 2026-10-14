@@ -852,11 +852,19 @@ export function RegisterSchoolForm() {
   /**
    * True when a waiver code already covers the WHOLE order.
    *
-   * Derived from the last SERVER response, never from a locally predicted
-   * split, so the decision to skip the payment provider is made on the same
-   * number the backend will charge against.
-   */
-  const waiverBypass = !!waiverSplit && waiverSplit.bypass_gateway === true;
+    * Derived from the last SERVER response, never from a locally predicted
+    * split, so the decision to skip the payment provider is made on the same
+    * number the backend will charge against.
+    *
+    * Falls back to the step-2 preview because `waiverSplit` is only set once
+    * the hold POST returns — which happens on the button click. Reading
+    * `waiverSplit` alone meant step 3's FIRST render still showed "Pay ₦45,000
+    * with Flutterwave", since nothing had been held yet.
+    *
+    * A stale preview can only mislabel the button, never divert a payment: the
+    * branch that actually skips Flutterwave reads the hold's own response.
+    */
+  const waiverBypass = (waiverSplit ?? waiverPreview)?.bypass_gateway === true;
 
   /**
    * Re-price the waiver whenever the code or the slot count changes.
@@ -1015,6 +1023,10 @@ export function RegisterSchoolForm() {
       waiverSplit = held.waiver && held.waiver.charged_ngn !== undefined
         ? (held.waiver as unknown as WaiverSplitShape)
         : null;
+      // Persist the server's answer into state. The local shadow is gone by the
+      // time the next render happens, so without this the split existed only
+      // inside this function and every consumer had to guess at it.
+      setWaiverSplit(waiverSplit);
     } catch (e) {
       setGlobalError(
         e instanceof Error
@@ -1754,9 +1766,40 @@ export function RegisterSchoolForm() {
             </span>
           </div>
           <div className="my-2 border-t border-purple-500/10" />
+          {/* The bill is the SERVER's split, not the list price. Showing
+              orderTotal here told a fully-waived buyer they still owed
+              ₦45,000 one screen before a portal appeared for free, which reads
+              as a bait-and-switch even when the checkout does honour the waiver.
+              Strikethrough list price carries the discount; the waived part is
+              named so the entitlement is visible rather than implied. */}
+          {waiverPreview ? (
+            <>
+              <div className="flex justify-between py-1">
+                <span className="text-purple-200/60">Waived</span>
+                <span className="font-medium text-emerald-300">
+                  −{formatNaira(waiverPreview.waived_ngn ?? 0)}
+                </span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-purple-200/60">
+                  {waiverPreview.waived_slots} of {orderCount} slots covered
+                </span>
+                <span className="font-medium text-emerald-300">
+                  {waiverPreview.discount_percentage}% off
+                </span>
+              </div>
+            </>
+          ) : null}
           <div className="flex justify-between py-1 text-base font-bold text-white">
-            <span>Total due</span>
-            <span>{formatNaira(orderTotal)}</span>
+            <span>{waiverBypass ? "Total due — fully covered" : "Total due"}</span>
+            <span className={waiverBypass ? "text-emerald-300" : undefined}>
+              {formatNaira(waiverPreview ? Number(waiverPreview.charged_ngn ?? orderTotal) : orderTotal)}
+              {waiverPreview ? (
+                <span className="ml-2 text-xs font-normal text-purple-300/40 line-through">
+                  {formatNaira(orderTotal)}
+                </span>
+              ) : null}
+            </span>
           </div>
           {/* Step 3 footnote. Unmounts entirely when the offer is paused —
               including the negative branch, which said "Publishing credits are
@@ -1842,6 +1885,11 @@ export function RegisterSchoolForm() {
             <>
               <Loader2 className="h-4 w-4 animate-spin" /> Opening secure checkout…
             </>
+          ) : waiverBypass ? (
+            // No charge, so no Flutterwave modal to open. Saying "Pay with
+            // Flutterwave" on a ₦0 bill invited a payment attempt the gateway
+            // cannot accept.
+            <>Create portal — fully covered</>
           ) : (
             <>Pay {formatNaira(orderTotal)} with Flutterwave</>
           )}
