@@ -899,11 +899,86 @@ def main():
         else:
             no(f"unexpected status {e.status_code}", str(e.detail))
 
+    # ===================================================================
+        section("11. the bypass sweeper's selection predicate")
+        #
+        # The sweeper is the only thing that can ever finish a 100% waiver
+        # registration, because that path produces no Flutterwave charge and
+        # therefore no webhook. A predicate that is too eager provisions schools
+        # out from under live browsers; one that is too timid loses them. Both
+        # directions are asserted.
+        from routers.admin import list_orphaned_bypass_holds
+
+        def park_hold(tx_ref, charge_required, waiver_token_id, age_minutes=10, status="pending"):
+            exec_(
+                """
+                INSERT INTO pending_registrations
+                    (tx_ref, subdomain, payload, expires_at, created_at,
+                     waiver_token_id, charge_required, charge_ngn, charged_slots, status)
+                VALUES (%s, %s, '{}'::jsonb,
+                        NOW() + INTERVAL '40 minutes',
+                        NOW() - make_interval(mins => %s),
+                        %s, %s, 0, 0, %s)
+                ON CONFLICT (tx_ref) DO UPDATE SET status = EXCLUDED.status;
+                """,
+                (tx_ref, f"probe-{tx_ref}", age_minutes, waiver_token_id, charge_required, status),
+            )
+
+        wa_tok = mint(pct=100, allowance=100)
+        wa_id = wa_tok["id"]
+
+        park_hold("sweep_real_bypass", False, wa_id, age_minutes=10)
+        park_hold("sweep_paid", True, wa_id, age_minutes=10)
+        park_hold("sweep_fresh", False, wa_id, age_minutes=0)
+        park_hold("sweep_notoken", False, None, age_minutes=10)
+        park_hold("sweep_claimed", False, wa_id, age_minutes=10, status="completed")
+
+        found = {
+            o["tx_ref"] for o in list_orphaned_bypass_holds(buffer_minutes=3, limit=50)["orphans"]
+        }
+
+        if "sweep_real_bypass" in found:
+            ok("an abandoned 100% bypass IS recovered")
+        else:
+            no("the sweeper would LOSE a school whose browser died", str(sorted(found)))
+        if "sweep_paid" not in found:
+            ok("a PAID hold is left alone — the webhook owns it, the sweeper must not race it")
+        else:
+            no("THE SWEEPER STEALS PAID HOLDS from a live checkout", "")
+        if "sweep_fresh" not in found:
+            ok("a hold inside the 3-minute buffer is left to the browser")
+        else:
+            no("THE RACE BUFFER IS NOT WORKING — the sweeper would win a live browser's race", "")
+        if "sweep_notoken" not in found:
+            ok("a bypass hold with no token is not recovered (nothing to settle)")
+        else:
+            no("recovered a hold with no waiver token — it would provision with nothing burnt", "")
+        if "sweep_claimed" not in found:
+            ok("a claimed/completed hold is not re-processed")
+        else:
+            no("THE SWEEPER WOULD DOUBLE-PROVISION", "")
+
+        # And the buffer must actually be a buffer, not a constant nobody reads.
+        #
+        # Direction: a LARGER buffer excludes MORE. The 10-minute-old bypass is
+        # eligible at 3 minutes and must NOT be eligible at 30. Comparing the
+        # two result sets is the only way to tell "the argument is honoured"
+        # from "the predicate ignores it and returns the same rows regardless".
+        wider = {
+            o["tx_ref"] for o in list_orphaned_bypass_holds(buffer_minutes=30, limit=50)["orphans"]
+        }
+        if "sweep_real_bypass" in found and "sweep_real_bypass" not in wider:
+            ok("a 30-minute buffer excludes the 10-minute hold — the window is honoured, not ignored")
+        else:
+            no(
+                "the buffer argument appears to be ignored",
+                f"buffer=3 -> {sorted(found)} / buffer=30 -> {sorted(wider)}",
+            )
+
     finally:
         section("CLEANUP")
         cleanup()
         print("  triggers dropped, probe rows removed")
-    print("\n==========================================")
     print(f"  {PASS} passed, {FAIL} failed")
     print("==========================================")
     if FAIL == 0:
