@@ -33,6 +33,17 @@ export interface HoldRequest {
   waiver_token?: string;
 }
 
+/**
+ * The split shape.
+ *
+ * Re-exported from lib/waiverPricing rather than declared here. Two
+ * structurally identical interfaces in two files is how the client copy and the
+ * server copy of a payload quietly diverge; there is one definition and both
+ * callers reference it.
+ */
+export type { WaiverSplit as WaiverSplitShape } from "@/lib/waiverPricing";
+import type { WaiverSplit as WaiverSplitShape } from "@/lib/waiverPricing";
+
 export interface HoldResult {
   tx_ref: string;
   /**
@@ -47,20 +58,6 @@ export interface HoldResult {
    * pay, so the wizard must not open Flutterwave at all.
    */
   waiver: (Partial<WaiverSplitShape> & { token_id?: number }) | null;
-}
-
-export interface WaiverSplitShape {
-  requested_slots: number;
-  slot_allowance: number;
-  discount_percentage: number;
-  waived_slots: number;
-  charged_slots: number;
-  forfeited_slots: number;
-  unit_price_ngn: number;
-  list_ngn: number;
-  waived_ngn: number;
-  charged_ngn: number;
-  bypass_gateway: boolean;
 }
 
 export async function holdRegistration(p: HoldRequest): Promise<HoldResult> {
