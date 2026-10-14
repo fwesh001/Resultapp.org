@@ -1509,6 +1509,103 @@ class TxRefIn(BaseModel):
     tx_ref: str
 
 
+@router.get("/pending-registrations/orphaned-bypasses", summary="List abandoned 100%-waiver holds awaiting recovery")
+def list_orphaned_bypass_holds(
+    buffer_minutes: int = 3,
+    limit: int = 20,
+):
+    """Holds that a crashed browser will never finish, so a sweeper must.
+
+    WHY THIS CLASS OF HOLD EXISTS AT ALL
+    ------------------------------------
+    Every reason `pending_registrations` was built assumes a PAYMENT follows:
+    the browser callback is the happy path and the Flutterwave webhook is the
+    net underneath it. A 100% waiver produces no charge — Flutterwave rejects
+    a zero-value transaction — so `charge.completed` never fires and there is
+    no net. The browser callback is the only completion path, and a closed tab,
+    a crash or a dead connection loses the school entirely: no portal, a
+    reserved subdomain, and a waiver token burned against nothing.
+
+    So these holds are recovered by the Next.js sweeper instead, which is the
+    only tier that can read them (see below).
+
+    THE SELECTION PREDICATE, and why each clause is load-bearing:
+
+      charge_required = false   Only bypasses need rescuing. A PAID hold that
+                                is still pending is a school mid-checkout, and
+                                the webhook owns it.
+      waiver_token_id IS NOT NULL
+                                A bypass without a token is not a thing. This
+                                also guarantees the recovery path has something
+                                to burn, so a recovered school is never
+                                provisioned without settling its entitlement.
+      status = 'pending'        Claimed and completed holds are finished.
+      created_at < NOW() - buffer
+                                THE RACE BUFFER. The browser provisions within
+                                seconds; the sweeper must never win a race it
+                                was never in. Three minutes is generous for a
+                                local POST and short enough that a school does
+                                not wait to find out whether they got their
+                                portal.
+
+    WHY THIS ROUTE CANNOT PROVISION
+    -------------------------------
+    It returns references, not credentials. The admin password inside the hold
+    is sealed with AES-256-GCM under PENDING_REGISTRATION_SECRET, and that key
+    exists only in the Next.js tier by design — the backend has never been able
+    to read a hold, and this is not the place to change that. Completion runs
+    in `provisionHeldRegistration()` on the Next side, which already claims the
+    hold, so the browser and the sweeper still exclude each other through the
+    same CAS.
+    """
+    from services.db_manager import _connect_as_superuser, PENDING_REGISTRATIONS_TABLE
+
+    buffer_m = max(1, min(int(buffer_minutes or 3), 60))
+    lim = max(1, min(int(limit or 20), 100))
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT tx_ref, subdomain, waiver_token_id, charge_ngn, charged_slots,
+                   created_at, expires_at
+            FROM {PENDING_REGISTRATIONS_TABLE}
+            WHERE charge_required = FALSE
+              AND waiver_token_id IS NOT NULL
+              AND status = 'pending'
+              AND created_at < NOW() - make_interval(mins => %s)
+            ORDER BY created_at ASC
+            LIMIT %s;
+            """,
+            (buffer_m, lim),
+        )
+        rows = []
+        for r in cur.fetchall():
+            rows.append(
+                {
+                    "tx_ref": r[0],
+                    "subdomain": r[1],
+                    "waiver_token_id": r[2],
+                    "charge_ngn": int(r[3] or 0),
+                    "charged_slots": int(r[4] or 0),
+                    "created_at": r[5].isoformat() if r[5] else None,
+                    "expires_at": r[6].isoformat() if r[6] else None,
+                }
+            )
+        return {"success": True, "buffer_minutes": buffer_m, "orphans": rows, "count": len(rows)}
+    except Exception as e:
+        _logger.exception("[admin] orphaned-bypass listing failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not list orphaned holds: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.post("/pending-registrations", summary="Park a registration before checkout")
 def create_pending_registration(body: PendingRegistrationIn):
     """Store the sealed registration, keyed by tx_ref.
