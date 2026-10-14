@@ -103,6 +103,135 @@ def test_connection() -> bool:
             conn.close()
 
 
+WAIVER_TOKENS_TABLE = "waiver_tokens"
+
+
+def _init_waiver_tokens(cur) -> None:
+    """DDL for superadmin waiver tokens, plus the hold columns that bind one.
+
+    Split out of init_schools_registry() because it is large and self-contained,
+    and because `waiver_tokens` must exist BEFORE the pending_registrations
+    ALTER that references it.
+
+    WHY THIS TABLE IS SHAPED THE WAY IT IS
+    --------------------------------------
+    Three things in it are load-bearing and look redundant:
+
+    1. `status` is three-state (open -> reserved -> consumed), not boolean. A
+       plain `is_used` flag cannot express "someone is checking out with this
+       token right now", and that middle state is the entire reason a token
+       cannot be double-spent between validation and payment.
+
+    2. `is_used` is GENERATED from `status` rather than written by application
+       code. The original spec asked for it; deriving it is what stops the two
+       columns from disagreeing after some future edit touches one of them.
+
+    3. `ck_waiver_reservation` ties reservation_tx_ref to status='reserved'.
+       Without it, a bug that nulls the ref without moving the status leaves a
+       token that reads as free and is not — an unpaid grant, discovered by a
+       customer.
+    """
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {WAIVER_TOKENS_TABLE} (
+            id                   SERIAL PRIMARY KEY,
+
+            -- Credential. The plaintext code is shown once and never stored.
+            -- Same shape as schools.verify_token_hash; a readable token column
+            -- would put every live code in every database backup.
+            token_hash           CHAR(64) NOT NULL UNIQUE,
+            token_prefix         VARCHAR(8)  NOT NULL,
+            token_fingerprint    VARCHAR(6)  NOT NULL,
+
+            -- The commercial terms, exactly as the superadmin defined them.
+            discount_percentage  INTEGER NOT NULL CHECK (discount_percentage BETWEEN 1 AND 100),
+            slot_allowance       INTEGER NOT NULL CHECK (slot_allowance BETWEEN 1 AND 10000),
+            applies_to           VARCHAR(10) NOT NULL DEFAULT 'BOTH'
+                                 CHECK (applies_to IN ('REGISTRATION','TOPUP','BOTH')),
+            locked_to_tenant     VARCHAR(60) REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE SET NULL,
+            restores_suspension  BOOLEAN NOT NULL DEFAULT FALSE,
+
+            status               VARCHAR(10) NOT NULL DEFAULT 'open'
+                                 CHECK (status IN ('open','reserved','consumed','voided','expired')),
+            expires_at           TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
+
+            -- The reservation: which checkout currently holds this token.
+            reservation_tx_ref   VARCHAR(128),
+            reserved_at          TIMESTAMPTZ,
+            reservation_expires_at TIMESTAMPTZ,
+
+            -- Consumption record. This is the audit trail, and
+            -- `slots_forfeited` is the one that answers "you gave us 100 and
+            -- only took 50" six months later.
+            slots_requested      INTEGER,
+            slots_waived         INTEGER,
+            slots_forfeited      INTEGER,
+            discount_ngn         INTEGER,
+            charged_slots        INTEGER,
+            charged_ngn          INTEGER,
+            used_by_tenant       VARCHAR(60) REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE SET NULL,
+            used_at              TIMESTAMPTZ,
+            transaction_ref      VARCHAR(100),
+
+            -- Provenance. NOTE: created_by is FORWARDED by the Next.js proxy
+            -- from readSuperadminIdentity(). The backend cannot independently
+            -- attest who issued a token, because /api/v1/admin/* is guarded
+            -- solely by the shared API secret — anyone holding it could
+            -- impersonate any superadmin. That is a property of the existing
+            -- admin surface, not of this table, and is recorded here so the
+            -- audit trail is not read as stronger than it is.
+            created_by           VARCHAR(120) NOT NULL,
+            created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            note                 TEXT,
+
+            is_used              BOOLEAN GENERATED ALWAYS AS (status = 'consumed') STORED,
+
+            CONSTRAINT ck_waiver_reservation
+                CHECK ((status = 'reserved') = (reservation_tx_ref IS NOT NULL))
+        );
+    """)
+    cur.execute(f"""
+        CREATE INDEX IF NOT EXISTS ix_waiver_tokens_status
+        ON {WAIVER_TOKENS_TABLE} (status, expires_at);
+    """)
+    cur.execute(f"""
+        CREATE INDEX IF NOT EXISTS ix_waiver_tokens_created
+        ON {WAIVER_TOKENS_TABLE} (created_at DESC);
+    """)
+    cur.execute(f"""
+        CREATE INDEX IF NOT EXISTS ix_waiver_tokens_used
+        ON {WAIVER_TOKENS_TABLE} (used_by_tenant, used_at DESC)
+        WHERE status = 'consumed';
+    """)
+    cur.execute(f"""
+        CREATE INDEX IF NOT EXISTS ix_waiver_tokens_reap
+        ON {WAIVER_TOKENS_TABLE} (reservation_expires_at)
+        WHERE status = 'reserved';
+    """)
+
+    # A hold now carries the waiver binding, and knows whether a charge is even
+    # expected. `charge_required = false` is the 100% bypass: there is no
+    # Flutterwave transaction, so the webhook will never fire for it and the
+    # browser callback is the only completion path. Without this column the
+    # bypass and a failed payment are indistinguishable from the outside.
+    cur.execute(f"""
+        ALTER TABLE {PENDING_REGISTRATIONS_TABLE}
+        ADD COLUMN IF NOT EXISTS waiver_token_id INTEGER
+            REFERENCES {WAIVER_TOKENS_TABLE}(id) ON DELETE SET NULL;
+    """)
+    cur.execute(f"""
+        ALTER TABLE {PENDING_REGISTRATIONS_TABLE}
+        ADD COLUMN IF NOT EXISTS charge_required BOOLEAN NOT NULL DEFAULT TRUE;
+    """)
+    cur.execute(f"""
+        ALTER TABLE {PENDING_REGISTRATIONS_TABLE}
+        ADD COLUMN IF NOT EXISTS charge_ngn INTEGER NOT NULL DEFAULT 0;
+    """)
+    cur.execute(f"""
+        ALTER TABLE {PENDING_REGISTRATIONS_TABLE}
+        ADD COLUMN IF NOT EXISTS charged_slots INTEGER NOT NULL DEFAULT 0;
+    """)
+
+
 # ---------------------------------------------------------------------------
 # Schools registry (central metadata store in the superuser DB)
 # ---------------------------------------------------------------------------
@@ -475,6 +604,17 @@ def init_schools_registry() -> None:
             DELETE FROM pending_registrations
             WHERE expires_at < NOW() - INTERVAL '1 day';
         """)
+        _init_waiver_tokens(cur)
+        # Reap lapsed waiver reservations on boot, for the same reason the
+        # pending-registration cleanup above runs here: this service has no
+        # scheduler. Without it a token reserved by a tab that closed mid-checkout
+        # would sit unusable until the process restarted by hand.
+        try:
+            from services.waivers import reap_stale_reservations
+
+            reap_stale_reservations()
+        except Exception as _waiver_reap_error:
+            logger.warning(f"[DB] waiver reservation reaper skipped: {_waiver_reap_error}")
         # Command Center: immutable NGN revenue per purchase (0 = free/legacy).
         cur.execute(f"""
             ALTER TABLE {BILLING_LEDGER_TABLE}
@@ -504,6 +644,15 @@ def init_schools_registry() -> None:
         cur.execute("""
             INSERT INTO app_settings (key, value)
             VALUES ('free_credits_enabled', 'true')
+            ON CONFLICT (key) DO NOTHING;
+        """)
+        # Global kill switch for waiver tokens. Defaults ON: a missing seed
+        # should never quietly disable a feature the superadmin believes is
+        # live. Turning this off makes peek/reserve refuse, which drops every
+        # checkout back to the full-price path.
+        cur.execute("""
+            INSERT INTO app_settings (key, value)
+            VALUES ('waiver_tokens_enabled', 'true')
             ON CONFLICT (key) DO NOTHING;
         """)
         cur.execute(f"""
@@ -2217,13 +2366,37 @@ def set_free_credits_enabled(enabled: bool) -> bool:
             conn.close()
 
 
-def resolve_initial_credit_grant(student_count: int) -> int:
+def resolve_initial_credit_grant(student_count: int, paid_slots: Optional[int] = None) -> int:
     """Authoritative decision for the registration credit grant.
 
     The backend is the only authority: the client's `initial_credits` payload is
     never consulted. Returns the number of credits to grant, which is 0 when
-    either the toggle is off or the tenant's initial capacity is below the
+    either the toggle is off or the tenant's qualifying capacity is below the
     inclusive threshold.
+
+    PAID SLOTS, NOT TOTAL SLOTS
+    ---------------------------
+    `paid_slots` is the number of slots the school actually bought rather than
+    the number it was granted. The distinction is the whole point of the
+    parameter:
+
+    With the threshold keyed on TOTAL capacity, a single 100% waiver token with
+    a 500-slot allowance mints a brand-new school that gets 500 free seats AND
+    30 free publishing credits — for nothing. Nothing. And it repeats, because
+    the school is disposable and the next one is a fresh subdomain. That is not
+    a discount, it is a printing press.
+
+    Keying on paid slots makes a full waiver grant exactly zero free credits,
+    which is the honest reading of "you paid nothing, you get the slots you
+    paid nothing for, and nothing else".
+
+    THE DEFAULT IS LOAD-BEARING. `paid_slots=None` means "fall back to the
+    historical total-capacity behaviour". That is deliberate: this function is
+    called from more than one place, and a caller that has not been updated must
+    keep its current behaviour rather than silently start granting zero. It
+    will not default to None forever — once every caller passes the real
+    figure, the parameter should become required so the unsafe reading cannot
+    be taken by accident. Tracked with the waiver rollout, not forgotten.
 
     Note this intentionally re-reads the toggle at call time rather than
     caching it, so a superadmin toggle takes effect on the next registration.
@@ -2232,9 +2405,15 @@ def resolve_initial_credit_grant(student_count: int) -> int:
         count = max(0, int(student_count or 0))
     except (TypeError, ValueError):
         count = 0
+    qualifying = count
+    if paid_slots is not None:
+        try:
+            qualifying = max(0, int(paid_slots))
+        except (TypeError, ValueError):
+            qualifying = 0
     if not get_free_credits_enabled():
         return 0
-    if count < FREE_CREDITS_MIN_STUDENTS:
+    if qualifying < FREE_CREDITS_MIN_STUDENTS:
         return 0
     return TRIAL_CREDITS
 
