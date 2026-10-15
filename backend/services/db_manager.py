@@ -571,6 +571,45 @@ def init_schools_registry() -> None:
             ON billing_ledger (created_at DESC);
         """)
 
+        # ---------------------------------------------------------------------
+        # Deferred slot releases  (End of Session, Phase 3)
+        #
+        # A graduation refunds its slot immediately. A WITHDRAWAL does not: the
+        # child may transfer out in January and come back in September, and
+        # refunding at once lets one pupil consume two paid slots in one
+        # academic year. So the release is recorded against the session it
+        # becomes available in, and `slots_balance` is deliberately NOT
+        # incremented yet.
+        #
+        # Two columns rather than a second table, because the release IS a
+        # ledger event and must appear in the school's own billing history —
+        # the moment it settles, not when it is promised.
+        #
+        #   available_from_session  session label the credit matures in; NULL
+        #                           for an already-settled or immediate release.
+        #   settled_at              when the balance was actually moved. NULL
+        #                           means still parked, and is what the settle
+        #                           pass filters on.
+        #
+        # Deliberately NO worker and NO cron: a pupil's entitlement maturing is
+        # a pure function of "what session is it", so it is settled by
+        # settle_deferred_slot_releases() whenever a balance is read or written
+        # for that tenant. Idempotency comes from settled_at plus the existing
+        # reference_id UNIQUE.
+        # ---------------------------------------------------------------------
+        cur.execute(
+            "ALTER TABLE billing_ledger "
+            "ADD COLUMN IF NOT EXISTS available_from_session VARCHAR(50);"
+        )
+        cur.execute(
+            "ALTER TABLE billing_ledger ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;"
+        )
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS ix_billing_ledger_deferred
+            ON billing_ledger (subdomain, available_from_session)
+            WHERE available_from_session IS NOT NULL AND settled_at IS NULL;
+        """)
+
         # Pending registrations — the server-side hold that makes webhook-driven
         # provisioning possible.
         #
@@ -2283,9 +2322,118 @@ def grant_initial_credits(subdomain: str, amount: int = TRIAL_CREDITS) -> Dict[s
             conn.close()
 
 
+def settle_deferred_slot_releases(subdomain: str, as_of_session: Optional[str] = None) -> int:
+    """Move matured deferred slot releases into the tenant's spendable balance.
+
+    A withdrawal refund recorded during End of Session is parked against the
+    session it matures in (see the billing_ledger migration). When the school
+    reaches that session the credit becomes real. This promotes those rows.
+
+    NO WORKER. A pupil's entitlement maturing is a pure function of which
+    session the school is in, so this runs wherever a balance is read or
+    written rather than on a timer. A school that never touches its billing
+    surface simply has not drawn on the credit yet, which is correct — nothing
+    is lost, it settles on first use.
+
+    ORDERING: the schools row is locked FOR UPDATE before the ledger rows are
+    read, the same order every other slot mutation uses (student create, batch
+    import, delete refund). Taking the ledger lock first would deadlock against
+    a concurrent signup holding the schools row.
+
+    Idempotent twice over: `settled_at IS NULL` selects each row once, and the
+    mark-then-advance happens inside one transaction, so a crash mid-settle
+    rolls the whole thing back rather than double-crediting.
+
+    Returns the number of slots released. Never raises on a missing tenant.
+    """
+    tid = _sanitize_subdomain(subdomain)
+    session = (as_of_session or "").strip() or resolve_tenant_session(tid, None)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        # Lock first. See the ordering note above.
+        cur.execute(
+            f"SELECT 1 FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (tid,),
+        )
+        if cur.fetchone() is None:
+            return 0
+
+        cur.execute(
+            f"""
+            SELECT id, amount FROM {BILLING_LEDGER_TABLE}
+            WHERE subdomain = %s
+              AND token_type = 'SLOT'
+              AND amount > 0
+              AND settled_at IS NULL
+              AND available_from_session IS NOT NULL
+              AND available_from_session <= %s
+            ORDER BY id
+            FOR UPDATE
+            """,
+            (tid, session),
+        )
+        pending = cur.fetchall()
+        if not pending:
+            return 0
+
+        total = sum(int(r[1] or 0) for r in pending)
+        # Mark FIRST, then move the balance. Both are inside this transaction,
+        # so a failure between them rolls back together — but ordering them
+        # this way means a crash can never leave a row marked settled whose
+        # credit was never granted.
+        cur.execute(
+            f"""
+            UPDATE {BILLING_LEDGER_TABLE}
+               SET settled_at = NOW()
+             WHERE id = ANY(%s)
+            """,
+            ([r[0] for r in pending],),
+        )
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+               SET slots_balance = COALESCE(slots_balance, 0) + %s,
+                   updated_at = NOW()
+             WHERE subdomain = %s;
+            """,
+            (total, tid),
+        )
+        conn.commit()
+        logger.info(
+            "[DB] Settled %s deferred slot(s) for '%s' at session %s", total, tid, session
+        )
+        return total
+    except Exception as e:
+        logger.error(f"[DB] Deferred slot settle failed for '{tid}': {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        # Fail-open: a settlement problem must not make the balance unreadable
+        # or block a signup. The rows stay unsettled and the next call retries.
+        return 0
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def get_slots_balance(subdomain: str) -> int:
-    """Return the remaining student slot capacity for a tenant (0 if unknown)."""
+    """Return the remaining student slot capacity for a tenant (0 if unknown).
+
+    Settles any matured deferred releases first, so a caller never sees a
+    balance that is short by credits the school has already earned.
+    """
     subdomain = _sanitize_subdomain(subdomain)
+    # Best-effort, never raises — see settle_deferred_slot_releases.
+    settle_deferred_slot_releases(subdomain)
     conn = None
     try:
         conn = _connect_as_superuser()

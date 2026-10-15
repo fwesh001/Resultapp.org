@@ -468,7 +468,19 @@ async def tenant_lookup(subdomain: str):
     lib/tenant.ts can normalize them. Clean 404 if the subdomain is unknown.
     """
     subdomain = subdomain.lower().strip()
-    school = get_school_by_subdomain(subdomain)
+    # get_school_by_subdomain -> _sanitize_subdomain raises ValueError for a
+    # slug that is too short or illegally punctuated. For a PUBLIC lookup the
+    # honest answer is 404, not 400: from the caller's side a slug that could
+    # never exist is indistinguishable from one that does not, and this is the
+    # endpoint crawlers hit most. Without this the ValueError escaped to the
+    # generic handler and every such request became a logged 500.
+    try:
+        school = get_school_by_subdomain(subdomain)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No school found for subdomain '{subdomain}'",
+        )
     if school is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1239,6 +1251,46 @@ async def tenant_readiness(subdomain: str):
 # Global exception handler (JSON)
 # ---------------------------------------------------------------------------
 
+@app.exception_handler(ValueError)
+async def invalid_value_handler(request: Request, exc: ValueError):
+    """Turn a service-layer ValueError into a 400 instead of a 500.
+
+    WHY THIS EXISTS
+    ---------------
+    `services.db_manager._sanitize_subdomain` raises ValueError for a subdomain
+    that is too short or contains illegal characters. It is the right call for a
+    helper: fail loudly rather than query with a value the schema forbids.
+
+    But it is called from ~30 places, and not all of them validate the tenant
+    first. A crawler asking for /api/v1/tenant/m produced:
+
+        ERROR provisioning: Unhandled exception for /api/v1/tenant/m:
+        Subdomain must be >= 3 chars
+
+    ...which the generic handler turned into a 500 with a full traceback in the
+    journal. A malformed URL is the client's mistake, not ours, and reporting it
+    as a server fault both misleads monitoring and buries real 500s in noise.
+
+    Handled here rather than at each call site so every current caller is
+    covered and every future one is covered for free. The routers that DO
+    validate still raise HTTPException(400) directly, which takes precedence
+    and stays the preferred path — this is the safety net, not the mechanism.
+
+    The message is echoed back: these helpers raise on the value the caller
+    themselves supplied, so it discloses nothing about the data.
+    """
+    logger.warning(f"Invalid value for {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={
+            "success": False,
+            "detail": "Invalid value",
+            "error": str(exc),
+            "path": str(request.url.path),
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception(f"Unhandled exception for {request.url.path}: {exc}")
@@ -1365,6 +1417,21 @@ try:
     logger.info("[App] Clearance router mounted (/api/v1/tenant/{tenant_id}/clearance)")
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Clearance router not mounted: {e}")
+
+# ---------------------------------------------------------------------------
+# End of Session — cohort close. Transactional promotion / repetition /
+# graduation / withdrawal, with the slot ledger moved in the same commit.
+# ---------------------------------------------------------------------------
+
+try:
+    from routers.end_of_session import router as end_of_session_router
+
+    app.include_router(end_of_session_router)
+    logger.info(
+        "[App] End-of-session router mounted (/api/v1/tenant/{tenant_id}/end-of-session)"
+    )
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] End-of-session router not mounted: {e}")
 
 # ---------------------------------------------------------------------------
 # Tenant audit trail — the admin-facing read side of audit_logs.
