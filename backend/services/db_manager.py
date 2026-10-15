@@ -3173,18 +3173,22 @@ DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
     # carry target_user_id so only the affected member sees them. A broadcast
     # would tell the whole staffroom who was just promoted, which is nobody's
     # business but the admin and the person promoted.
+    # These bodies were written when a moderator reached the admin portal and
+    # had to re-enter a Staff ID and PIN. Neither is true now: the Moderator
+    # Console opens straight from the Staff Portal sidebar with no second
+    # sign-in, and revoking no longer leaves a long-lived session behind.
     {
         "event_type": "MODERATOR_GRANTED",
         "category": "SECURITY",
         "title_template": "You now have Moderator access",
-        "body_template": "{{school_name}} has made you a Moderator. Sign in to the Admin Portal with your existing Staff ID and PIN. You can manage Results, Allocations, Clearance and Templates — but not Settings, Billing, Audit or staff roles.",
+        "body_template": "{{school_name}} has made you a Moderator. Open the Moderator Console from your Staff Portal sidebar - there is no extra sign-in, and we re-check your access each time you open it. You can manage Results, Allocations, Clearance, Templates and exports - but not Settings, Billing, Audit or staff roles.",
         "default_color": "#8B5CF6",
     },
     {
         "event_type": "MODERATOR_REVOKED",
         "category": "SECURITY",
         "title_template": "Your Moderator access has ended",
-        "body_template": "{{school_name}} has removed your Moderator access. Your Staff Portal account is unaffected and your {{role}} role stays the same. Any Admin Portal session keeps working until it expires or you sign out.",
+        "body_template": "{{school_name}} has removed your Moderator access. Your Staff Portal account is unaffected and your {{role}} role stays the same. If you had the Moderator Console open, close the tab - its sessions expire within a couple of hours, and opening it again will be refused.",
         "default_color": "#EF4444",
     },
 ]
