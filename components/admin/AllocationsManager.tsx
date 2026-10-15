@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, AlertCircle, X, Sparkles, Pencil, Search, Upload, GraduationCap } from "lucide-react";
+import { Plus, Trash2, Users, UserCog, BookOpen, Layers, Loader2, AlertCircle, X, Sparkles, Pencil, Search, Upload, GraduationCap, KeyRound } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { RowActionsMenu } from "@/components/ui/RowActionsMenu";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import { BulkUploadModal, type BulkEntity } from "@/components/admin/BulkUploadModal";
 
@@ -64,6 +65,26 @@ function deleteWarning(type: string): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * Reset-confirmation copy.
+ *
+ * The reset puts the target back on the shared default rather than handing the
+ * admin a random string they cannot read aloud. So the dialog has to say the
+ * new password out loud — an admin who clicks through a vague "are you sure?"
+ * and does not realise the password is now a publicly-known value has gained
+ * nothing over not resetting at all.
+ */
+function resetWarning(name: string): string {
+  return (
+    `${name}'s password becomes ${DEFAULT_ROSTER_PASSWORD} and their current one stops ` +
+    "working immediately. Share it privately — anyone who guesses it can sign in as them. " +
+    "They will be prompted to change it the next time they sign in."
+  );
+}
+
+/** Kept in step with DEFAULT_ROSTER_PASSWORD in backend/routers/allocations.py. */
+const DEFAULT_ROSTER_PASSWORD = "123456";
 
 const TAB_ENTITY: Record<Tab, string> = {
   Students: "students",
@@ -143,6 +164,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [submitting, setSubmitting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ type: "student" | "staff" | "allocation" | "subject" | "form_assignment"; id: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Reset is a separate deferred-confirm state from delete so the two dialogs
+  // can never be open at once, and so an in-flight reset does not get cancelled
+  // by the user clicking Delete somewhere else.
+  const [pendingReset, setPendingReset] = useState<{ type: "student" | "staff"; id: string; name: string } | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   // Computed available classes from registered students (unique, sorted)
   const availableClasses = useMemo(() => {
@@ -588,6 +615,33 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }
 
+  async function handleResetPassword(type: "student" | "staff", id: string) {
+    setPendingReset(null);
+    setResetting(true);
+    try {
+      const res = await fetch("/api/admin/allocations/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId, type, id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; password?: string };
+      if (!res.ok) throw new Error(data.error || "Password reset failed");
+      toast.success(`Password reset to ${data.password || DEFAULT_ROSTER_PASSWORD}`, {
+        description: "Share it with them privately — they will be asked to change it.",
+      });
+      // The roster itself is unchanged by a reset, but re-fetching keeps the
+      // row order stable if the reset raced a concurrent edit.
+      await fetchAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Password reset failed");
+      toast.error("Could not reset that password", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setResetting(false);
+    }
+  }
+
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "Students", label: "Students", icon: Users },
     { key: "Staff", label: "Staff", icon: UserCog },
@@ -690,7 +744,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                       <th className="px-4 py-3">Full Name</th>
                       <th className="px-4 py-3">Class</th>
                       <th className="px-4 py-3">Gender</th>
-                      <th className="px-4 py-3 text-right">Action</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -708,21 +762,29 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                           <td className="px-4 py-3">{s.class_name}</td>
                           <td className="px-4 py-3">{s.gender || "—"}</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="inline-flex gap-1.5">
-                              <button
-                                onClick={() => openEditStudent(s)}
-                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-900/10 p-2 text-purple-300 hover:bg-purple-900/20"
-                                aria-label="Edit student"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => setPendingDelete({ type: "student", id: s.id })}
-                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <RowActionsMenu
+                              label={`Actions for ${s.full_name}`}
+                              items={[
+                                {
+                                  label: "Edit student",
+                                  icon: Pencil,
+                                  onSelect: () => openEditStudent(s),
+                                },
+                                {
+                                  label: "Reset password",
+                                  icon: KeyRound,
+                                  onSelect: () =>
+                                    setPendingReset({ type: "student", id: s.id, name: s.full_name }),
+                                },
+                                {
+                                  label: "Delete student",
+                                  icon: Trash2,
+                                  variant: "danger",
+                                  separatorBefore: true,
+                                  onSelect: () => setPendingDelete({ type: "student", id: s.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       ))
@@ -762,7 +824,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                       <th className="px-4 py-3">Full Name</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Role</th>
-                      <th className="px-4 py-3 text-right">Action</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -782,21 +844,29 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                             <span className="rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200">{m.role}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <div className="inline-flex gap-1.5">
-                              <button
-                                onClick={() => openEditStaff(m)}
-                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-900/10 p-2 text-purple-300 hover:bg-purple-900/20"
-                                aria-label="Edit staff"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => setPendingDelete({ type: "staff", id: m.id })}
-                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <RowActionsMenu
+                              label={`Actions for ${m.full_name}`}
+                              items={[
+                                {
+                                  label: "Edit staff",
+                                  icon: Pencil,
+                                  onSelect: () => openEditStaff(m),
+                                },
+                                {
+                                  label: "Reset password",
+                                  icon: KeyRound,
+                                  onSelect: () =>
+                                    setPendingReset({ type: "staff", id: m.id, name: m.full_name }),
+                                },
+                                {
+                                  label: "Delete staff",
+                                  icon: Trash2,
+                                  variant: "danger",
+                                  separatorBefore: true,
+                                  onSelect: () => setPendingDelete({ type: "staff", id: m.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       ))
@@ -844,7 +914,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                     <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
                       <th className="px-4 py-3">Subject</th>
                       <th className="px-4 py-3">Created At</th>
-                      <th className="px-4 py-3 text-right">Action</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -860,12 +930,17 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                           <td className="px-4 py-3 font-medium text-white">{s.subject_name}</td>
                           <td className="px-4 py-3 text-xs text-purple-300/50">{new Date(s.created_at).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => setPendingDelete({ type: "subject", id: s.id })}
-                              className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <RowActionsMenu
+                              label={`Actions for ${s.subject_name}`}
+                              items={[
+                                {
+                                  label: "Delete subject",
+                                  icon: Trash2,
+                                  variant: "danger",
+                                  onSelect: () => setPendingDelete({ type: "subject", id: s.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       ))
@@ -927,7 +1002,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                           <tr className="border-b border-purple-500/10 bg-purple-950/10 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
                             <th className="px-4 py-3">Subject</th>
                             <th className="px-4 py-3">Staff</th>
-                            <th className="px-4 py-3 text-right">Action</th>
+                            <th className="px-4 py-3 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -936,12 +1011,18 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                               <td className="px-4 py-3 font-medium text-white">{a.subject_name}</td>
                               <td className="px-4 py-3">{a.staff_name}</td>
                               <td className="px-4 py-3 text-right">
-                                <button
-                                  onClick={() => setPendingDelete({ type: "allocation", id: a.id })}
-                                  className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                <RowActionsMenu
+                                  label={`Actions for ${a.subject_name}`}
+                                  items={[
+                                    {
+                                      label: "Remove allocation",
+                                      icon: Trash2,
+                                      variant: "danger",
+                                      onSelect: () =>
+                                        setPendingDelete({ type: "allocation", id: a.id }),
+                                    },
+                                  ]}
+                                />
                               </td>
                             </tr>
                           ))}
@@ -986,7 +1067,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                       <th className="px-4 py-3">Class</th>
                       <th className="px-4 py-3">Form Teacher</th>
                       <th className="px-4 py-3">Staff ID</th>
-                      <th className="px-4 py-3 text-right">Action</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1003,22 +1084,24 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                           <td className="px-4 py-3">{f.full_name || "—"}</td>
                           <td className="px-4 py-3 font-mono text-xs">{f.staff_id}</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => openEditForm(f)}
-                                className="inline-flex items-center justify-center rounded-full border border-purple-500/15 bg-purple-500/5 p-2 text-purple-300 hover:bg-purple-500/15"
-                                aria-label={`Edit form teacher for ${f.class_name}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => setPendingDelete({ type: "form_assignment", id: f.id })}
-                                className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15"
-                                aria-label="Remove form assignment"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <RowActionsMenu
+                              label={`Actions for the ${f.class_name} form class`}
+                              items={[
+                                {
+                                  label: "Edit form teacher",
+                                  icon: Pencil,
+                                  onSelect: () => openEditForm(f),
+                                },
+                                {
+                                  label: "Remove form assignment",
+                                  icon: Trash2,
+                                  variant: "danger",
+                                  separatorBefore: true,
+                                  onSelect: () =>
+                                    setPendingDelete({ type: "form_assignment", id: f.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       ))
@@ -1341,6 +1424,18 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         confirmLabel="Delete"
         loading={deleting}
         onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete.type, pendingDelete.id); }}
+      />
+
+      <ConfirmDialog
+        open={pendingReset !== null}
+        onOpenChange={(o) => { if (!o) setPendingReset(null); }}
+        title={pendingReset ? `Reset ${pendingReset.name}'s password?` : "Reset password?"}
+        message={pendingReset ? resetWarning(pendingReset.name) : undefined}
+        confirmLabel="Reset password"
+        loading={resetting}
+        onConfirm={() => {
+          if (pendingReset) void handleResetPassword(pendingReset.type, pendingReset.id);
+        }}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2, PenLine, Save, UserCircle } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 import UploadField from "@/components/ui/UploadField";
 import SignatureCaptureModal from "@/components/ui/SignatureCaptureModal";
+import StaffPasswordCard from "@/components/staff/StaffPasswordCard";
 
 interface HubStaff {
   id: string;
@@ -269,6 +270,13 @@ export default function StaffProfilePage() {
               </button>
             )}
           </div>
+
+          {/*
+            Credentials are self-service here rather than an admin setting, so
+            the card lives on the member's own profile. A school's admin can
+            still reset it from Allocations if someone is locked out.
+          */}
+          <StaffPasswordCard tenantId={tenantId} />
         </>
       ) : null}
 

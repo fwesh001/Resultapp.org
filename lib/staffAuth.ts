@@ -37,6 +37,15 @@ export interface StaffSessionPayload {
      * dashboard payload and only falls back to this. See the sidebar link.
      */
     is_moderator?: boolean;
+    /**
+     * Whether this member should be shown the "change your password" banner.
+     *
+     * Baked in at login from the roster row. Like `is_moderator` this is a
+     * snapshot: a cookie minted 11 hours ago still says true after the member
+     * changed their password, so the staff layout prefers the live value from
+     * the dashboard payload. See the layout.
+     */
+    must_change_password?: boolean;
   };
   tenant_id?: string;
 }
@@ -66,6 +75,17 @@ export interface StaffIdentity {
    * someone who cannot use it.
    */
   isModerator: boolean;
+  /**
+   * Change-your-password prompt, as of cookie issue — same staleness caveat as
+   * `isModerator`. Prefer the live value from the dashboard payload; use this
+   * only as a fallback so the banner still renders when that fetch fails.
+   *
+   * Derived with `=== true` so a cookie minted before this field existed, or a
+   * row written by older code with a NULL, both read as "needs changing" —
+   * failing closed here is correct, because a NULL member really is still on
+   * the seeded default password.
+   */
+  mustChangePassword: boolean;
 }
 
 /** Tenant ids are DNS labels; same rule enforced by the backend. */
@@ -116,6 +136,7 @@ export async function readStaffSession(
     // silent no-op on its own — this literal is the only place the identity is
     // constructed, so without it nothing forwards the claim to a caller.
     isModerator: session.staff?.is_moderator === true,
+    mustChangePassword: session.staff?.must_change_password === true,
   };
 }
 

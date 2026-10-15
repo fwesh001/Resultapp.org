@@ -201,21 +201,23 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
                     class_name,
                     rng.choice(("Male", "Female")),
                 ))
+        # The default password is hashed inside Postgres (pgcrypto) and arrives
+        # as a bound parameter, so the plaintext never reaches a query log —
+        # same treatment as the roster router's insert paths.
+        #
+        # Appended to each tuple rather than via execute_values(template_args=),
+        # which needs psycopg2 >= 2.8; this keeps demo seeding working on an
+        # older pinned driver.
         execute_values(
             cur,
             f"INSERT INTO {db.TENANT_STUDENTS_TABLE} "
             "(subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password) VALUES %s",
-            students,
-            # The default password hash is computed inside Postgres (pgcrypto),
-            # so the plaintext never travels as a bound parameter — the same
-            # reason the staff insert below uses a template.
-            template="(%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)",
+            [(*s, db.DEFAULT_ROSTER_PASSWORD) for s in students],
+            template="(%s, %s, %s, %s, %s, crypt(%s, gen_salt('bf')), TRUE)",
         )
         counts["students"] = len(students)
 
         # --- Staff: DEMO-ADM login + 5 teachers, shared PIN 123456 ---
-        # The hash is computed inside Postgres (pgcrypto) so the PIN never
-        # travels as a hash constant and NOT NULL is satisfied on insert.
         staff = []
         for i, (name, role) in enumerate(_STAFF_NAMES):
             staff.append((subdomain, "DEMO-ADM" if i == 0 else f"DEMO-T{i:02d}", name, role))
@@ -223,8 +225,8 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
             cur,
             f"INSERT INTO {db.TENANT_STAFF_TABLE} "
             "(subdomain, staff_id, full_name, role, password_hash) VALUES %s",
-            staff,
-            template="(%s, %s, %s, %s, crypt('123456', gen_salt('bf')))",
+            [(*m, db.DEFAULT_ROSTER_PASSWORD) for m in staff],
+            template="(%s, %s, %s, %s, crypt(%s, gen_salt('bf')))",
         )
         counts["staff"] = len(staff)
 

@@ -12,6 +12,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# DEFAULT_ROSTER_PASSWORD is NOT imported here at module scope. Every other
+# services.db_manager reference in this file is deferred into the function body
+# that needs it, and this module is imported at app start — pulling the 4k-line
+# db_manager (and its psycopg2 dependency) into the import graph here would
+# break that convention for no benefit. Each call site adds it to its own
+# function-local `from services.db_manager import ...` instead.
+
 
 def _notify_moderator_change(
     *,
@@ -449,6 +456,7 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
         TENANT_ALLOCATIONS_TABLE,
         TENANT_SUBJECTS_TABLE,
         TENANT_FORM_ASSIGNMENTS_TABLE,
+        DEFAULT_ROSTER_PASSWORD,
         _connect_as_superuser,
         _row_to_dict,
     )
@@ -650,10 +658,10 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             cur.execute(
                 f"""
                 INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password)
-                VALUES (%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)
+                VALUES (%s, %s, %s, %s, %s, crypt(%s, gen_salt('bf')), TRUE)
                 RETURNING id, subdomain, student_id, full_name, class_name, gender, created_at;
                 """,
-                (tid, student_id, full_name, class_name, gender),
+                (tid, student_id, full_name, class_name, gender, DEFAULT_ROSTER_PASSWORD),
             )
             row = cur.fetchone()
             # Serialize IMMEDIATELY: subsequent statements below (slot UPDATE,
@@ -745,10 +753,10 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
             cur.execute(
                 f"""
                 INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
-                VALUES (%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))
+                VALUES (%s, %s, %s, %s, %s, %s, crypt(%s, gen_salt('bf')))
                 RETURNING id, subdomain, staff_id, full_name, email, phone, role, signature_url, created_at;
                 """,
-                (tid, staff_id, full_name, email, phone, role),
+                (tid, staff_id, full_name, email, phone, role, DEFAULT_ROSTER_PASSWORD),
             )
             row = cur.fetchone()
             # Serialize FIRST: any statement executed after this (including the
@@ -951,6 +959,7 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         TENANT_STUDENTS_TABLE,
         SCHOOLS_REGISTRY_TABLE,
         BILLING_LEDGER_TABLE,
+        DEFAULT_ROSTER_PASSWORD,
         _connect_as_superuser,
     )
     from datetime import datetime
@@ -1023,17 +1032,16 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
                 ),
             )
 
-        # Every imported student gets the same hashed default, computed inside
-        # Postgres so the plaintext never becomes a bound parameter — the same
-        # trick the staff batch uses via its `crypt('123456', gen_salt('bf'))`
-        # placeholder. must_change_password starts TRUE for the soft portal
-        # prompt.
+        # Every imported student gets the same hashed default, hashed inside
+        # Postgres via pgcrypto so no bcrypt dependency is needed here. The
+        # plaintext is a bound parameter, exactly as on the student change-password
+        # path. must_change_password starts TRUE for the soft portal prompt.
         placeholders = ", ".join(
-            ["(%s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')), TRUE)"] * len(fresh)
+            ["(%s, %s, %s, %s, %s, crypt(%s, gen_salt('bf')), TRUE)"] * len(fresh)
         )
         flat: list = []
         for c in fresh:
-            flat.extend([tid, c["student_id"], c["full_name"], c["class_name"], c["gender"]])
+            flat.extend([tid, c["student_id"], c["full_name"], c["class_name"], c["gender"], DEFAULT_ROSTER_PASSWORD])
         cur.execute(
             f"""
             INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password)
@@ -1106,7 +1114,12 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
     tid = _validate_tenant_id(tenant_id)
     _ensure_tenant_exists(tid)
 
-    from services.db_manager import TENANT_STAFF_TABLE, SCHOOLS_REGISTRY_TABLE, _connect_as_superuser
+    from services.db_manager import (
+        TENANT_STAFF_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        DEFAULT_ROSTER_PASSWORD,
+        _connect_as_superuser,
+    )
 
     allowed_roles = {"Teacher", "Form Master", "Vice Principal", "Principal", "Admin"}
     cleaned: list[dict] = []
@@ -1153,10 +1166,10 @@ def batch_create_staff(tenant_id: str, payload: BatchStaffPayload):
         staff_prefix = ((srow[0] or "STAFF/").strip().lower()) or "staff/"
 
         new_ids = _next_prefixed_ids(cur, staff_prefix, TENANT_STAFF_TABLE, "staff_id", len(cleaned), tid)
-        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt('123456', gen_salt('bf')))"] * len(cleaned))
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, crypt(%s, gen_salt('bf')))"] * len(cleaned))
         flat: list = []
         for c, nid in zip(cleaned, new_ids):
-            flat.extend([tid, nid, c["full_name"], c["email"], c["phone"], c["role"]])
+            flat.extend([tid, nid, c["full_name"], c["email"], c["phone"], c["role"], DEFAULT_ROSTER_PASSWORD])
         cur.execute(
             f"""
             INSERT INTO {TENANT_STAFF_TABLE} (subdomain, staff_id, full_name, email, phone, role, password_hash)
@@ -1992,6 +2005,132 @@ def delete_roster_record(
                 pass
         logger.exception(f"[roster] delete failed {record_type} {record_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Admin-initiated credential reset.
+#
+# Resets the target's password back to the SAME shared default the row was
+# seeded with, and re-arms must_change_password so the portal banner comes back.
+#
+# This is deliberately a reset-to-default and not a generated temp password. An
+# admin doing this over a teacher's shoulder at 8am needs something they can say
+# out loud and write on a slip of paper; a random 12-char string they cannot
+# read aloud is useless to them. The cost is that the target's password is
+# knowable to every other account that was ever reset the same way, which is why
+# the change is audited and why the banner pushes them off the default.
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{record_type}/{record_id}/reset-password",
+    summary="Reset a roster member's password back to the default",
+)
+def reset_roster_password(
+    tenant_id: str,
+    record_type: str,
+    record_id: str,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
+    tid = _validate_tenant_id(tenant_id)
+
+    # Only credential-bearing record types. Subjects and allocations have no
+    # login, so accepting them here would be a confusing silent no-op.
+    if record_type not in ("student", "staff"):
+        raise HTTPException(
+            status_code=400,
+            detail="record_type must be student or staff for reset-password",
+        )
+
+    import uuid
+
+    try:
+        uuid.UUID(record_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid record id (must be UUID)")
+
+    from services.db_manager import (
+        _connect_as_superuser,
+        DEFAULT_ROSTER_PASSWORD,
+        TENANT_STAFF_TABLE,
+        TENANT_STUDENTS_TABLE,
+    )
+
+    table = TENANT_STUDENTS_TABLE if record_type == "student" else TENANT_STAFF_TABLE
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        # Re-arm the soft prompt on the same statement. For students this column
+        # already exists; for staff it was added by the migration in
+        # db_manager, which runs at boot before this router can serve traffic.
+        cur.execute(
+            f"""
+            UPDATE {table}
+            SET password_hash = crypt(%s, gen_salt('bf')),
+                must_change_password = TRUE
+            WHERE id = %s AND subdomain = %s
+            RETURNING full_name;
+            """,
+            (DEFAULT_ROSTER_PASSWORD, record_id, tid),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"{record_type} not found")
+
+        conn.commit()
+
+        try:
+            from services.db_manager import log_admin_action
+
+            # Deliberately no password value in the details. The audit trail
+            # records THAT a reset happened and by whom, never the credential.
+            log_admin_action(
+                f"roster.{record_type}_password_reset",
+                subdomain=tid,
+                details={"record_id": record_id, "record_type": record_type},
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            # The write is already committed. A broken audit sink must not be
+            # reported to the admin as a failed reset — they would retry and
+            # set the same default twice, which is harmless but confusing.
+            logger.warning(
+                "[roster] audit log failed for %s password reset %s/%s: %s",
+                record_type, tid, record_id, _audit_err,
+            )
+
+        logger.info("[roster] password reset %s %s/%s", record_type, tid, record_id)
+        return {
+            "success": True,
+            "type": record_type,
+            "id": record_id,
+            "password": DEFAULT_ROSTER_PASSWORD,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(
+            "[roster] password reset failed %s %s/%s: %s",
+            record_type, tid, record_id, e,
+        )
+        raise HTTPException(status_code=500, detail=f"Password reset failed: {e}")
     finally:
         if conn:
             try:

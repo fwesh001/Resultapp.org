@@ -79,12 +79,19 @@ export interface PasswordFieldProps
   label: string;
   /** Shown under the field. Also switches the border to the error colour. */
   error?: string;
+  /**
+   * Persistent helper text under the field, shown when there is no error. Use
+   * for policy hints ("At least 6 characters") that should stay visible while
+   * the member types. Suppressed once `error` is set so the two never stack.
+   */
+  hint?: string;
 }
 
 export function PasswordField({
   id,
   label,
   error,
+  hint,
   className,
   ...props
 }: PasswordFieldProps) {
@@ -99,7 +106,9 @@ export function PasswordField({
         <input
           id={id}
           type={visible ? "text" : "password"}
-          aria-describedby={error ? `${id}-error` : undefined}
+          aria-describedby={
+            error ? `${id}-error` : hint ? `${id}-hint` : undefined
+          }
           aria-invalid={error ? true : undefined}
           className={
             "flex h-10 w-full rounded-xl border bg-purple-950/30 py-2 pl-3 pr-11 text-sm text-purple-50 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 " +
@@ -121,6 +130,10 @@ export function PasswordField({
       {error ? (
         <p id={`${id}-error`} className="text-xs text-red-400">
           {error}
+        </p>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="text-xs text-purple-300/50">
+          {hint}
         </p>
       ) : null}
     </div>

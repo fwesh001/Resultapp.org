@@ -5,12 +5,27 @@ Protected by _verify_allocations_secret fallback (system-to-system)
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from pydantic import BaseModel, Field
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+#: Minimum new-password length for staff. Six, matching the seeded default PIN
+#: ("123456") and the student policy, rather than the eight the admin policy
+#: enforces. Staff sign in with a short credential by design; an 8-char floor
+#: would block the very first thing a new teacher tries to do.
+MIN_STAFF_PASSWORD = 6
+MAX_PASSWORD_LEN = 128
+
+#: Password change requires supplying the current password, so it is a guessing
+#: surface. These buckets are keyed with a "staff-" prefix rather than reusing
+#: the student ones — a shared key would let one portal's traffic throttle the
+#: other.
+STAFF_PASSWORD_MAX_PER_ACCOUNT = 5
+STAFF_PASSWORD_WINDOW_S = 60
+STAFF_PASSWORD_MAX_PER_IP = 20
 
 
 async def _verify_allocations_secret(
@@ -61,6 +76,61 @@ class StaffLoginRequest(BaseModel):
     password: str = Field(..., description="PIN/Password")
 
 
+class StaffPasswordChange(BaseModel):
+    staff_id: str = Field(..., description="The authenticated staff row id")
+    current_password: str = Field(...)
+    new_password: str = Field(...)
+
+
+def _client_ip(request: Request) -> str:
+    if request is not None and getattr(request, "client", None):
+        fwd = request.headers.get("x-forwarded-for") or ""
+        if fwd:
+            return fwd.split(",")[0].strip()
+        return request.client.host or "unknown"
+    return "unknown"
+
+
+def _throttle_password_flow(request: Request, tid: str, ident: str) -> None:
+    """Per-account and per-IP limiter for the change-password endpoint.
+
+    Never throws on limiter failure. A rate-limit outage must not stop a
+    teacher changing their password — they would be locked out of the portal
+    until the limiter recovers. Same fail-open choice the student flow makes,
+    for the same reason.
+    """
+    try:
+        from services.rate_limit import check as _rl_check
+
+        ok_acct, retry_acct = _rl_check(
+            f"staff-password:{tid}:{ident.lower()}",
+            max_hits=STAFF_PASSWORD_MAX_PER_ACCOUNT,
+            window_s=STAFF_PASSWORD_WINDOW_S,
+        )
+        if not ok_acct:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many attempts. Please wait a moment and try again.",
+                headers={"Retry-After": str(retry_acct)},
+            )
+
+        ok_ip, retry_ip = _rl_check(
+            f"staff-password-ip:{_client_ip(request)}",
+            max_hits=STAFF_PASSWORD_MAX_PER_IP,
+            window_s=STAFF_PASSWORD_WINDOW_S,
+        )
+        if not ok_ip:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many attempts from this network. Please wait a moment.",
+                headers={"Retry-After": str(retry_ip)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("[staff_auth] rate limit unavailable; continuing unthrottled", exc_info=True)
+
+
 @router.post("/login", summary="Staff login via Staff ID or Email + PIN")
 def staff_login(tenant_id: str, payload: StaffLoginRequest):
     tid = _validate_tenant_id(tenant_id)
@@ -78,10 +148,15 @@ def staff_login(tenant_id: str, payload: StaffLoginRequest):
         cur = conn.cursor()
         # Dual-login: staff_id OR email (both case-insensitive so legacy
         # uppercase IDs like STAFF/001 keep working), password via crypt.
+        #
+        # must_change_password rides along so the Next.js proxy can bake it into
+        # the session cookie at sign-in. COALESCE guards rows written before the
+        # column existed — a NULL must read as "needs changing", not as False.
         cur.execute(
             f"""
             SELECT id, staff_id, full_name, email, role,
-                   COALESCE(is_moderator, FALSE) AS is_moderator
+                   COALESCE(is_moderator, FALSE) AS is_moderator,
+                   COALESCE(must_change_password, TRUE) AS must_change_password
             FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s
               AND (LOWER(staff_id) = LOWER(%s) OR LOWER(email) = LOWER(%s))
@@ -94,6 +169,7 @@ def staff_login(tenant_id: str, payload: StaffLoginRequest):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         d = _row_to_dict(row, cur)
         d["id"] = str(d["id"])
+        d["must_change_password"] = bool(d.get("must_change_password"))
         logger.info(f"[staff_auth] login success {tid}/{identifier} -> {d['staff_id']}")
         return {"staff": d, "tenant_id": tid}
     except HTTPException:
@@ -132,7 +208,8 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         cur.execute(
             f"""
             SELECT full_name, staff_id, id, role, signature_url, signature_data,
-                   COALESCE(is_moderator, FALSE) AS is_moderator
+                   COALESCE(is_moderator, FALSE) AS is_moderator,
+                   COALESCE(must_change_password, TRUE) AS must_change_password
             FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
             LIMIT 1
@@ -143,6 +220,7 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         if staff_row is None:
             raise HTTPException(status_code=404, detail="Staff not found")
         staff = _row_to_dict(staff_row, cur)
+        staff["must_change_password"] = bool(staff.get("must_change_password"))
         staff_name = staff.get("full_name")
 
         # Now fetch allocations where staff_name matches
@@ -355,3 +433,107 @@ def staff_dashboard(tenant_id: str, staff_id: str):
     if not sid:
         raise HTTPException(status_code=400, detail="staff_id is required")
     return _load_staff_dashboard(tid, sid)
+
+
+# ---------------------------------------------------------------------------
+# POST /password — staff self-service credential change
+# ---------------------------------------------------------------------------
+
+
+@router.post("/password", summary="Change this staff member's password")
+def change_staff_password(
+    tenant_id: str,
+    payload: StaffPasswordChange,
+    request: Request = None,  # type: ignore[assignment]
+):
+    """Verify the current password, then set the new one.
+
+    staff_id arrives in the BODY, not as a path param. FastAPI silently
+    promotes an untyped path-style parameter to a QUERY parameter, which is how
+    an early version of the student equivalent rejected every real request with
+    a 422 while still reading as correct.
+
+    Identity is established by the Next.js proxy, which reads the signed
+    staff_session cookie and substitutes its own staff_id — whatever arrives in
+    this body is only ever the value the proxy chose to forward.
+
+    The current password is required so a left-open session on a shared staff
+    room machine cannot silently reassign the account to whoever finds it next.
+
+    must_change_password is cleared here. That column is the ONLY thing that
+    clears it — the proxy deliberately does not clear it from the cookie, so a
+    stale cookie cannot be used to fake having changed the password.
+    """
+    from services.db_manager import (
+        TENANT_STAFF_TABLE,
+        _connect_as_superuser,
+    )
+
+    tid = _validate_tenant_id(tenant_id)
+    sid = (payload.staff_id or "").strip()
+    current = payload.current_password or ""
+    new = payload.new_password or ""
+
+    if not sid:
+        raise HTTPException(status_code=400, detail="staff_id is required")
+    if not current or not new:
+        raise HTTPException(
+            status_code=400,
+            detail="current_password and new_password are required",
+        )
+    if len(new) < MIN_STAFF_PASSWORD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"New password must be at least {MIN_STAFF_PASSWORD} characters",
+        )
+    if len(new) > MAX_PASSWORD_LEN:
+        raise HTTPException(status_code=400, detail="New password is too long")
+    if current == new:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must differ from the current one",
+        )
+
+    _throttle_password_flow(request, tid, sid)
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+
+        # The current-password check IS the WHERE clause. One statement means
+        # there is no read-then-write window where two concurrent requests could
+        # both pass a check and the second silently overwrite the first.
+        #
+        # The OR lets the caller identify the row by either the human staff_id
+        # (which may contain "/" and so cannot be trusted through a path segment)
+        # or the UUID, matching every other lookup in this router.
+        cur.execute(
+            f"""
+            UPDATE {TENANT_STAFF_TABLE}
+            SET password_hash = crypt(%s, gen_salt('bf')),
+                must_change_password = FALSE
+            WHERE subdomain = %s
+              AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s)
+              AND password_hash = crypt(%s, password_hash)
+            RETURNING staff_id;
+            """,
+            (new, tid, sid, sid, current),
+        )
+        row = cur.fetchone()
+        conn.commit()
+
+        if row is None:
+            # Wrong current password, or no such row. Same 401 for both so this
+            # is not an existence oracle.
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        logger.info("[staff_auth] password changed for %s/%s", tid, sid)
+        return {"success": True, "subdomain": tid, "staff_id": str(row[0])}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+

@@ -3,6 +3,7 @@ import { getTenant } from "@/lib/tenant";
 import { getStaffDashboard, type StaffFormClass } from "@/lib/staffDashboard";
 import { readStaffSession } from "@/lib/staffAuth";
 import StaffShell from "@/components/staff/StaffShell";
+import StaffPasswordPrompt from "@/components/staff/StaffPasswordPrompt";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
 
 export const dynamic = "force-dynamic";
@@ -59,23 +60,41 @@ export default async function StaffDashboardLayout({
   // before the link that tells them what to do with it. The dashboard query is
   // already being made for form classes, so the live value costs nothing.
   let liveIsModerator: boolean | null = null;
+  // Change-password prompt, read LIVE from the same payload for the same
+  // reason. The cookie's value is frozen at sign-in and lives 12 hours, so a
+  // member who changed their password five minutes ago would still be shown the
+  // banner until tomorrow. The dashboard query is already being made, so the
+  // live value costs nothing.
+  let liveMustChangePassword: boolean | null = null;
   try {
     const dashboard = await getStaffDashboard(slug, staffId);
     if (Array.isArray(dashboard?.form_classes)) {
       formClasses = dashboard.form_classes.filter((f) => f?.class_name?.trim());
     }
-    const hub = dashboard as { staff?: { is_moderator?: unknown } } | null;
+    const hub = dashboard as
+      | { staff?: { is_moderator?: unknown; must_change_password?: unknown } }
+      | null;
     if (hub?.staff && typeof hub.staff.is_moderator === "boolean") {
       liveIsModerator = hub.staff.is_moderator;
+    }
+    if (hub?.staff && typeof hub.staff.must_change_password === "boolean") {
+      liveMustChangePassword = hub.staff.must_change_password;
     }
   } catch {
     formClasses = [];
   }
 
   const isModerator = liveIsModerator ?? identity.isModerator;
+  const mustChangePassword = liveMustChangePassword ?? identity.mustChangePassword;
 
   return (
     <StaffShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl} formClasses={formClasses} isModerator={isModerator}>
+      {/*
+        Soft prompt, above the page content but inside the shell. Dismissible on
+        purpose — see components/staff/StaffPasswordPrompt.tsx for why this is a
+        banner rather than the hard redirect the student portal uses.
+      */}
+      {mustChangePassword ? <StaffPasswordPrompt subdomain={slug} /> : null}
       {children}
     </StaffShell>
   );

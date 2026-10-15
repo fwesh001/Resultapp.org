@@ -2849,6 +2849,18 @@ STUDENT_CLEARANCE_TABLE = "student_term_clearance"
 
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
 
+#: Shared starting credential for every roster row (tenant_students and
+#: tenant_staff), and the value an admin reset puts it back to.
+#:
+#: This lives here rather than in a router because three layers need it: the
+#: roster router's create/batch/reset paths, this module's own migrations, and
+#: services/demo.py. It was previously written inline at eight call sites across
+#: all three, so changing the default meant finding every one of them.
+#:
+#: Deliberately a bound parameter (crypt(%s, ...)), never a literal inside the
+#: SQL text, so the plaintext never reaches a query log.
+DEFAULT_ROSTER_PASSWORD = "123456"
+
 
 def init_roster_registry() -> None:
     """Create tenant_students, tenant_staff, tenant_allocations if they don't exist."""
@@ -2881,7 +2893,7 @@ def init_roster_registry() -> None:
         # between them is still NULL and therefore still receives the default,
         # so no account can be locked out by the migration itself.
         cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
-        cur.execute(f"UPDATE {TENANT_STUDENTS_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
+        cur.execute(f"UPDATE {TENANT_STUDENTS_TABLE} SET password_hash = crypt(%s, gen_salt('bf')) WHERE password_hash IS NULL;", (DEFAULT_ROSTER_PASSWORD,))
         cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
         # Soft prompt flag, not a hard gate. Reserved at DDL time on purpose:
         # adding a NOT NULL DEFAULT column later is a full-table rewrite, and
@@ -2909,9 +2921,20 @@ def init_roster_registry() -> None:
         """)
 # Ensure existing deployments get password_hash column (NOT NULL constraint added after backfill)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
-        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt('123456', gen_salt('bf')) WHERE password_hash IS NULL;")
+        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET password_hash = crypt(%s, gen_salt('bf')) WHERE password_hash IS NULL;", (DEFAULT_ROSTER_PASSWORD,))
         # Enforce NOT NULL after backfill (idempotent)
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ALTER COLUMN password_hash SET NOT NULL;")
+
+        # Soft prompt flag, mirroring tenant_students above.
+        #
+        # Until the staff change-password endpoint landed there was NO way for a
+        # staff member to set anything other than the seeded 123456, so every
+        # pre-existing row really is on the default and backfilling TRUE is
+        # accurate rather than a mass warning. It is cleared by
+        # POST /staff/password and re-armed by the admin reset.
+        cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT TRUE;")
+        cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET must_change_password = TRUE WHERE must_change_password IS NULL;")
+
         # Future-proof Active Staff flag — additive, defaults TRUE, counts WHERE is_active=TRUE
         cur.execute(f"ALTER TABLE {TENANT_STAFF_TABLE} ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
         cur.execute(f"UPDATE {TENANT_STAFF_TABLE} SET is_active = TRUE WHERE is_active IS NULL;")
