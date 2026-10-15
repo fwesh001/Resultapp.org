@@ -150,17 +150,6 @@ type RegistrationDraft = {
   txRef: string | null;
 };
 
-function emptyDraftValues(): RegistrationDraft["values"] {
-  return {
-    schoolName: "",
-    subdomain: "",
-    adminEmail: "",
-    adminName: "",
-    studentCount: "",
-    acceptTerms: false,
-  };
-}
-
 /**
  * Read the draft once, defensively.
  *
