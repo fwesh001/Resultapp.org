@@ -1947,6 +1947,45 @@ def current_academic_session(now: Optional[datetime] = None) -> str:
     return f"{ref.year - 1}/{ref.year}"
 
 
+def resolve_tenant_session(subdomain: str, override: Optional[str] = None) -> str:
+    """The ONE resolver for "which academic session is this tenant working in".
+
+    Precedence, in order:
+      1. an explicit override from the caller (a report link that names a
+         session must win over whatever the school is currently set to);
+      2. the school's own configured ``current_session``;
+      3. `current_academic_session()` derived from the server clock.
+
+    WHY THIS IS A SINGLE SHARED FUNCTION
+    ------------------------------------
+    routers/clearance.py and routers/export.py each grew their own
+    `_resolve_session`, and report.py carries a third inline variant.
+    LEGAL_REMEDIATION.md item 1 records a real bug caused by those two drifting
+    apart: a financial hold written for one session was invisible to the result
+    checker in another — a silent revenue leak. Same terms, same tenants, same
+    three-step precedence is now written once. New code calls THIS; the older
+    copies are left in place only to avoid churning a working money path in the
+    same change, and should be collapsed onto it.
+
+    Step 2 is deliberately ahead of step 3. The derived value depends on the
+    server clock, and report.py:601-603 already documents that naive
+    server-local time diverges from the UTC basis of `current_academic_session`
+    around the September rollover. The school-configured value is the operator's
+    explicit statement of intent and outranks a computed guess.
+    """
+    explicit = (override or "").strip()
+    if explicit:
+        return explicit
+
+    tid = _sanitize_subdomain(subdomain)
+    row = get_school_by_subdomain(tid) or {}
+    configured = str(row.get("current_session") or "").strip()
+    if configured:
+        return configured
+
+    return current_academic_session()
+
+
 def get_credit_balance(subdomain: str) -> int:
     """Return the spendable credit balance for a tenant (0 if unknown)."""
     subdomain = _sanitize_subdomain(subdomain)
@@ -2718,9 +2757,10 @@ def publish_student_results(
                 cur.execute(
                     """
                     SELECT student_id, academic_scores FROM tenant_grades
-                    WHERE subdomain = %s AND term = %s AND student_id = ANY(%s);
+                    WHERE subdomain = %s AND term = %s AND academic_session = %s
+                      AND student_id = ANY(%s);
                     """,
-                    (subdomain, term, unique_ids),
+                    (subdomain, term, academic_session, unique_ids),
                 )
                 _totals: dict = {}
                 for _psid, _pscores in ((r[0], r[1]) for r in cur.fetchall()):
@@ -2747,10 +2787,14 @@ def publish_student_results(
                     cur.executemany(
                         """
                         UPDATE tenant_grades SET principal_remark = %s, updated_at = NOW()
-                        WHERE subdomain = %s AND term = %s AND student_id = %s
+                        WHERE subdomain = %s AND term = %s AND academic_session = %s
+                          AND student_id = %s
                           AND (principal_remark IS NULL OR principal_remark = '');
                         """,
-                        _writes,
+                        [
+                            (w[0], w[1], w[2], academic_session, w[3])
+                            for w in _writes
+                        ],
                     )
                     principal_remarks_applied = int(cur.rowcount or 0)
         except Exception as _re:
@@ -3018,6 +3062,148 @@ def init_roster_registry() -> None:
                 UNIQUE(subdomain, student_id, subject_name, term)
             );
         """)
+
+        # ---------------------------------------------------------------------
+        # Session-scoping for tenant_grades  (End of Session, Phase 0)
+        #
+        # THE BUG THIS FIXES
+        # ------------------
+        # The table above keys on (subdomain, student_id, subject_name, term),
+        # and term is CHECK-constrained to Term 1/2/3. There is NO academic
+        # session anywhere on it. Meanwhile student_term_clearance and
+        # result_publications BOTH carry academic_session, and db_manager
+        # already documents why for clearance:
+        #
+        #     "academic_session is part of the key on purpose. Without it a
+        #      Term 1..."   (see the student_term_clearance block)
+        #
+        # So clearance was session-safe and grades were not. The moment a
+        # student is promoted and then sits "Term 1" again in the next session,
+        # staff_grading's UPSERT fires:
+        #
+        #     academic_scores = tenant_grades.academic_scores || EXCLUDED.academic_scores
+        #
+        # which is a JSONB MERGE. Last year's Term 1 row silently absorbs this
+        # year's score, and the UNIQUE constraint makes a clean row impossible
+        # to create anyway. The student ends up with one blended Term 1
+        # spanning two academic years, and every report card drawn from it is
+        # wrong in a way nothing detects.
+        #
+        # Until cohort promotion ships this is unreachable; promotion makes it
+        # routine on the first day it is used. Fixed here, before that.
+        #
+        # MIGRATION ORDER — load-bearing, do not reorder:
+        #   1. add NULLABLE           (no rewrite, no lock contention on PG11+)
+        #   2. backfill every NULL    (a row written between 1 and 2 must still
+        #                               be catchable, so NOT NULL waits)
+        #   3. set NOT NULL
+        #   4. swap the unique constraint LAST, once the data can satisfy it
+        #
+        # Backfill source is the school's own current_session — the operator's
+        # decision, on the grounds that breaking a live report card is worse
+        # than a mis-attributed year on the (currently empty) legacy table.
+        # current_academic_session() is only a fallback for a school whose
+        # column is blank, never the primary source: it derives from the server
+        # clock, which report.py:601-603 already warns drifts against the
+        # school-configured value near the September rollover.
+        # ---------------------------------------------------------------------
+        cur.execute(
+            f"ALTER TABLE {TENANT_GRADES_TABLE} "
+            f"ADD COLUMN IF NOT EXISTS academic_session VARCHAR(50);"
+        )
+        cur.execute(
+            f"""
+            UPDATE {TENANT_GRADES_TABLE} g
+               SET academic_session = COALESCE(NULLIF(s.current_session, ''), %s)
+              FROM {SCHOOLS_REGISTRY_TABLE} s
+             WHERE s.subdomain = g.subdomain
+               AND g.academic_session IS NULL;
+            """,
+            (current_academic_session(),),
+        )
+        cur.execute(
+            f"ALTER TABLE {TENANT_GRADES_TABLE} "
+            f"ALTER COLUMN academic_session SET NOT NULL;"
+        )
+
+        # The old inline UNIQUE names itself after its columns, but Postgres
+        # auto-generates that name AND truncates it at 63 characters, so
+        # matching on it is brittle — a table created under a longer name would
+        # silently keep the 4-column constraint. Drop it by DEFINITION instead:
+        # find the unique constraint whose column set is exactly the old one.
+        cur.execute(
+            f"""
+            DO $$
+            DECLARE _legacy text;
+            BEGIN
+                SELECT conname INTO _legacy
+                  FROM pg_constraint
+                 WHERE conrelid = '{TENANT_GRADES_TABLE}'::regclass
+                   AND contype = 'u'
+                   AND (
+                        -- Set equality, deliberately NOT an ordered array
+                        -- comparison. The obvious alternative —
+                        --   array_agg(attname ORDER BY attname) = ARRAY[...]
+                        -- -- is wrong twice over: the literal's order has to
+                        -- match the database's collation exactly, and
+                        -- array_agg returns name[] so it does not even compare
+                        -- to a text[] literal without a cast. Both failure
+                        -- modes are silent: the block simply matches nothing
+                        -- and the old constraint survives, which looks like a
+                        -- pass.
+                        --
+                        -- Every constrained column must be one of the four
+                        -- names, and the constraint has exactly four columns,
+                        -- so "all four matched" IS set equality. No ordering,
+                        -- no collation dependence.
+                        SELECT count(*)
+                          FROM unnest(conkey) AS k(attnum)
+                          JOIN pg_attribute a
+                            ON a.attrelid = '{TENANT_GRADES_TABLE}'::regclass
+                           AND a.attnum = k.attnum
+                         WHERE a.attname::text = ANY(
+                                   ARRAY['subdomain','student_id','subject_name','term']::text[]
+                               )
+                       ) = 4;
+                IF _legacy IS NOT NULL THEN
+                    EXECUTE format('ALTER TABLE {TENANT_GRADES_TABLE} DROP CONSTRAINT %I', _legacy);
+                END IF;
+            END $$;
+            """
+        )
+        # Added conditionally, NOT via DROP-then-ADD. init_roster_registry runs
+        # on EVERY boot, and a bare ADD CONSTRAINT throws "already exists" the
+        # second time the service restarts — which the warn-only wrapper in
+        # main.py would swallow, leaving a server that looks healthy and has a
+        # roster that never finished initialising. A guarded add is a no-op on
+        # every boot after the first and takes no lock once present.
+        cur.execute(
+            f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                     WHERE conrelid = '{TENANT_GRADES_TABLE}'::regclass
+                       AND conname = 'uq_grades_tenant_student_subject_term_session'
+                ) THEN
+                    ALTER TABLE {TENANT_GRADES_TABLE}
+                      ADD CONSTRAINT uq_grades_tenant_student_subject_term_session
+                      UNIQUE (subdomain, student_id, subject_name, term, academic_session);
+                END IF;
+            END $$;
+            """
+        )
+        # Report cards and exports are always "one school, one session, all
+        # terms" or "one student, one session, one term". Neither is served by
+        # the existing (student_id) or (subject_name, term) indexes.
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_tenant_term_session "
+            f"ON {TENANT_GRADES_TABLE}(subdomain, term, academic_session);"
+        )
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_tenant_student_session "
+            f"ON {TENANT_GRADES_TABLE}(subdomain, student_id, academic_session);"
+        )
 
         # Form assignments â€” exactly ONE form teacher per class (contextual allocations).
         # staff_id is a logical link to tenant_staff.staff_id (not an FK so

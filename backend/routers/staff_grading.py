@@ -173,6 +173,7 @@ def get_form_grid(
     class_name: str,
     term: str = Query("Term 1"),
     staff_id: Optional[str] = Query(None),
+    academic_session: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Form-teacher workspace data (read-only).
@@ -206,6 +207,7 @@ def get_form_grid(
         TENANT_ALLOCATIONS_TABLE,
         TENANT_FORM_ASSIGNMENTS_TABLE,
         TENANT_STAFF_TABLE,
+        resolve_tenant_session,
         _connect_as_superuser,
     )
 
@@ -231,10 +233,11 @@ def get_form_grid(
                 f"""
                 SELECT student_id, subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark
                 FROM {TENANT_GRADES_TABLE}
-                WHERE subdomain = %s AND term = %s AND student_id = ANY(%s)
+                WHERE subdomain = %s AND term = %s AND academic_session = %s
+                  AND student_id = ANY(%s)
                 ORDER BY updated_at DESC
                 """,
-                (tid, term, student_ids),
+                (tid, term, resolve_tenant_session(tid, academic_session), student_ids),
             )
             # Canonical total chain (same definition as the report summary).
             from routers.report import (
@@ -492,6 +495,13 @@ def get_grading_bundle(
     subject_name: str,
     term: str = Query("Term 1"),
     staff_id: Optional[str] = Query(None),
+    academic_session: Optional[str] = Query(
+        None,
+        description=(
+            "Target an explicit session instead of the school's current one. "
+            "Absent for virtually every request."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     tid = _validate_tenant_id(tenant_id)
@@ -515,6 +525,7 @@ def get_grading_bundle(
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
         TENANT_FORM_ASSIGNMENTS_TABLE,
+        resolve_tenant_session,
         _connect_as_superuser,
     )
 
@@ -533,9 +544,16 @@ def get_grading_bundle(
         academic: Dict[str, Any] = {}
         behavioural: Dict[str, Any] = {}
         if student_ids:
+            # Scoped to the tenant's current session. Without this a promoted
+            # student grading Term 1 would be shown their PREVIOUS session's
+            # Term 1 marks as if they were this year's, and — worse — the save
+            # below would merge into that same row.
+            _read_session = resolve_tenant_session(tid, academic_session)
             cur.execute(
-                f"SELECT student_id, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND subject_name = %s AND term = %s AND student_id = ANY(%s)",
-                (tid, subject_name, term, student_ids),
+                f"SELECT student_id, academic_scores, behavioural_traits FROM {TENANT_GRADES_TABLE} "
+                f"WHERE subdomain = %s AND subject_name = %s AND term = %s "
+                f"AND academic_session = %s AND student_id = ANY(%s)",
+                (tid, subject_name, term, _read_session, student_ids),
             )
             for row in cur.fetchall():
                 sid = row[0]
@@ -634,6 +652,14 @@ class BatchPayload(BaseModel):
     # writes tenant_grades.remarks; "form_teacher" writes
     # tenant_grades.form_teacher_remark (Smart Remarks canonical output).
     remark_kind: Optional[Literal["legacy", "form_teacher"]] = None
+    # Which academic session these marks belong to. Omit for the school's
+    # current session, which is what a teacher grading "Term 1" means. Set it
+    # only to enter a prior session deliberately.
+    #
+    # tenant_grades is keyed on this. A promoted student sits "Term 1" again in
+    # the new session, and without this column their new marks would merge into
+    # last year's row instead of starting a clean one.
+    academic_session: Optional[str] = None
 
 
 @router.post("/batch", status_code=201, summary="Save batch scores for one assessment")
@@ -663,6 +689,7 @@ def post_grading_batch(
         TENANT_STAFF_TABLE,
         TENANT_ALLOCATIONS_TABLE,
         TENANT_FORM_ASSIGNMENTS_TABLE,
+        resolve_tenant_session,
         _connect_as_superuser,
     )
 
@@ -763,6 +790,18 @@ def post_grading_batch(
                     detail=f"Staff '{caller_staff_id}' is not the Form Teacher for '{class_name}'",
                 )
 
+        # Which academic session this batch belongs to. Resolved ONCE, before
+        # the row tuples are built, so every row in the chunked batch lands in
+        # the same session and the statement is reproducible.
+        #
+        # `payload.academic_session` is optional and normally absent: a teacher
+        # grading "Term 1" means the term the school is currently in, which is
+        # the school's own current_session. The override exists so a school can
+        # enter a prior session deliberately without a deploy.
+        session = resolve_tenant_session(
+            tid, getattr(payload, "academic_session", None)
+        )
+
         for entry in payload.scores:
             _raw = (entry.student_id or "").strip()
             # Lowercase prefix before slash (vhs/005)
@@ -810,6 +849,7 @@ def post_grading_batch(
                 sid,
                 subject_name,
                 payload.term,
+                session,
                 json.dumps(academic_updates.get(sid, {})),
                 json.dumps(trait_updates.get(sid, {})),
                 remark_updates.get(sid),
@@ -822,14 +862,21 @@ def post_grading_batch(
         # remarks: NULL in EXCLUDED preserves the stored value; a provided
         # string overwrites it. remark_kind selects the destination column
         # (cutover: legacy `remarks` vs Smart Remarks `form_teacher_remark`).
+        #
+        # academic_session IS PART OF THE CONFLICT TARGET. Without it this
+        # statement merges a promoted student's new-session Term 1 into their
+        # previous-session Term 1 row — `||` is a JSONB merge, so last year's
+        # score survives alongside this year's and the report card is a blend
+        # of two years that nothing flags. See the tenant_grades migration in
+        # db_manager.init_roster_registry for the full note.
         from psycopg2.extras import execute_values
 
         remark_col = "form_teacher_remark" if (payload.remark_kind or "") == "form_teacher" else "remarks"
         upsert_sql = (
             f"INSERT INTO {TENANT_GRADES_TABLE} "
-            f"(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits, {remark_col}) "
+            f"(subdomain, student_id, subject_name, term, academic_session, academic_scores, behavioural_traits, {remark_col}) "
             "VALUES %s "
-            "ON CONFLICT (subdomain, student_id, subject_name, term) "
+            "ON CONFLICT (subdomain, student_id, subject_name, term, academic_session) "
             f"DO UPDATE SET academic_scores = {TENANT_GRADES_TABLE}.academic_scores || EXCLUDED.academic_scores, "
             f"behavioural_traits = {TENANT_GRADES_TABLE}.behavioural_traits || EXCLUDED.behavioural_traits, "
             f"{remark_col} = CASE WHEN EXCLUDED.{remark_col} IS NULL THEN {TENANT_GRADES_TABLE}.{remark_col} ELSE EXCLUDED.{remark_col} END, "
@@ -841,7 +888,7 @@ def post_grading_batch(
                 cur,
                 upsert_sql,
                 rows[_i : _i + 500],
-                template="(%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)",
+                template="(%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)",
             )
         conn.commit()
         logger.info(f"[staff-grading] batch saved {tid}/{class_name}/{subject_name}/{assessment_key} for {len(all_sids)} students by {caller_staff_id}")

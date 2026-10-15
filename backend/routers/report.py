@@ -850,10 +850,15 @@ def get_report_bundle(
                     f"[report] form-teacher signature lookup failed for {tid}/{class_name}"
                 )
 
-            # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows
+            # Primary source: tenant_grades — case-insensitive for pre-migration UPPER rows.
+            # Session-scoped: the publication gate on this same page already
+            # resolved which session this report belongs to (_session), and
+            # pulling grades without that filter would render a promoted
+            # student's PREVIOUS year's Term 1 marks on a report the checker
+            # has already confirmed as published for THIS year.
             cur.execute(
-                f"SELECT subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark, principal_remark FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s ORDER BY subject_name",
-                (tid, sid, term),
+                f"SELECT subject_name, academic_scores, behavioural_traits, remarks, form_teacher_remark, principal_remark FROM {TENANT_GRADES_TABLE} WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) AND term = %s AND academic_session = %s ORDER BY subject_name",
+                (tid, sid, term, _session),
             )
             rows = cur.fetchall()
             # Smart Remarks outputs: first non-empty across subject rows.
@@ -1002,9 +1007,10 @@ def get_report_bundle(
                         f"""
                         SELECT student_id, subject_name, academic_scores
                         FROM {TENANT_GRADES_TABLE}
-                        WHERE subdomain = %s AND term = %s AND subject_name = ANY(%s) AND student_id = ANY(%s)
+                        WHERE subdomain = %s AND term = %s AND academic_session = %s
+                          AND subject_name = ANY(%s) AND student_id = ANY(%s)
                         """,
-                        (tid, term, subject_names, class_student_ids),
+                        (tid, term, _session, subject_names, class_student_ids),
                     )
                     peer_rows = cur.fetchall()
                     for pr_sid, pr_subj, pr_scores in peer_rows:

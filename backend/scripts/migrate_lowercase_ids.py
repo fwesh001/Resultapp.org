@@ -51,7 +51,7 @@ def main(dry_run=False):
         # precheck collisions: count duplicates after LOWER
         for sql, label in [
             (f"SELECT subdomain, LOWER(student_id) as lower_id, COUNT(*) c FROM {TENANT_STUDENTS_TABLE} GROUP BY subdomain, lower_id HAVING COUNT(*) > 1", "tenant_students duplicate lower_ids"),
-            (f"SELECT subdomain, LOWER(student_id) as lower_id, COUNT(*) c FROM {TENANT_GRADES_TABLE} GROUP BY subdomain, LOWER(student_id), subject_name, term HAVING COUNT(*) > 1", "tenant_grades duplicate"),
+            (f"SELECT subdomain, LOWER(student_id) as lower_id, COUNT(*) c FROM {TENANT_GRADES_TABLE} GROUP BY subdomain, lower_id, subject_name, term, academic_session HAVING COUNT(*) > 1", "tenant_grades duplicate"),
         ]:
             cur.execute(sql)
             rows = cur.fetchall()

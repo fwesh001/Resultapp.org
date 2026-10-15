@@ -287,7 +287,7 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
                     if rng.random() < 0.12:
                         continue  # a few genuinely missing entries
                     grades.append((
-                        subdomain, sid, subject, term,
+                        subdomain, sid, subject, term, DEMO_SESSION,
                         json.dumps({
                             "Assignment 1": _score(rng, 4, 10),
                             "Test 1": _score(rng, 12, 30),
@@ -298,7 +298,7 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
         execute_values(
             cur,
             f"INSERT INTO {db.TENANT_GRADES_TABLE} "
-            "(subdomain, student_id, subject_name, term, academic_scores, behavioural_traits) "
+            "(subdomain, student_id, subject_name, term, academic_session, academic_scores, behavioural_traits) "
             "VALUES %s",
             grades,
         )

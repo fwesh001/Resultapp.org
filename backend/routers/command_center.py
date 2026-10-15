@@ -213,10 +213,10 @@ def get_classes(term: Optional[str] = None, academic_session: Optional[str] = No
                 FROM tenant_grades g
                 JOIN tenant_students s
                   ON s.subdomain = g.subdomain AND s.student_id = g.student_id
-                WHERE g.subdomain = %s AND g.term = %s
+                WHERE g.subdomain = %s AND g.term = %s AND g.academic_session = %s
                 GROUP BY s.class_name;
                 """,
-                (tid, t),
+                (tid, t, session),
             )
             graded_by_class = {r[0]: int(r[1] or 0) for r in cur.fetchall()}
         out = []
@@ -247,7 +247,7 @@ def get_classes(term: Optional[str] = None, academic_session: Optional[str] = No
         _close(conn)
 
 
-def _missing_for_class(cur, tid: str, t: str, cls: str) -> dict:
+def _missing_for_class(cur, tid: str, t: str, session: str, cls: str) -> dict:
     """Per-class missing-grades payload on an already-open cursor.
 
     Shared core for GET /missing (single class) and GET /missing-batch
@@ -300,9 +300,10 @@ def _missing_for_class(cur, tid: str, t: str, cls: str) -> dict:
         """
         SELECT student_id, subject_name
         FROM tenant_grades
-        WHERE subdomain = %s AND term = %s AND student_id = ANY(%s);
+        WHERE subdomain = %s AND term = %s AND academic_session = %s
+          AND student_id = ANY(%s);
         """,
-        (tid, t, student_ids),
+        (tid, t, session, student_ids),
     )
     covered = {(r[0], r[1]) for r in cur.fetchall()}
     graded_ids = {sid for (sid, _subj) in covered}
@@ -361,7 +362,7 @@ def get_missing(class_name: str, term: str, tenant_id: str = ""):
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        return _missing_for_class(cur, tid, t, cls)
+        return _missing_for_class(cur, tid, t, _session, cls)
     finally:
         _close(conn)
 
@@ -405,7 +406,7 @@ def get_missing_batch(class_names: str, term: str, tenant_id: str = ""):
         cur = conn.cursor()
         out: dict = {}
         for cls in classes:
-            out[cls] = _missing_for_class(cur, tid, t, cls)
+            out[cls] = _missing_for_class(cur, tid, t, _session, cls)
         return {"subdomain": tid, "term": t, "classes": out}
     finally:
         _close(conn)
