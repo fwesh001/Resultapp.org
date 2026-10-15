@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminSidebar, { type PortalSegment } from "@/components/admin/AdminSidebar";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { toTitleCase } from "@/lib/format";
 
@@ -28,6 +28,16 @@ interface AdminShellProps {
   /** Who is signed in — staff_id, name or email, for the moderator badge. */
   actorLabel?: string | null;
   children: React.ReactNode;
+  /**
+   * Route segment this shell renders inside. Defaults to "admin" so the admin
+   * portal is unaffected.
+   *
+   * Threaded to the sidebar (hrefs + branding copy) and to the notification
+   * bell (link destination). Note the bell's `portal` stays "admin" even for the
+   * moderator console: the derived moderator session is stored in the ADMIN
+   * cookie, so that is the identity the inbox must read. Only the LINK differs.
+   */
+  portal?: PortalSegment;
 }
 
 /**
@@ -42,6 +52,7 @@ export default function AdminShell({
   capabilities,
   actorLabel,
   children,
+  portal = "admin",
 }: AdminShellProps) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +82,7 @@ export default function AdminShell({
           isModerator={isModerator}
           capabilities={capabilities}
           actorLabel={actorLabel}
+          portal={portal}
         />
       </div>
 
@@ -80,7 +92,9 @@ export default function AdminShell({
           ref={drawerRef}
           role="dialog"
           aria-modal="true"
-          aria-label={`${toTitleCase(schoolName)} admin menu`}
+          aria-label={`${toTitleCase(schoolName)} ${
+            portal === "moderator" ? "moderator" : "admin"
+          } menu`}
           className="fixed inset-0 z-50 md:hidden"
         >
           <div
@@ -96,6 +110,7 @@ export default function AdminShell({
               isModerator={isModerator}
               capabilities={capabilities}
               actorLabel={actorLabel}
+              portal={portal}
               onNavigate={() => setOpen(false)}
             />
           </div>
@@ -124,12 +139,20 @@ export default function AdminShell({
               {toTitleCase(schoolName)}
             </span>
           </Link>
-          <NotificationBell tenantId={subdomain} portal="admin" />
+          <NotificationBell
+            tenantId={subdomain}
+            portal="admin"
+            notificationsPath={`/${subdomain}/${portal}/notifications`}
+          />
         </div>
 
         {/* Desktop top header */}
         <div className="relative z-40 hidden items-center justify-end border-b border-line-1 bg-surface-0/90 px-6 py-3 backdrop-blur-md md:flex">
-          <NotificationBell tenantId={subdomain} portal="admin" />
+          <NotificationBell
+            tenantId={subdomain}
+            portal="admin"
+            notificationsPath={`/${subdomain}/${portal}/notifications`}
+          />
         </div>
 
         <main className="flex-1 overflow-y-auto bg-surface-0">{children}</main>
