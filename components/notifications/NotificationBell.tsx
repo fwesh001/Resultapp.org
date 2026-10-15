@@ -8,8 +8,33 @@ import { getCategoryStyle, type InboxNotification } from "@/lib/notifications";
 
 interface NotificationBellProps {
   tenantId: string;
-  /** Active portal context — drives the "View all" footer link. */
+  /**
+   * Which session's inbox to read — an AUTHORIZATION-adjacent hint, because a
+   * moderator holds BOTH cookies and this decides which one wins the tie.
+   *
+   * Deliberately still only "admin" | "staff" even though there are now three
+   * portals. The moderator console's session is stored in the ADMIN cookie
+   * (app/api/moderator/session mints SESSION_COOKIES.admin), so "moderator" as
+   * an identity branch would be a duplicate of "admin". Widening this union
+   * would suggest three identities where the server recognises two.
+   *
+   * What changes is WHERE THE LINK GOES, not which cookie is read — see
+   * `notificationsPath`.
+   */
   portal?: "admin" | "staff";
+  /**
+   * Where "View all" and the no-CTA deep-link navigate.
+   *
+   * Split out from `portal` because the two genuinely differ for a moderator:
+   * the fetch wants `portal="admin"` (that is where their session lives), while
+   * the link must be /{sub}/moderator/notifications. Deriving the URL from
+   * `portal` would send them to /{sub}/admin/notifications — a real, working
+   * page belonging to the admin portal, which is worse than a 404 because it
+   * looks correct.
+   *
+   * Defaults to the portal-derived path, preserving admin/staff behaviour.
+   */
+  notificationsPath?: string;
 }
 
 const POLL_BASE_MS = 120000; // 120s idle cadence (C1 cost fix)
@@ -228,7 +253,11 @@ function subscribeUnread(tid: string, portal: "admin" | "staff" | undefined, cb:
 }
 
 /** Tenant inbox bell — badge + hand-rolled dropdown (no menu library). */
-export default function NotificationBell({ tenantId, portal }: NotificationBellProps) {
+export default function NotificationBell({
+  tenantId,
+  portal,
+  notificationsPath,
+}: NotificationBellProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<InboxNotification[]>([]);
@@ -237,6 +266,9 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const tid = (tenantId || "").toLowerCase().trim();
+  // Fall back to the portal segment when no explicit path was given, preserving
+  // the previous behaviour for admin and staff. Declared AFTER `tid` on purpose.
+  const inboxPath = notificationsPath ?? (portal ? `/${tid}/${portal}/notifications` : "");
 
   const loadInbox = useCallback(async () => {
     if (!tid) return;
@@ -305,7 +337,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
       await fetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tid, notification_id: n.id }),
+        body: JSON.stringify({ tenant_id: tid, notification_id: n.id, portal }),
       });
     } catch {
       setItems(prevItems);
@@ -317,10 +349,12 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
       setOpen(false);
       if (link.startsWith("/")) router.push(link);
       else window.open(link, "_blank", "noopener,noreferrer");
-    } else if (portal) {
+} else if (inboxPath) {
       // No CTA — deep-link into the dedicated inbox with this item expanded.
+      // Uses inboxPath, not `portal`, so a moderator lands in the moderator
+      // console rather than being routed into the admin portal's inbox.
       setOpen(false);
-      router.push(`/${tid}/${portal}/notifications?open=${n.id}`);
+      router.push(`${inboxPath}?open=${n.id}`);
     }
   }
 
@@ -435,10 +469,10 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
             )}
           </div>
 
-          {portal && (
+          {inboxPath && (
             <div className="sticky bottom-0 border-t border-purple-500/20 bg-[#140A24]/95 backdrop-blur">
               <Link
-                href={`/${tid}/${portal}/notifications`}
+                href={inboxPath}
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-purple-300 transition hover:bg-white/5 hover:text-white"
               >
