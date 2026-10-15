@@ -1112,6 +1112,80 @@ check("a successful OTP send keeps its cooldown (anti-abuse intact)", () => {
     : `expected exactly one cooldown release before the success return, found ${releases}`;
 });
 
+// ---------------------------------------------------------------------------
+// Tab-discard resilience (mobile).
+//
+// Regression guard for a real iOS defect: proving inbox ownership means
+// leaving the app for the mail client, and backgrounding long enough gets the
+// tab discarded and RELOADED. Every useState in the wizard is plain memory, so
+// the whole thing reset to Step 1 with otpSent=false — the user asked for a new
+// code, was refused by the backend's cooldown, and looped with no way out.
+// ---------------------------------------------------------------------------
+
+check("wizard draft survives a discarded tab", () =>
+  /sessionStorage\.setItem\(REGISTRATION_DRAFT_KEY/.test(register)
+    ? true
+    : "the wizard never writes a resumable draft"
+);
+
+check("the draft is restored on mount, not only written", () =>
+  /useState<RegistrationDraft \| null>\(loadRegistrationDraft\)/.test(register)
+    ? true
+    : "no lazy read of the draft, so a reload starts from a blank wizard"
+);
+
+check("otpSent is restored — this is what breaks the resend loop", () =>
+  /useState\(\(\) => draft\?\.otpSent === true\)/.test(register)
+    ? true
+    : "otpSent is not hydrated, so a reloaded tab offers 'Send code' during the cooldown"
+);
+
+check("the resend cooldown is derived from a timestamp, not a bare counter", () =>
+  /function resendSecondsRemaining/.test(register) &&
+  /otpSentAt/.test(register)
+    ? true
+    : "the cooldown cannot be reconstructed after a reload"
+);
+
+check("the cooldown resyncs when a throttled tab returns", () =>
+  /visibilitychange/.test(register) && /pageshow/.test(register)
+    ? true
+    : "a backgrounded tab keeps showing a stale 'Resend in Ns'"
+);
+
+check("resetting the OTP clears the sent-at timestamp too", () => {
+  const fn = /function resetOtp\(\)\s*\{([\s\S]*?)\n  \}/.exec(register);
+  if (!fn) return "cannot locate resetOtp()";
+  const body = fn[1];
+  return /setOtpSentAt\(null\)/.test(body)
+    ? true
+    : "resetOtp() leaves otpSentAt behind, so a new address inherits the old cooldown";
+});
+
+check("the admin password is never written to sessionStorage", () => {
+  // The draft type is the contract. If either password field ever appears in
+  // the persisted shape, it becomes readable by any XSS on the origin.
+  const block = /type RegistrationDraft = \{[\s\S]*?\n\};/.exec(register);
+  if (!block) return "cannot locate the RegistrationDraft type";
+  if (/adminPassword/.test(block[0])) {
+    return "adminPassword is part of the persisted draft — do not store passwords";
+  }
+  return true;
+});
+
+check("a completed registration clears the draft", () =>
+  /setSuccessData\(\{[\s\S]*?\}\);[\s\S]{0,200}clearRegistrationDraft\(\)/.test(register)
+    ? true
+    : "success does not clear the draft, so a live school can be resumed from Step 1"
+);
+
+check("the stored draft shape is versioned", () =>
+  /REGISTRATION_DRAFT_KEY = "resultapp:registration-draft:v1"/.test(register) &&
+  /parsed\.v !== 1/.test(register)
+    ? true
+    : "the draft is unversioned, so a shape change silently half-applies"
+);
+
 console.log("\nPayment verification: settled only, and never confused with pending");
 check("the API envelope status is never treated as proof of payment", () => {
   // The envelope's top-level `status` is "success" whenever the provider merely
