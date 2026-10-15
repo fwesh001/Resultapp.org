@@ -99,6 +99,135 @@ const OTP_RESEND_COOLDOWN_S = 60;
 const PENDING_TX_REF_KEY = "resultapp:pending-tx-ref";
 
 /**
+ * Wizard draft, so a discarded tab does not cost the user their place.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Proving inbox ownership means leaving the app: the user switches to their
+ * mail client to read a 6-digit code. On iOS that backgrounding is enough for
+ * the OS to discard and later RELOAD the tab. Every `useState` in this wizard
+ * is plain memory, so the whole thing resets to Step 1 with `otpSent = false`.
+ * The user then asks for a new code, the backend's 60s cooldown rejects it, and
+ * they are in a loop they cannot get out of without a full page reload — which
+ * resets it again.
+ *
+ * sessionStorage, not localStorage: the draft is scoped to this tab and dies
+ * with it. A registration abandoned on a library PC must not still be
+ * resumable on that machine the next day.
+ *
+ * WHAT IS DELIBERATELY NOT STORED
+ * ------------------------------
+ * `adminPassword` and `adminPasswordConfirm` are excluded. sessionStorage is
+ * origin-scoped, JavaScript-readable storage: whatever is in it is readable by
+ * any XSS on resultapp.org and outlives the tab it was typed into. Re-typing a
+ * password is a five-second cost; a leaked one is not. Everything persisted
+ * here is either already public (school name, subdomain) or already known to
+ * the backend (the email that received the code).
+ *
+ * The stored shape is versioned so a future change to FormValues can be
+ * detected and discarded rather than half-applied.
+ */
+const REGISTRATION_DRAFT_KEY = "resultapp:registration-draft:v1";
+
+type RegistrationDraft = {
+  v: 1;
+  step: 1 | 2 | 3;
+  /** Only the non-secret half of FormValues. See the note above. */
+  values: {
+    schoolName: string;
+    subdomain: string;
+    adminEmail: string;
+    adminName: string;
+    studentCount: string;
+    acceptTerms: boolean;
+  };
+  otpSent: boolean;
+  /** Epoch ms the code was requested. Drives the resend cooldown across reloads. */
+  otpSentAt: number | null;
+  otpCode: string;
+  /** See the caveat on isEmailVerified below. */
+  emailVerified: boolean;
+  txRef: string | null;
+};
+
+function emptyDraftValues(): RegistrationDraft["values"] {
+  return {
+    schoolName: "",
+    subdomain: "",
+    adminEmail: "",
+    adminName: "",
+    studentCount: "",
+    acceptTerms: false,
+  };
+}
+
+/**
+ * Read the draft once, defensively.
+ *
+ * Every field is re-validated on the way out. sessionStorage is writable from
+ * devtools and survives across deploys that change this shape, so a stored
+ * value is untrusted input — a hand-edited `step: 99` must not put the wizard
+ * in a state it has no renderer for.
+ */
+function loadRegistrationDraft(): RegistrationDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(REGISTRATION_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RegistrationDraft>;
+    if (!parsed || parsed.v !== 1) return null;
+
+    const v = (parsed.values ?? {}) as Partial<RegistrationDraft["values"]>;
+    const str = (x: unknown, fallback = "") => (typeof x === "string" ? x : fallback);
+
+    return {
+      v: 1,
+      step: parsed.step === 2 || parsed.step === 3 ? parsed.step : 1,
+      values: {
+        schoolName: str(v.schoolName),
+        subdomain: str(v.subdomain),
+        adminEmail: str(v.adminEmail),
+        adminName: str(v.adminName),
+        studentCount: str(v.studentCount),
+        acceptTerms: v.acceptTerms === true,
+      },
+      otpSent: parsed.otpSent === true,
+      otpSentAt: typeof parsed.otpSentAt === "number" ? parsed.otpSentAt : null,
+      otpCode: OTP_RE.test(str(parsed.otpCode)) ? str(parsed.otpCode) : "",
+      emailVerified: parsed.emailVerified === true,
+      txRef: typeof parsed.txRef === "string" && parsed.txRef ? parsed.txRef : null,
+    };
+  } catch {
+    // Private mode, storage disabled, or corrupt JSON. Starting fresh is always
+    // correct here — the only cost is retyping, and nothing is half-applied.
+    return null;
+  }
+}
+
+function saveRegistrationDraft(draft: RegistrationDraft): void {
+  try {
+    window.sessionStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Quota or private mode. The wizard still works in-memory; it just becomes
+    // discardable again, which is the pre-fix behaviour rather than a failure.
+  }
+}
+
+function clearRegistrationDraft(): void {
+  try {
+    window.sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+  } catch {
+    /* Nothing actionable — the draft is already unreachable. */
+  }
+}
+
+/** Seconds still to wait before the resend button re-enables. Never negative. */
+function resendSecondsRemaining(sentAt: number | null, at: number): number {
+  if (!sentAt) return 0;
+  return Math.max(0, OTP_RESEND_COOLDOWN_S - Math.floor((at - sentAt) / 1000));
+}
+
+/**
  * Admin name bounds — MUST equal ProvisionRequest.admin_name in
  * backend/main.py (min_length=3, max_length=80). Enforced here as well as in
  * app/api/register-school/route.ts so an out-of-range name is caught on Step 2,
@@ -195,15 +324,33 @@ function PasswordField({
 }
 
 export function RegisterSchoolForm() {
-  const [values, setValues] = useState<FormValues>({
-    schoolName: "",
-    subdomain: "",
-    adminEmail: "",
-    adminName: "",
-    adminPassword: "",
-    adminPasswordConfirm: "",
-    studentCount: "",
-    acceptTerms: false,
+  /**
+   * The resumable draft, read ONCE per mount.
+   *
+   * A lazy initialiser rather than a mount effect, for the same reason
+   * `pendingRef` below uses one: this reads an external store, which is what
+   * useState initialisers are for, and it avoids the setState-in-effect
+   * cascading render that react-hooks/set-state-in-effect rejects.
+   */
+  const [draft] = useState<RegistrationDraft | null>(loadRegistrationDraft);
+
+  const [values, setValues] = useState<FormValues>(() => {
+    const base: FormValues = {
+      schoolName: "",
+      subdomain: "",
+      adminEmail: "",
+      adminName: "",
+      adminPassword: "",
+      adminPasswordConfirm: "",
+      studentCount: "",
+      acceptTerms: false,
+    };
+    // Rehydrate the non-secret fields. Passwords are intentionally left blank —
+    // see the draft note. `values` is a fresh object either way so nothing
+    // downstream can mutate the draft we captured at mount.
+    return draft
+      ? { ...base, ...draft.values, adminPassword: "", adminPasswordConfirm: "" }
+      : base;
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -214,25 +361,45 @@ export function RegisterSchoolForm() {
   // 1 = school details, 2 = account security, 3 = review & payment.
   // Step 3 also renders the post-payment provisioning/provisioned states, which
   // is why `successData` (not the step number) is the terminal condition.
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(() => draft?.step ?? 1);
   const [transactionId, setTransactionId] = useState<string | null>(null);
 
   // --- Email OTP (inbox ownership proof, Step 1) --------------------------
   // isEmailVerified gates the Pay button, never navigation: a user with a
   // broken mail path can still reach review and see exactly what is missing.
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  //
+  // All four restore from the draft. Restoring `otpSent` is the load-bearing
+  // one: without it the user comes back to a "Send code" button, asks for
+  // another code, and is refused by the backend cooldown — the loop this
+  // hydration exists to break.
+  //
+  // CAVEAT on isEmailVerified: this is a CLIENT-side gate. Nothing in
+  // /api/register-school re-checks the OTP (it validates only that the email
+  // is well-formed), so the flag is advisory by construction and always was.
+  // Persisting it adds no capability that devtools did not already offer — but
+  // it is not a security control and must not be described as one.
+  const [isEmailVerified, setIsEmailVerified] = useState(
+    () => draft?.emailVerified === true
+  );
+  const [otpCode, setOtpCode] = useState(() => draft?.otpCode ?? "");
+  const [otpSent, setOtpSent] = useState(() => draft?.otpSent === true);
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [otpResendIn, setOtpResendIn] = useState(0);
+  // Epoch ms of the last successful send. The source of truth for the cooldown;
+  // `otpResendIn` below is only its on-screen projection.
+  const [otpSentAt, setOtpSentAt] = useState<number | null>(
+    () => draft?.otpSentAt ?? null
+  );
+  const [otpResendIn, setOtpResendIn] = useState(() =>
+    resendSecondsRemaining(draft?.otpSentAt ?? null, Date.now())
+  );
 
   // Password visibility toggles (Step 2). Two independent fields — revealing
   // one must not reveal the other, so they are never combined.
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [txRef, setTxRef] = useState<string | null>(null);
+  const [txRef, setTxRef] = useState<string | null>(() => draft?.txRef ?? null);
   const [provisioning, setProvisioning] = useState(false);
 
   // --- Superadmin waiver code (Step 2) ------------------------------------
@@ -444,8 +611,56 @@ export function RegisterSchoolForm() {
   // The backend `stage` strings stay in state for debugging; users only ever
   // see the friendly copy below.
   const displayPercent = useSimulatedProgress(progress?.percent ?? null, portalReady);
-  const displayStage = friendlyStage(displayPercent, portalReady);
-  const stalled =
+  /**
+   * Mirror the resumable slice of wizard state into sessionStorage.
+   *
+   * No setState here, so it costs nothing but a serialise — the reason the
+   * whole feature can live without tripping react-hooks/set-state-in-effect.
+   *
+   * Guarded on `!successData` so a completed registration can never rewrite a
+   * draft after the success path cleared it.
+   *
+   * `otpCode` is persisted on purpose. The whole reason the user leaves the tab
+   * is to copy that code; restoring it is the difference between resuming and
+   * retyping. It is a 6-digit value with a ~10-minute TTL that the backend
+   * burns on first successful use, so it is not a durable secret.
+   */
+  useEffect(() => {
+    if (successData) return;
+    saveRegistrationDraft({
+      v: 1,
+      step: currentStep,
+      values: {
+        schoolName: values.schoolName,
+        subdomain: values.subdomain,
+        adminEmail: values.adminEmail,
+        adminName: values.adminName,
+        studentCount: values.studentCount,
+        acceptTerms: values.acceptTerms,
+      },
+      otpSent,
+      otpSentAt,
+      otpCode,
+      emailVerified: isEmailVerified,
+      txRef,
+    });
+  }, [
+    successData,
+    currentStep,
+    values.schoolName,
+    values.subdomain,
+    values.adminEmail,
+    values.adminName,
+    values.studentCount,
+    values.acceptTerms,
+    otpSent,
+    otpSentAt,
+    otpCode,
+    isEmailVerified,
+    txRef,
+  ]);
+
+  const displayStage = friendlyStage(displayPercent, portalReady);  const stalled =
     !portalReady && !progressTimedOut && now - lastBackendAdvanceRef.current > 45000;
 
   // Bulletproof handoff: a single effect arms exactly one navigation timeout
@@ -684,6 +899,11 @@ export function RegisterSchoolForm() {
     setOtpSent(false);
     setOtpError(null);
     setOtpResendIn(0);
+    // The timestamp MUST clear with the rest. Leaving it behind would keep
+    // charging the cooldown against a code that no longer exists — after a
+    // reload the new address would open with "Resend in 40s" despite nothing
+    // having been sent to it.
+    setOtpSentAt(null);
   }
 
   /** Countdown ticker for the resend button. */
@@ -692,6 +912,31 @@ export function RegisterSchoolForm() {
     const t = setTimeout(() => setOtpResendIn((n) => n - 1), 1000);
     return () => clearTimeout(t);
   }, [otpResendIn]);
+
+  /**
+   * Recompute the cooldown when the tab comes back to the foreground.
+   *
+   * A backgrounded tab has its timers throttled or frozen outright, so the
+   * decrementing counter above stops advancing while the wall clock keeps
+   * going. Without this the user returns to a button reading "Resend in 48s"
+   * when the real wait was over — and, worse, if they somehow reach it early
+   * the backend refuses them, which is the same dead end this whole feature
+   * exists to remove.
+   */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      const remaining = resendSecondsRemaining(otpSentAt, Date.now());
+      if (remaining !== otpResendIn) setOtpResendIn(remaining);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+  }, [otpSentAt, otpResendIn]);
 
   async function sendOtp() {
     const email = values.adminEmail.trim();
@@ -725,7 +970,12 @@ export function RegisterSchoolForm() {
 
       setOtpSent(true);
       setOtpCode("");
+      setOtpSentAt(Date.now());
       setOtpResendIn(OTP_RESEND_COOLDOWN_S);
+      // The cooldown is the backend's, not ours — see `_cooldown_ok` in
+      // auth_flow.request_email_otp. Seeding the timer from a local timestamp
+      // keeps the button honest across a reload, and the backend still has the
+      // final say if the two ever disagree.
     } catch {
       setOtpError("Could not reach the verification service. Check your connection.");
     } finally {
@@ -1361,6 +1611,10 @@ export function RegisterSchoolForm() {
           subdomain: data.subdomain || payload.subdomain,
           schoolName: data.school_name || payload.schoolName,
         });
+        // The tenant exists now, so a resumable draft is worse than useless: it
+        // would drop the user back onto a Step 1 for a school that is already
+        // live. Success is terminal.
+        clearRegistrationDraft();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
         setGlobalError(message);
