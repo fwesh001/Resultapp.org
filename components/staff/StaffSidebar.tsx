@@ -14,15 +14,19 @@ interface StaffSidebarProps {
   /** The tenant's uploaded crest. Absent -> neutral cap (never the ResultApp mark). */
   logoUrl?: string;
   formClasses?: Array<{ class_name: string }>;
-  /**
+/**
    * Whether this member has been granted Moderator (deputy) access, which adds
-   * a link into the Admin Portal.
+   * a link into the Moderator Console.
    *
    * Purely a DISCOVERY affordance — without it a promoted member has no way to
    * learn the access exists except by noticing their colleague's sidebar has
-   * fewer items. It grants nothing: the admin portal reads its own session and
-   * enforces capabilities server-side, so showing this link to someone who was
-   * not actually promoted changes nothing about what they can reach.
+   * fewer items.
+   *
+   * It grants NOTHING, and this is now strictly true in both directions. The
+   * console reads the staff session the user already holds and re-checks
+   * `is_moderator` against the DATABASE on every entry (POST
+   * /api/moderator/session), so this boolean cannot grant access it does not
+   * reflect, and hiding the link cannot withhold access that was granted.
    */
   isModerator?: boolean;
   onNavigate?: () => void;
@@ -49,7 +53,17 @@ const nav: Array<{
   // Last in the array on purpose: the "My Form Class" entry used to be keyed
   // off `index === 1`, so inserting above it silently relocated that link onto
   // the wrong nav row. It is keyed off the label now.
-  { label: "Admin Portal", href: (sub: string) => `/${sub}/admin`, icon: ShieldCheck, moderatorOnly: true },
+  // Points at /moderator, NOT /admin.
+    //
+    // This link is the whole reason the Moderator Console exists. It used to
+    // read "Admin Portal" and go to /{sub}/admin, which rendered the school's
+    // admin branding and asked for "Admin ID or Email" — credentials a moderator
+    // does not have, for a role they do not hold.
+    //
+    // The target route auto-elevates from the staff session the user ALREADY has
+    // (POST /api/moderator/session, which re-verifies is_moderator against the
+    // database first). So this is a navigation link, not a login form.
+    { label: "Moderator Console", href: (sub: string) => `/${sub}/moderator`, icon: ShieldCheck, moderatorOnly: true },
 ];
 
 export default function StaffSidebar({ subdomain, schoolName, logoUrl, formClasses, isModerator = false, onNavigate }: StaffSidebarProps) {
