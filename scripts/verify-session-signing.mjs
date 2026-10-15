@@ -204,6 +204,92 @@ for (const [label, value] of [
   check(`returns null (never throws) for ${label}`, () => verifySession(value) === null);
 }
 
+// ---------------------------------------------------------------------------
+// CROSS-COOKIE REPLAY — the case this script previously had NO coverage of
+// ---------------------------------------------------------------------------
+//
+// Every other check here calls signSession/verifySession directly, which means
+// it never passed a cookie name and could never notice the name was
+// unauthenticated. This file would have stayed green while a token minted for
+// one cookie verified perfectly under another.
+//
+// What used to stop that replay was NOT the MAC. It was payload SHAPE:
+// readAdminIdentity requires `admin.email || admin.staff_id`, and a staff
+// session carries `staff: {...}`. That is a coincidence of two payload
+// definitions in two files, one refactor away from silently opening.
+//
+// The payloads below are deliberately shaped to PASS that identity check, so
+// these assertions test the MAC alone rather than the incidental shape guard.
+
+check("a token signed for staff_session does not verify as admin_session", () => {
+  // Shaped to be maximally dangerous: admin.staff_id + admin.email both
+  // present, correct tenant. The ONLY difference is the cookie name.
+  const staffToken = signSession(
+    { admin: { staff_id: "STAFF/001", email: "s@vhs.test", full_name: "S" }, tenant_id: "vhs" },
+    3600,
+    "staff_session",
+  );
+  return verifySession(staffToken, "admin_session") === null;
+});
+
+check("the mirrored direction is refused too (admin token read as staff)", () => {
+  const adminToken = signSession(
+    { admin: { email: "a@vhs.test" }, tenant_id: "vhs" },
+    3600,
+    "admin_session",
+  );
+  return verifySession(adminToken, "staff_session") === null;
+});
+
+check("a student token does not verify as an admin token", () => {
+  const t = signSession({ admin: { email: "a@vhs.test" }, tenant_id: "vhs" }, 3600, "student_session");
+  return verifySession(t, "admin_session") === null;
+});
+
+check("a superadmin token does not verify as an admin token", () => {
+  const t = signSession({ superadmin: true }, 3600, "superadmin_session");
+  return verifySession(t, "admin_session") === null;
+});
+
+check("the token still verifies under its OWN cookie name", () => {
+  // Guards against over-correcting the fix into "reject everything".
+  const t = signSession({ admin: { email: "a@vhs.test" }, tenant_id: "vhs" }, 3600, "staff_session");
+  const c = verifySession(t, "staff_session");
+  return c !== null && c.admin?.email === "a@vhs.test";
+});
+
+check("an unrelated cookie name is refused, not just the known pairs", () => {
+  const t = signSession({ admin: { email: "a@vhs.test" }, tenant_id: "vhs" }, 3600, "staff_session");
+  return verifySession(t, "attacker_session") === null;
+});
+
+check("every session cookie name is mutually exclusive", () => {
+  // Exhaustive rather than spot-checked: the pair someone forgets is exactly
+  // the pair that ships.
+  const NAMES = ["admin_session", "staff_session", "student_session", "superadmin_session"];
+  for (const signedAs of NAMES) {
+    for (const readAs of NAMES) {
+      if (signedAs === readAs) continue;
+      const t = signSession({ admin: { email: "a@vhs.test", staff_id: "S/1" }, tenant_id: "vhs" }, 3600, signedAs);
+      if (verifySession(t, readAs) !== null) return `${signedAs} verified as ${readAs}`;
+    }
+  }
+  return true;
+});
+
+check("an unbound token still verifies unbound (scripts + dev tool keep working)", () => {
+  const t = signSession({ tenant_id: "vhs", admin: { email: "a@vhs.test" } }, 3600);
+  return verifySession(t) !== null;
+});
+
+check("a name-bound token does NOT verify when the name is withheld", () => {
+  // Failing closed beats convenience: a caller that forgets the cookie name
+  // must get null, never a silent unbound pass.
+  const t = signSession({ admin: { email: "a@vhs.test" }, tenant_id: "vhs" }, 3600, "admin_session");
+  return verifySession(t) === null;
+});
+
+
 // ── report ─────────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.pass);
 console.log("=".repeat(72));
