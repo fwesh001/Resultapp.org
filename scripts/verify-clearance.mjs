@@ -184,7 +184,18 @@ check("proxy does not revalidate publication tags", !/revalidateTag/.test(proxy)
 // ---------------------------------------------------------------- admin UI
 
 check("clearance page exists", existsSync(join(root, "app/[subdomain]/admin/(dashboard)/clearance/page.tsx")));
-check("admin nav links to Clearance", /admin\/clearance/.test(read("components/admin/AdminSidebar.tsx")));
+// The sidebar href is now `${base}/clearance` where base is `/${sub}/admin` or
+// `/${sub}/moderator`, so a literal /admin/clearance match would fail for a
+// move that changed nothing. Assert the Clearance entry exists AND that it is
+// built from the portal-aware base, which is what keeps a moderator off a dead
+// link while still putting Clearance within reach.
+const adminSidebarSrc = read("components/admin/AdminSidebar.tsx");
+check(
+  "nav links to Clearance under the portal-aware base",
+  /label: "Clearance"/.test(adminSidebarSrc) &&
+    /href: `\$\{base\}\/clearance`/.test(adminSidebarSrc) &&
+    /const base = `\/\$\{subdomain\}\/\$\{portal\}`/.test(adminSidebarSrc),
+);
 
 // "Uncheck defaulters" must DESELECT. If it instead cleared everyone owing,
 // one click would release outstanding debt — the inverse of the intent.
