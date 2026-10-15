@@ -58,6 +58,12 @@ const RESERVED_DEMO_IDS = new Set([
   "www",
   "api",
   "admin",
+  // Portal segments, NOT tenant slugs. Every one of these matches DEMO_ID_RE, so
+  // on demo.<domain>/<segment> the first path element is read as the TENANT id.
+  // "moderator" was missing here, which meant demo.resultapp.org/moderator
+  // resolved to a tenant called "moderator" instead of the moderator portal —
+  // a routing bug that would only ever show up on the demo host.
+  "moderator",
   "app",
   "dashboard",
   "resultapp",
