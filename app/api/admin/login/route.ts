@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
-import { ADMIN_CAPABILITIES, MODERATOR_CAPABILITY_LIST } from "@/lib/capabilities";
+import { buildSessionClaims } from "@/lib/capabilities";
 
 /**
  * POST /api/admin/login
@@ -102,14 +102,21 @@ export async function POST(req: NextRequest) {
   // two known values is treated as "admin" — an unrecognised role from a future
   // backend must not silently produce a session with NO capabilities, which
   // would lock a real admin out with no obvious cause.
-  const role = String((data as { role?: unknown }).role ?? "admin").toLowerCase();
-  const caps: string[] =
-    role === "moderator" ? [...MODERATOR_CAPABILITY_LIST] : [...ADMIN_CAPABILITIES];
+  // `role` decides which capability list is minted. Anything other than the
+  // two known values is treated as "admin" — an unrecognised role from a future
+  // backend must not silently produce a session with NO capabilities, which
+  // would lock a real admin out with no obvious cause.
+  //
+  // Shaped by the shared helper because moderator elevation (app/api/moderator/
+  // session) mints the SAME two claims. The original comment here said they
+  // "must be minted here and nowhere else", which two minting sites would have
+  // quietly falsified.
+  const { role, capabilities } = buildSessionClaims(data as Record<string, unknown>);
 
   const claims = {
     ...data,
-    role: role === "moderator" ? "moderator" : "admin",
-    capabilities: caps,
+    role,
+    capabilities,
   };
 
   try {
