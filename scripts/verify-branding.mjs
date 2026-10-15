@@ -142,9 +142,23 @@ check(
 
 // ...and the layouts must actually supply it. Both already call getTenant(),
 // so the data is in scope; this fails if someone drops the prop at the seam.
+//
+// The ADMIN portal's layout is a one-line wrapper around the shared
+// PortalDashboardLayout, which is where the AdminShell and its getTenant call
+// now live. Asserting against the wrapper would fail on a move that changed no
+// behaviour — so the assertion follows the code, and additionally checks that
+// the moderator portal renders a crest too (a white-labelled school must not
+// see the ResultApp mark just because a deputy is the one signed in).
 const adminLayout = read("app/[subdomain]/admin/(dashboard)/layout.tsx");
 const staffLayout = read("app/[subdomain]/staff/(dashboard)/layout.tsx");
-check("admin dashboard layout passes school.logoUrl", /<AdminShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(adminLayout));
+const portalLayout = read("components/admin/PortalDashboardLayout.tsx");
+check("admin dashboard layout passes school.logoUrl", /<AdminShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(portalLayout));
+check(
+  "the moderator portal passes school.logoUrl through the SAME shared body",
+  /<AdminShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(portalLayout) &&
+    /PortalDashboardLayout/.test(read("app/[subdomain]/moderator/(dashboard)/layout.tsx")),
+  "a moderator seeing the ResultApp mark instead of their school crest is the white-label bug, not a cosmetic one",
+);
 check("staff dashboard layout passes school.logoUrl", /<StaffShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(staffLayout));
 
 // ------------------------------------------------- Logo: three-way branch
