@@ -71,7 +71,7 @@ def _notify_moderator_change(
             },
             # Deep-link back into the portal the notification is about. The
             # inbox validates this is a relative/absolute URL before rendering.
-            cta_link=f"/{tid}/admin" if is_moderator else f"/{tid}/staff",
+            cta_link=f"/{tid}/moderator" if is_moderator else f"/{tid}/staff",
             # Targeted: without this the event fans out to every admin and every
             # active staff member in the school, telling the whole staffroom
             # about one person's promotion.
@@ -97,23 +97,24 @@ def _notify_moderator_change(
         _fallback_link = notifier._fallback_link
         public_base_url = notifier.public_base_url
 
-        link = f"{public_base_url()}/{tid}/admin" if is_moderator else f"{public_base_url()}/{tid}/staff"
+        link = f"{public_base_url()}/{tid}/moderator" if is_moderator else f"{public_base_url()}/{tid}/staff"
         if is_moderator:
             subject = f"You now have Moderator access to {school_name}"
             heading = "You have Moderator access"
             body_html = (
                 f"<p>{name},</p>"
                 f"<p>{school_name} has made you a <strong>Moderator</strong>.</p>"
-                "<p>Sign in to the Admin Portal using the <strong>same Staff ID and PIN</strong> "
-                "you already use for the Staff Portal.</p>"
+                "<p>Open the <strong>Moderator Console</strong> from your Staff Portal "
+                "sidebar &mdash; there is no extra sign-in, and we re-check your "
+                "Moderator access each time you open it.</p>"
                 "<p>You can manage Results, Allocations, Clearance, Templates and exports. "
                 "You cannot change School Settings, Billing, the Audit Log or staff roles.</p>"
-                f"{_cta_button('Open the Admin Portal', link)}"
+                f"{_cta_button('Open the Moderator Console', link)}"
             )
             text_body = (
                 f"{name},\n\n{school_name} has made you a Moderator.\n\n"
-                "Sign in to the Admin Portal using the same Staff ID and PIN you already "
-                f"use for the Staff Portal.\n\nOpen it here: {link}\n"
+                "Open the Moderator Console from your Staff Portal sidebar - there is no "
+                f"extra sign-in.\n\nOpen it here: {link}\n"
             )
             # Clients that strip the styled button still get a usable URL.
             text_body += _fallback_link(link)
@@ -124,13 +125,17 @@ def _notify_moderator_change(
                 f"<p>{name},</p>"
                 f"<p>{school_name} has removed your <strong>Moderator</strong> access.</p>"
                 f"<p>Your Staff Portal account is unaffected and your {display_role} role is "
-                "unchanged. Any Admin Portal session you have open keeps working until it "
-                "expires or you sign out.</p>"
+                "unchanged.</p>"
+                "<p>If you had the Moderator Console open, close the tab - its sessions "
+                "are short-lived and expire on their own within a couple of hours. "
+                "Opening the console again will be refused.</p>"
                 f"{_cta_button('Go to your Staff Portal', link)}"
             )
             text_body = (
                 f"{name},\n\n{school_name} has removed your Moderator access. Your Staff "
                 f"Portal account is unaffected and your {display_role} role is unchanged.\n\n"
+                f"If you had the Moderator Console open, close the tab - its sessions "
+                f"expire within a couple of hours, and opening it again will be refused.\n\n"
                 f"Staff Portal: {link}\n"
             )
             text_body += _fallback_link(link)
