@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const guard = await requireAdminCapability(tenantId, "promotion");
+  const guard = await requireAdminCapability(tenantId, "end-of-session");
   if (guard) return guard;
 
   const sp = req.nextUrl.searchParams;
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
           success: false,
           error: upstreamMessage(
             data as { detail?: unknown; error?: unknown },
-            "Could not load the promotion preview"
+            "Could not load the session close preview"
           ),
         },
         { status: res.status }

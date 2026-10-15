@@ -33,7 +33,7 @@ export async function POST(
     );
   }
 
-  const guard = await requireAdminCapability(tenantId, "promotion");
+  const guard = await requireAdminCapability(tenantId, "end-of-session");
   if (guard) return guard;
 
   const { runId } = await ctx.params;

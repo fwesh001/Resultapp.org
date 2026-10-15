@@ -45,7 +45,7 @@
  * mark-read); composing and broadcasting lives behind /api/superadmin/*, which
  * a tenant moderator's session cannot reach at any capability level.
  *
- * `promotion` (End of Session) is here because it is the one capability a
+ * `end-of-session` is here because it is the one capability a
  * deputy already holds everything needed to fake. Moderators can edit every
  * student row via `allocations` — so a deputy could promote a cohort by hand,
  * one UPDATE at a time, with no ledger entry and no audit record. Gating the
@@ -54,6 +54,13 @@
  * cohort-wide, money-affecting path is a deliberate, audited, single
  * transaction an administrator authorised, rather than forty silent edits a
  * deputy made over an afternoon.
+ *
+ * NAMED end-of-session, NOT "promotion", ON PURPOSE. `allocations` already has
+ * a long-standing notion of "promotion" — promoting a STAFF MEMBER to moderator
+ * via PATCH /staff/moderator, which is a moderator-held capability and fires
+ * MODERATOR_GRANTED. One word meaning two unrelated privileges in the same
+ * codebase is how a guard ends up checking the wrong thing. The cohort close is
+ * named after what it does to a cohort, not after one of its four outcomes.
  */
 export const ADMIN_ONLY_CAPABILITIES = [
   "settings",
@@ -61,7 +68,7 @@ export const ADMIN_ONLY_CAPABILITIES = [
   "audit",
   "moderators",
   "announcements",
-  "promotion",
+  "end-of-session",
 ] as const;
 
 /** Capabilities a moderator (deputy) holds. */

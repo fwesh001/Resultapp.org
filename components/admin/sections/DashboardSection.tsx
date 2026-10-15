@@ -40,7 +40,7 @@ const DENIAL_COPY: Record<string, { title: string; body: string }> = {
     title: "Managing moderators is administrator-only",
     body: "Appointing or removing moderators grants authority, so it stays with the school's administrator.",
   },
-  promotion: {
+  "end-of-session": {
     title: "Closing a session is administrator-only",
     body: "Promoting, graduating or withdrawing a whole cohort changes every student's record and moves money in your slot ledger, so it stays with the school's administrator.",
   },

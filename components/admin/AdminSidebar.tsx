@@ -129,7 +129,7 @@ export default function AdminSidebar({
       label: "End of Session",
       href: `${base}/promotion`,
       icon: GraduationCap,
-      capability: "promotion",
+      capability: "end-of-session",
     },
     {
       label: "Templates",

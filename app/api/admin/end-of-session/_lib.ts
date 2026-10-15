@@ -2,9 +2,14 @@
  * Shared plumbing for the four End of Session proxies.
  *
  * Every one of them is admin-only via `requireAdminCapability(tenantId,
- * "promotion")`. Hiding the page from the sidebar is UX, not security — this
- * is the gate that actually refuses, and it must never be relaxed to
+ * "end-of-session")`. Hiding the page from the sidebar is UX, not security —
+ * this is the gate that actually refuses, and it must never be relaxed to
  * `requireAdminSession` (which a moderator satisfies).
+ *
+ * The capability is named end-of-session, NOT "promotion": `allocations`
+ * already uses that word for promoting a staff member to moderator. Same word,
+ * two unrelated privileges, in the same guard file, is how the wrong thing
+ * ends up being checked.
  *
  * There is deliberately no shared secret in this module: the callers are
  * expected to import getSecret/getBackendBase from the canonical definitions

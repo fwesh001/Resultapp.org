@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const guard = await requireAdminCapability(tenantId, "promotion");
+  const guard = await requireAdminCapability(tenantId, "end-of-session");
   if (guard) return guard;
 
   // Shape-checked here so a malformed payload is a clear 400 from the proxy
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
           success: false,
           error: upstreamMessage(
             data as { detail?: unknown; error?: unknown },
-            "Could not create the promotion run"
+            "Could not create the session close plan"
           ),
         },
         { status: res.status }

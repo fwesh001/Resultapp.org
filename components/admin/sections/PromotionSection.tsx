@@ -24,7 +24,7 @@ export async function PromotionSection({
 }) {
   const { subdomain } = await params;
 
-  await enforceAdminCapability(params, "promotion", portal);
+  await enforceAdminCapability(params, "end-of-session", portal);
 
   const tenantId = subdomain.toLowerCase().trim();
   const school = await getTenant(tenantId);
