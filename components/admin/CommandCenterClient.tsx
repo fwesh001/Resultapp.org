@@ -49,9 +49,27 @@ interface CommandCenterClientProps {
   tenantId: string;
   schoolName: string;
   initialTerm?: string;
+  /**
+   * Which portal this is rendering inside.
+   *
+   * Present because this component renders two navigation links, and one of them
+   * ("Top up credits") points at BILLING — a capability a moderator does not
+   * hold. Hardcoding `/${tenantId}/admin/...` here meant the moderator console's
+   * Result Command Center offered a link to a page that would 403 them. Hiding
+   * nav is UX; this one is simply a broken affordance, so it is now decided from
+   * the portal rather than left to 403 at click time.
+   */
+  portal?: "admin" | "moderator";
 }
 
-export default function CommandCenterClient({ tenantId, schoolName, initialTerm = "Term 1" }: CommandCenterClientProps) {
+export default function CommandCenterClient({
+  tenantId,
+  schoolName,
+  initialTerm = "Term 1",
+  portal = "admin",
+}: CommandCenterClientProps) {
+  const base = `/${tenantId}/${portal}`;
+  const canSeeBilling = portal === "admin";
   const [term, setTerm] = useState(initialTerm);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,7 +282,7 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link
-            href={`/${tenantId}/admin`}
+            href={`${base}`}
             className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" /> Back to dashboard
@@ -337,9 +355,22 @@ export default function CommandCenterClient({ tenantId, schoolName, initialTerm 
                 <p className="text-xs text-purple-200/60">Available Credits</p>
               </div>
               <p className="mt-3 text-2xl font-bold text-white">{balance.toLocaleString()}</p>
-              <Link href={`/${tenantId}/admin/billing`} className="mt-2 inline-block text-xs font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white">
-                Top up credits →
-              </Link>
+{/* A moderator still needs to SEE the balance — publishing costs
+                  credits, so hiding the number would leave them publishing blind
+                  and blaming the platform. What they cannot do is BUY more, so
+                  the link becomes a read-only note rather than a 403. */}
+              {canSeeBilling ? (
+                <Link
+                  href={`${base}/billing`}
+                  className="mt-2 inline-block text-xs font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white"
+                >
+                  Top up credits &rarr;
+                </Link>
+              ) : (
+                <p className="mt-2 text-xs text-purple-200/50">
+                  Ask the school&apos;s administrator to top up.
+                </p>
+              )}
             </div>
           </div>
 
