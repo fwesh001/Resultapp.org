@@ -1173,11 +1173,24 @@ check("the admin password is never written to sessionStorage", () => {
   return true;
 });
 
-check("a completed registration clears the draft", () =>
-  /setSuccessData\(\{[\s\S]*?\}\);[\s\S]{0,200}clearRegistrationDraft\(\)/.test(register)
-    ? true
-    : "success does not clear the draft, so a live school can be resumed from Step 1"
-);
+check("a completed registration clears the draft", () => {
+  // Positional rather than a regex: the two calls are separated by an
+  // explanatory comment whose length will drift every time it is reworded.
+  const at = register.indexOf("setSuccessData({");
+  if (at === -1) return "cannot locate the setSuccessData call";
+  const clear = register.indexOf("clearRegistrationDraft()", at);
+  if (clear === -1) {
+    return "success does not clear the draft, so a live school can be resumed from Step 1";
+  }
+  // The clear must not live inside the useEffect guard (that one is the
+  // "never write while provisioned" guard, not the terminal cleanup).
+  const inEffect = /useEffect\(\(\) => \{[\s\S]*?clearRegistrationDraft\(\)/.exec(
+    register.slice(0, at)
+  );
+  return inEffect
+    ? "clearRegistrationDraft() is called before success is reached"
+    : true;
+});
 
 check("the stored draft shape is versioned", () =>
   /REGISTRATION_DRAFT_KEY = "resultapp:registration-draft:v1"/.test(register) &&
