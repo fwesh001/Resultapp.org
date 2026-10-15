@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 
 type State = "working" | "no-session" | "not-a-moderator" | "failed";
@@ -38,7 +38,6 @@ type State = "working" | "no-session" | "not-a-moderator" | "failed";
 export default function ModeratorElevationPage() {
   const params = useParams<{ subdomain: string }>();
   const subdomain = (params?.subdomain ?? "").toLowerCase().trim();
-  const router = useRouter();
   const [state, setState] = useState<State>("working");
   // React 18 StrictMode mounts effects twice in development. Without this the
   // endpoint would be called twice, minting a second session and re-running the
