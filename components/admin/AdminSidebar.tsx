@@ -219,6 +219,17 @@ export default function AdminSidebar({
       </nav>
 
       <div className="space-y-1 border-t border-line-1 p-4">
+        {/* Who this session actually belongs to.
+            In the moderator console this matters more than usual: the session is
+            DERIVED from a staff login, so a deputy holding two sessions can
+            otherwise be unsure which one they are looking at. The prop was
+            already being passed by AdminShell and silently dropped here. */}
+        {actorLabel ? (
+          <p className="truncate px-3 pb-1 text-xs text-text-3">
+            Signed in as{" "}
+            <span className="text-text-2">{toTitleCase(actorLabel)}</span>
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={() => void handleSignOut()}
