@@ -3740,6 +3740,34 @@ def init_end_of_session_tables() -> None:
         # already happened rather than promoting a cohort twice. Keying on
         # (subdomain, from_session) means one school cannot open two competing
         # runs for the same close, and re-POSTing the same run id is a no-op.
+        # Column documentation is kept in PYTHON comments above the statement,
+        # not as SQL comments inside it. This is an f-string, and a SQL comment
+        # containing JSON braces -- {"promote": [...]} -- is read by Python as
+        # a format specifier and raises ValueError before the statement is ever
+        # sent. That shipped once: the whole init raised on every boot, the
+        # lifespan's warn-only handler swallowed it, and the table silently
+        # never existed. SQL comments must escape braces; Python comments
+        # cannot bite.
+        #
+        # `decisions` holds the operator's confirmed plan:
+        #     {"promote":   [{"student_id","from","to"}],
+        #      "repeat":    [{"student_id","class"}],
+        #      "graduate":  [{"student_id","class"}],
+        #      "withdraw":  [{"student_id","class","reason"}]}
+        # Kept as JSONB rather than normalised rows: a run is written once and
+        # read as a unit, and normalising it would mean the apply transaction
+        # joins four tables to reassemble what it already received.
+        #
+        # `preview` is what the preview computed at draft time, kept purely so
+        # the run can be audited afterwards against what was decided. Never
+        # authoritative — the preview is recomputed on every GET.
+        #
+        # `actor` is VARCHAR, not a FK to tenant_staff: a moderator is keyed by
+        # an admission-number-style STRING, and log_admin_action documents that
+        # forcing one into a UUID column makes Postgres reject the whole INSERT
+        # — which its best-effort wrapper then swallows, silently losing every
+        # moderator action from the audit trail. Same reasoning as its own
+        # docstring.
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {END_OF_SESSION_RUNS_TABLE} (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -3747,25 +3775,8 @@ def init_end_of_session_tables() -> None:
                 from_session VARCHAR(50) NOT NULL,
                 to_session VARCHAR(50) NOT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'draft',
-                -- The operator's confirmed plan. Shape:
-                --   {"promote":   [{"student_id","from","to"}],
-                --    "repeat":    [{"student_id","class"}],
-                --    "graduate":  [{"student_id","class"}],
-                --    "withdraw":  [{"student_id","class","reason"}]}
-                -- Kept as JSONB rather than normalised rows: a run is written
-                -- once and read as a unit, and normalising it would mean the
-                -- apply transaction joins four tables to reassemble what it
-                -- already received.
                 decisions JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                -- What the preview computed at draft time, kept purely so the
-                -- run can be audited after the fact against what was decided.
-                -- Never authoritative: the preview is recomputed on every GET.
                 preview JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                -- VARCHAR, not a FK to tenant_staff. A moderator is keyed by an
-                -- admission-number-style STRING, and log_admin_action documents
-                -- that forcing it into a UUID column makes Postgres reject the
-                -- whole INSERT — which its best-effort wrapper then swallows,
-                -- silently losing every moderator action from the audit trail.
                 actor VARCHAR(120) NOT NULL,
                 actor_id UUID,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
