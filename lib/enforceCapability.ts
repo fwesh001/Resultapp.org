@@ -25,23 +25,37 @@ import { readAdminIdentity } from "@/lib/adminAuth";
  * Components, which cannot return raw Response objects.
  *
  * Returns the redirect target for callers that want to log it, and throws
- * nothing. Missing session -> /admin/login; missing capability -> the
- * dashboard, where the admin sees why.
+ * nothing. Missing session -> the portal's login; missing capability -> that
+ * portal's dashboard, carrying `?denied=` so the page can explain itself.
  */
 export async function enforceAdminCapability(
   params: { subdomain: string } | Promise<{ subdomain: string }>,
   capability: string,
+  /**
+   * Which portal the caller lives in.
+   *
+   * Both redirect targets used to be hardcoded to `/admin/...`, which was
+   * invisible while only the admin portal used this helper. Once a moderator
+   * portal exists it matters twice over: a signed-out moderator was sent to
+   * the ADMIN login — the very page that asks for "Admin ID or Email" — and a
+   * denied moderator was dumped onto the admin dashboard. Both read as "the
+   * moderator feature is broken".
+   *
+   * The capability check itself is identical either way. This only decides
+   * WHERE a rejection lands.
+   */
+  portal: "admin" | "moderator" = "admin",
 ): Promise<string | null> {
   const { subdomain: raw } = await params;
   const subdomain = (raw || "").toLowerCase().trim();
 
   const identity = await readAdminIdentity(subdomain);
   if (!identity) {
-    redirect(`/${subdomain}/admin/login`);
+    redirect(`/${subdomain}/${portal}/login`);
   }
 
   if (identity.role !== "admin" && !identity.capabilities.includes(capability)) {
-    redirect(`/${subdomain}/admin?denied=${encodeURIComponent(capability)}`);
+    redirect(`/${subdomain}/${portal}?denied=${encodeURIComponent(capability)}`);
   }
 
   return null;
