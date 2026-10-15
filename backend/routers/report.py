@@ -236,13 +236,28 @@ def _compute_total(academic_structure: Optional[Dict[str, Any]], scores: Dict[st
 
 
 def _academic_session() -> str:
-    now = datetime.now()
-    y = now.year
-    m = now.month
-    # Sept (9) is academic year rollover for NG schools
-    if m >= 9:
-        return f"{y}/{y+1}"
-    return f"{y-1}/{y}"
+    """Derived academic session. Delegates to the single implementation.
+
+    This used to recompute the September rollover inline against
+    `datetime.now()` — NAIVE server-local time — while
+    db_manager.current_academic_session() uses UTC. The two therefore
+    disagreed for up to a timezone-width around the rollover, which is the same
+    class of bug as LEGAL_REMEDIATION.md item 1, and the reason the caller
+    below had to give `school.current_session` priority purely to paper over
+    it.
+
+    Delegating closes the gap. Behaviour changes ONLY when a school has a
+    blank `current_session` (the fallback path); every configured school
+    resolves at the earlier step and is unaffected. It now gets the UTC basis,
+    which is the correct one and matches the derived label written by
+    current_academic_session().
+
+    Kept as a named function because the call site below reads better with it
+    and other modules import it.
+    """
+    from services.db_manager import current_academic_session
+
+    return current_academic_session()
 
 
 def _compute_simple_granular_total(breakdown: Dict[str, Optional[float]]) -> Optional[float]:
@@ -595,12 +610,14 @@ def get_report_bundle(
 
     # Session used for the publication decision.
     #
-    # The tenant's configured session wins, so this agrees exactly with the
-    # Next.js report page (which resolves school.currentSession first). Using
-    # the derived session alone let the gate and the page disagree near the
-    # September rollover, because _academic_session() is naive server-local
-    # time while db_manager.current_academic_session() is UTC.
-    _session = (school_info.get("current_session") or "").strip() or _academic_session()
+    # Resolved by the single shared resolver, same as clearance.py and
+    # export.py. The tenant's configured session wins, which is what makes this
+    # agree exactly with the Next.js report page. The derived fallback is now
+    # UTC-based (it used to be naive server-local), which closes the
+    # September-rollover disagreement the previous inline copy could produce.
+    from services.db_manager import resolve_tenant_session
+
+    _session = resolve_tenant_session(tid, None)
 
     # Historical link support (student portal "past results" archive).
     #

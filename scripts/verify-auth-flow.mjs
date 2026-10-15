@@ -37,6 +37,8 @@ const NOTIFIER = path.join("backend", "services", "notifier.py");
 const ROUTER = path.join("backend", "routers", "auth_flow.py");
 const MAIN = path.join("backend", "main.py");
 const ADMIN_AUTH = path.join("backend", "routers", "admin_auth.py");
+const STUDENT_AUTH = path.join("backend", "routers", "student_auth.py");
+const ALLOCATIONS = path.join("backend", "routers", "allocations.py");
 const PLATFORM_AUTH = path.join("backend", "routers", "platform_auth.py");
 const WALL = path.join("components", "auth", "VerifyEmailWall.tsx");
 const SIGNIN = path.join("components", "auth", "SignInForm.tsx");
@@ -1198,6 +1200,97 @@ check("the stored draft shape is versioned", () =>
     ? true
     : "the draft is unversioned, so a shape change silently half-applies"
 );
+
+// ---------------------------------------------------------------------------
+// Alumni access (End of Session, Phase 1).
+//
+// tenant_students gained status/terminal_outcome so a graduating or leaving
+// pupil is a STATE CHANGE rather than a delete. The single most dangerous way
+// to use that new column is to add `AND status = 'active'` to the login query
+// "for cleanliness" — which silently and permanently locks every graduate out
+// of their own historical report cards.
+//
+// This guard exists because the failure is invisible in review: it looks like
+// sensible hardening, and it is not a bug anyone would notice until a parent
+// rings two years later.
+// ---------------------------------------------------------------------------
+
+check("student login does NOT filter on roster status", () => {
+  const src = read(STUDENT_AUTH);
+  const fn = src.slice(src.indexOf("def student_login"));
+  if (fn === src) return "cannot locate student_login";
+  const sql = fn.slice(fn.indexOf("SELECT id, student_id"), fn.indexOf("return {"));
+  if (!sql) return "cannot locate the student_login credential query";
+  if (/\bstatus\b/i.test(sql)) {
+    return "student_login filters on status — this locks graduates out of their own results";
+  }
+  return true;
+});
+
+check("the report reader does NOT filter on roster status", () => {
+  // report.py is what serves alumni a historical report card. Same hazard.
+  const src = read(path.join("backend", "routers", "report.py"));
+  const from = src.slice(src.indexOf("FROM {TENANT_STUDENTS_TABLE}"));
+  if (from === src) return "cannot locate the report student query";
+  const query = from.slice(0, 600);
+  if (/\bstatus\b/i.test(query)) {
+    return "report.py filters on student status — alumni would 404 on their own history";
+  }
+  return true;
+});
+
+check("lifecycle status is constrained in the schema, not just in app code", () => {
+  const src = read(DB);
+  if (!/ck_students_status/.test(src)) return "no CHECK constraint on tenant_students.status";
+  if (!/status IN \('active','graduated','withdrawn'\)/.test(src)) {
+    return "the status CHECK does not enumerate the allowed lifecycle states";
+  }
+  if (!/ck_students_status_outcome_agree/.test(src)) {
+    return "status and terminal_outcome can disagree";
+  }
+  return true;
+});
+
+check("graduation and withdrawal do not delete the student row", () => {
+  // Deleting orphans every grade/remark/publication row, because those tables
+  // key on the admission-number string with no FK back to tenant_students.
+  const src = read(DB);
+  return /status VARCHAR\(20\) NOT NULL DEFAULT 'active'/.test(src)
+    ? true
+    : "no status column — a terminal outcome can only be recorded as a delete";
+});
+
+check("one cohort-close run per school per session (idempotency key)", () => {
+  const src = read(DB);
+  const block = /CREATE TABLE IF NOT EXISTS \{END_OF_SESSION_RUNS_TABLE\} \([\s\S]*?\n            \);/.exec(
+    src
+  );
+  if (!block) return "end_of_session_runs is not created";
+  if (!/UNIQUE\(subdomain, from_session\)/.test(block[0])) {
+    return "no UNIQUE(subdomain, from_session) — a retried apply can promote twice";
+  }
+  return true;
+});
+
+check("an applied run is required to carry its timestamp", () =>
+  /ck_eos_run_applied_has_timestamp/.test(read(DB))
+    ? true
+    : "a run can be marked applied with no applied_at, so 'was it applied?' is unanswerable"
+);
+
+check("the session resolver is defined once, not copied per router", () => {
+  const db = read(DB);
+  if (!/def resolve_tenant_session/.test(db)) return "the shared resolver is missing";
+  const copies = ["clearance.py", "export.py"].filter((f) => {
+    const s = read(path.join("backend", "routers", f));
+    // A delegating wrapper is fine; an inline 3-step reimplementation is not.
+    const body = /def _resolve_session\([\s\S]*?\n\n/.exec(s);
+    return body && /get_school_by_subdomain/.test(body[0]) && /resolve_tenant_session/.test(body[0]) === false;
+  });
+  return copies.length === 0
+    ? true
+    : `these routers still reimplement session resolution: ${copies.join(", ")}`;
+});
 
 console.log("\nPayment verification: settled only, and never confused with pending");
 check("the API envelope status is never treated as proof of payment", () => {

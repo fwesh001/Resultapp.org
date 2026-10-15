@@ -2891,6 +2891,14 @@ TENANT_GRADES_TABLE = "tenant_grades"
 TENANT_FORM_ASSIGNMENTS_TABLE = "tenant_form_assignments"
 STUDENT_CLEARANCE_TABLE = "student_term_clearance"
 
+#: One resumable, auditable attempt to close a cohort (End of Session, Phase 2).
+END_OF_SESSION_RUNS_TABLE = "end_of_session_runs"
+
+#: Lifecycle states a run can be in. 'draft' is editable, 'applied' is terminal
+#: and carries applied_at, 'cancelled' means an operator abandoned it before
+#: anything was written.
+END_OF_SESSION_RUN_STATUSES = ("draft", "applied", "cancelled")
+
 VALID_TERMS = ("Term 1", "Term 2", "Term 3")
 
 #: Shared starting credential for every roster row (tenant_students and
@@ -2947,6 +2955,125 @@ def init_roster_registry() -> None:
         # family device strands whoever did not get to change it.
         cur.execute(f"ALTER TABLE {TENANT_STUDENTS_TABLE} ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT TRUE;")
         cur.execute(f"UPDATE {TENANT_STUDENTS_TABLE} SET must_change_password = TRUE WHERE must_change_password IS NULL;")
+
+        # ---------------------------------------------------------------------
+        # Student lifecycle  (End of Session, Phase 1)
+        #
+        # A student leaving the active roster is a STATE CHANGE, never a
+        # delete. Two independent reasons, both from existing behaviour:
+        #
+        #   1. tenant_grades / result_publications / student_term_clearance all
+        #      key on the admission-number STRING with no FK back to
+        #      tenant_students. Deleting the student orphans every one of them.
+        #      scripts/purge_orphan_students.py exists purely to mop up after
+        #      historical deletes, and it documents that a re-enrolled admission
+        #      number inherits the previous child's marks, remarks, behavioural
+        #      ratings and — worst — their published state, so the new pupil is
+        #      "already published" and costs zero credits.
+        #
+        #   2. A graduate must keep portal access to read their own history.
+        #      Verified: student_login (routers/student_auth.py) filters only
+        #      on subdomain + student_id + password_hash, and slots are consumed
+        #      at CREATE time and never re-checked. So an alumni record survives
+        #      a slot refund untouched — but only as long as the ROW survives.
+        #
+        # WHY status IS DENORMALISED ALONGSIDE terminal_outcome
+        # They are not independent: status='active' implies
+        # terminal_outcome IS NULL, and a non-active status implies it is set.
+        # That is enforced below rather than left to application code, because
+        # a bulk promotion that fails halfway would otherwise leave rows
+        # claiming to be active graduates.
+        #
+        # status stays a plain VARCHAR with a CHECK rather than a PG enum: an
+        # enum needs ALTER TYPE to add a state, which cannot run inside the
+        # transaction budget of a startup migration.
+        # ---------------------------------------------------------------------
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} "
+            f"ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';"
+        )
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} "
+            f"ADD COLUMN IF NOT EXISTS terminal_outcome VARCHAR(20);"
+        )
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} "
+            f"ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMPTZ;"
+        )
+
+        # Backfill before constraining. A pre-existing row inserted between the
+        # ADD COLUMN and this UPDATE would otherwise violate the CHECK and fail
+        # the whole startup.
+        cur.execute(
+            f"UPDATE {TENANT_STUDENTS_TABLE} SET status = 'active' WHERE status IS NULL;"
+        )
+        cur.execute(
+            f"UPDATE {TENANT_STUDENTS_TABLE} SET terminal_outcome = NULL "
+            f"WHERE terminal_outcome IS NULL;"
+        )
+
+        # Named, IF NOT EXISTS, drop-then-add: the table may have been created
+        # by an older build that had no such constraint, and init runs on every
+        # boot so a bare ADD would raise the second time.
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} DROP CONSTRAINT IF EXISTS ck_students_status;"
+        )
+        cur.execute(
+            f"""
+            ALTER TABLE {TENANT_STUDENTS_TABLE}
+              ADD CONSTRAINT ck_students_status
+              CHECK (status IN ('active','graduated','withdrawn'));
+            """
+        )
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} DROP CONSTRAINT IF EXISTS ck_students_terminal_outcome;"
+        )
+        cur.execute(
+            f"""
+            ALTER TABLE {TENANT_STUDENTS_TABLE}
+              ADD CONSTRAINT ck_students_terminal_outcome
+              CHECK (terminal_outcome IS NULL
+                     OR terminal_outcome IN ('graduated','withdrawn'));
+            """
+        )
+        # The cross-field invariant. WITHOUT VALID so the migration can apply to an
+        # existing roster without a full validation scan; new and updated rows
+        # are checked immediately regardless.
+        #
+        # IS NOT DISTINCT FROM, NOT `=`. A CHECK rejects only FALSE — it is
+        # SATISFIED by NULL. So the obvious form
+        #
+        #     CHECK ((status='active' AND terminal_outcome IS NULL)
+        #          OR (status = terminal_outcome))
+        #
+        # does not constrain anything: for a graduating student with no
+        # terminal_outcome yet, `status = terminal_outcome` is
+        # 'graduated' = NULL -> NULL, and NULL passes. The constraint was
+        # proven to accept that row by the scratch dry run. IS NOT DISTINCT
+        # FROM compares NULLs as equal, so the row is correctly REJECTED.
+        cur.execute(
+            f"ALTER TABLE {TENANT_STUDENTS_TABLE} DROP CONSTRAINT IF EXISTS ck_students_status_outcome_agree;"
+        )
+        cur.execute(
+            f"""
+            ALTER TABLE {TENANT_STUDENTS_TABLE}
+              ADD CONSTRAINT ck_students_status_outcome_agree
+              CHECK ( (status = 'active' AND terminal_outcome IS NULL)
+                   OR (terminal_outcome IS NOT DISTINCT FROM status
+                       AND terminal_outcome IS NOT NULL) ) NOT VALID;
+            """
+        )
+
+        # Every roster screen, the promotion preview and the apply transaction
+        # all ask the same question: "the active students of this school, in
+        # this class". The partial index makes that a narrow index scan and
+        # keeps graduated rows — which accumulate every year — out of it
+        # entirely. Without the WHERE clause this index would still carry every
+        # historical row and the selectivity benefit would largely evaporate.
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS ix_{TENANT_STUDENTS_TABLE}_active_class "
+            f"ON {TENANT_STUDENTS_TABLE}(subdomain, class_name) WHERE status = 'active';"
+        )
 
         # Staff â€” with password_hash for Staff Authentication (default PIN 123456 hashed via pgcrypto)
         cur.execute(f"""
@@ -3586,6 +3713,112 @@ VALID_SUPPORT_SUBMITTER_KINDS = ("admin", "staff", "anonymous")
 MAX_SUPPORT_PAYLOAD_FIELD_LEN = 4000
 #: Whole-body cap so a single ticket cannot bloat the row / WAL.
 MAX_SUPPORT_PAYLOAD_BYTES = 64 * 1024
+
+
+def init_end_of_session_tables() -> None:
+    """Create the cohort-closing run table if absent (idempotent).
+
+    Separate from init_roster_registry on purpose: this belongs to a feature
+    that does not exist yet, and the roster init is already the widest startup
+    path in the codebase. A failure in one is caught independently in main.py,
+    so a broken run table cannot take the roster down with it — and vice versa.
+
+    Safe to call on every startup. Additive only: this never drops or alters.
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+
+        # ONE ROW PER SCHOOL PER SESSION CLOSE.
+        #
+        # This UNIQUE constraint IS the idempotency key for the whole feature.
+        # Bulk promotion is not a single UPDATE — it is a transaction spanning
+        # student reclassification, the slot ledger and the audit log — so a
+        # retry after a network timeout must be able to detect that the work
+        # already happened rather than promoting a cohort twice. Keying on
+        # (subdomain, from_session) means one school cannot open two competing
+        # runs for the same close, and re-POSTing the same run id is a no-op.
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {END_OF_SESSION_RUNS_TABLE} (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                subdomain VARCHAR(60) NOT NULL REFERENCES {SCHOOLS_REGISTRY_TABLE}(subdomain) ON DELETE CASCADE,
+                from_session VARCHAR(50) NOT NULL,
+                to_session VARCHAR(50) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'draft',
+                -- The operator's confirmed plan. Shape:
+                --   {"promote":   [{"student_id","from","to"}],
+                --    "repeat":    [{"student_id","class"}],
+                --    "graduate":  [{"student_id","class"}],
+                --    "withdraw":  [{"student_id","class","reason"}]}
+                -- Kept as JSONB rather than normalised rows: a run is written
+                -- once and read as a unit, and normalising it would mean the
+                -- apply transaction joins four tables to reassemble what it
+                -- already received.
+                decisions JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                -- What the preview computed at draft time, kept purely so the
+                -- run can be audited after the fact against what was decided.
+                -- Never authoritative: the preview is recomputed on every GET.
+                preview JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                -- VARCHAR, not a FK to tenant_staff. A moderator is keyed by an
+                -- admission-number-style STRING, and log_admin_action documents
+                -- that forcing it into a UUID column makes Postgres reject the
+                -- whole INSERT — which its best-effort wrapper then swallows,
+                -- silently losing every moderator action from the audit trail.
+                actor VARCHAR(120) NOT NULL,
+                actor_id UUID,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                applied_at TIMESTAMPTZ,
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(subdomain, from_session)
+            );
+        """)
+        # "Look up the run for this school this close" is the single hottest
+        # query this table will see — it runs on every preview render and on
+        # every apply attempt, and UNIQUE(subdomain, from_session) already
+        # provides exactly that lookup, so no extra index is warranted.
+        cur.execute(
+            f"ALTER TABLE {END_OF_SESSION_RUNS_TABLE} "
+            f"DROP CONSTRAINT IF EXISTS ck_eos_run_status;"
+        )
+        cur.execute(f"""
+            ALTER TABLE {END_OF_SESSION_RUNS_TABLE}
+              ADD CONSTRAINT ck_eos_run_status
+              CHECK (status IN ({','.join(repr(s) for s in END_OF_SESSION_RUN_STATUSES)}));
+        """)
+        # A run that moves between sessions is not a close, it is a data-entry
+        # error, and letting it through would produce a cohort advanced into a
+        # session nobody is reporting on.
+        cur.execute(
+            f"ALTER TABLE {END_OF_SESSION_RUNS_TABLE} "
+            f"DROP CONSTRAINT IF EXISTS ck_eos_run_sessions_differ;"
+        )
+        cur.execute(f"""
+            ALTER TABLE {END_OF_SESSION_RUNS_TABLE}
+              ADD CONSTRAINT ck_eos_run_sessions_differ
+              CHECK (from_session <> to_session);
+        """)
+        # One-directional on purpose: 'applied' MUST carry applied_at, but a
+        # cancelled run must be allowed to keep the timestamp it would have
+        # had. Forbidding the reverse would make a legitimate cancel-and-retry
+        # impossible to record.
+        cur.execute(
+            f"ALTER TABLE {END_OF_SESSION_RUNS_TABLE} "
+            f"DROP CONSTRAINT IF EXISTS ck_eos_run_applied_has_timestamp;"
+        )
+        cur.execute(f"""
+            ALTER TABLE {END_OF_SESSION_RUNS_TABLE}
+              ADD CONSTRAINT ck_eos_run_applied_has_timestamp
+              CHECK (status <> 'applied' OR applied_at IS NOT NULL);
+        """)
+        conn.commit()
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def init_support_tables() -> None:

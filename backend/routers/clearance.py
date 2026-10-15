@@ -103,27 +103,22 @@ def _validate_term(term: str) -> str:
 
 
 def _resolve_session(tid: str, academic_session: Optional[str]) -> str:
-    """Prefer the school's configured session, else the derived one.
+    """Prefer an explicit override, else the school's configured session,
+    else the derived one.
 
-    This must agree with the report gate (report.py) or a hold written for one
-    session would be invisible to the checker in another — which would be a
-    silent revenue leak. LEGAL_REMEDIATION.md item 1 records a past drift bug
-    between exactly these two resolvers.
+    Now a thin delegation to `db_manager.resolve_tenant_session`, which is the
+    single implementation of those three steps. This function used to carry its
+    own copy, and export.py carried a second one described as "verbatim
+    behaviour". LEGAL_REMEDIATION.md item 1 records a real revenue leak caused
+    by exactly that pair drifting apart: a financial hold written for one
+    session became invisible to the result checker in another.
+
+    Kept as a named local rather than inlined at every call site so the
+    callers in this file read the same as they did before.
     """
-    session = (academic_session or "").strip()
-    if session:
-        return session
+    from services.db_manager import resolve_tenant_session
 
-    from services.db_manager import get_school_by_subdomain
-
-    school = get_school_by_subdomain(tid)
-    configured = (school or {}).get("current_session")
-    if configured:
-        return str(configured).strip()
-
-    from services.db_manager import current_academic_session
-
-    return current_academic_session()
+    return resolve_tenant_session(tid, academic_session)
 
 
 def _serialize(cursor, rows) -> List[dict]:

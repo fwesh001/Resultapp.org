@@ -88,6 +88,16 @@ async def lifespan(app: FastAPI):
         init_roster_registry()
     except Exception as e:
         logger.warning(f"Roster registry init warning: {e}")
+    # Cohort-closing runs (End of Session). Its own try/except so a failure here
+    # cannot take the roster init down — the feature is not shipping in the same
+    # deploy as the schema, and a broken run table must not strand every other
+    # tenant.
+    try:
+        from services.db_manager import init_end_of_session_tables
+
+        init_end_of_session_tables()
+    except Exception as e:
+        logger.warning(f"End-of-session tables init warning: {e}")
     try:
         from database import init_grading_tables
 

@@ -172,28 +172,19 @@ def _validate_term(term: Optional[str]) -> Optional[str]:
 
 
 def _resolve_session(tid: str, academic_session: Optional[str]) -> str:
-    """Prefer the school's configured session, else derive it.
+    """Prefer an explicit override, else the school's configured session,
+    else the derived one.
 
-    Verbatim behaviour of clearance._resolve_session. This MUST agree with
-    the report gate: if the export resolved a different session than the one
-    the bursar cleared against, the Cleared/Owing column would contradict the
-    admin's own screen. LEGAL_REMEDIATION.md item 1 records exactly that class
-    of drift bug.
+    Now a thin delegation to `db_manager.resolve_tenant_session`. This used to
+    be a second copy of clearance's resolver, carrying the note that it was
+    "verbatim behaviour" of the first. Two copies that must agree is exactly
+    how they stopped agreeing: LEGAL_REMEDIATION.md item 1 records an export
+    resolving a different session than the bursar's clearance, so the
+    Cleared/Owing column contradicted the admin's own screen.
     """
-    session = (academic_session or "").strip()
-    if session:
-        return session
+    from services.db_manager import resolve_tenant_session
 
-    from services.db_manager import get_school_by_subdomain
-
-    school = get_school_by_subdomain(tid)
-    configured = (school or {}).get("current_session")
-    if configured:
-        return str(configured).strip()
-
-    from services.db_manager import current_academic_session
-
-    return current_academic_session()
+    return resolve_tenant_session(tid, academic_session)
 
 
 # ---------------------------------------------------------------------------
