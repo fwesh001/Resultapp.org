@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   LogOut,
   ShieldCheck,
+  GraduationCap,
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
@@ -120,6 +121,15 @@ export default function AdminSidebar({
       href: `${base}/clearance`,
       icon: Wallet,
       capability: "clearance",
+    },
+    {
+      // Admin-only. Sits after Clearance because closing a session is what the
+      // bursary's cleared state feeds into, and before Templates because it
+      // changes the class every report card is rendered against.
+      label: "End of Session",
+      href: `${base}/promotion`,
+      icon: GraduationCap,
+      capability: "promotion",
     },
     {
       label: "Templates",

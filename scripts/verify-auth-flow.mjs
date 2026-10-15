@@ -38,7 +38,6 @@ const ROUTER = path.join("backend", "routers", "auth_flow.py");
 const MAIN = path.join("backend", "main.py");
 const ADMIN_AUTH = path.join("backend", "routers", "admin_auth.py");
 const STUDENT_AUTH = path.join("backend", "routers", "student_auth.py");
-const ALLOCATIONS = path.join("backend", "routers", "allocations.py");
 const PLATFORM_AUTH = path.join("backend", "routers", "platform_auth.py");
 const WALL = path.join("components", "auth", "VerifyEmailWall.tsx");
 const SIGNIN = path.join("components", "auth", "SignInForm.tsx");

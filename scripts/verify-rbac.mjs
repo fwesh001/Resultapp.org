@@ -18,7 +18,7 @@
  * indistinguishable, the feature is decorative.
  */
 import { createHmac, randomBytes } from "node:crypto";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -576,6 +576,82 @@ check(
   /portal === "moderator" \? "Moderator Overview"/.test(
     read("components/admin/sections/DashboardSection.tsx"),
   ),
+);
+
+// ---- 12. End of Session (promotion) — admin-only, and guarded everywhere ----
+//
+// A cohort close is the one action that is cohort-wide, money-affecting and
+// effectively irreversible. It must be refused in FOUR places, and it is
+// enough for any ONE of them to be a bare session check for a moderator to walk
+// straight into it.
+check(
+  "the promotion capability exists and is admin-only",
+  /ADMIN_ONLY_CAPABILITIES[\s\S]{0,400}"promotion"/.test(capabilities),
+  "promotion must be listed under ADMIN_ONLY_CAPABILITIES",
+);
+check(
+  "moderators do NOT receive the promotion capability",
+  !/MODERATOR_CAPABILITIES[\s\S]{0,400}"promotion"/.test(capabilities),
+  "a deputy must not be able to close a session",
+);
+check(
+  "the promotion page exports the capability so the layout enforces it",
+  /requiredCapability\s*=\s*"promotion"/.test(
+    read(join("app", "[subdomain]", "admin", "(dashboard)", "promotion", "page.tsx"))
+  ),
+);
+check(
+  "every end-of-session proxy requires the promotion capability",
+  () => {
+    const dir = join(root, "app", "api", "admin", "end-of-session");
+    const routes = [];
+    (function walk(d) {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.name === "route.ts") routes.push(fs.readFileSync(p, "utf8"));
+      }
+    })(dir);
+    if (routes.length !== 4) {
+      return `expected 4 end-of-session route handlers, found ${routes.length}`;
+    }
+    const unguarded = routes.filter(
+      (src) =>
+        !/requireAdminCapability\(\s*tenantId\s*,\s*["']promotion["']/.test(src)
+    );
+    return unguarded.length === 0
+      ? true
+      : `${unguarded.length} of ${routes.length} proxies do not require the promotion capability`;
+  }
+);
+check(
+  "no end-of-session proxy falls back to the bare session guard",
+  () => {
+    const dir = join(root, "app", "api", "admin", "end-of-session");
+    let bad = 0;
+    (function walk(d) {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.name === "route.ts" && /requireAdminSession\(/.test(fs.readFileSync(p, "utf8"))) {
+          bad += 1;
+        }
+      }
+    })(dir);
+    return bad === 0 ? true : `${bad} proxies use requireAdminSession, which a moderator satisfies`;
+  }
+);
+check(
+  "the sidebar hides End of Session from moderators",
+  /label:\s*"End of Session"[\s\S]{0,200}capability:\s*"promotion"/.test(sidebar),
+  "the nav entry must carry the capability so visibleNav filters it",
+);
+check(
+  "a moderator reaching the page gets an explanation, not a bare 403",
+  /promotion:[\s\S]{0,300}title:/.test(
+    read(join("components", "admin", "sections", "DashboardSection.tsx"))
+  ),
+  "DENIAL_COPY has no entry for promotion, so the redirect renders the fallback string",
 );
 
 // ---- 11c. Announcements must be capability-guarded, and admin-only --------

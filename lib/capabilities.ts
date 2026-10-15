@@ -44,6 +44,16 @@
  * tenant-facing notification API is read/receipt-only (list, unread-count,
  * mark-read); composing and broadcasting lives behind /api/superadmin/*, which
  * a tenant moderator's session cannot reach at any capability level.
+ *
+ * `promotion` (End of Session) is here because it is the one capability a
+ * deputy already holds everything needed to fake. Moderators can edit every
+ * student row via `allocations` — so a deputy could promote a cohort by hand,
+ * one UPDATE at a time, with no ledger entry and no audit record. Gating the
+ * BULK action behind a capability does not stop that, and this list is not the
+ * place to pretend otherwise: what it buys is that the destructive,
+ * cohort-wide, money-affecting path is a deliberate, audited, single
+ * transaction an administrator authorised, rather than forty silent edits a
+ * deputy made over an afternoon.
  */
 export const ADMIN_ONLY_CAPABILITIES = [
   "settings",
@@ -51,6 +61,7 @@ export const ADMIN_ONLY_CAPABILITIES = [
   "audit",
   "moderators",
   "announcements",
+  "promotion",
 ] as const;
 
 /** Capabilities a moderator (deputy) holds. */
