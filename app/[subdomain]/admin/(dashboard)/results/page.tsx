@@ -1,38 +1,22 @@
-import { getTenant } from "@/lib/tenant";
-import { toTitleCase } from "@/lib/format";
-import CommandCenterClient from "@/components/admin/CommandCenterClient";
-import { enforceAdminCapability } from "@/lib/enforceCapability";
+﻿import { ResultsSection } from "@/components/admin/sections/ResultsSection";
+import type { PortalSegment } from "@/components/admin/AdminSidebar";
 
-
-// RBAC: the admin layout reads this to enforce the moderator boundary.
-// An allow-list, not a deny-list — a new page without this constant is
-// unavailable to moderators until someone grants it.
+/**
+ * Result Command Center — served under BOTH `/{sub}/admin/results` and
+ * `/{sub}/moderator/results`.
+ *
+ * RBAC: the capability id is an allow-list entry (see lib/capabilities.ts). A
+ * page added without a decision stays unavailable to moderators.
+ */
 export const requiredCapability = "results";
 export const dynamic = "force-dynamic";
 
-/**
- * Result Command Center — publication tracking, missing-grade drill-down,
- * staff nudges, and batch publishing (1 credit per newly published card).
- */
 export default async function ResultsPage({
   params,
 }: {
   params: Promise<{ subdomain: string }>;
 }) {
-  const { subdomain } = await params;
-
-    // RBAC gate. See lib/enforceCapability.ts for why this lives here
-    // rather than in the layout: Next does not expose a page's exports to
-    // its parent layout, so a layout-level check is always a silent no-op.
-    await enforceAdminCapability(params, "results");
-  const tenantId = subdomain.toLowerCase().trim();
-  const school = await getTenant(tenantId);
-
   return (
-    <CommandCenterClient
-      tenantId={tenantId}
-      schoolName={school ? toTitleCase(school.name) : tenantId}
-      initialTerm={school?.currentTerm?.trim() || "Term 1"}
-    />
+    <ResultsSection params={params} portal={"admin" as PortalSegment} />
   );
 }
