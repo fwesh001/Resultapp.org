@@ -74,14 +74,11 @@ const moderatorSession = read("app/api/moderator/session/route.ts");
 const allocationsRouter = read("backend/routers/allocations.py");
 const dbManager = read("backend/services/db_manager.py");
 
-const pages = [
-  "allocations", "billing", "clearance", "notifications",
-  "results", "settings", "templates",
-].map((p) => ({
-  name: p,
-  path: `app/[subdomain]/admin/(dashboard)/${p}/page.tsx`,
-}));
-const dashboardPage = "app/[subdomain]/admin/(dashboard)/page.tsx";
+// Page routes are no longer enumerated here. They used to be, as `pages` +
+// `dashboardPage`, both admin-only — which is exactly why the gate checks had to
+// be rewritten when the moderator portal appeared (see SECTION_ROUTES below).
+// That list now covers BOTH portals and the admin-only pages that must NOT be
+// mirrored, and `gateFor` resolves each route through its shared section.
 
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 

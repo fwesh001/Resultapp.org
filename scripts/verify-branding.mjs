@@ -149,7 +149,6 @@ check(
 // behaviour — so the assertion follows the code, and additionally checks that
 // the moderator portal renders a crest too (a white-labelled school must not
 // see the ResultApp mark just because a deputy is the one signed in).
-const adminLayout = read("app/[subdomain]/admin/(dashboard)/layout.tsx");
 const staffLayout = read("app/[subdomain]/staff/(dashboard)/layout.tsx");
 const portalLayout = read("components/admin/PortalDashboardLayout.tsx");
 check("admin dashboard layout passes school.logoUrl", /<AdminShell[^>]*logoUrl=\{school\?\.logoUrl\}/.test(portalLayout));
