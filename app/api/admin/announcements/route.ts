@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminAuth";
+import { requireAdminCapability } from "@/lib/adminAuth";
 
 function getProxySecret(): string {
   return (
@@ -24,9 +24,24 @@ const MESSAGE_TYPES = ["Meeting", "Urgent", "Reminder", "General"] as const;
 /**
  * POST /api/admin/announcements
  * Body: { tenantId, message_type, title, message }
- * Tenant-admin only (admin_session cookie, tenant-matched). Forwards to
- * FastAPI POST /api/v1/tenant/{id}/staff/broadcast which fans out an
- * ANNOUNCEMENT to all active staff (admin gets a pre-read copy, no bell).
+ *
+ * Requires the `announcements` capability — ADMIN ONLY.
+ *
+ * ══ THE BUG THIS FIXES ══
+ * The guard here was `requireAdminSession`, which only asks "is there a validly
+ * signed admin_session for this tenant?". It never asked WHICH role. So any
+ * moderator — who holds a real admin_session with the `notifications`
+ * capability — could POST an ANNOUNCEMENT into every active staff member's
+ * inbox. School-wide communication, from a deputy, with no capability check at
+ * all. The sidebar hid nothing because this route was never reachable from the
+ * UI for a moderator; it was simply unprotected for anyone who found it.
+ *
+ * `requireAdminCapability` also rejects an unrecognised role claim rather than
+ * assuming admin (normalizeRole), so a session with no usable role cannot
+ * broadcast either.
+ *
+ * Note this is the TENANT broadcast. Platform-wide announcement composition
+ * lives behind /api/superadmin/* and is unreachable from any tenant session.
  */
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -40,7 +55,7 @@ export async function POST(req: NextRequest) {
   if (!tenantId) {
     return NextResponse.json({ success: false, error: "Missing tenantId" }, { status: 400 });
   }
-  const guard = await requireAdminSession(tenantId);
+  const guard = await requireAdminCapability(tenantId, "announcements");
   if (guard) return guard;
 
   const messageType = String(body.message_type ?? body.messageType ?? "").trim();
