@@ -18,6 +18,27 @@ import {
 } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
 
+/**
+ * Which portal this sidebar is rendering inside.
+ *
+ * A moderator used to be sent to `/{sub}/admin`, which rendered this exact
+ * component with "Admin Portal" written under the school name. The capability
+ * boundary was already correct; the framing was not — a deputy being told they
+ * are the school's admin.
+ */
+export type PortalSegment = "admin" | "moderator";
+
+/**
+ * Branding copy per portal.
+ *
+ * Not derived from the role at runtime on purpose: it is a literal, so a test
+ * can assert that the moderator portal renders no "Admin Portal" string at all.
+ */
+const PORTAL_COPY: Record<PortalSegment, { subtitle: string; ariaSuffix: string }> = {
+  admin: { subtitle: "Admin Portal", ariaSuffix: "admin portal" },
+  moderator: { subtitle: "Moderator Console", ariaSuffix: "moderator console" },
+};
+
 interface AdminSidebarProps {
   subdomain: string;
   schoolName: string;
@@ -28,6 +49,12 @@ interface AdminSidebarProps {
   /** Who is signed in, for the moderator badge. */
   actorLabel?: string | null;
   onNavigate?: () => void;
+  /**
+   * Route segment this sidebar lives under. Drives every href AND the branding
+   * copy from one value, so a moderator console cannot render an admin-flavoured
+   * link or label by forgetting one of the two.
+   */
+  portal?: PortalSegment;
 }
 
 export default function AdminSidebar({
@@ -38,9 +65,13 @@ export default function AdminSidebar({
   capabilities,
   actorLabel,
   onNavigate,
+  portal = "admin",
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  /** Every tenant-scoped href in this sidebar is built from this one value. */
+  const base = `/${subdomain}/${portal}`;
+  const copy = PORTAL_COPY[portal];
 
   async function handleSignOut() {
     try {
@@ -49,7 +80,11 @@ export default function AdminSidebar({
       // Cookie clear is best-effort; still navigate to login.
     }
     onNavigate?.();
-    router.push(`/${subdomain}/admin/login`);
+    // A moderator has NO login page — elevation is automatic from the staff
+    // session (POST /api/moderator/session), so `/${sub}/moderator/login` would
+    // be a dead end. The admin logout leaves the staff cookie intact, so send
+    // them to the Staff Portal: that is where they can still work.
+    router.push(portal === "moderator" ? `/${subdomain}/staff` : `${base}/login`);
     router.refresh();
   }
 
@@ -64,55 +99,55 @@ export default function AdminSidebar({
   const nav = [
     {
       label: "Dashboard",
-      href: `/${subdomain}/admin`,
+      href: base,
       icon: LayoutDashboard,
       capability: "dashboard",
     },
     {
       label: "Results",
-      href: `/${subdomain}/admin/results`,
+      href: `${base}/results`,
       icon: ClipboardCheck,
       capability: "results",
     },
     {
       label: "Allocations",
-      href: `/${subdomain}/admin/allocations`,
+      href: `${base}/allocations`,
       icon: Users,
       capability: "allocations",
     },
     {
       label: "Clearance",
-      href: `/${subdomain}/admin/clearance`,
+      href: `${base}/clearance`,
       icon: Wallet,
       capability: "clearance",
     },
     {
       label: "Templates",
-      href: `/${subdomain}/admin/templates`,
+      href: `${base}/templates`,
       icon: BookOpen,
       capability: "templates",
     },
     {
       label: "Audit Log",
-      href: `/${subdomain}/admin/audit`,
+      href: `${base}/audit`,
       icon: ShieldCheck,
       capability: "audit",
     },
     {
       label: "Settings",
-      href: `/${subdomain}/admin/settings`,
+      href: `${base}/settings`,
       icon: Settings,
       capability: "settings",
     },
     {
       label: "Billing",
-      href: `/${subdomain}/admin/billing`,
+      href: `${base}/billing`,
       icon: CreditCard,
       capability: "billing",
     },
     {
       label: "Notifications",
-      href: `/${subdomain}/admin/notifications`,
+      href: `${base}/notifications`,
       icon: Bell,
       capability: "notifications",
     },
@@ -133,8 +168,13 @@ export default function AdminSidebar({
   });
 
   function isActive(href: string): boolean {
-    if (href.endsWith("/admin")) {
-      return pathname === href;
+    // The dashboard href is the portal ROOT, which is a string prefix of every
+    // other href here (`/{sub}/moderator` vs `/{sub}/moderator/results`).
+    // The old check was `href.endsWith("/admin")` — specific to one portal, and
+    // so already wrong for a moderator root. Comparing against `base` directly
+    // fixes that and needs no special case.
+    if (href === base) {
+      return pathname === base;
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   }
@@ -144,7 +184,7 @@ export default function AdminSidebar({
       <Link
         href={`/${subdomain}`}
         onClick={onNavigate}
-        aria-label={`${toTitleCase(schoolName)} school portal`}
+        aria-label={`${toTitleCase(schoolName)} school ${copy.ariaSuffix}`}
         className="flex items-center gap-2.5 border-b border-line-1 px-5 py-5 transition hover:bg-surface-2"
       >
         <Logo size="sm" src={logoUrl} alt="" className="rounded-full" />
@@ -152,7 +192,7 @@ export default function AdminSidebar({
           <p className="truncate text-sm font-semibold tracking-tight text-text-1">
             {toTitleCase(schoolName)}
           </p>
-          <p className="text-xs text-text-3">Admin Portal</p>
+          <p className="text-xs text-text-3">{copy.subtitle}</p>
         </div>
       </Link>
 
