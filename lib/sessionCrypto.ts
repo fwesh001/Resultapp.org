@@ -107,7 +107,38 @@ function macFor(message: string): string {
 }
 
 /**
+ * The exact string the MAC covers.
+ *
+ * THE COOKIE NAME IS PART OF THE AUTHENTICATED MATERIAL, and that is the whole
+ * point of this function existing.
+ *
+ * Without it, `signSession` MACs only `v1.<payload>`, so a token minted as
+ * `staff_session` verifies byte-identically when read as `admin_session`. The
+ * only thing that stopped that replay was the payload SHAPE — a staff session
+ * carries `staff: {...}` and `readAdminIdentity` requires `admin.email ||
+ * admin.staff_id`. That is a coincidence of two differently-shaped payloads, not
+ * a boundary: one refactor that copies `staff` into `admin`, or one that loosens
+ * the identity check, opens cross-privilege replay with no diff anywhere near
+ * the cause. scripts/verify-session-signing.mjs had no cross-cookie case at all.
+ *
+ * Cost of binding it: every outstanding session fails verification once on
+ * deploy and everyone signs in again. That is the intended fail-closed
+ * behaviour, not a regression.
+ */
+function macInput(name: string | null | undefined, body: string): string {
+  const ns = String(name ?? "").trim();
+  // An unnamed token stays verifiable by an unnamed verifier, so the pure
+  // crypto helpers in scripts/ and the dev minting tool keep working. Every
+  // real call site goes through setSessionCookie/readSessionCookie, which
+  // ALWAYS supply a name.
+  return ns ? `${ns}.${body}` : body;
+}
+
+/**
  * Sign a session payload into a cookie value.
+ *
+ * `name` is the cookie the token is destined for. It is authenticated (see
+ * macInput) but not secret, so passing it costs nothing.
  *
  * Adds `iat`/`exp` to the payload. The caller must pass only non-secret
  * identity claims — this value ends up in a cookie and must never be returned
@@ -116,12 +147,13 @@ function macFor(message: string): string {
 export function signSession<T extends object>(
   payload: T,
   ttlSeconds: number = SESSION_TTL_SECONDS,
+  name?: string | null,
 ): string {
   const now = Math.floor(Date.now() / 1000);
   const ttl = Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? Math.floor(ttlSeconds) : SESSION_TTL_SECONDS;
   const claims = { ...payload, iat: now, exp: now + ttl };
   const body = `${SESSION_VERSION}.${Buffer.from(JSON.stringify(claims), "utf8").toString("base64url")}`;
-  return `${body}.${macFor(body)}`;
+  return `${body}.${macFor(macInput(name, body))}`;
 }
 
 /**
@@ -134,8 +166,14 @@ export function signSession<T extends object>(
  *
  * Rejection is fail-closed by construction: there is no code path that returns
  * claims without first passing a constant-time MAC comparison.
+ *
+ * Pass the cookie `name` the token was read from. A token bound to a different
+ * cookie will not verify — see macInput for why that binding is load-bearing.
  */
-export function verifySession<T extends object>(token: string | undefined | null): SessionClaims<T> | null {
+export function verifySession<T extends object>(
+  token: string | undefined | null,
+  name?: string | null,
+): SessionClaims<T> | null {
   if (!token || typeof token !== "string") return null;
 
   const parts = token.split(".");
@@ -149,7 +187,11 @@ export function verifySession<T extends object>(token: string | undefined | null
   let expected: Buffer;
   try {
     provided = Buffer.from(macB64, "base64url");
-    expected = Buffer.from(macFor(`${version}.${payloadB64}`), "base64url");
+    // `name` MUST be the cookie the value was actually read from. A caller that
+    // omits it (or passes the wrong cookie) cannot validate a name-bound token,
+    // which is the safe direction: an unbound check fails rather than a bound
+    // token being accepted under a weaker claim.
+    expected = Buffer.from(macFor(macInput(name, `${version}.${payloadB64}`)), "base64url");
   } catch {
     return null;
   }
