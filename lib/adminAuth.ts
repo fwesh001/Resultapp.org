@@ -44,14 +44,31 @@ export interface AdminIdentity {
 }
 
 /**
- * Sessions minted before RBAC existed carry neither field. Treat them as the
- * full admin: revoking access from someone who already has it is the safe
- * direction for a boolean guard, and the alternative (treat unknown as
- * moderator) would silently strip capabilities from a real admin who has not
- * re-logged-in since the upgrade.
+ * Read a role claim, or `null` when it is absent/unrecognised.
+ *
+ * ══ WHY THIS NO LONGER FAILS OPEN ══
+ * This used to return `"admin"` for anything that wasn't literally
+ * `"moderator"` — including `undefined` — on the theory that sessions minted
+ * before RBAC existed carried no role and should keep working. That is the
+ * single most dangerous default in this file: one derivation path that forgets
+ * to set `role` produces a session with `ADMIN_CAPABILITIES`, which is
+ * settings, billing, audit AND `moderators` — i.e. a school admin who can
+ * appoint more admins. Total tenant takeover from a missing string.
+ *
+ * The original rationale is now OBSOLETE and cannot come back. Binding the
+ * cookie name into the MAC (lib/sessionCrypto macInput) invalidates every
+ * outstanding session on deploy, so there are no pre-RBAC cookies left in the
+ * wild to be compatible with. A session without a valid role is therefore
+ * either corrupt or forged, and both deserve `null`.
+ *
+ * Callers must handle `null` by rejecting the session. There is deliberately
+ * no "assume admin" fallback anywhere.
  */
-function normalizeRole(value: unknown): "admin" | "moderator" {
-  return String(value ?? "").toLowerCase() === "moderator" ? "moderator" : "admin";
+function normalizeRole(value: unknown): "admin" | "moderator" | null {
+  const role = String(value ?? "").trim().toLowerCase();
+  if (role === "admin") return "admin";
+  if (role === "moderator") return "moderator";
+  return null;
 }
 
 /**
@@ -161,6 +178,9 @@ export async function readAdminIdentity(subdomain: string): Promise<AdminIdentit
   if (!email && !staffId) return await unauthorized();
 
   const role = normalizeRole(session.role);
+  // No role claim, or one we do not recognise: treat the session as absent
+  // rather than assuming the more privileged branch. See normalizeRole.
+  if (!role) return await unauthorized();
   const capabilities = Array.isArray(session.capabilities)
     ? session.capabilities.filter((c): c is string => typeof c === "string")
     : [];
