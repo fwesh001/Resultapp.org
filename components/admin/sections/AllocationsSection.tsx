@@ -1,5 +1,4 @@
 import { getTenant } from "@/lib/tenant";
-import { toTitleCase } from "@/lib/format";
 import { enforceAdminCapability } from "@/lib/enforceCapability";
 import type { PortalSegment } from "@/components/admin/AdminSidebar";
 
