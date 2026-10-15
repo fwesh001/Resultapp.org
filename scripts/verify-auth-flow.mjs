@@ -1292,6 +1292,97 @@ check("the session resolver is defined once, not copied per router", () => {
     : `these routers still reimplement session resolution: ${copies.join(", ")}`;
 });
 
+// ---------------------------------------------------------------------------
+// Slot economics of a cohort close (Phase 3). These guard MONEY, not UI.
+//
+// A withdrawal refund must be deferred to the next session, because a child
+// who transfers out in January and returns in September is one pupil, not two.
+// The failure mode is silent in both directions: refund early and the school
+// is credited for a seat it is still paying for; never refund and the school
+// is short a seat forever with no error anywhere.
+// ---------------------------------------------------------------------------
+
+check("a withdrawal refund is deferred, not paid immediately", () => {
+  const src = read(path.join("backend", "routers", "end_of_session.py"));
+  const wd = /outcome == "withdraw"[\s\S]{0,1200}/.exec(src);
+  if (!wd) return "cannot locate the withdraw branch";
+  if (!/"SLOT_RELEASE_DEFERRED"/.test(wd[0])) {
+    return "withdrawal writes an immediate SLOT_RELEASE — one pupil can consume two slots";
+  }
+  if (!/available_from_session=to|"SLOT_RELEASE_DEFERRED",\s*\n\s*to/.test(src) && !/to,\s*\n\s*\)\s*\n\s*#/) {
+    // fall through; the explicit check below is authoritative
+  }
+  return /_write_slot_release\([\s\S]{0,400}?"SLOT_RELEASE_DEFERRED",\s*\n\s*to,/.test(src)
+    ? true
+    : "the deferred release is not tied to to_session";
+});
+
+check("a graduation refund is immediate", () => {
+  const src = read(path.join("backend", "routers", "end_of_session.py"));
+  // Slice to THIS branch only. A fixed character window is not enough: the
+  // withdraw branch sits ~35 lines below and carries SLOT_RELEASE_DEFERRED, so
+  // an over-wide match sees both and reports the wrong thing.
+  const i = src.indexOf('elif outcome == "graduate":');
+  if (i === -1) return "cannot locate the graduate branch";
+  const next = src.indexOf('elif outcome == "withdraw":', i);
+  const branch = src.slice(i, next === -1 ? i + 1500 : next);
+  if (!/"SLOT_RELEASE"/.test(branch)) return "graduation does not write a slot release";
+  return branch.includes("SLOT_RELEASE_DEFERRED")
+    ? "graduation defers the refund — a graduate's seat is free for good"
+    : true;
+});
+
+check("only graduations move the slot balance in the apply transaction", () => {
+  const src = read(path.join("backend", "routers", "end_of_session.py"));
+  // Exactly one balance mutation in apply, and it is gated on the graduate count.
+  const bumps = src.match(/SET slots_balance = COALESCE\(slots_balance, 0\) \+ %s/g) || [];
+  if (bumps.length !== 1) {
+    return `expected exactly one balance mutation in the apply path, found ${bumps.length}`;
+  }
+  return /\(\s*graduated,\s*tid,?\s*\)/.test(src)
+    ? true
+    : "the balance mutation is not driven by the graduated count";
+});
+
+check("apply cannot promote a cohort twice under concurrency", () => {
+  const src = read(path.join("backend", "routers", "end_of_session.py"));
+  const fn = src.slice(src.indexOf("def apply_run"));
+  if (!fn) return "cannot locate apply_run";
+  if (!/status == "applied"/.test(fn)) {
+    return "apply does not re-check the run status under lock";
+  }
+  // Strip Python comment lines before locating locks. The phrase "FOR UPDATE"
+  // appears in a phase-A comment that explains the very hazard being checked,
+  // so matching it positionally would anchor the scan before the real lock and
+  // make a correct implementation look broken.
+  const body = fn
+    .split("\n")
+    .filter((l) => !/^\s*#/.test(l))
+    .join("\n");
+
+  // The invariant is NOT "commit once". Phase A commits an unlocked read-only
+  // probe before the settle, which is harmless. The invariant that actually
+  // matters: once the run's FOR UPDATE is taken, no commit may happen until the
+  // work is finished — an early one would release the lock and let a second
+  // Apply pass the already-applied check.
+  const lockAt = body.indexOf("FOR UPDATE");
+  if (lockAt === -1) return "apply takes no FOR UPDATE lock at all";
+  const commitsAfter = (body.slice(lockAt).match(/conn\.commit\(\)/g) || []).length;
+  return commitsAfter === 1
+    ? true
+    : `${commitsAfter} commits after the run lock is taken; only the final one is safe`;
+});
+
+check("malformed subdomains return 400/404, not 500", () => {
+  const src = read(MAIN);
+  if (!/@app\.exception_handler\(ValueError\)/.test(src)) {
+    return "no ValueError handler — _sanitize_subdomain escapes as a 500";
+  }
+  return /get_school_by_subdomain[\s\S]{0,200}except ValueError/.test(src)
+    ? true
+    : "the public tenant lookup still lets ValueError escape";
+});
+
 console.log("\nPayment verification: settled only, and never confused with pending");
 check("the API envelope status is never treated as proof of payment", () => {
   // The envelope's top-level `status` is "success" whenever the provider merely
