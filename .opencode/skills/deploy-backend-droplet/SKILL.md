@@ -83,20 +83,35 @@ Env overrides: `DEPLOY_UNIT`, `DEPLOY_PORT`, `SKIP_DEPS=1`, `GIT_BRANCH`.
 
 ## Before deploying a change that alters the schema
 
-Migrations run in the FastAPI **lifespan** (`init_roster_registry()` in
-`backend/main.py`), which means the restart applies them automatically.
+Migrations run in the FastAPI **lifespan** (`init_roster_registry()` and friends
+in `backend/main.py`), which means the restart applies them automatically.
 
 The trap: each `init_*` call is wrapped in a `try/except` that only **logs a
 warning**. A failed migration therefore starts a healthy-looking server whose
-queries then 500 on the missing column. After any schema-changing deploy,
-confirm the warning did not fire:
+queries then 500 on the missing column.
+
+After any schema-changing deploy, confirm the init actually ran:
 
 ```powershell
-ssh resultapp-droplet 'journalctl -u resultapp-provision -p warning --since -40min --no-pager | tail -20'
+ssh resultapp-droplet 'journalctl -u resultapp-provision --since -40min --no-pager | grep -i "init warning"'
 ```
 
-Check row counts and PG version first. On PG 11+ `ADD COLUMN` with a default is
-metadata-only, so it is cheap regardless of table size.
+### DO NOT use `journalctl -p warning` for this
+
+`-p` filters on the **journald** priority field, which is derived from
+syslog framing — and uvicorn writes Python log records to stdout as plain
+unprefixed lines, so journald tags them all `info(6)`. A genuine Python
+`WARNING` therefore does **not** appear under `-p warning`.
+
+This is not theoretical. A deploy added an init that raised on every boot;
+`-p warning` reported "No entries" and the deploy script declared success. The
+failure was only visible by grepping the text. `-p err` happens to be reliable
+only because genuinely fatal syslog entries do get framed.
+
+**The rule: after deploying schema, assert the artefact exists in the
+database. Do not infer it from the deploy script's success banner, from
+`/api/version`, or from the absence of errors — all three passed while the
+table did not exist.**
 
 ## Verifying a deploy
 
@@ -104,14 +119,29 @@ metadata-only, so it is cheap regardless of table size.
 # serving commit matches the checkout
 ssh resultapp-droplet 'curl -s http://127.0.0.1:8000/api/version'
 
-# nothing broke
-ssh resultapp-droplet 'journalctl -u resultapp-provision -p err --since -40min --no-pager | tail -20'
+# Python-level warnings the journald priority filter cannot see
+ssh resultapp-droplet 'journalctl -u resultapp-provision --since -40min --no-pager | grep -i "init warning"'
+
+# nothing fatal
+ssh resultapp-droplet 'journalctl -u resultapp-provision --since -40min --no-pager | tail -20'
 ssh resultapp-droplet 'systemctl is-active resultapp-provision'
 ```
 
 `/api/version` returning `status:ok` is necessary but not sufficient — it
 reports the commit, not that your endpoint works. Exercise the endpoint you
-changed with `curl` against `127.0.0.1:8000`.
+changed with `curl` against `127.0.0.1:8000`, and for schema work, query the
+schema directly.
+
+## Migrations with SQL comments in f-strings
+
+Python f-strings interpret `{...}` even inside a `--` SQL comment. A JSON
+example in a column comment raises `ValueError: Invalid format specifier`
+*before the statement is sent*, so the migration silently never runs.
+
+Keep column documentation in Python comments above the `cur.execute(...)`,
+not as SQL comments inside it. The `{{}}` escape on a JSONB default is correct
+and separate — an escaped default alongside an unescaped comment is exactly the
+combination that hides this.
 
 ## Reading the database
 
