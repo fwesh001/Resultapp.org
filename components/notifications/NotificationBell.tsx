@@ -59,11 +59,32 @@ interface SharedPoller {
   lastStart: number;
   lastCount: number | null;
   stopped: boolean;
+  /**
+   * Carried on the poller so a tick keyed only by its map key still knows what
+   * to fetch. Needed because pollers are keyed by tenant AND portal — see
+   * pollerKey.
+   */
+  tid: string;
+  portal: "admin" | "staff" | undefined;
   onVisibility: () => void;
   onFocus: () => void;
 }
 
 const POLLERS = new Map<string, SharedPoller>();
+
+/**
+ * Pollers are shared per tenant+portal, never per tenant alone.
+ *
+ * A MODERATOR HOLDS BOTH SESSIONS: the same Staff ID and PIN sign them into the
+ * staff portal and (once promoted) the admin portal, so both cookies coexist.
+ * Keying only by tenant meant one poller served both, and whichever bell
+ * subscribed first set the unread count for both — the staff badge showing the
+ * admin's mail. The unread endpoint now takes an explicit portal hint, so the
+ * poller has to be able to say which one it is asking about.
+ */
+function pollerKey(tid: string, portal?: "admin" | "staff"): string {
+  return `${tid}::${portal ?? "any"}`;
+}
 const POKE_MIN_INTERVAL_MS = 15000;
 
 /**
@@ -78,25 +99,27 @@ const POKE_MIN_INTERVAL_MS = 15000;
 const RECENT_FETCHES = new Map<string, { promise: Promise<{ ok: boolean; count: number | null }>; startedAt: number }>();
 const RECENT_REUSE_MS = 10000;
 
-function dedupedFetchUnread(tid: string): Promise<{ ok: boolean; count: number | null }> {
+function dedupedFetchUnread(key: string, tid: string, portal?: "admin" | "staff"): Promise<{ ok: boolean; count: number | null }> {
   const now = Date.now();
-  const recent = RECENT_FETCHES.get(tid);
+  const recent = RECENT_FETCHES.get(key);
   if (recent && now - recent.startedAt < RECENT_REUSE_MS) return recent.promise;
-  const p = fetchUnread(tid);
-  RECENT_FETCHES.set(tid, { promise: p, startedAt: now });
+  const p = fetchUnread(tid, portal);
+  RECENT_FETCHES.set(key, { promise: p, startedAt: now });
   void p.finally(() => {
-    if (RECENT_FETCHES.get(tid)?.promise === p) RECENT_FETCHES.delete(tid);
+    if (RECENT_FETCHES.get(key)?.promise === p) RECENT_FETCHES.delete(key);
   });
   return p;
 }
 
-async function fetchUnread(tid: string): Promise<{ ok: boolean; count: number | null }> {
+async function fetchUnread(tid: string, portal?: "admin" | "staff"): Promise<{ ok: boolean; count: number | null }> {
   // Hidden tabs never hit the network (C1 visibility gate).
   if (typeof document !== "undefined" && document.visibilityState === "hidden") {
     return { ok: true, count: null };
   }
   try {
-    const res = await fetch(`/api/notifications/unread-count?tenant_id=${encodeURIComponent(tid)}`, {
+    const qs = new URLSearchParams({ tenant_id: tid });
+    if (portal) qs.set("portal", portal);
+    const res = await fetch(`/api/notifications/unread-count?${qs.toString()}`, {
       cache: "no-store",
     });
     if (res.status === 401) return { ok: true, count: null }; // signed out — stay silent, no backoff
@@ -113,21 +136,21 @@ function pollerDelay(failures: number): number {
   return Math.min(POLL_BASE_MS * 2 ** failures, POLL_MAX_MS) + Math.random() * POLL_JITTER_MS;
 }
 
-function pollerSchedule(tid: string): void {
-  const poller = POLLERS.get(tid);
+function pollerSchedule(key: string): void {
+  const poller = POLLERS.get(key);
   if (!poller || poller.stopped) return;
-  poller.timer = setTimeout(() => void pollerTick(tid), pollerDelay(poller.failures));
+  poller.timer = setTimeout(() => void pollerTick(key), pollerDelay(poller.failures));
 }
 
-async function pollerTick(tid: string): Promise<void> {
-  const poller = POLLERS.get(tid);
+async function pollerTick(key: string): Promise<void> {
+  const poller = POLLERS.get(key);
   if (!poller || poller.stopped || poller.inFlight) return;
   if (typeof document === "undefined" || document.visibilityState === "visible") {
     poller.inFlight = true;
     poller.lastStart = Date.now();
-    const { ok, count } = await dedupedFetchUnread(tid);
+    const { ok, count } = await dedupedFetchUnread(key, poller.tid, poller.portal);
     poller.inFlight = false;
-    if (POLLERS.get(tid) !== poller || poller.stopped) return;
+    if (POLLERS.get(key) !== poller || poller.stopped) return;
     poller.failures = ok ? 0 : poller.failures + 1;
     if (count !== null) {
       poller.lastCount = count;
@@ -140,11 +163,11 @@ async function pollerTick(tid: string): Promise<void> {
       }
     }
   }
-  pollerSchedule(tid);
+  pollerSchedule(key);
 }
 
-function pollerPoke(tid: string): void {
-  const poller = POLLERS.get(tid);
+function pollerPoke(key: string): void {
+  const poller = POLLERS.get(key);
   if (!poller || poller.stopped || poller.inFlight) return;
   // Coalesce the focus + visibilitychange double-fire on tab return.
   if (Date.now() - poller.lastStart < POKE_MIN_INTERVAL_MS) return;
@@ -152,11 +175,12 @@ function pollerPoke(tid: string): void {
     clearTimeout(poller.timer);
     poller.timer = null;
   }
-  void pollerTick(tid);
+  void pollerTick(key);
 }
 
-function subscribeUnread(tid: string, cb: UnreadSubscriber): () => void {
-  let poller = POLLERS.get(tid);
+function subscribeUnread(tid: string, portal: "admin" | "staff" | undefined, cb: UnreadSubscriber): () => void {
+  const key = pollerKey(tid, portal);
+  let poller = POLLERS.get(key);
   if (!poller) {
     const created: SharedPoller = {
       subs: new Set(),
@@ -166,16 +190,18 @@ function subscribeUnread(tid: string, cb: UnreadSubscriber): () => void {
       lastStart: 0,
       lastCount: null,
       stopped: false,
+      tid,
+      portal,
       onVisibility: () => {
-        if (document.visibilityState === "visible") pollerPoke(tid);
+        if (document.visibilityState === "visible") pollerPoke(key);
       },
-      onFocus: () => pollerPoke(tid),
+      onFocus: () => pollerPoke(key),
     };
     poller = created;
-    POLLERS.set(tid, poller);
+    POLLERS.set(key, poller);
     document.addEventListener("visibilitychange", poller.onVisibility);
     window.addEventListener("focus", poller.onFocus);
-    void pollerTick(tid);
+    void pollerTick(key);
   }
   poller.subs.add(cb);
   // Late mounters hydrate instantly from the last known count.
@@ -196,7 +222,7 @@ function subscribeUnread(tid: string, cb: UnreadSubscriber): () => void {
       if (current.timer) clearTimeout(current.timer);
       document.removeEventListener("visibilitychange", current.onVisibility);
       window.removeEventListener("focus", current.onFocus);
-      if (POLLERS.get(tid) === current) POLLERS.delete(tid);
+      if (POLLERS.get(key) === current) POLLERS.delete(key);
     }
   };
 }
@@ -217,10 +243,17 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/notifications/inbox?tenant_id=${encodeURIComponent(tid)}&limit=${INBOX_LIMIT}&offset=0`,
-        { cache: "no-store" },
-      );
+      const qs = new URLSearchParams({
+        tenant_id: tid,
+        limit: String(INBOX_LIMIT),
+        offset: "0",
+      });
+      // Same portal hint as the poller — without it this dropdown shows the
+      // admin's inbox to a moderator who happens to hold both sessions.
+      if (portal) qs.set("portal", portal);
+      const res = await fetch(`/api/notifications/inbox?${qs.toString()}`, {
+        cache: "no-store",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error || `Failed (${res.status})`);
       setItems(((data as { notifications?: InboxNotification[] }).notifications || []).slice(0, INBOX_LIMIT));
@@ -237,7 +270,7 @@ export default function NotificationBell({ tenantId, portal }: NotificationBellP
   // every badge consistent from a single fetch per interval.
   useEffect(() => {
     if (!tid) return;
-    return subscribeUnread(tid, setUnread);
+    return subscribeUnread(tid, portal, setUnread);
   }, [tid]);
 
   // Load inbox when opened.

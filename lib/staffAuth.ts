@@ -28,6 +28,15 @@ export interface StaffSessionPayload {
     full_name?: string;
     email?: string;
     role?: string;
+    /**
+     * Minted into the cookie at login. Carries the value at the instant of
+     * sign-in, NOT the current one — a promotion applied afterwards does not
+     * rewrite an issued cookie, and the TTL is 12 hours.
+     *
+     * That staleness is why the staff layout prefers the live value from the
+     * dashboard payload and only falls back to this. See the sidebar link.
+     */
+    is_moderator?: boolean;
   };
   tenant_id?: string;
 }
@@ -45,6 +54,18 @@ export interface StaffIdentity {
   email: string | null;
   fullName: string | null;
   role: string;
+  /**
+   * Moderator (deputy) status as of cookie issue — see the staleness note on
+   * StaffSessionPayload.staff.is_moderator. Prefer the live value from the
+   * dashboard payload when deciding whether to SHOW the Admin Portal link; use
+   * this only as a fallback.
+   *
+   * Derived with `=== true` so a cookie minted before this field existed, or a
+   * row written by older code with a NULL, both fail closed to "not a
+   * moderator". Failing open here would advertise admin-portal access to
+   * someone who cannot use it.
+   */
+  isModerator: boolean;
 }
 
 /** Tenant ids are DNS labels; same rule enforced by the backend. */
@@ -91,6 +112,10 @@ export async function readStaffSession(
     email: String(session.staff?.email ?? "").trim().toLowerCase() || null,
     fullName: String(session.staff?.full_name ?? "").trim() || null,
     role: String(session.staff?.role ?? "").trim() || "Teacher",
+    // THIRD of three edits. Adding the field to the two interfaces above is a
+    // silent no-op on its own — this literal is the only place the identity is
+    // constructed, so without it nothing forwards the claim to a caller.
+    isModerator: session.staff?.is_moderator === true,
   };
 }
 

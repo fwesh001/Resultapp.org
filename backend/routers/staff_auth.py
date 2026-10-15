@@ -80,7 +80,8 @@ def staff_login(tenant_id: str, payload: StaffLoginRequest):
         # uppercase IDs like STAFF/001 keep working), password via crypt.
         cur.execute(
             f"""
-            SELECT id, staff_id, full_name, email, role
+            SELECT id, staff_id, full_name, email, role,
+                   COALESCE(is_moderator, FALSE) AS is_moderator
             FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s
               AND (LOWER(staff_id) = LOWER(%s) OR LOWER(email) = LOWER(%s))
@@ -130,7 +131,9 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         # cast id to text for comparison to allow both.
         cur.execute(
             f"""
-            SELECT full_name, staff_id, id, signature_url, signature_data FROM {TENANT_STAFF_TABLE}
+            SELECT full_name, staff_id, id, role, signature_url, signature_data,
+                   COALESCE(is_moderator, FALSE) AS is_moderator
+            FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s AND (LOWER(staff_id) = LOWER(%s) OR id::text = %s OR LOWER(email) = LOWER(%s))
             LIMIT 1
             """,
@@ -175,8 +178,27 @@ def _load_staff_dashboard(tid: str, sid: str) -> dict:
         form_classes = [{"class_name": r[0]} for r in cur.fetchall()]
 
         # Also return staff profile (signature included for the profile page).
+        #
+        # `role` was never in the SELECT above, so `staff.get("role") if "role"
+        # in staff else None` always evaluated to None and the profile page's
+        # role display has been permanently blank. It is selected now.
+        #
+        # `is_moderator` rides along for the same reason and matters more: the
+        # staff session cookie is minted at login with a 12-hour TTL, so a
+        # member promoted a minute ago still carries is_moderator=false in their
+        # cookie and would not see their Admin Portal link until they signed out
+        # and back in. Reading it live here lets the layout use the current value
+        # instead of a stale claim.
         return {
-            "staff": {"id": str(staff.get("id")), "staff_id": staff.get("staff_id"), "full_name": staff_name, "role": staff.get("role") if "role" in staff else None, "signature_url": staff.get("signature_url") or None, "signature_data": staff.get("signature_data") or None},
+            "staff": {
+                "id": str(staff.get("id")),
+                "staff_id": staff.get("staff_id"),
+                "full_name": staff_name,
+                "role": staff.get("role"),
+                "is_moderator": bool(staff.get("is_moderator")),
+                "signature_url": staff.get("signature_url") or None,
+                "signature_data": staff.get("signature_data") or None,
+            },
             "allocations": allocs,
             "count": len(allocs),
             "form_classes": form_classes,

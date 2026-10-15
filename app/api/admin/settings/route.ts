@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { requireAdminSession } from "@/lib/adminAuth";
+import { requireAdminSession, requireAdminCapability } from "@/lib/adminAuth";
 import { MAX_SIGNATURE_DATA_BYTES, MAX_SIGNATURE_LABEL } from "@/lib/signatureLimits";
 
 /**
@@ -74,6 +74,22 @@ export async function PATCH(req: NextRequest) {
 
   const guard = await requireAdminSession(subdomain);
   if (guard) return guard;
+
+  // The SESSION check above only proves *someone* is signed in for this school.
+  // The page gate in app/[subdomain]/admin/settings/page.tsx already requires
+  // the `settings` capability, which lib/capabilities.ts lists as ADMIN-ONLY —
+  // but that gate is client-observable, so a moderator could simply call this
+  // endpoint directly and rewrite the school name, motto, phone, logo, term or
+  // ID prefixes that the page deliberately hides from them.
+  //
+  // Defence in depth: both the page and the proxy must enforce it, because the
+  // proxy is the only one the attacker does not choose to skip.
+  //
+  // The email field stays additionally gated by the OTP flow in the backend, so
+  // this changes nothing for the legitimate admin path — including the
+  // Verify-then-auto-save flow, which runs on an admin session.
+  const capGuard = await requireAdminCapability(subdomain, "settings");
+  if (capGuard) return capGuard;
 
   const payload: Record<string, unknown> = {};
   let signatureDataProvided = false;

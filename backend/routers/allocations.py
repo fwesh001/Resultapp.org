@@ -12,6 +12,138 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _notify_moderator_change(
+    *,
+    tid: str,
+    target_id: str,
+    is_moderator: bool,
+    full_name: str | None,
+    role: str | None,
+    email: str,
+) -> None:
+    """Announce a moderator grant or revocation to the affected staff member.
+
+    Fires two independent channels, because they fail for different reasons and
+    neither is reliable alone:
+
+      1. An in-app notification, targeted at this one member. They see it in the
+         staff portal's bell. Skipped when the event template is missing or the
+         row is inactive — dispatch_event returns {"skipped": True} rather than
+         raising, so an unseeded deployment degrades to "email only".
+
+      2. An email, so someone who is not currently signed in — or who never
+         discovers the notification — still finds out. tenant_staff.email is
+         NULLABLE, so this is genuinely best-effort and silently skipped when
+         absent.
+
+    EVERY failure here is swallowed and logged. This runs after the promotion is
+    committed and audited; a Brevo outage must not turn a successful grant into
+    a 500, and must never roll back the authoritative write.
+    """
+    name = (full_name or target_id or "").strip()
+    display_role = (role or "staff").strip()
+
+    school_name = tid
+    try:
+        from services.db_manager import get_school_by_subdomain
+
+        # Returns the registry row keyed by COLUMNNAME (school_name, not name).
+        row = get_school_by_subdomain(tid) or {}
+        school_name = str(row.get("school_name") or tid)
+    except Exception as name_err:
+        logger.warning("[roster] could not resolve school name for %s: %s", tid, name_err)
+
+    event = "MODERATOR_GRANTED" if is_moderator else "MODERATOR_REVOKED"
+
+    # 1. In-app notification.
+    try:
+        from services.notifications import dispatch_event
+
+        dispatch_event(
+            event,
+            tid,
+            {
+                "school_name": school_name,
+                "full_name": name,
+                "role": display_role,
+                "subdomain": tid,
+            },
+            # Deep-link back into the portal the notification is about. The
+            # inbox validates this is a relative/absolute URL before rendering.
+            cta_link=f"/{tid}/admin" if is_moderator else f"/{tid}/staff",
+            # Targeted: without this the event fans out to every admin and every
+            # active staff member in the school, telling the whole staffroom
+            # about one person's promotion.
+            target_user_id=target_id,
+            target_user_type="staff",
+        )
+    except Exception as notify_err:
+        logger.warning("[roster] %s notification failed for %s/%s: %s", event, tid, target_id, notify_err)
+
+    # 2. Email.
+    if not email or "@" not in email:
+        logger.info("[roster] %s: no email on %s/%s — notification only", event, tid, target_id)
+        return
+    try:
+        # Notifier internals are imported by name — they are shared building
+        # blocks (one shell, one button) and duplicating that markup here is
+        # how a later email restyle ends up applying to half the sends.
+        from services import notifier
+        from services.notifier import send_auth_email
+
+        _auth_email_shell = notifier._auth_email_shell
+        _cta_button = notifier._cta_button
+        _fallback_link = notifier._fallback_link
+        public_base_url = notifier.public_base_url
+
+        link = f"{public_base_url()}/{tid}/admin" if is_moderator else f"{public_base_url()}/{tid}/staff"
+        if is_moderator:
+            subject = f"You now have Moderator access to {school_name}"
+            heading = "You have Moderator access"
+            body_html = (
+                f"<p>{name},</p>"
+                f"<p>{school_name} has made you a <strong>Moderator</strong>.</p>"
+                "<p>Sign in to the Admin Portal using the <strong>same Staff ID and PIN</strong> "
+                "you already use for the Staff Portal.</p>"
+                "<p>You can manage Results, Allocations, Clearance, Templates and exports. "
+                "You cannot change School Settings, Billing, the Audit Log or staff roles.</p>"
+                f"{_cta_button('Open the Admin Portal', link)}"
+            )
+            text_body = (
+                f"{name},\n\n{school_name} has made you a Moderator.\n\n"
+                "Sign in to the Admin Portal using the same Staff ID and PIN you already "
+                f"use for the Staff Portal.\n\nOpen it here: {link}\n"
+            )
+            # Clients that strip the styled button still get a usable URL.
+            text_body += _fallback_link(link)
+        else:
+            subject = f"Your Moderator access has ended — {school_name}"
+            heading = "Moderator access removed"
+            body_html = (
+                f"<p>{name},</p>"
+                f"<p>{school_name} has removed your <strong>Moderator</strong> access.</p>"
+                f"<p>Your Staff Portal account is unaffected and your {display_role} role is "
+                "unchanged. Any Admin Portal session you have open keeps working until it "
+                "expires or you sign out.</p>"
+                f"{_cta_button('Go to your Staff Portal', link)}"
+            )
+            text_body = (
+                f"{name},\n\n{school_name} has removed your Moderator access. Your Staff "
+                f"Portal account is unaffected and your {display_role} role is unchanged.\n\n"
+                f"Staff Portal: {link}\n"
+            )
+            text_body += _fallback_link(link)
+
+        send_auth_email(
+            email.lower(),
+            subject,
+            _auth_email_shell(heading, body_html, "Role notification from your school."),
+            text_body,
+        )
+    except Exception as email_err:
+        logger.warning("[roster] %s email failed for %s/%s: %s", event, tid, target_id, email_err)
+
 async def _verify_allocations_secret(
     x_api_secret_key: Optional[str] = Header(None, alias="X-API-SECRET-KEY"),
 ):
@@ -1262,7 +1394,8 @@ def set_staff_moderator(
         # read "one admin left" and both proceed.
         cur.execute(
             f"""
-            SELECT staff_id, full_name, role, COALESCE(is_moderator, FALSE) AS is_moderator
+            SELECT staff_id, full_name, email, role,
+                   COALESCE(is_moderator, FALSE) AS is_moderator
             FROM {TENANT_STAFF_TABLE}
             WHERE subdomain = %s AND staff_id = %s
             FOR UPDATE;
@@ -1316,7 +1449,8 @@ def set_staff_moderator(
             RETURNING COALESCE(is_moderator, FALSE) AS is_moderator,
                       moderator_granted_at,
                       role,
-                      full_name;
+                      full_name,
+                      email;
             """,
             (payload.is_moderator, payload.is_moderator, tid, target_id),
         )
@@ -1355,6 +1489,26 @@ def set_staff_moderator(
             "promoted" if payload.is_moderator else "demoted",
             target_id, tid, (x_viewer_id or x_viewer_label or "tenant_admin"),
         )
+
+        # Tell the person. Until this existed, the ONLY signal that you had been
+        # promoted was noticing that your colleague's sidebar had fewer items
+        # than yours — there was no notification, no email, and no link from the
+        # staff portal telling you where the new access lived.
+        #
+        # After conn.commit(), never before: a notification for a write that
+        # later rolls back would tell someone they were promoted when they were
+        # not. Best-effort by design — a failed email must not fail the
+        # promotion, which is the authoritative write above and has already
+        # succeeded and been audited.
+        _notify_moderator_change(
+            tid=tid,
+            target_id=target_id,
+            is_moderator=payload.is_moderator,
+            full_name=result.get("full_name") or before.get("full_name"),
+            role=result.get("role") or before.get("role"),
+            email=(result.get("email") or before.get("email") or "").strip(),
+        )
+
         return {"success": True, "subdomain": tid, **result}
     except HTTPException:
         raise

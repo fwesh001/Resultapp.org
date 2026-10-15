@@ -51,17 +51,31 @@ export default async function StaffDashboardLayout({
   // dashboard page's fetch, so Next.js request memoization collapses both
   // into one backend hit per render. Fail-open: sidebar hides the link.
   let formClasses: StaffFormClass[] = [];
+  // Moderator status, read LIVE from the same payload.
+  //
+  // The session cookie carries is_moderator as of sign-in and lives 12 hours,
+  // so a member promoted a minute ago still has it false in their cookie. Using
+  // the cookie alone means the "you have Moderator access" notification arrives
+  // before the link that tells them what to do with it. The dashboard query is
+  // already being made for form classes, so the live value costs nothing.
+  let liveIsModerator: boolean | null = null;
   try {
     const dashboard = await getStaffDashboard(slug, staffId);
     if (Array.isArray(dashboard?.form_classes)) {
       formClasses = dashboard.form_classes.filter((f) => f?.class_name?.trim());
     }
+    const hub = dashboard as { staff?: { is_moderator?: unknown } } | null;
+    if (hub?.staff && typeof hub.staff.is_moderator === "boolean") {
+      liveIsModerator = hub.staff.is_moderator;
+    }
   } catch {
     formClasses = [];
   }
 
+  const isModerator = liveIsModerator ?? identity.isModerator;
+
   return (
-    <StaffShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl} formClasses={formClasses}>
+    <StaffShell subdomain={slug} schoolName={schoolName} logoUrl={school?.logoUrl} formClasses={formClasses} isModerator={isModerator}>
       {children}
     </StaffShell>
   );

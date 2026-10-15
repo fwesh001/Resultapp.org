@@ -20,7 +20,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
   }
 
-  const auth = await requireTenantIdentity(tenantId);
+  // Same portal hint as the inbox routes — see requireTenantIdentity. Without it
+  // a moderator holding both cookies would have their "mark read" applied to the
+  // ADMIN identity while the staff inbox they clicked came from the staff one.
+  const auth = await requireTenantIdentity(
+    tenantId,
+    String(body.portal ?? "").trim().toLowerCase() || null,
+  );
   if ("error" in auth) return auth.error;
   const { user_id, user_type } = auth.identity;
 

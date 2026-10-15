@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck, ShieldOff, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toTitleCase } from "@/lib/format";
 
 interface StaffRow {
@@ -49,6 +50,14 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * What the admin is about to change, held until they confirm.
+   *
+   * Null means "no dialog". Holding the row (not just a boolean) is what lets
+   * the dialog title, permission note and confirm label be derived from the
+   * specific person being promoted rather than from generic wording.
+   */
+  const [pendingToggle, setPendingToggle] = useState<{ row: StaffRow; next: boolean } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,9 +86,22 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
     void load();
   }, [load]);
 
-  async function toggle(row: StaffRow) {
+  /**
+   * Ask first, then act.
+   *
+   * This used to call `window.confirm` inline. Two problems with that: a
+   * browser-native dialog cannot be styled, so it rendered as a grey Chrome box
+   * in the middle of a carefully themed admin portal; and `ConfirmDialog`
+   * already exists and is used in eight other places for exactly this shape of
+   * decision.
+   *
+   * So the click now only records WHAT is being changed and opens the dialog.
+   * The PATCH lives in the dialog's onConfirm. Same deferred pattern as
+   * AllocationsManager (`pendingDelete`) and CommandCenterClient
+   * (`pendingPublish`).
+   */
+  function toggle(row: StaffRow) {
     const next = !row.is_moderator;
-    const verb = next ? "promote" : "demote";
 
     // Client-side mirror of the backend's last-admin floor. The server is the
     // authority; this just avoids offering a click that must fail.
@@ -87,15 +109,14 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
       toast.error(`Cannot demote ${toTitleCase(row.role)} ${row.staff_id} — it is the last admin.`);
       return;
     }
+    setPendingToggle({ row, next });
+  }
 
-    const confirmed =
-      typeof window === "undefined" ||
-      window.confirm(
-        next
-          ? `Promote ${row.full_name || row.staff_id} to Moderator?\n\nThey will gain Dashboard, Allocations, Results, Clearance, Templates, Export and Notifications. They will NOT gain Settings, Billing, Audit or Moderator Management.`
-          : `Remove Moderator access from ${row.full_name || row.staff_id}?\n\nThey keep their ${toTitleCase(row.role)} role but lose all admin-portal access immediately.`,
-      );
-    if (!confirmed) return;
+  async function commitToggle() {
+    const pending = pendingToggle;
+    if (!pending) return;
+    const { row, next } = pending;
+    const verb = next ? "promote" : "demote";
 
     setBusy(row.staff_id);
     try {
@@ -117,8 +138,12 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
           ? `${row.full_name || row.staff_id} is now a Moderator.`
           : `${row.full_name || row.staff_id} no longer has Moderator access.`,
       );
+      setPendingToggle(null);
       await load();
     } catch (e) {
+      // Leave the dialog open on failure so the message is visible next to the
+      // buttons that caused it; closing it would throw the error into a toast
+      // the admin may have already looked away from.
       toast.error(e instanceof Error ? e.message : `Could not ${verb}.`);
     } finally {
       setBusy(null);
@@ -237,6 +262,35 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
           admin first if you need to hand over.
         </p>
       ) : null}
+
+      {/* The permission list lives in `note`, not `message`.
+          `message` is rendered by Modal as a single description string, so the
+          old "\\n\\n" separator would have collapsed and run the gains straight
+          into the losses with no line break. `note` is a separate element and
+          reads as the footnote it is. */}
+      <ConfirmDialog
+        open={pendingToggle !== null}
+        onOpenChange={(o) => { if (!o) setPendingToggle(null); }}
+        title={
+          pendingToggle?.next
+            ? `Promote ${pendingToggle.row.full_name || pendingToggle.row.staff_id} to Moderator?`
+            : `Remove Moderator access from ${pendingToggle?.row.full_name || pendingToggle?.row.staff_id}?`
+        }
+        message={
+          pendingToggle?.next
+            ? "They will be able to sign in to the Admin Portal with their existing Staff ID and PIN."
+            : `They keep their ${toTitleCase(pendingToggle?.row.role ?? "")} role but lose all admin-portal access immediately.`
+        }
+        note={
+          pendingToggle?.next
+            ? "Gains: Dashboard, Allocations, Results, Clearance, Templates, Export and Notifications. Does NOT gain: Settings, Billing, Audit or Moderator Management. They are notified on the staff portal and by email."
+            : "Their in-progress Admin Portal session keeps working until it expires or they sign out."
+        }
+        confirmLabel={pendingToggle?.next ? "Promote" : "Remove access"}
+        variant={pendingToggle?.next ? "default" : "danger"}
+        loading={busy !== null}
+        onConfirm={() => void commitToggle()}
+      />
     </div>
   );
 }

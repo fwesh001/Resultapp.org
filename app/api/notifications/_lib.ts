@@ -46,10 +46,38 @@ interface Identity {
  *
  * Returns the identity or a 401 JSON response when neither matches the tenant.
  */
+/**
+ * Which cookie is this inbox actually asking about?
+ *
+ * "admin" | "staff" | undefined. Undefined keeps the old behaviour: try admin,
+ * then staff.
+ *
+ * WHY THIS EXISTS. A MODERATOR HOLDS BOTH COOKIES. They sign into the staff
+ * portal with their Staff ID and PIN, and — once promoted — they sign into the
+ * admin portal with the SAME credentials, so `admin_session` and `staff_session`
+ * coexist happily (both are path=/, sameSite=lax).
+ *
+ * With no portal hint, the admin cookie was checked first and always won, so a
+ * moderator's STAFF PORTAL bell rendered the ADMIN's inbox: wrong unread count,
+ * and any notification targeted at their staff id (including "you have been made
+ * a Moderator") simply invisible. The hint is taken from the client, but it only
+ * reorders which EXISTING, SIGNED cookie is read — it cannot manufacture one or
+ * change the identity that comes back, so it is not an authorization surface.
+ */
+export type NotificationPortal = "admin" | "staff";
+
+/** Narrow an untrusted query/body value to a portal, or null. */
+function toPortal(value: string | null | undefined): NotificationPortal | null {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "admin" || v === "staff" ? v : null;
+}
+
 export async function requireTenantIdentity(
   tenantId: string,
+  portal?: string | null,
 ): Promise<{ identity: Identity } | { error: NextResponse }> {
   const normalized = (tenantId || "").toLowerCase().trim();
+  const preferStaff = toPortal(portal) === "staff";
   if (!normalized) {
     return {
       error: NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 }),
@@ -68,8 +96,9 @@ export async function requireTenantIdentity(
     };
   };
 
-  // Admin first (admin and staff cookies are mutually exclusive per portal).
-  try {
+  // Portal-scoped: check the matching cookie FIRST, then fall back to the other
+  // one so a caller that omits the hint behaves exactly as before.
+  const readAdmin = async (): Promise<{ identity: Identity } | null> => {
     const session = await readSessionCookie<{
       admin?: { email?: string };
       tenant_id?: string;
@@ -81,11 +110,9 @@ export async function requireTenantIdentity(
         return { identity: { user_id: email, user_type: "admin" } };
       }
     }
-  } catch {
-    // fall through to staff check
-  }
-
-  try {
+    return null;
+  };
+  const readStaff = async (): Promise<{ identity: Identity } | null> => {
     const session = await readSessionCookie<{
       staff?: { id?: string; staff_id?: string; email?: string };
       tenant_id?: string;
@@ -98,8 +125,18 @@ export async function requireTenantIdentity(
         return { identity: { user_id: userId, user_type: "staff" } };
       }
     }
-  } catch {
-    // fall through to 401
+    return null;
+  };
+
+  const first = preferStaff ? readStaff : readAdmin;
+  const second = preferStaff ? readAdmin : readStaff;
+  for (const attempt of [first, second]) {
+    try {
+      const found = await attempt();
+      if (found) return found;
+    } catch {
+      // Rejected or unreadable cookie — try the other one, then 401.
+    }
   }
 
   return await unauthorized();

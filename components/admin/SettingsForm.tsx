@@ -11,6 +11,7 @@ import ModeratorManager from "@/components/admin/ModeratorManager";
 import PasswordChange from "@/components/admin/PasswordChange";
 import { toast } from "@/components/ui/toast";
 import SignatureCaptureModal from "@/components/ui/SignatureCaptureModal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { RemarkBand, School } from "@/types/school";
 
 interface SettingsFormProps {
@@ -85,6 +86,18 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  /**
+   * Holds a VERIFIED code whose application is waiting on a yes/no answer,
+   * because applying it signs the admin out and would discard other edits.
+   *
+   * The code travels in here rather than being re-read from `otpCode` so the
+   * dialog cannot apply a different code than the one that was just checked —
+   * if the admin edits the OTP field while the dialog is open, the pending
+   * entry still carries what actually verified.
+   */
+  const [discardPrompt, setDiscardPrompt] = useState<{ code: string } | null>(null);
+  /** True while the confirmed email is being written and the admin is signed out. */
+  const [applyingEmail, setApplyingEmail] = useState(false);
   // Needed to read the live DOM values of the profile fields. The form is
   // uncontrolled (defaultValue), so there is no state holding them — the only
   // way to know whether the admin has unsaved work is to ask the form.
@@ -197,6 +210,19 @@ export default function SettingsForm({ school }: SettingsFormProps) {
     }
   }
 
+  /**
+   * Apply a code that has just been verified.
+   *
+   * Both routes into this converge here — the direct path when the form is
+   * clean, and the ConfirmDialog's onConfirm when the admin has other unsaved
+   * edits. One function so the two can never drift: if the guard were only on
+   * one path, a change would save silently on the other.
+   */
+  async function commitEmailChange(code: string) {
+    setOtpState("verified");
+    await saveEmailChange(code);
+  }
+
   async function verifyOtp() {
     const target = emailValue.trim();
     setOtpBusy(true);
@@ -229,21 +255,22 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       // is the single authoritative consume — so save immediately rather than
       // asking the admin for a second click on a button that has nothing left
       // to do.
+      //
+      // Unless they have other work in progress, which the redirect would
+      // silently throw away. That used to be a `window.confirm`: an unstyled
+      // grey box in the middle of a themed page. ConfirmDialog is what the rest
+      // of the app uses for exactly this decision, and it can show a loading
+      // state while the (async) save runs.
       if (hasUnsavedOtherChanges()) {
-        const proceed = window.confirm(
-          "Saving your new email signs you out immediately, and you have unsaved changes to other fields on this page that will be discarded.\n\nSave the email change anyway?",
+        setDiscardPrompt({ code: otpCode });
+        setOtpState("sent");
+        setOtpError(
+          "Code confirmed. Choose below to apply it now — your other unsaved changes will be discarded.",
         );
-        if (!proceed) {
-          setOtpState("sent");
-          setOtpError(
-            "Code confirmed, but not applied. Save your other changes first, then verify again.",
-          );
-          return;
-        }
+        return;
       }
 
-      setOtpState("verified");
-      await saveEmailChange(otpCode);
+      await commitEmailChange(otpCode);
     } catch (e) {
       setOtpError(e instanceof Error ? e.message : "That code is incorrect.");
       setOtpState("sent");
@@ -922,6 +949,43 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   return (
     <>
       {content}
+
+      {/* Confirm a verified email when the form has other unsaved edits.
+          Mounted outside `content` so it survives the Security tab switching —
+          this decision is about the whole page, not one tab. */}
+      <ConfirmDialog
+        open={discardPrompt !== null}
+        onOpenChange={(o: boolean) => {
+          if (o) return;
+          setDiscardPrompt(null);
+          // Declining is not an error, but the code stays spent-proof-pending:
+          // tell them plainly that nothing was applied.
+          setOtpError(
+            "Code confirmed, but not applied. Save your other changes first, then press Verify again.",
+          );
+        }}
+        title="Apply your new email address now?"
+        message="This signs you out immediately, because your session is keyed to the address you are changing."
+        note="Any unsaved changes to the school name, motto, phone, term or branding on this page will be discarded."
+        confirmLabel="Save email & sign out"
+        cancelLabel="Keep editing"
+        variant="danger"
+        loading={applyingEmail}
+        onConfirm={async () => {
+          const pending = discardPrompt;
+          setDiscardPrompt(null);
+          if (!pending) return;
+          setApplyingEmail(true);
+          try {
+            await commitEmailChange(pending.code);
+          } catch (e) {
+            setOtpError(e instanceof Error ? e.message : "Could not update the login address.");
+            setOtpState("sent");
+          } finally {
+            setApplyingEmail(false);
+          }
+        }}
+      />
 
       <SignatureCaptureModal
         open={sigModalOpen}

@@ -3169,6 +3169,24 @@ DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
         "body_template": "Reminder: Grades for {{subject_name}} are due. Please finalize your entries.",
         "default_color": "#10B981",
     },
+    # Moderator (deputy) grants and revocations. DISPATCHED, NOT FAN-OUT: these
+    # carry target_user_id so only the affected member sees them. A broadcast
+    # would tell the whole staffroom who was just promoted, which is nobody's
+    # business but the admin and the person promoted.
+    {
+        "event_type": "MODERATOR_GRANTED",
+        "category": "SECURITY",
+        "title_template": "You now have Moderator access",
+        "body_template": "{{school_name}} has made you a Moderator. Sign in to the Admin Portal with your existing Staff ID and PIN. You can manage Results, Allocations, Clearance and Templates — but not Settings, Billing, Audit or staff roles.",
+        "default_color": "#8B5CF6",
+    },
+    {
+        "event_type": "MODERATOR_REVOKED",
+        "category": "SECURITY",
+        "title_template": "Your Moderator access has ended",
+        "body_template": "{{school_name}} has removed your Moderator access. Your Staff Portal account is unaffected and your {{role}} role stays the same. Any Admin Portal session keeps working until it expires or you sign out.",
+        "default_color": "#EF4444",
+    },
 ]
 
 

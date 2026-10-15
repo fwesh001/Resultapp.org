@@ -133,6 +133,11 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
           limit: String(PAGE_LIMIT),
           offset: String(offset),
         });
+        // Tell the proxy which portal is asking. A moderator holds BOTH cookies
+        // (same Staff ID and PIN work in each portal), and without this the
+        // admin cookie won the tie and this staff inbox silently rendered the
+        // admin's mail.
+        if (portal) qs.set("portal", portal);
         if (unreadOnly) qs.set("unread_only", "true");
         if (debouncedQuery) qs.set("q", debouncedQuery);
         const res = await fetch(`/api/notifications/inbox?${qs.toString()}`, { cache: "no-store" });
@@ -181,7 +186,7 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
       void fetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tid, notification_id: target }),
+        body: JSON.stringify({ tenant_id: tid, notification_id: target, portal }),
       }).catch(() => {
         // Best-effort: leave the optimistic read state on failure.
       });
@@ -211,7 +216,7 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
         const res = await fetch("/api/notifications/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tenant_id: tid, notification_id: n.id }),
+          body: JSON.stringify({ tenant_id: tid, notification_id: n.id, portal }),
         });
         if (!res.ok) throw new Error("failed");
       } catch {
@@ -230,7 +235,7 @@ export default function NotificationInbox({ tenantId, basePath, portal }: Notifi
       const res = await fetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tid, read_all: true }),
+        body: JSON.stringify({ tenant_id: tid, read_all: true, portal }),
       });
       if (!res.ok) throw new Error("failed");
     } catch {

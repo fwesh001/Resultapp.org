@@ -170,12 +170,77 @@ check("Verify applies the change itself instead of asking for a second click", (
   const verifyAt = src.indexOf("async function verifyOtp(");
   if (verifyAt === -1) return "verifyOtp is missing";
   const body = slice(src, verifyAt, src.indexOf("\n  async function ", verifyAt + 10));
-  if (!/await saveEmailChange\(/.test(body)) {
-    return "verifyOtp does not save — it still only sets otpState and leaves the change unapplied";
+
+  // The save is reached through `commitEmailChange`, not inline. That helper
+  // exists because verifying now has two routes into it — the clean form, and
+  // the ConfirmDialog shown when other edits would be discarded — and one
+  // function keeps them from drifting. So the assertion follows the call chain
+  // rather than demanding the literal `saveEmailChange` in verifyOtp, which
+  // would have passed only for the single-path version.
+  if (!/await commitEmailChange\(/.test(body)) {
+    return "verifyOtp never applies the change — it still only sets otpState and leaves it unapplied";
   }
-  if (/save the form to apply/i.test(read("components/admin/SettingsForm.tsx"))) {
+  const commitAt = src.indexOf("async function commitEmailChange(");
+  if (commitAt === -1) return "commitEmailChange is missing";
+  const commit = slice(src, commitAt, src.indexOf("\n  async function ", commitAt + 10));
+  if (!/saveEmailChange\(/.test(commit)) {
+    return "commitEmailChange does not call saveEmailChange — the chain is broken";
+  }
+  if (!/await saveEmailChange\(/.test(commit)) {
+    return "commitEmailChange fires saveEmailChange without awaiting it";
+  }
+
+  // The discard path must go through the same helper, or a verified change
+  // would save silently on one branch and ask on the other.
+  const dialogAt = src.indexOf("open={discardPrompt !== null}");
+  if (dialogAt === -1) return "the discard confirmation dialog is missing";
+  if (!/commitEmailChange\(/.test(slice(src, dialogAt, src.length))) {
+    return "the discard dialog does not route through commitEmailChange";
+  }
+
+  if (/save the form to apply/i.test(src)) {
     return "stale copy still tells the admin to press Save";
   }
+  return null;
+});
+
+check("no browser-native confirm/alert/prompt survives anywhere", () => {
+  const offenders = [];
+  // Listed literally rather than via PASSWORD_FILES: that const is declared in
+  // section 3, below this check, and referencing it here is a TDZ error.
+  const files = [
+    "components/admin/SettingsForm.tsx",
+    "components/admin/ModeratorManager.tsx",
+    "components/auth/SignInForm.tsx",
+    "components/auth/AdminSetupForm.tsx",
+    "components/superadmin/SuperadminLoginForm.tsx",
+    "components/admin/PasswordChange.tsx",
+    "components/student/PasswordChangeForm.tsx",
+    "components/forms/RegisterSchoolForm.tsx",
+    "components/landing/ResultLookupWidget.tsx",
+    "app/reset-password/page.tsx",
+  ];
+  for (const rel of files) {
+    const src = read(rel);
+    // Comments describing the migration still mention the old call, so only
+    // executable occurrences count: require it to be followed by a quote or
+    // template, not by prose.
+    for (const fn of ["confirm", "alert", "prompt"]) {
+      const re = new RegExp(`(?:window\\.)?${fn}\\s*\\(\\s*[\\"'\`{]`, "g");
+      if (re.test(src)) offenders.push(`${rel}:${fn}`);
+    }
+  }
+  if (offenders.length) {
+    return `browser-native dialog still in use: ${offenders.join(", ")}`;
+  }
+  return null;
+});
+
+check("the moderator promote/demote asks through ConfirmDialog", () => {
+  const src = read("components/admin/ModeratorManager.tsx");
+  if (!/ConfirmDialog/.test(src)) return "the confirm dialog is not rendered";
+  if (!/setPendingToggle/.test(src)) return "the toggle click does not defer to a pending state";
+  if (!/pendingToggle\?\.row/.test(src)) return "the dialog copy is not derived from the pending row";
   return null;
 });
 

@@ -18,10 +18,17 @@ interface StaffShellProps {
    */
   logoUrl?: string;
   formClasses?: Array<{ class_name: string }>;
+  /**
+   * Whether this member has been granted Moderator (deputy) access to the
+   * Admin Portal. Drives a single extra sidebar link — it is a DISCOVERY
+   * affordance, not an authorization check; every admin page and API route
+   * enforces the capability server-side regardless of this flag.
+   */
+  isModerator?: boolean;
   children: React.ReactNode;
 }
 
-export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses, children }: StaffShellProps) {
+export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses, isModerator = false, children }: StaffShellProps) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +49,7 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
   return (
     <div className="flex h-screen bg-surface-0 text-text-1">
       <div className="hidden md:flex">
-        <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} />
+        <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} isModerator={isModerator} />
       </div>
 
       {open && (
@@ -55,7 +62,7 @@ export default function StaffShell({ subdomain, schoolName, logoUrl, formClasses
         >
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute left-0 top-0 h-full shadow-2xl">
-            <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} onNavigate={() => setOpen(false)} />
+            <StaffSidebar subdomain={subdomain} schoolName={schoolName} logoUrl={logoUrl} formClasses={formClasses} isModerator={isModerator} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}

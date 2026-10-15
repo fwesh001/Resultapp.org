@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Missing tenant_id" }, { status: 400 });
   }
 
-  const auth = await requireTenantIdentity(tenantId);
+  const auth = await requireTenantIdentity(tenantId, searchParams.get("portal"));
   if ("error" in auth) return auth.error;
   const { user_id, user_type } = auth.identity;
 
