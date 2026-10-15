@@ -51,7 +51,9 @@ export async function setSessionCookie(
   payload: Record<string, unknown>,
   ttlSeconds: number = SESSION_TTL_SECONDS,
 ): Promise<string> {
-  const token = signSession(payload, ttlSeconds);
+  // `name` is bound into the MAC — see macInput in sessionCrypto. A staff token
+  // must never verify as an admin token.
+  const token = signSession(payload, ttlSeconds, name);
   const store = await cookies();
   store.set(name, token, {
     httpOnly: true,
@@ -78,7 +80,8 @@ export async function readSessionCookie<T extends object>(
   } catch {
     return null;
   }
-  return verifySession<T>(raw);
+  // Verified against the cookie it was READ FROM, not any cookie.
+  return verifySession<T>(raw, name);
 }
 
 /**
