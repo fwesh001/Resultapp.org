@@ -180,6 +180,12 @@ check("Verify applies the change itself instead of asking for a second click", (
   if (!/await commitEmailChange\(/.test(body)) {
     return "verifyOtp never applies the change — it still only sets otpState and leaves it unapplied";
   }
+  // Guard against `await commitEmailChange(...)` being present but its promise
+  // discarded — the check above only proves the words appear, which a bare call
+  // without `await` would also satisfy.
+  if (/[^t]\bcommitEmailChange\(/.test(body) && !/await commitEmailChange\(/.test(body)) {
+    return "commitEmailChange is called without awaiting it";
+  }
   const commitAt = src.indexOf("async function commitEmailChange(");
   if (commitAt === -1) return "commitEmailChange is missing";
   const commit = slice(src, commitAt, src.indexOf("\n  async function ", commitAt + 10));
@@ -194,8 +200,28 @@ check("Verify applies the change itself instead of asking for a second click", (
   // would save silently on one branch and ask on the other.
   const dialogAt = src.indexOf("open={discardPrompt !== null}");
   if (dialogAt === -1) return "the discard confirmation dialog is missing";
-  if (!/commitEmailChange\(/.test(slice(src, dialogAt, src.length))) {
+  const dialogTail = slice(src, dialogAt, src.length);
+  if (!/commitEmailChange\(/.test(dialogTail)) {
     return "the discard dialog does not route through commitEmailChange";
+  }
+  // Awaited, not merely called — a bare call discards the promise, so the
+  // admin would be shown a success toast for a save that never ran.
+  if (!/await commitEmailChange\(/.test(dialogTail)) {
+    return "the discard dialog fires commitEmailChange without awaiting it";
+  }
+  // And it must not be dismissible into a lost code: declining has to explain
+  // itself, otherwise the admin is left with a "confirmed" badge and no change.
+  // Dismissing (backdrop, Escape, X or Cancel) must clear the pending entry, or
+  // the dialog reopens on the next render with a code that may no longer be
+  // current. Matched loosely because the handler is written as
+  // `if (o) return; setDiscardPrompt(null);` rather than `if (!o) ...`.
+  if (!/onOpenChange=\{\(o(?:: boolean)?\)\s*=>/.test(dialogTail)) {
+    return "the discard dialog has no onOpenChange handler";
+  }
+  const handlerAt = dialogTail.indexOf("onOpenChange=");
+  const handler = slice(dialogTail, handlerAt, dialogTail.indexOf("title=", handlerAt));
+  if (!/setDiscardPrompt\(null\)/.test(handler)) {
+    return "dismissing the discard dialog does not clear its pending state";
   }
 
   if (/save the form to apply/i.test(src)) {
