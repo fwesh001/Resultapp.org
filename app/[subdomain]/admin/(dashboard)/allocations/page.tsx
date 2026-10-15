@@ -1,11 +1,13 @@
-import { getTenant } from "@/lib/tenant";
-import { AllocationsManager } from "@/components/admin/AllocationsManager";
-import { enforceAdminCapability } from "@/lib/enforceCapability";
+﻿import { AllocationsSection } from "@/components/admin/sections/AllocationsSection";
+import type { PortalSegment } from "@/components/admin/AdminSidebar";
 
-
-// RBAC: the admin layout reads this to enforce the moderator boundary.
-// An allow-list, not a deny-list — a new page without this constant is
-// unavailable to moderators until someone grants it.
+/**
+ * Allocations and Roster — served under BOTH `/{sub}/admin/allocations` and
+ * `/{sub}/moderator/allocations`.
+ *
+ * RBAC: the capability id is an allow-list entry (see lib/capabilities.ts). A
+ * page added without a decision stays unavailable to moderators.
+ */
 export const requiredCapability = "allocations";
 export const dynamic = "force-dynamic";
 
@@ -14,33 +16,7 @@ export default async function AllocationsPage({
 }: {
   params: Promise<{ subdomain: string }>;
 }) {
-  const { subdomain } = await params;
-
-    // RBAC gate. See lib/enforceCapability.ts for why this lives here
-    // rather than in the layout: Next does not expose a page's exports to
-    // its parent layout, so a layout-level check is always a silent no-op.
-    await enforceAdminCapability(params, "allocations");
-  const tenantId = subdomain.toLowerCase().trim();
-  const school = await getTenant(tenantId);
-
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Allocations & Roster</h1>
-          <p className="mt-1 text-sm text-purple-200/60">
-            Manage students, staff & subject allocations for{" "}
-            <span className="font-mono font-medium text-white">{school?.name || tenantId}</span>
-            <span className="ml-2 rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-mono text-purple-200">
-              {tenantId}
-            </span>
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <AllocationsManager tenantId={tenantId} idPrefix={school?.idPrefix ?? tenantId.toLowerCase()} staffIdPrefix={school?.staffIdPrefix ?? "STAFF/"} />
-      </div>
-    </div>
+    <AllocationsSection params={params} portal={"admin" as PortalSegment} />
   );
 }
