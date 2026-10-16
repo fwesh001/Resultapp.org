@@ -1522,6 +1522,135 @@ check("malformed subdomains return 400/404, not 500", () => {
     : "the public tenant lookup still lets ValueError escape";
 });
 
+// ---------------------------------------------------------------------------
+// Demo sweeper — the child tables must be DISCOVERED, never hardcoded.
+//
+// A hardcoded list is a standing promise that someone remembers to update it,
+// and the previous one had already silently missed four tables (audit_logs,
+// grading_templates, notification_reads, pending_registrations). None of them
+// have a foreign key to schools, so nothing caught it: the sweep reported
+// success and left orphan rows that made pg_dump unrestorable.
+//
+// The failure mode is invisible from the log. The sweeper deletes some tables,
+// reports success, and quietly leaves the rest behind.
+// ---------------------------------------------------------------------------
+
+console.log("\nDemo sweeper: discovered children, and honest about what it deletes");
+
+const demoPy = read(path.join("backend", "services", "demo.py"));
+const sweepFn = fnSlice(demoPy, "sweep_expired_demos");
+
+check("the sweeper no longer hardcodes a child-table list", () => {
+  // The old shape: a tuple of literal table names assigned to `child_tables`.
+  const hardcoded = /child_tables\s*=\s*\([\s\S]{0,600}?\)/.exec(code(sweepFn));
+  if (!hardcoded) return true;
+  // A parenthesised empty tuple or a call is fine; string literals are not.
+  return /["']/.test(hardcoded[0])
+    ? "the sweeper still carries a literal list of table names"
+    : true;
+});
+
+check("the sweeper discovers its child tables from the database", () =>
+  /_tenant_child_tables\(/.test(sweepFn) &&
+  /child_tables\s*=\s*_tenant_child_tables\(/.test(sweepFn)
+    ? true
+    : "the sweeper does not use discovered tables"
+);
+
+check("discovery covers tables with any FK to schools, not just column names", () => {
+  const fn = fnSlice(demoPy, "_tenant_child_tables");
+  if (!fn) return "cannot locate _tenant_child_tables";
+  // waiver_tokens.locked_to_tenant / used_by_tenant match neither
+  // `subdomain` nor `tenant_id`; only an FK scan finds them.
+  return /confrelid|tgt\.relname = %s/.test(code(fn)) &&
+    /confkey/.test(code(fn))
+    ? true
+    : "discovery only looks for named columns, so FK tables are invisible";
+});
+
+check("discovery resolves tenant_id from the foreign key, never by assumption", () => {
+  const fn = code(fnSlice(demoPy, "_tenant_child_tables") || "");
+  // purge_tenants.py shipped a years-long bug by assuming tenant_id held the
+  // schools.id UUID; it holds the subdomain. Same trap, so it is asserted.
+  const readsReferencedColumn = /fk_parent_cols/.test(fn) && /confkey/.test(fn);
+  if (!readsReferencedColumn) {
+    return "the referenced schools column is not read per table";
+  }
+  const resolves = /"id" if parents\[0\] == "id" else "subdomain"/.test(fn);
+  if (!resolves) {
+    return "the schools key is not derived from the referenced column";
+  }
+  return /uuids/.test(fn) && /subs/.test(fn)
+    ? true
+    : "no data probe fallback exists for tables with no foreign key";
+});
+
+check("discovery reads BOTH ends of the foreign key", () => {
+  const fn = code(fnSlice(demoPy, "_tenant_child_tables") || "");
+  // An earlier draft read only the REFERENCED column and used it as if it were
+  // the child's column. That pairs waiver_tokens with a `subdomain` column it
+  // does not have, and the sweep dies with "column does not exist" -- found by
+  // the scratch test, not by the guards.
+  if (!/child\.attrelid\s*=\s*src\.oid/.test(fn)) {
+    return "the child-side attribute lookup is missing or targets the wrong table";
+  }
+  // Presence of the variable is not enough: it has to actually FEED the
+  // candidate set. A guard that only greps for the name stays green when the
+  // loop that uses it is deleted, which is what the first version did.
+  const feeds = /for table, cols in fk_child_cols\.items\(\)[\s\S]{0,160}?candidates\.add\(/.test(fn);
+  if (!feeds) {
+    return "fk_child_cols is never used to add candidates, so FK-only tables are invisible";
+  }
+  return /fk_parent_cols/.test(fn) ? true : "the referenced side is not captured";
+});
+
+check("deletes are ordered by the foreign-key graph so triggers stay on", () => {
+  const fn = code(fnSlice(demoPy, "_tenant_child_tables") || "");
+  if (!fn) return "cannot locate _tenant_child_tables";
+  const hasOrder = /dependents\[tgt_t\]\.add\(src_t\)/.test(fn) && /while remaining/.test(fn);
+  if (!hasOrder) {
+    return "no FK-graph ordering is computed, or it is stored in the wrong direction";
+  }
+  return /session_replication_role/.test(sweepFn || "")
+    ? "the sweeper disables triggers instead of ordering its deletes"
+    : true;
+});
+
+check("the sweeper runs in a real transaction", () => {
+  // Under autocommit, conn.rollback() is a no-op and "rolls back whole" is a
+  // lie -- a mid-sweep failure would leave a half-deleted demo tenant.
+  return /_connect_as_superuser_transactional\(\)/.test(sweepFn || "")
+    ? true
+    : "the sweeper still uses the autocommit connector, so its rollback is a no-op";
+});
+
+check("the sweeper asserts afterwards that nothing was left behind", () => {
+  if (!/leftovers\s*=\s*_sweep_orphans\(/.test(sweepFn || "")) {
+    return "the sweep never computes what it failed to delete";
+  }
+  if (!/if leftovers:/.test(sweepFn || "")) {
+    return "the leftover count is computed but never branched on";
+  }
+  // Surfacing means two things: a log line and a non-clean return value, so a
+  // caller reading the JSON cannot mistake a partial sweep for a clean one.
+  const logs = /logger\.error\(/.test(sweepFn);
+  const marks = /"clean":\s*False/.test(sweepFn);
+  if (!logs) return "leftovers are not logged";
+  if (!marks) return "leftovers do not mark the sweep as unclean in the return value";
+
+  // Every exit from the function must agree on the shape. An early return that
+  // omits `clean` makes "nothing to do" indistinguishable from "swept cleanly"
+  // for anything reading the JSON -- caught by the live 15-minute timer, which
+  // logged the old shape every time it had nothing to do.
+  const returns = sweepFn.match(/return \{[^\}]*\}/g) || [];
+  if (returns.length < 2) return "the sweep has a single exit shape; is anything short-circuited?";
+  const bad = returns.filter((r) => !/"clean"/.test(r));
+  return bad.length === 0
+    ? true
+    : `an exit path omits 'clean': ${bad.join(" ")}`;
+
+});
+
 console.log("\nPayment verification: settled only, and never confused with pending");
 check("the API envelope status is never treated as proof of payment", () => {
   // The envelope's top-level `status` is "success" whenever the provider merely

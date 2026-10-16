@@ -324,11 +324,197 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
     return counts
 
 
+def _tenant_child_tables(conn) -> List[tuple]:
+    """Every tenant-scoped table, ordered so deletes never trip a foreign key.
+
+    Returns [(table, column, value_kind)] where value_kind is 'subdomain' or
+    'id' -- matching what that column actually stores, which is NOT always the
+    obvious thing. `notifications.tenant_id` holds the SUBDOMAIN despite the
+    name, and purge_tenants.py shipped a bug for years because it assumed
+    otherwise.
+
+    WHY DISCOVERY, NOT A LIST
+    -------------------------
+    A hardcoded child list is a promise that someone remembers to update it.
+    The previous list omitted audit_logs, grading_templates, notification_reads
+    and pending_registrations -- none of which have a foreign key to schools --
+    so every sweep orphaned rows that silently broke pg_dump restorability. The
+    table set is derived from the database, so a table added next month is swept
+    without anyone editing this file.
+
+    Three sources, because each catches something the others miss:
+
+      1. every table with a `subdomain` column      -- the common case
+      2. every table with a `tenant_id` column      -- named confusingly
+      3. every table holding ANY foreign key to     -- catches waiver_tokens.
+         schools, whatever the column is called        locked_to_tenant and
+                                                      used_by_tenant, which
+                                                      match neither name above
+
+    ORDER
+    -----
+    A topological sort over the foreign-key graph, so a referencing table is
+    emptied before the table it references. The only live inter-child edge is
+    notification_reads -> notifications, but deriving the order means a new
+    child-to-child FK cannot start aborting sweeps. The schools row itself is
+    excluded here and deleted last by the caller, which keeps its CASCADE
+    triggers as a backstop rather than the primary mechanism.
+    """
+    cur = conn.cursor()
+    registry = db.SCHOOLS_REGISTRY_TABLE
+
+    # For every table with an FK to schools, BOTH ends of that FK matter:
+    #   child_cols  -- the column in THIS table  (waiver_tokens.locked_to_tenant)
+    #   parent_cols -- the schools column it points at (schools.subdomain)
+    # Reading only the referenced side and calling it the child's column is a
+    # silent bug: it pairs waiver_tokens with a `subdomain` column it does not
+    # have, and the sweep then dies on "column does not exist".
+    cur.execute(
+        """
+        SELECT src.relname,
+               array_agg(child.attname  ORDER BY k.ord),
+               array_agg(parent.attname ORDER BY k.ord)
+        FROM pg_constraint con
+        JOIN pg_class src ON src.oid = con.conrelid
+        JOIN pg_class tgt ON tgt.oid = con.confrelid
+        JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(attnum, fattnum, ord)
+             ON TRUE
+        JOIN pg_attribute child  ON child.attrelid  = src.oid AND child.attnum  = k.attnum
+        JOIN pg_attribute parent ON parent.attrelid = tgt.oid AND parent.attnum = k.fattnum
+        WHERE con.contype = 'f' AND tgt.relname = %s
+        GROUP BY src.relname
+        """,
+        (registry,),
+    )
+    fk_rows = cur.fetchall() or []
+    fk_child_cols = {t: list(cs) for t, cs, _ in fk_rows}
+    fk_parent_cols = {t: list(ps) for t, _, ps in fk_rows}
+
+    # Candidate (table, column) pairs.
+    cur.execute(
+        """
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name IN ('subdomain', 'tenant_id')
+        ORDER BY table_name
+        """
+    )
+    candidates = set(cur.fetchall() or [])
+    for table, cols in fk_child_cols.items():
+        for col in cols:
+            candidates.add((table, col))
+    candidates = {(t, col) for (t, col) in candidates if t != registry}
+
+    if not candidates:
+        return []
+
+    # Which schools column does each candidate column hold? Ask the FK; fall
+    # back to probing the data for tables with no FK at all.
+    cur.execute("SELECT subdomain, id::text FROM schools;")
+    rows = cur.fetchall() or []
+    subs = {r[0] for r in rows}
+    uuids = {r[1] for r in rows}
+
+    by_table: Dict[str, List[tuple]] = {}
+    for table, col in sorted(candidates):
+        parents = fk_parent_cols.get(table) or []
+        if len(parents) == 1:
+            kind = "id" if parents[0] == "id" else "subdomain"
+        else:
+            cur.execute(
+                f'SELECT DISTINCT "{col}"::text FROM public."{table}" '
+                f'WHERE "{col}" IS NOT NULL LIMIT 200;'
+            )
+            vals = {r[0] for r in (cur.fetchall() or [])}
+            kind = "id" if (vals & uuids and not (vals & subs)) else "subdomain"
+        by_table.setdefault(table, []).append((table, col, kind))
+
+    # One predicate per table: prefer `subdomain`, it is unambiguous.
+    chosen: List[tuple] = []
+    for table, entries in by_table.items():
+        entries.sort(key=lambda e: (e[1] != "subdomain", e[1]))
+        chosen.append(entries[0])
+
+    # Foreign keys BETWEEN child tables, for the delete order. Stored as
+    # dependents[parent] = {tables that reference it} rather than the natural
+    # direction, because what we need to enforce is "a referencing table is
+    # emptied before the table it references".
+    #
+    # Emitting the PARENT first happens to work today only because
+    # notification_reads -> notifications is ON DELETE CASCADE. With a RESTRICT
+    # or NO ACTION FK the parent delete would abort the whole sweep. Child-first
+    # is safe regardless of what action the FK carries, so that is the order.
+    tables = {t for (t, _, _) in chosen}
+    dependents: Dict[str, set] = {t: set() for t in tables}
+    if tables:
+        cur.execute(
+            """
+            SELECT DISTINCT src.relname, tgt.relname
+            FROM pg_constraint con
+            JOIN pg_class src ON src.oid = con.conrelid
+            JOIN pg_class tgt ON tgt.oid = con.confrelid
+            WHERE con.contype = 'f' AND src.relname <> tgt.relname
+            """
+        )
+        for src_t, tgt_t in cur.fetchall() or []:
+            if src_t in tables and tgt_t in tables:
+                dependents[tgt_t].add(src_t)
+
+    ordered: List[tuple] = []
+    remaining = {t: set(v) for t, v in dependents.items()}
+    by_name = {e[0]: e for e in chosen}
+    while remaining:
+        ready = sorted(t for t, deps in remaining.items() if not deps)
+        if not ready:                      # a cycle; emit the rest deterministically
+            ready = [sorted(remaining)[0]]
+        for t in ready:
+            ordered.append(by_name[t])
+            del remaining[t]
+            for deps in remaining.values():
+                deps.discard(t)
+    return ordered
+
+
+def _sweep_orphans(conn, swept: List[str]) -> Dict[str, int]:
+    """Swept tenants' rows that are still present. Must be empty after a sweep."""
+    if not swept:
+        return {}
+    cur = conn.cursor()
+    registry = db.SCHOOLS_REGISTRY_TABLE
+    found: Dict[str, int] = {}
+    for table, col, kind in _tenant_child_tables(conn):
+        if kind == "id":
+            cur.execute(f"SELECT id FROM {registry} WHERE subdomain = ANY(%s);", (swept,))
+            ids = [r[0] for r in (cur.fetchall() or [])]
+            if not ids:
+                continue
+            cur.execute(
+                f'SELECT count(*) FROM public."{table}" WHERE "{col}" = ANY(%s);', (ids,)
+            )
+        else:
+            cur.execute(
+                f'SELECT count(*) FROM public."{table}" WHERE "{col}" = ANY(%s);', (swept,)
+            )
+        row = cur.fetchone()
+        n = int(row[0]) if row else 0
+        if n:
+            found[f"{table}.{col}"] = n
+    return found
+
+
 def sweep_expired_demos(max_age_seconds: int = DEMO_TTL_SECONDS, limit: int = 50) -> Dict[str, Any]:
     """Hard-delete demo tenants older than the TTL. Demo-only by construction:
     the ``demo-`` prefix cannot belong to a paid tenant (provision rejects it),
-    and the age gate never touches young rows even under clock skew."""
-    conn = db._connect_as_superuser()
+    and the age gate never touches young rows even under clock skew.
+
+    The child tables are DISCOVERED from the database, not hardcoded -- a missed
+    table orphans rows that break pg_dump restorability, and the previous
+    hardcoded list had already missed four. Transactional, so a mid-sweep
+    failure rolls back whole instead of leaving a half-deleted tenant, and the
+    sweep asserts afterwards that nothing was left behind.
+    """
+    conn = db._connect_as_superuser_transactional()
     swept: List[str] = []
     try:
         cur = conn.cursor()
@@ -344,23 +530,31 @@ def sweep_expired_demos(max_age_seconds: int = DEMO_TTL_SECONDS, limit: int = 50
             (str(int(max_age_seconds)), int(limit)),
         )
         targets = [r[0] for r in (cur.fetchall() or [])]
-        child_tables = (
-            "result_publications",
-            db.TENANT_GRADES_TABLE,
-            db.TENANT_FORM_ASSIGNMENTS_TABLE,
-            db.TENANT_ALLOCATIONS_TABLE,
-            db.TENANT_SUBJECTS_TABLE,
-            db.TENANT_STAFF_TABLE,
-            db.TENANT_STUDENTS_TABLE,
-            db.BILLING_LEDGER_TABLE,
-            db.CREDIT_LEDGER_TABLE,
-            "tenant_consents",
+        if not targets:
+            # Same shape as the swept path. Returning a different dict here made
+            # the response depend on whether anything happened to be expired --
+            # so "nothing to do" looked different from "swept cleanly", and a
+            # caller checking for `clean` could not tell which had happened.
+            return {"swept": [], "count": 0, "clean": True}
+        child_tables = _tenant_child_tables(conn)
+        logger.info(
+            "[DEMO] Sweeping %d demo(s) across %d discovered tenant table(s)",
+            len(targets), len(child_tables),
         )
         for sub in targets:
             try:
-                for tbl in child_tables:
-                    # billing/credit ledgers key on subdomain too; consents likewise.
-                    cur.execute(f"DELETE FROM {tbl} WHERE subdomain = %s;", (sub,))
+                # Children first (FK-graph order), registry last so its CASCADE
+                # triggers remain a backstop rather than the mechanism.
+                for table, col, kind in child_tables:
+                    if kind == "id":
+                        cur.execute(f"SELECT id FROM {db.SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;", (sub,))
+                        row = cur.fetchone()
+                        if not row:
+                            continue
+                        value = row[0]
+                    else:
+                        value = sub
+                    cur.execute(f'DELETE FROM public."{table}" WHERE "{col}" = %s;', (value,))
                 cur.execute(
                     f"DELETE FROM {db.SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s;",
                     (sub,),
@@ -371,6 +565,10 @@ def sweep_expired_demos(max_age_seconds: int = DEMO_TTL_SECONDS, limit: int = 50
             except Exception as exc:
                 conn.rollback()
                 logger.error(f"[DEMO] Sweep failed for '{sub}': {exc.__class__.__name__}: {exc}")
+        leftovers = _sweep_orphans(conn, swept)
+        if leftovers:
+            logger.error("[DEMO] Sweep left rows behind for swept tenant(s): %s", leftovers)
+            return {"swept": swept, "count": len(swept), "orphans": leftovers, "clean": False}
+        return {"swept": swept, "count": len(swept), "clean": True}
     finally:
         conn.close()
-    return {"swept": swept, "count": len(swept)}
