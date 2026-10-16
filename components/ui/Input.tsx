@@ -25,7 +25,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-purple-100">
+          <label htmlFor={inputId} className="text-sm font-medium text-text-1">
             {label}
           </label>
         )}
@@ -34,8 +34,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             type={type}
             className={cn(
-              "flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:border-purple-500 disabled:cursor-not-allowed disabled:opacity-50",
-              error && "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500",
+              "flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 ring-offset-surface-0 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50",
+              error && "border-danger/60 focus-visible:ring-danger focus-visible:border-danger",
               trailing && "pr-11",
               className
             )}
@@ -46,7 +46,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             <div className="absolute inset-y-0 right-0 flex items-center">{trailing}</div>
           ) : null}
         </div>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     );
   }

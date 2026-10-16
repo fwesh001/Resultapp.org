@@ -101,7 +101,7 @@ export default function SuperadminLoginForm() {
         }
       />
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -109,7 +109,7 @@ export default function SuperadminLoginForm() {
       <Button
         type="submit"
         disabled={loading}
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+        className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
         size="lg"
       >
         {loading ? (

@@ -384,7 +384,7 @@ export default function NotificationBell({
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-purple-500/20 p-2 text-purple-200 transition hover:bg-purple-900/20"
+        className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
@@ -401,15 +401,15 @@ export default function NotificationBell({
         <div
           role="menu"
           aria-label="Recent notifications"
-          className="absolute right-0 z-[100] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-purple-500/20 bg-[#140A24] shadow-2xl sm:w-96"
+          className="absolute right-0 z-[100] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line-1 bg-surface-1 shadow-2xl sm:w-96"
         >
-          <div className="flex items-center justify-between border-b border-purple-500/20 px-4 py-3">
-            <p className="text-sm font-semibold text-white">Notifications</p>
+          <div className="flex items-center justify-between border-b border-line-1 px-4 py-3">
+            <p className="text-sm font-semibold text-text-1">Notifications</p>
             {unread > 0 && (
               <button
                 type="button"
                 onClick={() => void markAll()}
-                className="inline-flex items-center gap-1 text-xs text-purple-300 transition hover:text-white"
+                className="inline-flex items-center gap-1 text-xs text-accent transition hover:text-text-1"
               >
                 <CheckCheck className="h-3.5 w-3.5" /> Mark all read
               </button>
@@ -418,13 +418,13 @@ export default function NotificationBell({
 
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
-              <p className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-zinc-400">
+              <p className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-text-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading…
               </p>
             ) : error ? (
-              <p className="px-4 py-8 text-center text-sm text-red-300">{error}</p>
+              <p className="px-4 py-8 text-center text-sm text-danger">{error}</p>
             ) : items.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-zinc-500">You&apos;re all caught up.</p>
+              <p className="px-4 py-8 text-center text-sm text-text-3">You&apos;re all caught up.</p>
             ) : (
               <ul className="divide-y divide-white/5">
                 {items.map((n) => {
@@ -436,7 +436,7 @@ export default function NotificationBell({
                         type="button"
                         role="menuitem"
                         onClick={() => void markOne(n)}
-                        className={`flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/5 ${
+                        className={`flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-surface-2 ${
                           n.is_read ? "opacity-70" : ""
                         }`}
                       >
@@ -448,17 +448,17 @@ export default function NotificationBell({
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium text-white">{n.title}</span>
+                            <span className="truncate text-sm font-medium text-text-1">{n.title}</span>
                             {!n.is_read && (
                               <span className={`h-2 w-2 shrink-0 rounded-full ${style.dotClasses}`} aria-label="Unread" />
                             )}
                           </span>
-                          <span className="mt-0.5 line-clamp-3 break-words text-xs text-zinc-400">{n.message}</span>
+                          <span className="mt-0.5 line-clamp-3 break-words text-xs text-text-2">{n.message}</span>
                           <span className="mt-1.5 flex items-center gap-2">
                             <span className={`inline-block rounded-full border px-2 py-px text-[11px] ${style.badgeClasses}`}>
                               {style.label ?? n.category ?? "SYSTEM"}
                             </span>
-                            {n.created_at && <span className="text-[11px] text-zinc-500">{timeAgo(n.created_at)}</span>}
+                            {n.created_at && <span className="text-[11px] text-text-3">{timeAgo(n.created_at)}</span>}
                           </span>
                         </span>
                       </button>
@@ -470,11 +470,11 @@ export default function NotificationBell({
           </div>
 
           {inboxPath && (
-            <div className="sticky bottom-0 border-t border-purple-500/20 bg-[#140A24]/95 backdrop-blur">
+            <div className="sticky bottom-0 border-t border-line-1 bg-surface-1/95 backdrop-blur">
               <Link
                 href={inboxPath}
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-purple-300 transition hover:bg-white/5 hover:text-white"
+                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-accent transition hover:bg-surface-2 hover:text-text-1"
               >
                 View all notifications <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>

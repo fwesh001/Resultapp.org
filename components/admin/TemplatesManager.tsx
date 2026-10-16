@@ -150,19 +150,19 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {/* List */}
-      <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6">
+      <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-5 backdrop-blur-xl sm:p-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-text-1">
               Templates ({activeCount} active)
             </h2>
-            <p className="mt-0.5 text-xs text-purple-300/50">
+            <p className="mt-0.5 text-xs text-text-3">
               Bind each template to classes — empty means all classes.
             </p>
           </div>
@@ -170,7 +170,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
             type="button"
             size="sm"
             onClick={showBuilder && !editing ? () => setShowBuilder(false) : startCreate}
-            className="shrink-0 gap-1.5 rounded-full bg-purple-600 text-white hover:bg-purple-500"
+            className="shrink-0 gap-1.5 rounded-full bg-accent text-accent-fg hover:bg-accent-hover"
           >
             <Plus className="h-3.5 w-3.5" /> {showBuilder && !editing ? "Hide Builder" : "New Template"}
           </Button>
@@ -178,14 +178,14 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
 
         <div className="mt-4">
           {loading ? (
-            <div className="flex items-center gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] px-4 py-6 text-sm text-purple-200/60">
+            <div className="flex items-center gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-6 text-sm text-text-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading templates…
             </div>
           ) : templates.length === 0 ? (
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-6 text-center">
-              <BookOpen className="mx-auto h-6 w-6 text-purple-300/60" />
-              <h3 className="mt-2 text-sm font-semibold text-white">No templates yet</h3>
-              <p className="mt-1 text-xs text-purple-200/60">Create your first template with the builder below.</p>
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-6 text-center">
+              <BookOpen className="mx-auto h-6 w-6 text-text-2" />
+              <h3 className="mt-2 text-sm font-semibold text-text-1">No templates yet</h3>
+              <p className="mt-1 text-xs text-text-2">Create your first template with the builder below.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -200,24 +200,24 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
                     className={[
                       "flex flex-col gap-3 rounded-xl border px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between",
                       active
-                        ? "border-purple-500/15 bg-purple-900/[0.04]"
-                        : "border-zinc-500/15 bg-white/[0.02] opacity-70",
+                        ? "border-line-1 bg-surface-1"
+                        : "border-line-1 bg-surface-1 opacity-70",
                     ].join(" ")}
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-white">{t.name}</p>
+                        <p className="truncate text-sm font-semibold text-text-1">{t.name}</p>
                         <span
                           className={
                             active
-                              ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 ring-1 ring-emerald-500/20"
-                              : "rounded-full bg-zinc-500/10 px-2 py-0.5 text-[11px] font-medium text-zinc-400 ring-1 ring-zinc-500/20"
+                              ? "rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-medium text-success ring-1 ring-success/40"
+                              : "rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-2 ring-1 ring-line-1"
                           }
                         >
                           {active ? "Active" : "Disabled"}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-purple-200/50">
+                      <p className="mt-1 text-xs text-text-3">
                         {itemCount} assessment item{itemCount === 1 ? "" : "s"} •{" "}
                         {classes.length > 0 ? `Classes: ${classes.join(", ")}` : "All classes"}
                       </p>
@@ -227,7 +227,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
                         type="button"
                         onClick={() => startEdit(t)}
                         disabled={!active || actingId === t.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-purple-500/15 bg-purple-900/10 px-3 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-full border border-line-1 bg-surface-1 px-3 py-1.5 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
                       >
                         <Pencil className="h-3 w-3" /> Edit
                       </button>
@@ -235,7 +235,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
                         type="button"
                         onClick={() => void handleToggleActive(t)}
                         disabled={actingId === t.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-purple-500/15 bg-purple-900/10 px-3 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-full border border-line-1 bg-surface-1 px-3 py-1.5 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
                       >
                         {actingId === t.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -252,7 +252,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
                           onClick={() => setPendingDelete(t)}
                           disabled={actingId === t.id}
                           aria-label={`Disable ${t.name}`}
-                          className="inline-flex items-center justify-center rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15 disabled:opacity-40"
+                          className="inline-flex items-center justify-center rounded-full border border-danger/30 bg-danger-soft p-2 text-danger hover:bg-surface-2 disabled:opacity-40"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -268,7 +268,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
 
       {/* Builder */}
       {showBuilder && (
-        <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6">
+        <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-5 backdrop-blur-xl sm:p-6">
           <TemplateBuilder
             key={editing ? `edit-${editing.id}` : "new"}
             tenantId={tenantId}
@@ -298,7 +298,7 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
         </div>
       )}
 
-      <p className="text-center text-xs text-purple-300/40">
+      <p className="text-center text-xs text-text-3">
         Saved templates appear automatically when staff enter scores.
       </p>
 

@@ -107,45 +107,45 @@ export default function SuperadminSettingsPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
           <Settings className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Global Settings</h1>
-          <p className="text-sm text-purple-200/60">Platform-wide tunables</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">Global Settings</h1>
+          <p className="text-sm text-text-2">Platform-wide tunables</p>
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
-        <h2 className="text-sm font-semibold text-white">Publishing Credit Price (Superadmin)</h2>
-        <p className="mt-1 text-xs text-purple-200/60">
+      <div className="mt-6 rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur">
+        <h2 className="text-sm font-semibold text-text-1">Publishing Credit Price (Superadmin)</h2>
+        <p className="mt-1 text-xs text-text-2">
           Flat NGN per credit — applies to all future credit top-ups. Slots remain tiered (100/90/80).
         </p>
         {priceError && (
-          <div className="mt-3 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <div className="mt-3 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{priceError}</span>
           </div>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-purple-200/70">₦</span>
+            <span className="text-sm text-text-2">₦</span>
             <input
               type="number"
               min={1}
               max={100000}
               value={priceLoading ? "" : creditPrice}
               onChange={(e) => setCreditPrice(Math.max(1, Math.min(100000, Number(e.target.value) || 0)))}
-              className="w-28 rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              className="w-28 rounded-xl border border-line-1 bg-surface-0 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
               disabled={priceLoading}
             />
-            <span className="text-sm text-purple-300/60">per credit</span>
+            <span className="text-sm text-text-2">per credit</span>
           </div>
           <button
             type="button"
             disabled={priceSaving || priceLoading}
             onClick={() => void handleSave()}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-purple-600 px-5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
           >
             {priceSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Price
@@ -154,20 +154,20 @@ export default function SuperadminSettingsPage() {
       </div>
 
       {/* Free registration credits — toggle is only half the rule */}
-      <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
+      <div className="mt-4 rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-              <Sparkles className="h-4 w-4 text-emerald-300" />
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-text-1">
+              <Sparkles className="h-4 w-4 text-success" />
               Free Registration Credits
             </h2>
-            <p className="mt-1 text-xs text-purple-200/60">
+            <p className="mt-1 text-xs text-text-2">
               Grants a complimentary credit bundle to new schools at provisioning.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-purple-200/70">
+            <span className="text-sm font-medium text-text-2">
               {freeLoading ? "Loading…" : freeCredits?.enabled ? "Enabled" : "Disabled"}
             </span>
             <button
@@ -178,7 +178,7 @@ export default function SuperadminSettingsPage() {
               disabled={freeLoading || freeSaving || !freeCredits}
               onClick={() => void handleToggleFreeCredits(!(freeCredits?.enabled ?? false))}
               className={cn(
-                "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0514] disabled:cursor-not-allowed disabled:opacity-60",
+                "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 disabled:cursor-not-allowed disabled:opacity-60",
                 freeCredits?.enabled ? "bg-emerald-500" : "bg-purple-800/60"
               )}
             >
@@ -190,21 +190,21 @@ export default function SuperadminSettingsPage() {
                 )}
               />
             </button>
-            {freeSaving && <Loader2 className="h-4 w-4 animate-spin text-purple-300" />}
+            {freeSaving && <Loader2 className="h-4 w-4 animate-spin text-accent" />}
           </div>
         </div>
 
         {/* The threshold is the binding constraint — say so explicitly so the
             toggle is never read as "free credits for everyone". */}
-        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3">
-          <p className="text-xs font-medium text-amber-200">Volume threshold always applies</p>
-          <p className="mt-1 text-xs leading-5 text-amber-100/60">
+        <div className="mt-4 rounded-xl border border-warning/30 bg-warning-soft p-3">
+          <p className="text-xs font-medium text-warning">Volume threshold always applies</p>
+          <p className="mt-1 text-xs leading-5 text-warning">
             This toggle only <em>permits</em> the grant. The backend grants{" "}
-            <strong className="font-semibold text-amber-100">
+            <strong className="font-semibold text-warning">
               {freeCredits?.grant_amount ?? 30} credits
             </strong>{" "}
             only when a school&apos;s initial capacity is{" "}
-            <strong className="font-semibold text-amber-100">
+            <strong className="font-semibold text-warning">
               {freeCredits?.min_students ?? 500} students or more
             </strong>{" "}
             (inclusive — exactly {freeCredits?.min_students ?? 500} qualifies). Smaller schools receive no
@@ -212,13 +212,13 @@ export default function SuperadminSettingsPage() {
           </p>
         </div>
 
-        <p className="mt-3 text-xs text-purple-300/40">
+        <p className="mt-3 text-xs text-text-3">
           The server is authoritative: the registration form&apos;s credit value is ignored, and this
           toggle never grants credits on its own. Changes apply to future registrations only.
         </p>
 
         {freeError && (
-          <div className="mt-3 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <div className="mt-3 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{freeError}</span>
           </div>

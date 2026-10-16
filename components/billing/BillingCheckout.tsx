@@ -543,10 +543,10 @@ export function BillingCheckout({
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
-          <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft ring-1 ring-success/40">
+          <CheckCircle2 className="h-8 w-8 text-success" />
         </div>
-        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">
+        <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">
           {success.restoredFromSuspension
             ? "Portal Restored!"
             : isCredit
@@ -555,8 +555,8 @@ export function BillingCheckout({
                 ? "Slots Added!"
                 : "Subscription Active!"}
         </h3>
-        <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
-          Payment verified for <span className="font-semibold text-white">{success.studentCount}</span> {isCredit ? "credits" : isSlot ? "slots" : "students"} (
+        <p className="mt-2 max-w-md text-sm leading-6 text-text-2">
+          Payment verified for <span className="font-semibold text-text-1">{success.studentCount}</span> {isCredit ? "credits" : isSlot ? "slots" : "students"} (
           {formatNaira(success.total)}). {success.restoredFromSuspension ? (
             <>
               Your portal is active again — public, staff, and report access have resumed.
@@ -566,14 +566,14 @@ export function BillingCheckout({
           ) : isSlot ? (
             <>Your new slot capacity will show on this page in a moment. You can now add more students.</>
           ) : (
-            <>Report cards for <span className="font-mono text-white">{tenantId}</span> are now unlocked.</>
+            <>Report cards for <span className="font-mono text-text-1">{tenantId}</span> are now unlocked.</>
           )}
         </p>
-        <div className="mt-6 w-full rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left">
-          <div className="flex items-center gap-2 text-sm font-medium text-emerald-100">
-            <Sparkles className="h-4 w-4 text-emerald-400" /> What’s next?
+        <div className="mt-6 w-full rounded-2xl border border-success/40 bg-success-soft p-4 text-left">
+          <div className="flex items-center gap-2 text-sm font-medium text-success">
+            <Sparkles className="h-4 w-4 text-success" /> What’s next?
           </div>
-          <ul className="mt-2 space-y-1 text-sm text-emerald-100/70">
+          <ul className="mt-2 space-y-1 text-sm text-success">
             <li>• Print any report card from <span className="font-mono">/report/STU001</span></li>
             <li>• Create grading templates at <span className="font-mono">/admin/templates</span></li>
           </ul>
@@ -589,13 +589,13 @@ export function BillingCheckout({
           <Button
             size="lg"
             variant="outline"
-            className="w-full rounded-full border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700"
+            className="w-full rounded-full border-line-1 bg-surface-3 text-text-1 hover:bg-surface-2"
             onClick={() => (window.location.href = `/${tenantId}/report/STU001?term=Term%201`)}
           >
             View Report
           </Button>
         </div>
-        <p className="mt-4 text-xs text-zinc-500">Keep this window open — you’ll be redirected shortly.</p>
+        <p className="mt-4 text-xs text-text-3">Keep this window open — you’ll be redirected shortly.</p>
       </div>
     );
   }
@@ -668,7 +668,7 @@ export function BillingCheckout({
                   className={`rounded-xl border p-3 text-xs ${
                     activePreview.bypass_gateway
                       ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                      : "border-purple-500/25 bg-purple-500/[0.08] text-purple-100"
+                      : "border-line-1 bg-accent-soft text-text-1"
                   }`}
                 >
                   <p className="font-medium">
@@ -702,7 +702,7 @@ export function BillingCheckout({
                     checkout.
                   */}
                   {activePreview.slot_allowance < SLOT_SLIDER_FLOOR && (
-                    <p className="mt-2 flex items-start gap-1.5 text-amber-200/90">
+                    <p className="mt-2 flex items-start gap-1.5 text-warning">
                       <Info className="mt-0.5 h-3 w-3 shrink-0" />
                       <span>
                         This code covers {activePreview.slot_allowance} slot
@@ -714,7 +714,7 @@ export function BillingCheckout({
                   )}
 
                   {activePreview.forfeited_slots > 0 && (
-                    <p className="mt-2 font-medium text-amber-200">
+                    <p className="mt-2 font-medium text-warning">
                       Use it or lose it: {activePreview.forfeited_slots} slot
                       {activePreview.forfeited_slots === 1 ? "" : "s"} of this code will be
                       permanently forfeited if you buy fewer than{" "}
@@ -729,10 +729,10 @@ export function BillingCheckout({
       )}
 
       {/* Slider — bounds depend on mode */}
-      <div className="rounded-2xl border border-purple-500/10 bg-purple-950/15 p-4 backdrop-blur">
-        <div className="flex items-center justify-between text-xs font-medium text-purple-300">
+      <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 backdrop-blur">
+        <div className="flex items-center justify-between text-xs font-medium text-accent">
           <span>{sliderMin.toLocaleString()}</span>
-          <span className="rounded-full border border-purple-500/15 bg-purple-500/5 px-2 py-0.5 text-[11px] text-purple-200/60">
+          <span className="rounded-full border border-line-1 bg-accent-soft px-2 py-0.5 text-[11px] text-text-2">
             {isCredit
               ? `Slider 1–10,000 • step 1 • flat ${formatNaira(price)}/credit`
               : "Slider 50–2000 • step 10 • 1–49 via text"}
@@ -747,7 +747,7 @@ export function BillingCheckout({
             step={sliderStep}
             value={clampedSlider}
             onChange={(e) => handleCountChange(e.target.value)}
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-purple-950/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
             style={{
               background: `linear-gradient(to right, rgb(147 51 234) 0%, rgb(168 85 247) ${sliderPct}%, rgba(88,28,135,0.35) ${sliderPct}%, rgba(88,28,135,0.35) 100%)`,
             }}
@@ -761,18 +761,18 @@ export function BillingCheckout({
         </div>
         {!isCredit ? (
           <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-            <span className={`rounded-full border px-2.5 py-1 ${countNum < 500 ? "border-purple-500 bg-purple-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum < 500 ? "border-accent bg-accent text-accent-fg" : "border-line-1 bg-surface-1 text-text-2"}`}>
               50–499 → ₦100
             </span>
-            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-line-1 bg-surface-1 text-text-2"}`}>
               500–999 → ₦90
             </span>
-            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-purple-500/15 bg-purple-900/10 text-purple-200/60"}`}>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-line-1 bg-surface-1 text-text-2"}`}>
               1000+ → ₦80
             </span>
           </div>
         ) : (
-          <p className="mt-3 text-[11px] text-purple-200/60">
+          <p className="mt-3 text-[11px] text-text-2">
             Flat {formatNaira(price)} per credit — no tiers.
           </p>
         )}
@@ -780,21 +780,21 @@ export function BillingCheckout({
       </div>
 
       {/* Pricing card */}
-      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/15 p-4 backdrop-blur">
+      <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_12px_rgba(147,51,234,0.35)]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_12px_rgba(147,51,234,0.35)]">
               <CreditCard className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">
+              <p className="text-sm font-medium text-text-1">
                 Total Amount{isBypass ? " — fully waived" : ""}
               </p>
               <p className="flex flex-wrap items-center gap-1.5 text-xs">
                 {preview && isSlot && listTotal !== total ? (
                   <span className="text-cyan-300/70 line-through">{formatNaira(listTotal)}</span>
                 ) : (
-                  <span className="text-purple-300/60">
+                  <span className="text-text-2">
                     {countNum || 0} × {formatNaira(pricePerStudent)}
                   </span>
                 )}
@@ -803,21 +803,21 @@ export function BillingCheckout({
             </div>
           </div>
           <div className="text-right">
-            <p className={`text-lg font-bold tracking-tight ${isBypass ? "text-cyan-300" : "text-white"}`}>
+            <p className={`text-lg font-bold tracking-tight ${isBypass ? "text-cyan-300" : "text-text-1"}`}>
               {countNum > 0 ? (isBypass ? "Free" : formatNaira(total)) : "—"}
             </p>
-            <p className="text-xs text-purple-300/50">{isCredit ? "One-time • Adds to balance" : "One-time • Unlocks printing"}</p>
+            <p className="text-xs text-text-3">{isCredit ? "One-time • Adds to balance" : "One-time • Unlocks printing"}</p>
           </div>
         </div>
         {countNum > 0 && (
-          <div className="mt-3 rounded-xl border border-purple-500/10 bg-[#0B0514]/60 p-3 text-xs leading-5 text-purple-200/70">
+          <div className="mt-3 rounded-xl border border-line-1 bg-surface-0/60 p-3 text-xs leading-5 text-text-2">
             <div className="flex justify-between">
               <span>{isCredit ? "Credits" : "Students"}</span>
-              <span className="font-medium text-white">{countNum}</span>
+              <span className="font-medium text-text-1">{countNum}</span>
             </div>
             <div className="flex justify-between">
               <span>Price per {unitNoun}</span>
-              <span className="text-purple-200">{formatNaira(pricePerStudent)}</span>
+              <span className="text-text-2">{formatNaira(pricePerStudent)}</span>
             </div>
             {activePreview && isSlot && (
               <>
@@ -825,38 +825,38 @@ export function BillingCheckout({
                   <span>Waiver ({activePreview.waived_slots} slot{activePreview.waived_slots === 1 ? "" : "s"})</span>
                   <span>−{formatNaira(activePreview.waived_ngn)}</span>
                 </div>
-                <div className="my-2 border-t border-purple-500/10" />
+                <div className="my-2 border-t border-line-1" />
               </>
             )}
-            <div className="flex justify-between font-semibold text-white">
+            <div className="flex justify-between font-semibold text-text-1">
               <span>Total payable</span>
               <span>{isBypass ? formatNaira(0) : formatNaira(total)}</span>
             </div>
           </div>
         )}
-        <p className="mt-2 flex items-center gap-1 text-xs text-purple-300/50">
+        <p className="mt-2 flex items-center gap-1 text-xs text-text-3">
           <Users className="h-3 w-3" /> Secured by Flutterwave • Pay with card, transfer, or USSD
         </p>
       </div>
 
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <span>{error}</span>
         </div>
       )}
 
       {(isPaying || upgrading) && (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 bg-purple-500/10 p-3 text-sm text-purple-200">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-line-1 bg-accent-soft p-3 text-sm text-accent">
           <Loader2 className="h-4 w-4 animate-spin" />
           {upgrading ? "Verifying payment & unlocking…" : "Initializing Flutterwave…"}
         </div>
       )}
 
       {isDemoTenant({ slug: tenantId }) && (
-        <div className="rounded-xl border border-amber-400/25 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100/80">
-          <p className="font-medium text-amber-100">Demo checkout — no real money moves.</p>
-          <p className="mt-1 text-amber-100/70">
+        <div className="rounded-xl border border-amber-400/25 bg-warning-soft p-3 text-xs leading-5 text-warning">
+          <p className="font-medium text-warning">Demo checkout — no real money moves.</p>
+          <p className="mt-1 text-warning">
             Use test card <span className="font-mono">5531 8866 9555 5447</span> (any future
             expiry, any CVV), or pick <span className="font-medium">Bank Transfer → Mock
             Bank</span> and confirm “I have sent the money”. The same server
@@ -893,11 +893,11 @@ export function BillingCheckout({
         )}
       </Button>
 
-      <p className="text-center text-xs leading-5 text-zinc-500">
+      <p className="text-center text-xs leading-5 text-text-3">
         {isCredit ? (
           <>On success you’ll stay on this page with your updated credit balance and ledger entry.</>
         ) : (
-          <>On success you’ll be redirected to <span className="font-mono font-medium text-purple-300">/{tenantId}/report/STU001?term=Term%201</span> and your report cards will be unlocked.</>
+          <>On success you’ll be redirected to <span className="font-mono font-medium text-accent">/{tenantId}/report/STU001?term=Term%201</span> and your report cards will be unlocked.</>
         )}
       </p>
     </div>

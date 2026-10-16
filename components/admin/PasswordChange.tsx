@@ -89,18 +89,18 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50";
+    "mt-2 w-full rounded-xl border border-line-1 bg-surface-0 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50";
 
   return (
     <form
       onSubmit={submit}
-      className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5"
+      className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5"
     >
       <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-purple-300" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-white">Admin password</h3>
+        <KeyRound className="h-4 w-4 text-accent" aria-hidden="true" />
+        <h3 className="text-sm font-semibold text-text-1">Admin password</h3>
       </div>
-      <p className="mt-1 text-xs text-purple-300/50">
+      <p className="mt-1 text-xs text-text-3">
         This is the password for the school&apos;s admin login. Staff have their
         own PINs, managed from the Command Center.
       </p>
@@ -108,20 +108,20 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
       {error ? (
         <p
           role="alert"
-          className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+          className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
         >
           {error}
         </p>
       ) : null}
       {done ? (
-        <p className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+        <p className="mt-4 flex items-center gap-2 rounded-xl border border-success/40 bg-success-soft px-4 py-3 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Password updated.
         </p>
       ) : null}
 
       <div className="mt-4 space-y-4">
         <div>
-          <label htmlFor="pw-current" className="block text-sm font-medium text-purple-200">
+          <label htmlFor="pw-current" className="block text-sm font-medium text-text-2">
             Current password
           </label>
           <div className="relative">
@@ -140,7 +140,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
               onClick={() => setShowCurrent((v) => !v)}
               aria-label={showCurrent ? "Hide current password" : "Show current password"}
               aria-pressed={showCurrent}
-              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-text-3 transition hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               {showCurrent ? (
                 <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -152,7 +152,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
         </div>
 
         <div>
-          <label htmlFor="pw-new" className="block text-sm font-medium text-purple-200">
+          <label htmlFor="pw-new" className="block text-sm font-medium text-text-2">
             New password
           </label>
           <div className="relative">
@@ -173,7 +173,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
               onClick={() => setShowNext((v) => !v)}
               aria-label={showNext ? "Hide new password" : "Show new password"}
               aria-pressed={showNext}
-              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-text-3 transition hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               {showNext ? (
                 <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -185,7 +185,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
         </div>
 
         <div>
-          <label htmlFor="pw-confirm" className="block text-sm font-medium text-purple-200">
+          <label htmlFor="pw-confirm" className="block text-sm font-medium text-text-2">
             Confirm new password
           </label>
           <div className="relative">
@@ -204,7 +204,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
               onClick={() => setShowConfirm((v) => !v)}
               aria-label={showConfirm ? "Hide confirmed password" : "Show confirmed password"}
               aria-pressed={showConfirm}
-              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-text-3 transition hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               {showConfirm ? (
                 <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -219,7 +219,7 @@ export default function PasswordChange({ subdomain }: PasswordChangeProps) {
       <button
         type="submit"
         disabled={busy}
-        className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
         {busy ? "Updating…" : "Change password"}

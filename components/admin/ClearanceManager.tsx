@@ -289,11 +289,11 @@ export default function ClearanceManager({
   return (
     <div className="mx-auto w-full max-w-6xl">
       <header className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
-          <Wallet className="h-6 w-6 text-purple-400" aria-hidden="true" />
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-text-1">
+          <Wallet className="h-6 w-6 text-accent" aria-hidden="true" />
           Financial Clearance
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-purple-200/60">
+        <p className="mt-1 max-w-2xl text-sm text-text-2">
           Place students on an Administrative Hold when school fees are unpaid. Their
           result stays published but is withheld from the public Result Checker until you
           clear them. Holds are per-term — clearing Term 1 does not clear Term 2.
@@ -302,18 +302,18 @@ export default function ClearanceManager({
 
       {/* Summary */}
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-purple-300/50">Students</p>
-          <p className="mt-1 text-2xl font-semibold text-white">{loading ? "—" : rows.length}</p>
+        <div className="rounded-2xl border border-line-1 bg-surface-1 p-4">
+          <p className="text-xs uppercase tracking-wide text-text-3">Students</p>
+          <p className="mt-1 text-2xl font-semibold text-text-1">{loading ? "—" : rows.length}</p>
         </div>
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-emerald-300/70">Cleared</p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-200">
+        <div className="rounded-2xl border border-success/40 bg-success-soft p-4">
+          <p className="text-xs uppercase tracking-wide text-success">Cleared</p>
+          <p className="mt-1 text-2xl font-semibold text-success">
             {loading ? "—" : rows.length - owingCount}
           </p>
         </div>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-amber-300/70">On Hold</p>
+          <p className="text-xs uppercase tracking-wide text-warning">On Hold</p>
           <p className="mt-1 text-2xl font-semibold text-amber-200">{loading ? "—" : owingCount}</p>
         </div>
       </div>
@@ -337,11 +337,11 @@ export default function ClearanceManager({
           options={classes.map((c): SelectOption => ({ value: c, label: c === "All" ? "All Classes" : c }))}
         />
         <div className="relative flex-1">
-          <label htmlFor="clearance-search" className="mb-1.5 block text-sm font-medium text-purple-100">
+          <label htmlFor="clearance-search" className="mb-1.5 block text-sm font-medium text-text-1">
             Search
           </label>
           <Search
-            className="pointer-events-none absolute bottom-3.5 left-3 h-4 w-4 text-purple-300/40"
+            className="pointer-events-none absolute bottom-3.5 left-3 h-4 w-4 text-text-3"
             aria-hidden="true"
           />
           <input
@@ -350,19 +350,19 @@ export default function ClearanceManager({
             placeholder="Name or admission number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 pl-10 pr-3 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 pl-10 pr-3 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
       </div>
 
       {academicSession && (
-        <p className="mb-4 text-xs text-purple-300/50">
-          Academic session: <span className="font-mono text-purple-200">{academicSession}</span>
+        <p className="mb-4 text-xs text-text-3">
+          Academic session: <span className="font-mono text-text-2">{academicSession}</span>
         </p>
       )}
 
       {/* Bulk bar */}
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-purple-500/15 bg-purple-900/10 p-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line-1 bg-surface-1 p-3">
         <Button size="sm" variant="secondary" onClick={allSelected ? clearSelection : selectAll}>
           {allSelected ? "Clear selection" : "Select All"}
         </Button>
@@ -375,7 +375,7 @@ export default function ClearanceManager({
           Select defaulters only
         </Button>
 
-        <span className="ml-auto text-xs text-purple-300/60">
+        <span className="ml-auto text-xs text-text-2">
           {selected.size} selected
           {stagedCount > 0 && (
             <>
@@ -436,23 +436,23 @@ export default function ClearanceManager({
 
       {/* Roster */}
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-10 text-sm text-purple-300/70">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-10 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Loading roster…
         </div>
       ) : loadError ? (
-        <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-6 text-sm text-red-200">
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-6 text-sm text-danger">
           {loadError}
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex items-center gap-3 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-8 text-sm text-purple-300/70">
+        <div className="flex items-center gap-3 rounded-2xl border border-line-1 bg-surface-1 p-8 text-sm text-text-2">
           <Users className="h-5 w-5 shrink-0" aria-hidden="true" />
           No students match this filter. Register students on the Allocations page first.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-purple-500/15">
+        <div className="overflow-x-auto rounded-2xl border border-line-1">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-purple-500/15 bg-purple-900/20 text-xs uppercase tracking-wide text-purple-300/60">
+            <thead className="border-b border-line-1 bg-surface-2 text-xs uppercase tracking-wide text-text-2">
               <tr>
                 <th scope="col" className="w-10 px-4 py-3">
                   <span className="sr-only">Select</span>
@@ -464,7 +464,7 @@ export default function ClearanceManager({
                 <th scope="col" className="px-4 py-3 text-right">Toggle</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-purple-500/10">
+            <tbody className="divide-y divide-line-1">
               {rows.map((r) => {
                 const cleared = effective(r);
                 const dirty = pending[r.student_id] !== undefined;
@@ -472,7 +472,7 @@ export default function ClearanceManager({
                 return (
                   <tr
                     key={r.student_id}
-                    className={isSel ? "bg-purple-500/5" : undefined}
+                    className={isSel ? "bg-accent-soft" : undefined}
                   >
                     <td className="px-4 py-3">
                       <input
@@ -487,31 +487,31 @@ export default function ClearanceManager({
                           })
                         }
                         aria-label={`Select ${r.full_name}`}
-                        className="h-4 w-4 rounded border-purple-700 bg-purple-950/40 accent-purple-500"
+                        className="h-4 w-4 rounded border-line-1 bg-surface-3 accent-accent"
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-purple-50">{r.full_name}</p>
-                      <p className="font-mono text-xs text-purple-300/50">{r.student_id}</p>
+                      <p className="font-medium text-text-1">{r.full_name}</p>
+                      <p className="font-mono text-xs text-text-3">{r.student_id}</p>
                     </td>
-                    <td className="px-4 py-3 text-purple-200/70">{r.class_name}</td>
+                    <td className="px-4 py-3 text-text-2">{r.class_name}</td>
                     <td className="px-4 py-3">
                       <span
                         className={
                           cleared
-                            ? "inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200"
+                            ? "inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success-soft px-2.5 py-1 text-xs font-medium text-success"
                             : "inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200"
                         }
                       >
                         {cleared ? "Cleared" : "Owing"}
                       </span>
                       {dirty && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-300/70">
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-warning">
                           unsaved
                         </span>
                       )}
                     </td>
-                    <td className="max-w-[220px] px-4 py-3 text-xs text-purple-300/60">
+                    <td className="max-w-[220px] px-4 py-3 text-xs text-text-2">
                       {!cleared ? r.hold_reason ?? "—" : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -523,8 +523,8 @@ export default function ClearanceManager({
                         onClick={() => toggle(r.student_id, !cleared)}
                         className={
                           cleared
-                            ? "relative inline-flex h-6 w-11 items-center rounded-full bg-emerald-500/80 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
-                            : "relative inline-flex h-6 w-11 items-center rounded-full bg-amber-500/80 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                            ? "relative inline-flex h-6 w-11 items-center rounded-full bg-emerald-500/80 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            : "relative inline-flex h-6 w-11 items-center rounded-full bg-amber-500/80 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         }
                       >
                         <span
@@ -565,7 +565,7 @@ export default function ClearanceManager({
             options={HOLD_REASONS}
           />
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="hold-reason-custom" className="text-sm font-medium text-purple-100">
+            <label htmlFor="hold-reason-custom" className="text-sm font-medium text-text-1">
               Note (optional)
             </label>
             <textarea
@@ -574,7 +574,7 @@ export default function ClearanceManager({
               onChange={(e) => setReason(e.target.value)}
               rows={2}
               placeholder="e.g. N50,000 balance outstanding since Term 1"
-              className="rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+              className="rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           </div>
           <div className="flex justify-end gap-2">

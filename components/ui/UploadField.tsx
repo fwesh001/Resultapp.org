@@ -33,7 +33,6 @@ export interface UploadFieldProps {
   helper?: string;
   required?: boolean;
   disabled?: boolean;
-  tone?: "dark" | "light";
   onUploaded?: (url: string) => void;
   onFileSelect?: (file: File | null) => void;
 }
@@ -122,6 +121,13 @@ export function uploadFile(
  *   resulting URL is submitted via a hidden input.
  * - behavior="select": only picks a file (with preview chip); the parent
  *   form submits the raw file on its own submit.
+ *
+ * NO `tone` PROP. It used to branch between a dark and a light palette, which
+ * was a second, hand-rolled theme switch living inside a form control. It had
+ * no callers passing anything but the default, so it was dead weight that
+ * would have fought the real provider: a field pinned to "dark" would stay dark
+ * while the rest of the page followed the toggle. Every colour below is a theme
+ * token now.
  */
 export default function UploadField({
   id,
@@ -141,7 +147,6 @@ export default function UploadField({
   helper,
   required = false,
   disabled = false,
-  tone = "dark",
   onUploaded,
   onFileSelect,
 }: UploadFieldProps) {
@@ -263,26 +268,19 @@ export default function UploadField({
   const showUrlInput = behavior === "upload" && (!allowUrl ? false : mode === "url");
   const acceptHint = accept === "image/*" ? "image" : accept;
 
-  const muted = tone === "dark" ? "text-purple-300/50" : "text-zinc-500";
+  const muted = "text-text-3";
   const dropzone =
-    tone === "dark"
-      ? `border-purple-500/30 text-purple-200/70 hover:bg-purple-900/10 ${dragOver ? "bg-purple-900/20 border-purple-400" : ""}`
-      : `border-zinc-300 text-zinc-500 hover:bg-zinc-50 ${dragOver ? "bg-zinc-100 border-zinc-400" : ""}`;
+    `border-line-1 text-text-2 hover:bg-surface-2 ${dragOver ? "bg-accent-soft border-accent" : ""}`;
   const inputClass =
-    tone === "dark"
-      ? "border-purple-500/20 bg-[#0B0514] text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:ring-purple-500/50"
-      : "border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-zinc-500/30";
-  const chip =
-    tone === "dark"
-      ? "border-purple-500/20 bg-purple-900/20 text-purple-200"
-      : "border-zinc-200 bg-zinc-100 text-zinc-700";
+    "border-line-1 bg-surface-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:ring-accent/50";
+  const chip = "border-line-1 bg-surface-2 text-text-1";
 
   return (
     <div>
       {label && (
         <label
           htmlFor={showUrlInput ? id : undefined}
-          className={`block text-sm font-medium ${tone === "dark" ? "text-purple-200" : "text-zinc-700"}`}
+          className={`block text-sm font-medium text-text-1`}
         >
           {label}
         </label>
@@ -298,8 +296,8 @@ export default function UploadField({
               onClick={() => setMode(m)}
               className={
                 mode === m
-                  ? "inline-flex min-h-[44px] items-center rounded-full bg-purple-600/20 px-4 py-1.5 text-xs font-medium text-purple-200"
-                  : "inline-flex min-h-[44px] items-center rounded-full border border-purple-500/15 px-4 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  ? "inline-flex min-h-[44px] items-center rounded-full bg-accent-soft px-4 py-1.5 text-xs font-medium text-accent"
+                  : "inline-flex min-h-[44px] items-center rounded-full border border-line-1 px-4 py-1.5 text-xs text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               }
             >
               {m === "url" ? "Paste image URL instead" : "Upload file"}
@@ -311,7 +309,7 @@ export default function UploadField({
       {/* Preview */}
       {preview !== "none" && (previewUrl || fileMeta) && (
         <div
-          className={`mt-2 overflow-hidden rounded-xl border ${tone === "dark" ? "border-purple-500/20 bg-[#0B0514]" : "border-zinc-200 bg-zinc-50"}`}
+          className={`mt-2 overflow-hidden rounded-xl border ${"border-line-1 bg-surface-1"}`}
         >
           {preview === "image" && previewUrl && previewIsImage ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -389,11 +387,11 @@ export default function UploadField({
           >
             {behavior === "upload" ? (
               <ImagePlus
-                className={`h-5 w-5 ${tone === "dark" ? "text-purple-300" : "text-zinc-400"}`}
+                className={`h-5 w-5 ${"text-text-3"}`}
               />
             ) : (
               <FileUp
-                className={`h-5 w-5 ${tone === "dark" ? "text-purple-300" : "text-zinc-400"}`}
+                className={`h-5 w-5 ${"text-text-3"}`}
               />
             )}
             {fileMeta && behavior === "select"
@@ -414,10 +412,10 @@ export default function UploadField({
           {behavior === "upload" && progress !== null && (
             <div className="mt-2">
               <div
-                className={`h-2 overflow-hidden rounded-full ${tone === "dark" ? "bg-white/5" : "bg-zinc-200"}`}
+                className={`h-2 overflow-hidden rounded-full ${"bg-surface-2"}`}
               >
                 <div
-                  className="h-full rounded-full bg-purple-500 transition-all"
+                  className="h-full rounded-full bg-accent transition-all"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -427,7 +425,7 @@ export default function UploadField({
                 ) : (
                   progress === 100 && (
                     <>
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                       Upload complete.
                     </>
                   )
@@ -436,7 +434,7 @@ export default function UploadField({
             </div>
           )}
           {uploadError && (
-            <p className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+            <p className="mt-2 rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-xs text-danger">
               {uploadError}
             </p>
           )}

@@ -57,17 +57,17 @@ function DenialNotice({
   return (
     <div
       role="status"
-      className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/10 px-5 py-4"
+      className="mb-6 rounded-xl border border-amber-500/25 bg-warning-soft px-5 py-4"
     >
-      <p className="text-sm font-semibold text-amber-200">
+      <p className="text-sm font-semibold text-warning">
         {copy?.title ?? `You do not have access to ${capability}`}
       </p>
-      <p className="mt-1 text-sm text-amber-200/80">
+      <p className="mt-1 text-sm text-warning">
         {copy?.body ??
           "That area is limited to the school's administrator."}{" "}
         <Link
           href={`/${subdomain}/${"staff"}`}
-          className="font-medium underline underline-offset-4 hover:text-white"
+          className="font-medium underline underline-offset-4 hover:text-text-1"
         >
           Back to the Staff Portal
         </Link>
@@ -271,7 +271,7 @@ export async function DashboardSection({
         <h1 className="text-2xl font-bold tracking-tight">
           {portal === "moderator" ? "Moderator Overview" : "Overview Dashboard"}
         </h1>
-        <p className="mt-1 text-sm text-purple-200/60">
+        <p className="mt-1 text-sm text-text-2">
           Welcome back
           {school ? `, ${toTitleCase(school.name)}` : ""} — here is what is
           happening across your school today.
@@ -288,17 +288,17 @@ export async function DashboardSection({
           return (
             <div
               key={stat.label}
-              className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-5"
+              className="rounded-xl border border-line-1 bg-surface-1 p-5"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-purple-500/15 bg-purple-600/10">
-                  <Icon className="h-5 w-5 text-purple-300" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line-1 bg-accent-soft">
+                  <Icon className="h-5 w-5 text-accent" />
                 </span>
-                <p className="text-xs text-purple-200/60">{stat.label}</p>
+                <p className="text-xs text-text-2">{stat.label}</p>
               </div>
               <p className="mt-3 text-2xl font-bold">{stat.value}</p>
               {stat.sub && (
-                <p className="mt-1 text-xs text-purple-300/50">{stat.sub}</p>
+                <p className="mt-1 text-xs text-text-3">{stat.sub}</p>
               )}
             </div>
           );
@@ -306,15 +306,15 @@ export async function DashboardSection({
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
+        <div className="rounded-xl border border-line-1 bg-surface-1 p-6">
           <h2 className="text-base font-semibold">Quick Actions</h2>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <p className="mt-1 text-sm text-text-2">
             {portal === "moderator"
               ? "Jump into your moderation workflows."
               : "Jump into common admin workflows."}
           </p>
           {quickActions.length === 0 ? (
-            <p className="mt-4 text-sm text-purple-200/50">
+            <p className="mt-4 text-sm text-text-3">
               No quick actions are available with your current permissions.
             </p>
           ) : (
@@ -325,7 +325,7 @@ export async function DashboardSection({
                   <Link
                     key={action.label}
                     href={action.href}
-                    className="inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-4 py-2 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white"
+                    className="inline-flex items-center gap-2 rounded-full border border-line-1 bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition hover:bg-surface-2 hover:text-text-1"
                   >
                     <Icon className="h-4 w-4" />
                     {action.label}
@@ -336,25 +336,25 @@ export async function DashboardSection({
           )}
         </div>
 
-        <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
+        <div className="rounded-xl border border-line-1 bg-surface-1 p-6">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Publication Progress</h2>
-            <span className="text-sm font-semibold text-purple-300">
+            <span className="text-sm font-semibold text-accent">
               {liveOk ? `${liveCompletion}% complete` : "Stats unavailable"}
             </span>
           </div>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <p className="mt-1 text-sm text-text-2">
             {liveOk
               ? `${livePublished} of ${displayUsed || liveStudents} results published • ${currentTerm} ${liveSession}`
               : `Could not reach live data • ${currentTerm} ${liveSession}`}
           </p>
-          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/5">
+          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-surface-2">
             <div
               className="h-full rounded-full bg-purple-500"
               style={{ width: `${liveOk ? Math.min(100, liveCompletion) : 0}%` }}
             />
           </div>
-          <p className="mt-3 text-xs text-purple-200/50">
+          <p className="mt-3 text-xs text-text-3">
             {liveOk
               ? `${livePublished} of ${displayUsed || liveStudents} results published.`
               : "Publication stats unavailable."}

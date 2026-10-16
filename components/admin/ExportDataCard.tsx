@@ -208,14 +208,14 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
 
   return (
     <>
-      <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
+      <div className="rounded-xl border border-line-1 bg-surface-1 p-6">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-purple-500/15 bg-purple-600/10">
-            <FileSpreadsheet className="h-5 w-5 text-purple-300" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line-1 bg-accent-soft">
+            <FileSpreadsheet className="h-5 w-5 text-accent" />
           </span>
           <div>
             <h2 className="text-base font-semibold">Export Data</h2>
-            <p className="mt-1 text-sm text-purple-200/60">
+            <p className="mt-1 text-sm text-text-2">
               Download your school&apos;s records as an Excel workbook.
             </p>
           </div>
@@ -227,7 +227,7 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
               reset();
               setOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-full bg-purple-600 font-semibold text-white transition hover:bg-purple-500"
+            className="inline-flex items-center gap-2 rounded-full bg-accent font-semibold text-accent-fg transition hover:bg-accent-hover"
           >
             <Download className="h-4 w-4" /> Export Data
           </Button>
@@ -249,27 +249,27 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
         <div className="space-y-5">
           {/* Dataset toggles */}
           <fieldset>
-            <legend className="mb-2 text-sm font-medium text-zinc-200">
+            <legend className="mb-2 text-sm font-medium text-text-1">
               Data to include
             </legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {DATASETS.map((d) => (
                 <label
                   key={d.key}
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-purple-500/20 bg-purple-900/[0.06] p-3 transition hover:border-purple-500/40"
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-line-1 bg-surface-1 p-3 transition hover:border-line-2"
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(d.key)}
                     onChange={() => toggle(d.key)}
                     disabled={busy}
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded accent-purple-500"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded accent-accent"
                   />
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-purple-100">
+                    <span className="block text-sm font-medium text-text-1">
                       {d.label}
                     </span>
-                    <span className="block text-xs text-purple-300/50">
+                    <span className="block text-xs text-text-3">
                       {d.hint}
                     </span>
                   </span>
@@ -277,7 +277,7 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
               ))}
             </div>
             {selected.length === 0 && (
-              <p className="mt-2 text-xs text-amber-300/70">
+              <p className="mt-2 text-xs text-warning">
                 Select at least one dataset.
               </p>
             )}
@@ -312,8 +312,8 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
 
           {/* Progress / status — replaces the form while running. */}
           {phase !== "idle" && (
-            <div className="rounded-xl border border-purple-500/20 bg-purple-900/[0.06] p-4">
-              <p className="mb-2 text-sm text-purple-100">{statusText}</p>
+            <div className="rounded-xl border border-line-1 bg-surface-1 p-4">
+              <p className="mb-2 text-sm text-text-1">{statusText}</p>
               <Progress
                 value={phase === "error" ? 0 : pct}
                 tone={phase === "error" ? "danger" : "brand"}
@@ -321,13 +321,13 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
                 showValue={phase !== "error"}
               />
               {phase === "error" && error && (
-                <p className="mt-2 text-xs text-red-300">{error}</p>
+                <p className="mt-2 text-xs text-danger">{error}</p>
               )}
             </div>
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-4">
+          <div className="flex items-center justify-end gap-2 border-t border-line-1 pt-4">
             <Button
               type="button"
               variant="outline"
@@ -344,7 +344,7 @@ export function ExportDataCard({ subdomain, currentTerm }: ExportDataCardProps) 
               type="button"
               onClick={() => void runExport()}
               disabled={busy || selected.length === 0}
-              className="inline-flex items-center gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-50"
             >
               {busy ? (
                 <>

@@ -29,7 +29,7 @@ export function Sidebar({ creditBalance }: { creditBalance?: number | null }) {
   const hasBalance = typeof creditBalance === "number" && Number.isFinite(creditBalance);
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-white md:flex md:flex-col">
+    <aside className="hidden w-64 shrink-0 border-r bg-surface-1 md:flex md:flex-col">
       <div className="flex h-16 items-center gap-2 border-b px-6 font-semibold">
         <Logo size="sm" alt="" />
         resultapp
@@ -45,8 +45,8 @@ export function Sidebar({ creditBalance }: { creditBalance?: number | null }) {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-black text-white"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-black"
+                  ? "bg-accent text-accent-fg"
+                  : "text-text-2 hover:bg-surface-2 hover:text-text-1"
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -57,14 +57,14 @@ export function Sidebar({ creditBalance }: { creditBalance?: number | null }) {
       </nav>
 
       <div className="border-t p-4">
-        <div className="rounded-lg bg-zinc-50 p-3">
+        <div className="rounded-lg bg-surface-2 p-3">
           <p className="text-sm font-medium">Credits</p>
           {hasBalance ? (
-            <p className="text-xs text-zinc-500">
-              <span className="text-base font-bold text-black">{creditBalance!.toLocaleString()}</span> remaining
+            <p className="text-xs text-text-3">
+              <span className="text-base font-bold text-text-1">{creditBalance!.toLocaleString()}</span> remaining
             </p>
           ) : (
-            <p className="text-xs text-zinc-500">Connect a school portal to view the live credit balance.</p>
+            <p className="text-xs text-text-3">Connect a school portal to view the live credit balance.</p>
           )}
         </div>
       </div>

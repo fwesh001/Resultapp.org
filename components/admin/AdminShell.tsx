@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import AdminSidebar, { type PortalSegment } from "@/components/admin/AdminSidebar";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 import { toTitleCase } from "@/lib/format";
 
 interface AdminShellProps {
@@ -144,6 +145,7 @@ export default function AdminShell({
             portal="admin"
             notificationsPath={`/${subdomain}/${portal}/notifications`}
           />
+          <ThemeToggle />
         </div>
 
         {/* Desktop top header */}
@@ -153,6 +155,7 @@ export default function AdminShell({
             portal="admin"
             notificationsPath={`/${subdomain}/${portal}/notifications`}
           />
+          <ThemeToggle />
         </div>
 
         <main className="flex-1 overflow-y-auto bg-surface-0">{children}</main>

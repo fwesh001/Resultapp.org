@@ -53,16 +53,16 @@ export function ConfirmDialog({
           className={cn(
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
             danger
-              ? "border-red-500/30 bg-red-500/10"
-              : "border-purple-500/30 bg-purple-500/10",
+              ? "border-danger/30 bg-danger-soft"
+              : "border-line-1 bg-accent-soft",
           )}
         >
           <TriangleAlert
-            className={cn("h-5 w-5", danger ? "text-red-400" : "text-purple-300")}
+            className={cn("h-5 w-5", danger ? "text-danger" : "text-accent")}
           />
         </span>
         {footnote && (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-3">
             {footnote}
           </p>
         )}
@@ -85,7 +85,7 @@ export function ConfirmDialog({
             "min-h-[48px] flex-1 text-white sm:flex-none",
             danger
               ? "bg-red-600 hover:bg-red-500"
-              : "bg-purple-600 hover:bg-purple-500",
+              : "bg-accent hover:bg-accent-hover",
           )}
         >
           {loading ? "Working..." : confirmLabel}

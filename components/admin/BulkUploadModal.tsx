@@ -270,7 +270,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
       title={meta.title}
       description={`Upload .xlsx or .csv for ${tenantId}. Parsed in your browser — only clean JSON is sent.`}
       size="lg"
-      className="border-purple-500/20 bg-[#0B0514] text-white"
+      className="border-line-1 bg-surface-0 text-text-1"
     >
       <div className="space-y-4">
         <Button
@@ -278,12 +278,12 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
           variant="outline"
           size="sm"
           onClick={downloadTemplate}
-          className="gap-1.5 rounded-full border-purple-500/20 bg-purple-950/20 text-purple-200 hover:bg-purple-900/30"
+          className="gap-1.5 rounded-full border-line-1 bg-surface-1 text-text-2 hover:bg-surface-2"
         >
           <Download className="h-3.5 w-3.5" /> Download Template (.xlsx)
         </Button>
         {(entity === "students" || entity === "staff") && (
-          <p className="-mt-2 text-xs text-purple-300/50">
+          <p className="-mt-2 text-xs text-text-3">
             IDs are auto-assigned on import ({entity === "students" ? "Admission ID Prefix" : "Staff ID Prefix"} from Settings) — just provide names{entity === "students" ? ", classes" : ""} and roles.
           </p>
         )}
@@ -310,14 +310,14 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
           }}
           className={[
             "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition",
-            dragOver ? "border-purple-400 bg-purple-900/20" : "border-purple-500/20 bg-purple-900/[0.04] hover:bg-purple-900/10",
+            dragOver ? "border-accent bg-surface-2" : "border-line-1 bg-surface-1 hover:bg-surface-2",
           ].join(" ")}
         >
-          <FileSpreadsheet className="h-8 w-8 text-purple-300/60" />
-          <p className="text-sm font-medium text-white">
+          <FileSpreadsheet className="h-8 w-8 text-text-2" />
+          <p className="text-sm font-medium text-text-1">
             {fileName ?? "Drop .xlsx / .csv here or click to browse"}
           </p>
-          <p className="text-xs text-purple-300/50">
+          <p className="text-xs text-text-3">
             Columns: {meta.headers.join(", ")}
           </p>
           <input
@@ -333,7 +333,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         </div>
 
         {parseError && (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{parseError}</span>
           </div>
@@ -342,21 +342,21 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         {rows.length > 0 && (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/20">
+              <span className="rounded-full bg-success-soft px-2.5 py-1 font-medium text-success ring-1 ring-success/40">
                 {validRows.length} valid
               </span>
               {invalidRows.length > 0 && (
-                <span className="rounded-full bg-red-500/10 px-2.5 py-1 font-medium text-red-300 ring-1 ring-red-500/20">
+                <span className="rounded-full bg-danger-soft px-2.5 py-1 font-medium text-danger ring-1 ring-danger/30">
                   {invalidRows.length} with errors (excluded)
                 </span>
               )}
-              <span className="text-purple-300/40">
+              <span className="text-text-3">
                 Previewing first {Math.min(8, rows.length)} of {rows.length}
               </span>
             </div>
-            <div className="max-h-56 overflow-auto rounded-xl border border-purple-500/15">
+            <div className="max-h-56 overflow-auto rounded-xl border border-line-1">
               <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-[#150A26] text-purple-300/60">
+                <thead className="sticky top-0 bg-surface-2 text-text-2">
                   <tr>
                     <th className="px-3 py-2 font-medium">Row</th>
                     {meta.headers.map((h) => (
@@ -365,20 +365,20 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
                     <th className="px-3 py-2 font-medium">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-purple-500/10">
+                <tbody className="divide-y divide-line-1">
                   {rows.slice(0, 8).map((r) => (
-                    <tr key={r.index} className={r.errors.length ? "bg-red-500/5" : undefined}>
-                      <td className="px-3 py-2 font-mono text-purple-200/60">{r.index}</td>
+                    <tr key={r.index} className={r.errors.length ? "bg-danger-soft" : undefined}>
+                      <td className="px-3 py-2 font-mono text-text-2">{r.index}</td>
                       {meta.headers.map((h) => (
-                        <td key={h} className="max-w-32 truncate px-3 py-2 text-white">
-                          {r.data[normalizeHeader(h)] || <span className="text-zinc-600">—</span>}
+                        <td key={h} className="max-w-32 truncate px-3 py-2 text-text-1">
+                          {r.data[normalizeHeader(h)] || <span className="text-text-3">—</span>}
                         </td>
                       ))}
                       <td className="px-3 py-2">
                         {r.errors.length ? (
-                          <span className="text-red-300">{r.errors.join("; ")}</span>
+                          <span className="text-danger">{r.errors.join("; ")}</span>
                         ) : (
-                          <span className="text-emerald-300">OK</span>
+                          <span className="text-success">OK</span>
                         )}
                       </td>
                     </tr>
@@ -387,7 +387,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
               </table>
             </div>
             {invalidRows.length > 8 && (
-              <p className="text-xs text-purple-300/40">
+              <p className="text-xs text-text-3">
                 + {invalidRows.length - 8} more rows with errors (all excluded from import).
               </p>
             )}
@@ -395,13 +395,13 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         )}
 
         {importError && (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{importError}</span>
           </div>
         )}
         {result && (
-          <div className="flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+          <div className="flex gap-2 rounded-xl border border-success/40 bg-success-soft p-3 text-sm text-success">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             <span>
               Imported {result.inserted} {entity}
@@ -410,14 +410,14 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
           </div>
         )}
         {progress && importing && (
-          <p className="text-xs text-purple-300/50">
+          <p className="text-xs text-text-3">
             Uploading rows {progress.done} of {progress.total}…
           </p>
         )}
 
         {/* Sticky footer */}
         <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl flex items-center justify-end gap-2">
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -434,7 +434,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
             type="button"
             onClick={() => void handleImport()}
             disabled={validRows.length === 0 || importing}
-            className="gap-1.5 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+            className="gap-1.5 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-50"
           >
             {importing ? (
               <>

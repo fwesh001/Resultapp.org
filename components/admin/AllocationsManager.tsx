@@ -98,7 +98,7 @@ function PaginationBar({ page, total, loaded, onPrev, onNext }: { page: number; 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   return (
     <div className="flex items-center justify-between gap-3 pt-1">
-      <p className="text-xs text-purple-300/50">
+      <p className="text-xs text-text-3">
         Showing {loaded} of {total} • page {page} of {totalPages}
       </p>
       <div className="flex gap-2">
@@ -106,7 +106,7 @@ function PaginationBar({ page, total, loaded, onPrev, onNext }: { page: number; 
           type="button"
           onClick={onPrev}
           disabled={page <= 1}
-          className="rounded-full border border-purple-500/20 px-4 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+          className="rounded-full border border-line-1 px-4 py-1.5 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
         >
           Prev
         </button>
@@ -114,7 +114,7 @@ function PaginationBar({ page, total, loaded, onPrev, onNext }: { page: number; 
           type="button"
           onClick={onNext}
           disabled={page >= totalPages}
-          className="rounded-full border border-purple-500/20 px-4 py-1.5 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+          className="rounded-full border border-line-1 px-4 py-1.5 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
         >
           Next
         </button>
@@ -657,7 +657,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   return (
     <div className="space-y-6">
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-purple-500/15 pb-4">
+      <div className="flex flex-wrap gap-2 border-b border-line-1 pb-4">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -667,8 +667,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
               onClick={() => { setActiveTab(tab.key); setPage(1); }}
               className={
                 activeTab === tab.key
-                  ? "rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-[0_0_14px_rgba(147,51,234,0.3)]"
-                  : "rounded-full border border-purple-500/15 px-4 py-2 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  ? "rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-[0_0_14px_rgba(147,51,234,0.3)]"
+                  : "rounded-full border border-line-1 px-4 py-2 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               }
             >
               <Icon className="mr-1.5 inline h-4 w-4" />
@@ -681,13 +681,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       {/* Shared Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-300/40" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
           <input
             type="search"
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 pl-10 pr-3 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 pl-10 pr-3 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
         {activeTab === "Students" && (
@@ -707,16 +707,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       {/* Inline errors stay here (validation is field-adjacent); success goes to
           the global toast. */}
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" /> <span className="flex-1">{error}</span>
-          <button onClick={() => setError(null)} className="ml-2 rounded-full p-1 hover:bg-white/10">
+          <button onClick={() => setError(null)} className="ml-2 rounded-full p-1 hover:bg-surface-2">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-8 text-sm text-purple-200/60">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-line-1 bg-surface-1 p-8 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading roster…
         </div>
       ) : (
@@ -725,21 +725,21 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Students" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Registered Students ({filteredStudents.length} of {totals.Students} • page {page})</h3>
+                <h3 className="text-sm font-semibold text-text-1">Registered Students ({filteredStudents.length} of {totals.Students} • page {page})</h3>
                 <div className="flex gap-2">
-                  <Button onClick={() => setBulkEntity("students")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                  <Button onClick={() => setBulkEntity("students")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
                     <Upload className="h-4 w-4" /> Bulk Upload
                   </Button>
-                  <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                  <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
                     <Plus className="h-4 w-4" /> Add Student
                   </Button>
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+              <div className="overflow-x-auto rounded-xl border border-line-1 bg-surface-1">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                    <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                       <th className="px-4 py-3">Admission No</th>
                       <th className="px-4 py-3">Full Name</th>
                       <th className="px-4 py-3">Class</th>
@@ -750,15 +750,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   <tbody>
                     {filteredStudents.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-purple-200/40">
+                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-text-3">
                           {students.length === 0 ? "No students yet. Add your first student." : "No students match search/filter."}
                         </td>
                       </tr>
                     ) : (
                       filteredStudents.map((s) => (
-                        <tr key={s.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
+                        <tr key={s.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
                           <td className="px-4 py-3 font-mono text-xs">{s.student_id}</td>
-                          <td className="px-4 py-3 font-medium text-white">{s.full_name}</td>
+                          <td className="px-4 py-3 font-medium text-text-1">{s.full_name}</td>
                           <td className="px-4 py-3">{s.class_name}</td>
                           <td className="px-4 py-3">{s.gender || "—"}</td>
                           <td className="px-4 py-3 text-right">
@@ -806,20 +806,20 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Staff" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Staff Members ({filteredStaff.length} of {totals.Staff} • page {page})</h3>
+                <h3 className="text-sm font-semibold text-text-1">Staff Members ({filteredStaff.length} of {totals.Staff} • page {page})</h3>
                 <div className="flex gap-2">
-                  <Button onClick={() => setBulkEntity("staff")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                  <Button onClick={() => setBulkEntity("staff")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
                     <Upload className="h-4 w-4" /> Bulk Upload
                   </Button>
-                  <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                  <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
                     <Plus className="h-4 w-4" /> Add Staff
                   </Button>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+              <div className="overflow-x-auto rounded-xl border border-line-1 bg-surface-1">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                    <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                       <th className="px-4 py-3">Staff ID</th>
                       <th className="px-4 py-3">Full Name</th>
                       <th className="px-4 py-3">Email</th>
@@ -830,18 +830,18 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   <tbody>
                     {filteredStaff.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-purple-200/40">
+                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-text-3">
                           {staff.length === 0 ? "No staff yet. Add staff first." : "No staff match search."}
                         </td>
                       </tr>
                     ) : (
                       filteredStaff.map((m) => (
-                        <tr key={m.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
+                        <tr key={m.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
                           <td className="px-4 py-3 font-mono text-xs">{m.staff_id}</td>
-                          <td className="px-4 py-3 font-medium text-white">{m.full_name}</td>
-                          <td className="px-4 py-3 text-purple-300/60">{m.email || "—"}</td>
+                          <td className="px-4 py-3 font-medium text-text-1">{m.full_name}</td>
+                          <td className="px-4 py-3 text-text-2">{m.email || "—"}</td>
                           <td className="px-4 py-3">
-                            <span className="rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200">{m.role}</span>
+                            <span className="rounded-full border border-line-1 bg-surface-1 px-2.5 py-1 text-xs font-medium text-text-2">{m.role}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <RowActionsMenu
@@ -888,30 +888,30 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Subjects" && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-white">Master Subjects ({filteredSubjects.length} of {totals.Subjects} • page {page})</h3>
+                <h3 className="text-sm font-semibold text-text-1">Master Subjects ({filteredSubjects.length} of {totals.Subjects} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button
                     onClick={() => handleCreate("bulk_subjects")}
                     disabled={submitting}
                     variant="outline"
-                    className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-50"
+                    className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2 disabled:opacity-50"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     Quick Add Standard Subjects
                   </Button>
-                  <Button onClick={() => setBulkEntity("subjects")} variant="outline" className="gap-1.5 rounded-full border-purple-500/20 bg-purple-900/10 px-4 py-2 text-sm font-medium text-purple-200 hover:bg-purple-900/20">
+                  <Button onClick={() => setBulkEntity("subjects")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
                     <Upload className="h-4 w-4" /> Bulk Upload
                   </Button>
-                  <Button onClick={() => setShowSubjectModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                  <Button onClick={() => setShowSubjectModal(true)} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
                     <Plus className="h-4 w-4" /> Add Subject
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-purple-300/40">Standard Nigerian subjects can be added with one click — duplicates are skipped. Master list powers the Allocate dropdown.</p>
-              <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+              <p className="text-xs text-text-3">Standard Nigerian subjects can be added with one click — duplicates are skipped. Master list powers the Allocate dropdown.</p>
+              <div className="overflow-x-auto rounded-xl border border-line-1 bg-surface-1">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                    <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                       <th className="px-4 py-3">Subject</th>
                       <th className="px-4 py-3">Created At</th>
                       <th className="px-4 py-3 text-right">Actions</th>
@@ -920,15 +920,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   <tbody>
                     {filteredSubjects.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-sm text-purple-200/40">
+                        <td colSpan={3} className="px-4 py-8 text-center text-sm text-text-3">
                           {subjects.length === 0 ? "No subjects yet. Add manually or use Quick Add." : "No subjects match search."}
                         </td>
                       </tr>
                     ) : (
                       filteredSubjects.map((s) => (
-                        <tr key={s.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
-                          <td className="px-4 py-3 font-medium text-white">{s.subject_name}</td>
-                          <td className="px-4 py-3 text-xs text-purple-300/50">{new Date(s.created_at).toLocaleDateString()}</td>
+                        <tr key={s.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
+                          <td className="px-4 py-3 font-medium text-text-1">{s.subject_name}</td>
+                          <td className="px-4 py-3 text-xs text-text-3">{new Date(s.created_at).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
                             <RowActionsMenu
                               label={`Actions for ${s.subject_name}`}
@@ -962,8 +962,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Allocate" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Allocate — Command Center ({filteredAllocations.length} of {totals.Allocate} • page {page})</h3>
-                <Button onClick={() => setShowAllocModal(true)} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                <h3 className="text-sm font-semibold text-text-1">Allocate — Command Center ({filteredAllocations.length} of {totals.Allocate} • page {page})</h3>
+                <Button onClick={() => setShowAllocModal(true)} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
                   <Plus className="h-4 w-4" /> Assign Subject
                 </Button>
               </div>
@@ -977,8 +977,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                     onClick={() => setAllocateClassFilter(cls)}
                     className={
                       allocateClassFilter === cls
-                        ? "shrink-0 rounded-full bg-purple-600 px-3 py-1.5 text-xs font-medium text-white shadow-[0_0_10px_rgba(147,51,234,0.3)]"
-                        : "shrink-0 rounded-full border border-purple-500/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                        ? "shrink-0 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+                        : "shrink-0 rounded-full border border-line-1 px-3 py-1.5 text-xs font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
                     }
                   >
                     {cls}
@@ -992,14 +992,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
               {filteredAllocations.length > 0 ? (
                 <div className="space-y-6">
                   {Array.from(filteredAllocationsByClass.entries()).map(([className, rows]) => (
-                    <div key={className} className="overflow-hidden rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
-                      <div className="border-b border-purple-500/10 bg-purple-950/30 px-4 py-2">
-                        <span className="rounded-full bg-purple-600/20 px-3 py-1 text-xs font-semibold text-purple-200">{className}</span>
-                        <span className="ml-2 text-xs text-purple-300/50">{rows.length} allocation{rows.length !== 1 ? "s" : ""}</span>
+                    <div key={className} className="overflow-hidden rounded-xl border border-line-1 bg-surface-1">
+                      <div className="border-b border-line-1 bg-surface-2 px-4 py-2">
+                        <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">{className}</span>
+                        <span className="ml-2 text-xs text-text-3">{rows.length} allocation{rows.length !== 1 ? "s" : ""}</span>
                       </div>
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-purple-500/10 bg-purple-950/10 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                          <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                             <th className="px-4 py-3">Subject</th>
                             <th className="px-4 py-3">Staff</th>
                             <th className="px-4 py-3 text-right">Actions</th>
@@ -1007,8 +1007,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                         </thead>
                         <tbody>
                           {rows.map((a) => (
-                            <tr key={a.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
-                              <td className="px-4 py-3 font-medium text-white">{a.subject_name}</td>
+                            <tr key={a.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
+                              <td className="px-4 py-3 font-medium text-text-1">{a.subject_name}</td>
                               <td className="px-4 py-3">{a.staff_name}</td>
                               <td className="px-4 py-3 text-right">
                                 <RowActionsMenu
@@ -1032,9 +1032,9 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-8 text-center text-sm text-purple-200/40">
+                <div className="rounded-xl border border-line-1 bg-surface-1 p-8 text-center text-sm text-text-3">
                   {allocations.length === 0 ? (
-                    <>No allocations yet. Use <span className="font-medium text-white">Assign Subject</span> to map a subject to a class and staff member.</>
+                    <>No allocations yet. Use <span className="font-medium text-text-1">Assign Subject</span> to map a subject to a class and staff member.</>
                   ) : (
                     <>No allocations match filter “{allocateClassFilter}” or search “{searchTerm}”.</>
                   )}
@@ -1054,16 +1054,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {activeTab === "Forms" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Form Classes ({filteredForms.length} of {totals.Forms} • page {page})</h3>
-                <Button onClick={openAddForm} className="gap-1.5 rounded-full bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500">
+                <h3 className="text-sm font-semibold text-text-1">Form Classes ({filteredForms.length} of {totals.Forms} • page {page})</h3>
+                <Button onClick={openAddForm} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
                   <Plus className="h-4 w-4" /> Assign Form Teacher
                 </Button>
               </div>
-              <p className="text-xs text-purple-300/40">Each class has exactly one form teacher for behavioural traits and remarks. Re-assigning a class overwrites the previous teacher.</p>
-              <div className="overflow-x-auto rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+              <p className="text-xs text-text-3">Each class has exactly one form teacher for behavioural traits and remarks. Re-assigning a class overwrites the previous teacher.</p>
+              <div className="overflow-x-auto rounded-xl border border-line-1 bg-surface-1">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                    <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                       <th className="px-4 py-3">Class</th>
                       <th className="px-4 py-3">Form Teacher</th>
                       <th className="px-4 py-3">Staff ID</th>
@@ -1073,14 +1073,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   <tbody>
                     {filteredForms.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-purple-200/40">
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-text-3">
                           {formAssignments.length === 0 ? "No form teachers assigned yet." : "No assignments match search."}
                         </td>
                       </tr>
                     ) : (
                       filteredForms.map((f) => (
-                        <tr key={f.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
-                          <td className="px-4 py-3 font-medium text-white">{f.class_name}</td>
+                        <tr key={f.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
+                          <td className="px-4 py-3 font-medium text-text-1">{f.class_name}</td>
                           <td className="px-4 py-3">{f.full_name || "—"}</td>
                           <td className="px-4 py-3 font-mono text-xs">{f.staff_id}</td>
                           <td className="px-4 py-3 text-right">
@@ -1127,7 +1127,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         onOpenChange={closeStudentModal}
         title={isEditingStudent ? "Edit Student" : "Add Student"}
         description={isEditingStudent ? "Update Full Name, Class, Gender — Admission No is locked" : "Admission No, Full Name, Class — Gender optional"}
-        className="border-purple-500/20 bg-[#0B0514] text-white"
+        className="border-line-1 bg-surface-0 text-text-1"
       >
         <div className="space-y-3">
           <div className="flex items-end gap-2">
@@ -1151,7 +1151,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 variant="ghost"
                 size="sm"
                 onClick={() => setStudentForm((p) => ({ ...p, student_id: nextAdmissionNo(idPrefix, students) }))}
-                className="mb-[2px] shrink-0 rounded-xl border border-purple-500/20 bg-purple-900/20 text-purple-200 hover:bg-purple-800/30 hover:text-white"
+                className="mb-[2px] shrink-0 rounded-xl border border-line-1 bg-surface-1 text-text-2 hover:bg-surface-2 hover:text-text-1"
                 title="Generate next Admission No"
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -1160,8 +1160,8 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             )}
           </div>
           {!isEditingStudent && (
-            <p className="text-xs text-purple-300/40">
-              Leave blank to auto-assign the next Admission No (<span className="font-mono text-purple-200">{idPrefix}/…</span> from Settings). Existing IDs are never changed.
+            <p className="text-xs text-text-3">
+              Leave blank to auto-assign the next Admission No (<span className="font-mono text-text-2">{idPrefix}/…</span> from Settings). Existing IDs are never changed.
             </p>
           )}
           <Input label="Full Name" value={studentForm.full_name} onChange={(e) => setStudentForm((p) => ({ ...p, full_name: e.target.value }))} placeholder="e.g., Ada Okoro" />
@@ -1191,12 +1191,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 onChange={(e) => setStudentForm((p) => ({ ...p, class_name: e.target.value }))}
                 placeholder="e.g., JSS 1 Gold"
                 aria-label="Custom class name"
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                className="flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             )}
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Gender (optional)</label>
+            <label className="text-sm font-medium text-text-1">Gender (optional)</label>
 <Select aria-label="Gender (optional)" value={studentForm.gender} onChange={(v) => setStudentForm((p) => ({ ...p, gender: v }))} placeholder="Select gender"
                 options={[
                   { value: "", label: "Select gender" },
@@ -1206,11 +1206,11 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
               />
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("student")}
               disabled={submitting}
-              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+              className="w-full gap-2 rounded-full bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStudent ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {isEditingStudent ? "Save Changes" : "Add Student"}
@@ -1225,7 +1225,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         onOpenChange={closeStaffModal}
         title={isEditingStaff ? "Edit Staff" : "Add Staff"}
         description={isEditingStaff ? "Update Full Name, Email, Phone, Role — Staff ID is locked" : "Staff ID, Full Name, Email, Role"}
-        className="border-purple-500/20 bg-[#0B0514] text-white"
+        className="border-line-1 bg-surface-0 text-text-1"
       >
         <div className="space-y-3">
           {isEditingStaff ? (
@@ -1241,15 +1241,15 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   variant="ghost"
                   size="sm"
                   onClick={() => setStaffForm((p) => ({ ...p, staff_id: nextStaffId(staffPrefix, staff) }))}
-                  className="mb-[2px] shrink-0 rounded-xl border border-purple-500/20 bg-purple-900/20 text-purple-200 hover:bg-purple-800/30 hover:text-white"
+                  className="mb-[2px] shrink-0 rounded-xl border border-line-1 bg-surface-1 text-text-2 hover:bg-surface-2 hover:text-text-1"
                   title="Generate next Staff ID"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   Auto
                 </Button>
               </div>
-              <p className="text-xs text-purple-300/40">
-                Leave blank to auto-assign the next Staff ID (<span className="font-mono text-purple-200">{staffPrefix}/…</span> from Settings, always lowercase). Existing IDs are never changed.
+              <p className="text-xs text-text-3">
+                Leave blank to auto-assign the next Staff ID (<span className="font-mono text-text-2">{staffPrefix}/…</span> from Settings, always lowercase). Existing IDs are never changed.
               </p>
             </>
           )}
@@ -1257,17 +1257,17 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <Input label="Email" type="email" value={staffForm.email} onChange={(e) => setStaffForm((p) => ({ ...p, email: e.target.value }))} placeholder="staff@school.edu" />
           <Input label="Phone" value={staffForm.phone} onChange={(e) => setStaffForm((p) => ({ ...p, phone: e.target.value }))} placeholder="080..." />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Role</label>
+            <label className="text-sm font-medium text-text-1">Role</label>
 <Select aria-label="Role" value={staffForm.role} onChange={(v) => setStaffForm((p) => ({ ...p, role: v }))}
                 options={STAFF_ROLES.map((r): SelectOption => ({ value: r, label: r }))}
               />
           </div>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("staff")}
               disabled={submitting}
-              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+              className="w-full gap-2 rounded-full bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingStaff ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {isEditingStaff ? "Save Changes" : "Add Staff"}
@@ -1277,12 +1277,12 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       </Modal>
 
       {/* Add Subject Modal */}
-      <Modal open={showSubjectModal} onOpenChange={setShowSubjectModal} title="Add Subject" description="Add a single subject to the master list" className="border-purple-500/20 bg-[#0B0514] text-white">
+      <Modal open={showSubjectModal} onOpenChange={setShowSubjectModal} title="Add Subject" description="Add a single subject to the master list" className="border-line-1 bg-surface-0 text-text-1">
         <div className="space-y-3">
           <Input label="Subject Name" value={subjectForm.subject_name} onChange={(e) => setSubjectForm((p) => ({ ...p, subject_name: e.target.value }))} placeholder="e.g., Mathematics" />
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
-            <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl">
+            <Button onClick={() => handleCreate("subject")} disabled={submitting} className="w-full gap-2 rounded-full bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-60">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add Subject
             </Button>
           </div>
@@ -1290,10 +1290,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       </Modal>
 
       {/* Assign Subject Modal — 3 dropdowns */}
-      <Modal open={showAllocModal} onOpenChange={setShowAllocModal} title="Assign Subject" description="Select Class, Subject and Staff to create allocation" className="border-purple-500/20 bg-[#0B0514] text-white">
+      <Modal open={showAllocModal} onOpenChange={setShowAllocModal} title="Assign Subject" description="Select Class, Subject and Staff to create allocation" className="border-line-1 bg-surface-0 text-text-1">
         <div className="space-y-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Class</label>
+            <label className="text-sm font-medium text-text-1">Class</label>
             {availableClasses.length === 0 ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
                 Register students first to generate classes. Classes are derived from the Students roster.
@@ -1309,7 +1309,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Subject</label>
+            <label className="text-sm font-medium text-text-1">Subject</label>
             {subjects.length === 0 ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
                 No subjects yet. Add subjects in the Subjects tab or Quick Add.
@@ -1325,7 +1325,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Staff</label>
+            <label className="text-sm font-medium text-text-1">Staff</label>
             {staff.length === 0 ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
                 No staff yet. Add staff in the Staff tab.
@@ -1340,13 +1340,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             )}
           </div>
 
-          <p className="text-xs text-purple-300/40">Tip: Unique on (subject, class) — one primary staff member per class.</p>
+          <p className="text-xs text-text-3">Tip: Unique on (subject, class) — one primary staff member per class.</p>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("allocation")}
               disabled={submitting || availableClasses.length === 0 || subjects.length === 0 || staff.length === 0}
-              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+              className="w-full gap-2 rounded-full bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign
             </Button>
@@ -1355,10 +1355,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       </Modal>
 
       {/* Assign Form Teacher Modal — class + staff (exactly one per class) */}
-      <Modal open={showFormModal} onOpenChange={closeFormModal} title={isEditingForm ? "Edit Form Teacher" : "Assign Form Teacher"} description={isEditingForm ? "Reassign the staff member responsible for this class's behavioural traits and remarks" : "Select a class and the staff member responsible for its behavioural traits and remarks"} className="border-purple-500/20 bg-[#0B0514] text-white">
+      <Modal open={showFormModal} onOpenChange={closeFormModal} title={isEditingForm ? "Edit Form Teacher" : "Assign Form Teacher"} description={isEditingForm ? "Reassign the staff member responsible for this class's behavioural traits and remarks" : "Select a class and the staff member responsible for its behavioural traits and remarks"} className="border-line-1 bg-surface-0 text-text-1">
         <div className="space-y-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Class</label>
+            <label className="text-sm font-medium text-text-1">Class</label>
             {availableClasses.length === 0 ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
                 Register students first to generate classes. Classes are derived from the Students roster.
@@ -1374,7 +1374,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-purple-100">Staff</label>
+            <label className="text-sm font-medium text-text-1">Staff</label>
             {staff.length === 0 ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
                 No staff yet. Add staff in the Staff tab.
@@ -1389,13 +1389,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             )}
           </div>
 
-          <p className="text-xs text-purple-300/40">Tip: One form teacher per class — assigning again overwrites the previous teacher.</p>
+          <p className="text-xs text-text-3">Tip: One form teacher per class — assigning again overwrites the previous teacher.</p>
           <div className="h-24 shrink-0 pointer-events-none" aria-hidden="true" />
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-white dark:bg-zinc-900 px-6 pt-4 pb-6 border-t border-white/10 rounded-b-none md:rounded-b-xl">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-[calc(1.5rem+env(safe-area-inset-bottom))] md:-mb-6 bg-surface-1 px-6 pt-4 pb-6 border-t border-line-1 rounded-b-none md:rounded-b-xl">
             <Button
               onClick={() => handleCreate("form_assignment")}
               disabled={submitting || staff.length === 0 || (!isEditingForm && availableClasses.length === 0)}
-              className="w-full gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60"
+              className="w-full gap-2 rounded-full bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-60"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingForm ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {isEditingForm ? "Save Changes" : "Assign"}

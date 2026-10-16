@@ -156,12 +156,12 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
           <Building2 className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Tenants</h1>
-          <p className="text-sm text-purple-200/60">
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">Tenants</h1>
+          <p className="text-sm text-text-2">
             {total} {total === 1 ? "school" : "schools"} • page {page} of {totalPages}
           </p>
         </div>
@@ -169,13 +169,13 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 sm:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-300/40" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, subdomain, email…"
-            className="w-full rounded-xl border border-purple-500/20 bg-purple-950/30 py-2 pl-9 pr-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+            className="w-full rounded-xl border border-line-1 bg-surface-3 py-2 pl-9 pr-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
           />
         </div>
         <div className="flex gap-2" role="group" aria-label="Status filter">
@@ -190,8 +190,8 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
               aria-pressed={status === s}
               className={
                 status === s
-                  ? "rounded-full bg-purple-600 px-4 py-2 text-xs font-semibold text-white"
-                  : "rounded-full border border-purple-500/20 bg-purple-900/10 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20"
+                  ? "rounded-full bg-accent px-4 py-2 text-xs font-semibold text-accent-fg"
+                  : "rounded-full border border-line-1 bg-surface-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2"
               }
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -201,16 +201,16 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
       </div>
 
       {error && (
-        <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-4 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
-      <div className="mt-4 overflow-hidden rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] backdrop-blur">
+      <div className="mt-4 overflow-hidden rounded-2xl border border-line-1 bg-surface-1 backdrop-blur">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+              <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                 <th className="px-4 py-3">Subdomain</th>
                 <th className="px-4 py-3">School Name</th>
                 <th className="px-4 py-3">Status</th>
@@ -222,13 +222,13 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-purple-200/40">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-text-3">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </td>
                 </tr>
               ) : tenants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-purple-200/40">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-text-3">
                     No tenants match this filter.
                   </td>
                 </tr>
@@ -236,9 +236,9 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
                 tenants.map((t) => {
                   const label = statusLabel(t);
                   return (
-                    <tr key={t.id || t.subdomain} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
+                    <tr key={t.id || t.subdomain} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
                       <td className="px-4 py-3">
-                        <Link href={`/superadmin/tenants/${t.subdomain}`} className="font-mono text-sm font-medium text-white hover:text-purple-300">
+                        <Link href={`/superadmin/tenants/${t.subdomain}`} className="font-mono text-sm font-medium text-text-1 hover:text-accent">
                           {t.subdomain}
                         </Link>
                       </td>
@@ -247,19 +247,19 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
                         <span
                           className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                             label === "Active"
-                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                              ? "border-success/40 bg-success-soft text-success"
                               : label === "Suspended"
-                                ? "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
+                                ? "border-line-1 bg-surface-2 text-text-2"
                                 : label === "Deleted"
-                                  ? "border-red-500/30 bg-red-500/15 text-red-200"
-                                  : "border-red-500/20 bg-red-500/10 text-red-300"
+                                  ? "border-danger/30 bg-danger-soft text-danger"
+                                  : "border-danger/30 bg-danger-soft text-danger"
                           }`}
                         >
                           {label}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-medium">{t.student_count ?? 0}</td>
-                      <td className="px-4 py-3 text-xs text-purple-300/50">
+                      <td className="px-4 py-3 text-xs text-text-3">
                         {t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -285,7 +285,7 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <p className="text-xs text-purple-300/40">
+        <p className="text-xs text-text-3">
           Showing {tenants.length} of {total}
         </p>
         <div className="flex gap-2">
@@ -293,7 +293,7 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
             type="button"
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="inline-flex items-center gap-1 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-full border border-line-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Prev
           </button>
@@ -301,7 +301,7 @@ async function handleSuspendConfirm(reason: string, suspensionReason: string | n
             type="button"
             disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => p + 1)}
-            className="inline-flex items-center gap-1 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-full border border-line-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
           >
             Next <ChevronRight className="h-3.5 w-3.5" />
           </button>

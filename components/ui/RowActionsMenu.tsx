@@ -67,9 +67,9 @@ interface RowActionsMenuProps {
 const ITEM_BASE =
   "flex w-full items-center gap-2 px-4 py-2.5 text-xs transition";
 const ITEM_VARIANT = {
-  default: "text-purple-100 hover:bg-white/5 hover:text-white",
-  success: "text-emerald-200 hover:bg-white/5",
-  danger: "font-medium text-red-300 hover:bg-red-500/10",
+  default: "text-text-1 hover:bg-surface-2 hover:text-text-1",
+  success: "text-success hover:bg-surface-2",
+  danger: "font-medium text-danger hover:bg-danger-soft",
 } as const;
 
 export function RowActionsMenu({
@@ -120,7 +120,7 @@ export function RowActionsMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         disabled={disabled}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/15 bg-purple-900/10 text-purple-200 transition hover:bg-purple-900/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line-1 bg-surface-2 text-text-2 transition hover:bg-surface-2 hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
       >
         <TriggerIcon className="h-4 w-4" />
       </button>
@@ -129,15 +129,15 @@ export function RowActionsMenu({
         <div
           role="menu"
           aria-label={label}
-          className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-purple-500/20 bg-[#150A26] shadow-2xl"
+          className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-line-1 bg-surface-1 shadow-2xl"
         >
           {items.map((item, i) => {
             const Icon = item.icon;
             const variant = item.variant ?? "default";
             const separator = item.separatorBefore
-              ? "border-t border-purple-500/10"
+              ? "border-t border-line-1"
               : "";
-            const dangerRule = variant === "danger" ? "border-t border-red-500/10" : "";
+            const dangerRule = variant === "danger" ? "border-t border-danger/20" : "";
             const cls = `${ITEM_BASE} ${ITEM_VARIANT[variant]} ${separator} ${dangerRule}`;
 
             if (item.href) {

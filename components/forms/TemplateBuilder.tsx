@@ -133,7 +133,7 @@ function gradesFromInitial(structure: NonNullable<TemplateBuilderProps["initial"
 }
 
 const inputClass =
-  "flex h-9 w-full rounded-lg border border-purple-800/30 bg-purple-950/20 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500";
+  "flex h-9 w-full rounded-lg border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -335,15 +335,15 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {isEditMode && (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-warning-soft px-4 py-2.5 text-sm text-warning">
           <span>
-            Editing <span className="font-semibold text-white">{initial?.name ?? templateName}</span>
+            Editing <span className="font-semibold text-text-1">{initial?.name ?? templateName}</span>
           </span>
           {onCancelEdit && (
             <button
               type="button"
               onClick={onCancelEdit}
-              className="rounded-full border border-amber-500/30 px-3 py-1 text-xs font-medium hover:bg-amber-500/10"
+              className="rounded-full border border-amber-500/30 px-3 py-1 text-xs font-medium hover:bg-surface-2"
             >
               Cancel edit
             </button>
@@ -352,12 +352,12 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       )}
       {/* School badge */}
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
           <GraduationCap className="h-4 w-4" />
         </span>
         <div>
-          <p className="text-xs font-medium text-purple-300/60">Setting up for</p>
-          <p className="text-sm font-semibold text-purple-100">{schoolName || tenantId}</p>
+          <p className="text-xs font-medium text-text-2">Setting up for</p>
+          <p className="text-sm font-semibold text-text-1">{schoolName || tenantId}</p>
         </div>
       </div>
 
@@ -371,9 +371,9 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       />
 
       {/* Applies to classes */}
-      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
-        <h3 className="text-sm font-semibold text-white">Applies to classes</h3>
-        <p className="mt-1 text-xs text-purple-300/50">
+      <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
+        <h3 className="text-sm font-semibold text-text-1">Applies to classes</h3>
+        <p className="mt-1 text-xs text-text-3">
           Leave empty to use this template for every class, or bind it to specific classes (e.g. JSS 1 uses one template, SSS 3 uses another).
         </p>
         {(classOptions ?? []).length > 0 && (
@@ -392,8 +392,8 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                   aria-pressed={selected}
                   className={
                     selected
-                      ? "rounded-full bg-purple-600 px-2.5 py-1 text-xs font-medium text-white"
-                      : "rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200 hover:bg-purple-900/30"
+                      ? "rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg"
+                      : "rounded-full border border-line-1 bg-surface-1 px-2.5 py-1 text-xs font-medium text-text-2 hover:bg-surface-2"
                   }
                 >
                   {c}
@@ -415,19 +415,19 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
             placeholder="Add a class, e.g. JSS 1"
             className={`${inputClass} h-9 flex-1`}
           />
-          <Button type="button" onClick={addClassBinding} size="sm" className="rounded-full bg-purple-600 text-white hover:bg-purple-500">
+          <Button type="button" onClick={addClassBinding} size="sm" className="rounded-full bg-accent text-accent-fg hover:bg-accent-hover">
             <Plus className="h-3.5 w-3.5" /> Add
           </Button>
         </div>
         {appliesTo.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {appliesTo.map((c) => (
-              <span key={c} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
+              <span key={c} className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
                 {c}
                 <button
                   type="button"
                   onClick={() => setAppliesTo((p) => p.filter((x) => x !== c))}
-                  className="ml-1 rounded-full bg-white/10 p-0.5 hover:bg-white/20"
+                  className="ml-1 rounded-full bg-surface-1 p-0.5 hover:bg-surface-2"
                   aria-label={`Remove ${c}`}
                 >
                   <Trash2 className="h-3 w-3" />
@@ -439,14 +439,14 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line-1 bg-surface-1 p-2">
         <button
           type="button"
           onClick={() => setActiveTab("academic")}
           className={
             activeTab === "academic"
-              ? "flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white"
-              : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+              ? "flex items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-fg"
+              : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
           }
         >
           <Calculator className="h-4 w-4" />
@@ -458,8 +458,8 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
           onClick={() => setActiveTab("traits")}
           className={
             activeTab === "traits"
-              ? "flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white"
-              : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+              ? "flex items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-accent-fg"
+              : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
           }
         >
           <HeartHandshake className="h-4 w-4" />
@@ -470,11 +470,11 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
 
       {/* Tab 1 — Academic scoring */}
       {activeTab === "academic" && (
-        <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
+        <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-white">How are scores divided?</h3>
-              <p className="mt-0.5 text-xs text-purple-300/50">
+              <h3 className="text-sm font-semibold text-text-1">How are scores divided?</h3>
+              <p className="mt-0.5 text-xs text-text-3">
                 Set the weight of each section. The weights must add up to 100%.
               </p>
             </div>
@@ -483,7 +483,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
               variant="outline"
               size="sm"
               onClick={addCategory}
-              className="shrink-0 gap-1.5 rounded-full border-purple-500/20 bg-purple-950/20 text-purple-200 hover:bg-purple-900/30"
+              className="shrink-0 gap-1.5 rounded-full border-line-1 bg-surface-3 text-text-2 hover:bg-surface-2"
             >
               <Plus className="h-3.5 w-3.5" /> Add Section
             </Button>
@@ -493,23 +493,23 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
           <div
             className={`mt-3 rounded-xl border px-3 py-2.5 ${
               weightOk
-                ? "border-emerald-500/20 bg-emerald-500/10"
+                ? "border-success/40 bg-success-soft"
                 : weightStatus === "over"
-                  ? "border-red-500/20 bg-red-500/10"
-                  : "border-amber-500/20 bg-amber-500/10"
+                  ? "border-danger/30 bg-danger-soft"
+                  : "border-amber-500/20 bg-warning-soft"
             }`}
           >
             <div className="flex items-center gap-2 text-xs font-medium">
               {weightOk ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
               ) : (
-                <AlertCircle className="h-3.5 w-3.5 text-amber-300" />
+                <AlertCircle className="h-3.5 w-3.5 text-warning" />
               )}
-              <span className={weightOk ? "text-emerald-300" : weightStatus === "over" ? "text-red-300" : "text-amber-300"}>
+              <span className={weightOk ? "text-success" : weightStatus === "over" ? "text-danger" : "text-warning"}>
                 Total: {totalWeight}% {weightOk ? "— perfectly balanced" : weightStatus === "over" ? "— too high, reduce a section" : "— add more weight to reach 100%"}
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
               <div
                 className={`h-full transition-all ${weightOk ? "bg-emerald-400" : weightStatus === "over" ? "bg-red-400" : "bg-amber-400"}`}
                 style={{ width: `${Math.min(100, totalWeight)}%` }}
@@ -523,10 +523,10 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
               const weight = parseInt(cat.weight) || 0;
               const balanced = sum > 0 && sum === weight;
               return (
-                <div key={cat.id} className="rounded-xl border border-purple-500/10 bg-[#0B0514]/40 p-3 sm:p-4">
+                <div key={cat.id} className="rounded-xl border border-line-1 bg-surface-0/40 p-3 sm:p-4">
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <label className="text-xs font-medium text-purple-200/70">Section name</label>
+                      <label className="text-xs font-medium text-text-2">Section name</label>
                       <input
                         value={cat.name}
                         onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
@@ -535,7 +535,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                       />
                     </div>
                     <div className="w-24 sm:w-28">
-                      <label className="text-xs font-medium text-purple-200/70">Weight</label>
+                      <label className="text-xs font-medium text-text-2">Weight</label>
                       <div className="mt-1 flex items-center gap-1">
                         <input
                           value={cat.weight}
@@ -544,14 +544,14 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                           inputMode="numeric"
                           className={inputClass}
                         />
-                        <span className="text-xs text-purple-300/50">%</span>
+                        <span className="text-xs text-text-3">%</span>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => removeCategory(cat.id)}
                       disabled={categories.length <= 1}
-                      className="mt-6 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-500/15 bg-red-500/5 text-red-300 hover:bg-red-500/10 disabled:opacity-30"
+                      className="mt-6 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-danger hover:bg-danger-soft disabled:opacity-30"
                       aria-label={`Remove ${cat.name || "section"}`}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -567,7 +567,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                           onChange={(e) => updateItem(cat.id, it.id, { name: e.target.value })}
                           placeholder="e.g. Assignment"
                           aria-label="Assessment item name"
-                          className="flex h-8 flex-1 rounded-lg border border-purple-800/20 bg-purple-950/20 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none"
+                          className="flex h-8 flex-1 rounded-lg border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                         />
                         <div className="flex w-28 items-center gap-1">
                           <input
@@ -576,14 +576,14 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                             placeholder="10"
                             inputMode="numeric"
                             aria-label="Maximum score"
-                            className="flex h-8 w-full rounded-lg border border-purple-800/20 bg-purple-950/20 px-2 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none"
+                            className="flex h-8 w-full rounded-lg border border-line-1 bg-surface-3 px-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                           />
-                          <span className="text-xs text-purple-300/40">max</span>
+                          <span className="text-xs text-text-3">max</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeItem(cat.id, it.id)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-zinc-400 hover:bg-white/10"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line-1 bg-surface-1 text-text-2 hover:bg-surface-2"
                           aria-label={`Remove ${it.name || "item"}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -594,12 +594,12 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                       <button
                         type="button"
                         onClick={() => addItem(cat.id)}
-                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-purple-500/15 bg-purple-500/5 px-3 py-1 text-xs font-medium text-purple-300 hover:bg-purple-500/10"
+                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-line-1 bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:bg-surface-2"
                       >
                         <Plus className="h-3 w-3" /> Add Assessment Item
                       </button>
                       {cat.items.length > 0 && (
-                        <span className={`text-xs ${balanced ? "text-emerald-300/80" : "text-purple-300/40"}`}>
+                        <span className={`text-xs ${balanced ? "text-success" : "text-text-3"}`}>
                           Items add up to {sum} (weight {weight}%)
                         </span>
                       )}
@@ -615,9 +615,9 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       {/* Tab 2 — Behavioural & psychomotor traits */}
       {activeTab === "traits" && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-white">Student traits</h3>
-            <p className="mt-1 text-xs text-purple-300/50">
+          <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-text-1">Student traits</h3>
+            <p className="mt-1 text-xs text-text-3">
               These appear on the report sheet just like the physical report. Add your own or remove any you don&apos;t use.
             </p>
 
@@ -634,31 +634,31 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                 placeholder="Add a trait, e.g. Team Spirit"
                 className={`${inputClass} h-9 flex-1`}
               />
-              <Button type="button" onClick={addTrait} size="sm" className="rounded-full bg-purple-600 text-white hover:bg-purple-500">
+              <Button type="button" onClick={addTrait} size="sm" className="rounded-full bg-accent text-accent-fg hover:bg-accent-hover">
                 <Plus className="h-3.5 w-3.5" /> Add
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {traits.map((t) => (
-                <span key={t} className="inline-flex items-center gap-1 rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-medium text-purple-200">
+                <span key={t} className="inline-flex items-center gap-1 rounded-full border border-line-1 bg-surface-1 px-2.5 py-1 text-xs font-medium text-text-2">
                   {t}
                   <button
                     type="button"
                     onClick={() => setTraits((p) => p.filter((x) => x !== t))}
-                    className="ml-1 rounded-full bg-white/10 p-0.5 hover:bg-white/20"
+                    className="ml-1 rounded-full bg-surface-1 p-0.5 hover:bg-surface-2"
                     aria-label={`Remove ${t}`}
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </span>
               ))}
-              {traits.length === 0 && <span className="text-xs text-purple-300/30">No traits yet — add your first one above.</span>}
+              {traits.length === 0 && <span className="text-xs text-text-3">No traits yet — add your first one above.</span>}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-white">Rating scale</h3>
-            <p className="mt-1 text-xs text-purple-300/50">
+          <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-text-1">Rating scale</h3>
+            <p className="mt-1 text-xs text-text-3">
               Staff grade each trait with these ratings. Give every grade a clear meaning.
             </p>
 
@@ -676,20 +676,20 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                     placeholder="A"
                     maxLength={2}
                     aria-label="Grade letter"
-                    className="h-9 w-16 rounded-lg border border-purple-800/30 bg-purple-950/20 px-2 text-center text-sm font-semibold text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none"
+                    className="h-9 w-16 rounded-lg border border-line-1 bg-surface-3 px-2 text-center text-sm font-semibold text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                   />
-                  <span className="text-sm text-purple-300/50">=</span>
+                  <span className="text-sm text-text-3">=</span>
                   <input
                     value={g.label}
                     onChange={(e) => setGrades((prev) => prev.map((x) => (x.id === g.id ? { ...x, label: e.target.value } : x)))}
                     placeholder="Excellent"
                     aria-label={`Meaning of grade ${g.grade || "rating"}`}
-                    className="flex h-9 flex-1 rounded-lg border border-purple-800/30 bg-purple-950/20 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none"
+                    className="flex h-9 flex-1 rounded-lg border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setGrades((prev) => prev.filter((x) => x.id !== g.id))}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-zinc-400 hover:bg-white/10"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-1 bg-surface-1 text-text-2 hover:bg-surface-2"
                     aria-label={`Remove grade ${g.grade || "rating"}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -726,7 +726,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                 aria-label="New grade meaning"
                 className={`${inputClass} h-9 flex-1`}
               />
-              <Button type="button" onClick={addGrade} size="sm" variant="outline" className="rounded-full border-purple-500/20">
+              <Button type="button" onClick={addGrade} size="sm" variant="outline" className="rounded-full border-line-1">
                 <Plus className="h-3.5 w-3.5" /> Add Rating
               </Button>
             </div>
@@ -735,8 +735,8 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
       )}
 
       {/* Plain-language summary */}
-      <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-4 text-xs leading-6 text-purple-200/70">
-        <span className="font-semibold text-white">{templateName.trim() || "Your template"}</span>
+      <div className="rounded-xl border border-line-1 bg-surface-1 p-4 text-xs leading-6 text-text-2">
+        <span className="font-semibold text-text-1">{templateName.trim() || "Your template"}</span>
         {" — "}
         {categories.length} scoring section{categories.length === 1 ? "" : "s"} ({totalWeight}% total) • {itemCount} assessment item{itemCount === 1 ? "" : "s"} • {traits.length} trait{traits.length === 1 ? "" : "s"} • Ratings: {grades.map((g) => g.grade || "–").join(", ") || "none yet"}
         {appliesTo.length > 0 ? ` • Classes: ${appliesTo.join(", ")}` : " • All classes"}
@@ -744,7 +744,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
 
       {/* Errors / success */}
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -754,7 +754,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
         <Button
           type="submit"
           disabled={submitting || !weightOk}
-          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+          className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-50"
           size="lg"
         >
           {submitting ? (
@@ -767,7 +767,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
             </>
           )}
         </Button>
-        <p className="mt-2 text-center text-xs text-purple-300/40">
+        <p className="mt-2 text-center text-xs text-text-3">
           This template will be saved for {schoolName || tenantId} and used on every report card.
         </p>
       </div>

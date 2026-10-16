@@ -54,14 +54,14 @@ export default function SuperadminSidebar({ onNavigate }: Props) {
   }
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-purple-500/20 bg-[#0B0514]/90 backdrop-blur-md">
-      <div className="flex items-center gap-2.5 border-b border-purple-500/20 px-5 py-5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-          <ShieldCheck className="h-5 w-5 text-purple-300" />
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line-1 bg-surface-0/90 backdrop-blur-md">
+      <div className="flex items-center gap-2.5 border-b border-line-1 px-5 py-5">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-line-1 bg-surface-1">
+          <ShieldCheck className="h-5 w-5 text-accent" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight text-white">ResultApp</p>
-          <p className="text-xs text-purple-300/50">Command Center</p>
+          <p className="truncate text-sm font-semibold tracking-tight text-text-1">ResultApp</p>
+          <p className="text-xs text-text-3">Command Center</p>
         </div>
       </div>
 
@@ -76,8 +76,8 @@ export default function SuperadminSidebar({ onNavigate }: Props) {
               onClick={onNavigate}
               className={
                 active
-                  ? "flex items-center gap-3 rounded-lg border-r-2 border-purple-500 bg-purple-600/20 px-3 py-2.5 text-sm font-medium text-purple-300"
-                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                  ? "flex items-center gap-3 rounded-lg border-r-2 border-accent bg-accent-soft px-3 py-2.5 text-sm font-medium text-accent"
+                  : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               }
             >
               <Icon className="h-5 w-5 shrink-0" />
@@ -87,11 +87,11 @@ export default function SuperadminSidebar({ onNavigate }: Props) {
         })}
       </nav>
 
-      <div className="border-t border-purple-500/20 p-4">
+      <div className="border-t border-line-1 p-4">
         <button
           type="button"
           onClick={() => void handleSignOut()}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-2 transition hover:bg-surface-2 hover:text-text-1"
         >
           <LogOut className="h-4 w-4" /> Sign out
         </button>

@@ -66,11 +66,11 @@ interface WaiverToken {
 const LIMIT = 20;
 
 const STATUS_STYLE: Record<TokenStatus, string> = {
-  open: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
-  reserved: "bg-amber-500/15 text-amber-300 border-amber-500/25",
-  consumed: "bg-purple-500/15 text-purple-300 border-purple-500/25",
-  voided: "bg-zinc-500/15 text-zinc-400 border-zinc-500/25",
-  expired: "bg-zinc-500/15 text-zinc-500 border-zinc-500/20",
+  open: "bg-success-soft text-success border-success/40",
+  reserved: "bg-warning-soft text-warning border-warning/30",
+  consumed: "bg-accent-soft text-accent border-line-1",
+  voided: "bg-surface-2 text-text-2 border-line-1",
+  expired: "bg-surface-2 text-text-3 border-line-1",
 };
 
 /**
@@ -260,12 +260,12 @@ export default function SuperadminWaiversPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
           <Ticket className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Waiver Tokens</h1>
-          <p className="text-sm text-purple-200/60">
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">Waiver Tokens</h1>
+          <p className="text-sm text-text-2">
             Single-use discount codes for slot purchases
           </p>
         </div>
@@ -275,16 +275,16 @@ export default function SuperadminWaiversPage() {
       {/* COPY ONCE — rendered before anything else so it cannot be missed */}
       {/* ================================================================= */}
       {issued && (
-        <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-emerald-200">
+        <div className="mt-6 rounded-2xl border border-success/40 bg-success-soft p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-success">
             <ShieldCheck className="h-4 w-4" />
             Copy this code now — it cannot be shown again
           </h2>
-          <p className="mt-1 text-xs text-emerald-100/60">
+          <p className="mt-1 text-xs text-success">
             Only a SHA-256 hash is stored. Nobody, including you, can recover this code later.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="select-all rounded-xl border border-emerald-500/30 bg-black/30 px-4 py-3 font-mono text-sm text-emerald-100">
+            <code className="select-all rounded-xl border border-success/40 bg-black/30 px-4 py-3 font-mono text-sm text-success">
               {issued.token_string}
             </code>
             <button
@@ -297,7 +297,7 @@ export default function SuperadminWaiversPage() {
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          <p className="mt-3 text-xs text-emerald-100/70">
+          <p className="mt-3 text-xs text-success">
             Worth up to {formatNaira(issued.notional_ngn)} when fully redeemed.
           </p>
           <button
@@ -305,7 +305,7 @@ export default function SuperadminWaiversPage() {
             onClick={() => setIssued(null)}
             disabled={!copied}
             title={copied ? undefined : "Copy the code before dismissing"}
-            className="mt-4 inline-flex min-h-[44px] items-center rounded-full border border-emerald-500/30 px-5 text-sm text-emerald-100 hover:bg-emerald-500/10 disabled:opacity-40"
+            className="mt-4 inline-flex min-h-[44px] items-center rounded-full border border-success/40 px-5 text-sm text-success hover:bg-success-soft disabled:opacity-40"
           >
             {copied ? "Done — create another" : "Copy the code first"}
           </button>
@@ -315,11 +315,11 @@ export default function SuperadminWaiversPage() {
       {/* ================================================================= */}
       {/* GENERATOR                                                          */}
       {/* ================================================================= */}
-      <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
-        <h2 className="text-sm font-semibold text-white">Generate a token</h2>
+      <div className="mt-4 rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur">
+        <h2 className="text-sm font-semibold text-text-1">Generate a token</h2>
 
         {formError && (
-          <div className="mt-3 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          <div className="mt-3 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{formError}</span>
           </div>
@@ -327,17 +327,17 @@ export default function SuperadminWaiversPage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-purple-100">Applies to</span>
+            <span className="text-sm font-medium text-text-1">Applies to</span>
             <select
               value={appliesTo}
               onChange={(e) => setAppliesTo(e.target.value as AppliesTo)}
-              className="h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-purple-50 focus:border-purple-500 focus:outline-none"
+              className="h-10 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 focus:border-accent focus:outline-none"
             >
               <option value="BOTH">Registration and top-ups</option>
               <option value="REGISTRATION">Registration only</option>
               <option value="TOPUP">Top-ups only</option>
             </select>
-            <p className="text-xs text-purple-300/50">
+            <p className="text-xs text-text-3">
               {appliesTo === "TOPUP"
                 ? "Top-ups have no minimum, so any allowance from 1 is valid."
                 : `Registration has a ${MIN_REGISTRATION_STUDENTS}-slot floor, so the allowance must be at least ${bounds.min} — below that the code would fail validation at checkout, after the buyer entered their card details.`}
@@ -345,7 +345,7 @@ export default function SuperadminWaiversPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="waiver-pct" className="text-sm font-medium text-purple-100">
+            <label htmlFor="waiver-pct" className="text-sm font-medium text-text-1">
               Discount
             </label>
             <div className="flex items-center gap-2">
@@ -358,8 +358,8 @@ export default function SuperadminWaiversPage() {
                   className={cn(
                     "min-h-[44px] rounded-full border px-4 text-xs font-medium transition",
                     pct === p
-                      ? "border-purple-500 bg-purple-600 text-white"
-                      : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30",
+                      ? "border-accent bg-accent text-accent-fg"
+                      : "border-line-1 bg-surface-1 text-text-2 hover:border-line-1",
                   )}
                 >
                   {p}%
@@ -372,13 +372,13 @@ export default function SuperadminWaiversPage() {
                 max={100}
                 value={pct}
                 onChange={(e) => setPct(Math.min(100, Math.max(1, Number(e.target.value) || 0)))}
-                className="w-24 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                className="w-24 rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 focus:border-accent focus:outline-none"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="waiver-allowance" className="text-sm font-medium text-purple-100">
+            <label htmlFor="waiver-allowance" className="text-sm font-medium text-text-1">
               Slot allowance
             </label>
             <input
@@ -388,15 +388,15 @@ export default function SuperadminWaiversPage() {
               max={bounds.max}
               value={allowance}
               onChange={(e) => setAllowance(Number(e.target.value) || 0)}
-              className="h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white focus:border-purple-500 focus:outline-none"
+              className="h-10 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 focus:border-accent focus:outline-none"
             />
-            <p className="text-xs text-purple-300/50">
+            <p className="text-xs text-text-3">
               Between {bounds.min} and {bounds.max.toLocaleString()} slots.
             </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="waiver-ttl" className="text-sm font-medium text-purple-100">
+            <label htmlFor="waiver-ttl" className="text-sm font-medium text-text-1">
               Valid for (days)
             </label>
             <input
@@ -406,12 +406,12 @@ export default function SuperadminWaiversPage() {
               max={365}
               value={ttlDays}
               onChange={(e) => setTtlDays(Math.min(365, Math.max(1, Number(e.target.value) || 1)))}
-              className="h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white focus:border-purple-500 focus:outline-none"
+              className="h-10 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 focus:border-accent focus:outline-none"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="waiver-locked" className="text-sm font-medium text-purple-100">
+            <label htmlFor="waiver-locked" className="text-sm font-medium text-text-1">
               Lock to a school (optional)
             </label>
             <input
@@ -420,15 +420,15 @@ export default function SuperadminWaiversPage() {
               placeholder="e.g. victoryhigh"
               value={lockedTo}
               onChange={(e) => setLockedTo(e.target.value.toLowerCase())}
-              className="h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none"
+              className="h-10 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
             />
-            <p className="text-xs text-purple-300/50">
+            <p className="text-xs text-text-3">
               Leave blank to let any school redeem it.
             </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="waiver-note" className="text-sm font-medium text-purple-100">
+            <label htmlFor="waiver-note" className="text-sm font-medium text-text-1">
               Note (optional)
             </label>
             <input
@@ -437,18 +437,18 @@ export default function SuperadminWaiversPage() {
               placeholder="Why was this issued?"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none"
+              className="h-10 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
             />
           </div>
         </div>
 
         {/* --- Suspension restore: off by default, and it must be. -------- */}
-        <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-purple-500/15 bg-purple-900/10 p-3">
+        <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-line-1 bg-surface-1 p-3">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-purple-100">
+            <p className="text-xs font-medium text-text-1">
               Lift a non-payment suspension when redeemed
             </p>
-            <p className="mt-0.5 text-xs text-purple-200/60">
+            <p className="mt-0.5 text-xs text-text-2">
               Off by default. A waiver is not a payment, so redeeming one should not
               restore a school that was cut off for not paying. An &ldquo;abuse&rdquo;
               or &ldquo;legal&rdquo; suspension can never be lifted by this, or by paying.
@@ -476,22 +476,22 @@ export default function SuperadminWaiversPage() {
         </div>
 
         {/* --- Valuation ---------------------------------------------------- */}
-        <div className="mt-4 rounded-xl border border-purple-500/20 bg-purple-900/[0.06] p-4">
-          <p className="flex items-center gap-2 text-xs font-medium text-purple-200">
+        <div className="mt-4 rounded-xl border border-line-1 bg-surface-1 p-4">
+          <p className="flex items-center gap-2 text-xs font-medium text-text-2">
             <Info className="h-3.5 w-3.5" />
             What this gives away
           </p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+          <p className="mt-2 text-2xl font-bold tracking-tight text-text-1">
             {formatNaira(valuation.worth)}
           </p>
-          <p className="mt-1 text-xs text-purple-200/60">
+          <p className="mt-1 text-xs text-text-2">
             {pct}% of {allowance.toLocaleString()} slots at{" "}
             {formatNaira(valuation.unit)} per slot
             {valuation.tier.badge ? ` — ${valuation.tier.badge}` : ""}.
           </p>
 
           {valuation.nextBoundary && (
-            <p className="mt-2 text-xs text-amber-200/90">
+            <p className="mt-2 text-xs text-warning">
               Heads up: {valuation.nextBoundary.toLocaleString()} slots crosses into the next
               volume tier. A code for {valuation.nextBoundary.toLocaleString()} slots is worth
               less than this one at the same percentage — the price per slot drops.
@@ -499,14 +499,14 @@ export default function SuperadminWaiversPage() {
           )}
 
           {allowance < SLIDER_FLOOR && appliesTo !== "REGISTRATION" && (
-            <p className="mt-2 text-xs text-amber-200/90">
+            <p className="mt-2 text-xs text-warning">
               Below {SLIDER_FLOOR} slots the top-up slider cannot reach this allowance, so a
               buyer will have to type the number instead of dragging it. The code is still
               valid.
             </p>
           )}
 
-          <p className="mt-3 text-xs text-purple-300/50">
+          <p className="mt-3 text-xs text-text-3">
             If the buyer takes fewer slots than the allowance, the token is consumed anyway and
             the remainder is permanently forfeited.
           </p>
@@ -516,7 +516,7 @@ export default function SuperadminWaiversPage() {
           type="button"
           onClick={() => void handleMint()}
           disabled={minting || !canMint}
-          className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full bg-purple-600 px-6 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+          className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
         >
           {minting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Generate token
@@ -537,14 +537,14 @@ export default function SuperadminWaiversPage() {
         school "paid nothing and got no portal", and useful as a smoke test that
         the cron is actually working after a deploy.
       */}
-      <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
+      <div className="mt-4 rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-text-1">
               <ShieldCheck className="h-4 w-4 text-cyan-300" />
               Abandoned waiver registrations
             </h2>
-            <p className="mt-1 text-xs text-purple-200/60">
+            <p className="mt-1 text-xs text-text-2">
               Fully-waived registrations whose browser never finished. The cron
               recovers these automatically after {3} minutes; this runs it now.
             </p>
@@ -553,7 +553,7 @@ export default function SuperadminWaiversPage() {
             type="button"
             onClick={() => void runSweep()}
             disabled={sweeping}
-            className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-purple-500/25 px-5 text-sm text-purple-200 hover:bg-purple-500/10 disabled:opacity-50"
+            className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-line-1 px-5 text-sm text-text-2 hover:bg-surface-2 disabled:opacity-50"
           >
             {sweeping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Recover now
@@ -564,8 +564,8 @@ export default function SuperadminWaiversPage() {
           <div
             className={`mt-4 rounded-xl border p-3 text-xs ${
               sweepResult.recovered > 0
-                ? "border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-100"
-                : "border-purple-500/15 bg-purple-900/20 text-purple-200"
+                ? "border-success/40 bg-success-soft text-success"
+                : "border-line-1 bg-surface-1 text-text-2"
             }`}
           >
             <p className="font-medium">
@@ -573,7 +573,7 @@ export default function SuperadminWaiversPage() {
               {sweepResult.already_done > 0 && ` · ${sweepResult.already_done} already completed`}
             </p>
             {sweepResult.orphans.length > 0 && (
-              <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-purple-200/70">
+              <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-text-2">
                 {sweepResult.orphans.map((o) => (
                   <li key={o.tx_ref}>
                     {o.subdomain} — {o.outcome}
@@ -583,7 +583,7 @@ export default function SuperadminWaiversPage() {
               </ul>
             )}
             {sweepResult.scanned === 0 && (
-              <p className="mt-1 text-purple-300/50">
+              <p className="mt-1 text-text-3">
                 Nothing to recover — every fully-waived registration completed normally.
               </p>
             )}
@@ -595,8 +595,8 @@ export default function SuperadminWaiversPage() {
       {/* AUDIT                                                              */}
       {/* ================================================================= */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-white">
-          Issued tokens <span className="text-purple-300/50">({total})</span>
+        <h2 className="text-sm font-semibold text-text-1">
+          Issued tokens <span className="text-text-3">({total})</span>
         </h2>
         <select
           value={status}
@@ -605,7 +605,7 @@ export default function SuperadminWaiversPage() {
             setPage(1);
           }}
           aria-label="Filter by status"
-          className="h-9 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-purple-50 focus:border-purple-500 focus:outline-none"
+          className="h-9 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 focus:border-accent focus:outline-none"
         >
           <option value="all">All statuses</option>
           <option value="open">Open</option>
@@ -617,16 +617,16 @@ export default function SuperadminWaiversPage() {
       </div>
 
       {listError && (
-        <div className="mt-3 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-3 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{listError}</span>
         </div>
       )}
 
-      <div className="mt-3 overflow-hidden rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] backdrop-blur">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-line-1 bg-surface-1 backdrop-blur">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-purple-500/10 text-left text-xs text-purple-300/60">
+            <tr className="border-b border-line-1 text-left text-xs text-text-2">
               <th className="px-4 py-3 font-medium">Code</th>
               <th className="px-4 py-3 font-medium">Terms</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -639,28 +639,28 @@ export default function SuperadminWaiversPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-purple-300/60">
+                <td colSpan={7} className="px-4 py-10 text-center text-text-2">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                 </td>
               </tr>
             )}
             {!loading && tokens.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-purple-300/60">
+                <td colSpan={7} className="px-4 py-10 text-center text-text-2">
                   No waiver tokens yet.
                 </td>
               </tr>
             )}
             {tokens.map((t) => (
-              <tr key={t.id} className="border-b border-purple-500/5 last:border-0">
-                <td className="px-4 py-3 font-mono text-xs text-purple-200/80">
+              <tr key={t.id} className="border-b border-line-1 last:border-0">
+                <td className="px-4 py-3 font-mono text-xs text-text-2">
                   {t.token_prefix}…{t.token_fingerprint}
                 </td>
-                <td className="px-4 py-3 text-purple-100">
+                <td className="px-4 py-3 text-text-1">
                   {t.discount_percentage}% · {t.slot_allowance.toLocaleString()} slots
-                  <span className="ml-1.5 text-xs text-purple-300/50">{t.applies_to}</span>
+                  <span className="ml-1.5 text-xs text-text-3">{t.applies_to}</span>
                   {t.locked_to_tenant && (
-                    <span className="ml-1.5 text-xs text-amber-300/70">
+                    <span className="ml-1.5 text-xs text-warning">
                       → {t.locked_to_tenant}
                     </span>
                   )}
@@ -675,26 +675,26 @@ export default function SuperadminWaiversPage() {
                     {t.status}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-purple-200/80">
-                  {t.used_by_tenant ?? <span className="text-purple-300/30">—</span>}
+                <td className="px-4 py-3 text-text-2">
+                  {t.used_by_tenant ?? <span className="text-text-3">—</span>}
                 </td>
-                <td className="px-4 py-3 text-xs text-purple-200/70">
+                <td className="px-4 py-3 text-xs text-text-2">
                   {t.status === "consumed" ? (
                     <>
-                      <span className="text-emerald-300">
+                      <span className="text-success">
                         {t.slots_waived} waived · {formatNaira(t.discount_ngn ?? 0)} off
                       </span>
                       {(t.slots_forfeited ?? 0) > 0 && (
-                        <span className="ml-1 text-amber-300">
+                        <span className="ml-1 text-warning">
                           · {t.slots_forfeited} forfeited
                         </span>
                       )}
                     </>
                   ) : (
-                    <span className="text-purple-300/30">—</span>
+                    <span className="text-text-3">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-xs text-purple-300/60">
+                <td className="px-4 py-3 text-xs text-text-2">
                   <div>{t.created_by}</div>
                   <div>{new Date(t.created_at).toLocaleDateString()}</div>
                 </td>
@@ -706,7 +706,7 @@ export default function SuperadminWaiversPage() {
                       disabled={voiding === t.id}
                       aria-label={`Cancel token ${t.id}`}
                       title="Cancel this unspent token"
-                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-red-500/25 px-3 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-danger/30 px-3 text-xs text-danger hover:bg-danger-soft disabled:opacity-50"
                     >
                       {voiding === t.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -729,18 +729,18 @@ export default function SuperadminWaiversPage() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="min-h-[44px] rounded-full border border-purple-500/25 px-4 text-sm text-purple-200 disabled:opacity-40"
+            className="min-h-[44px] rounded-full border border-line-1 px-4 text-sm text-text-2 disabled:opacity-40"
           >
             Previous
           </button>
-          <span className="text-xs text-purple-300/60">
+          <span className="text-xs text-text-2">
             Page {page} of {Math.ceil(total / LIMIT)}
           </span>
           <button
             type="button"
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= Math.ceil(total / LIMIT)}
-            className="min-h-[44px] rounded-full border border-purple-500/25 px-4 text-sm text-purple-200 disabled:opacity-40"
+            className="min-h-[44px] rounded-full border border-line-1 px-4 text-sm text-text-2 disabled:opacity-40"
           >
             Next
           </button>

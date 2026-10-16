@@ -48,7 +48,7 @@ export default function ComposeAnnouncementModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="ann-type" className="mb-1 block text-sm font-medium text-zinc-200">
+          <label htmlFor="ann-type" className="mb-1 block text-sm font-medium text-text-1">
             Type
           </label>
           <Select
@@ -60,7 +60,7 @@ export default function ComposeAnnouncementModal({
           />
         </div>
         <div>
-          <label htmlFor="ann-title" className="mb-1 block text-sm font-medium text-zinc-200">
+          <label htmlFor="ann-title" className="mb-1 block text-sm font-medium text-text-1">
             Title
           </label>
           <input
@@ -70,11 +70,11 @@ export default function ComposeAnnouncementModal({
             required
             maxLength={200}
             placeholder="Staff Briefing"
-            className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-lg border border-line-1 bg-surface-0 px-3 py-2.5 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
           />
         </div>
         <div>
-          <label htmlFor="ann-message" className="mb-1 block text-sm font-medium text-zinc-200">
+          <label htmlFor="ann-message" className="mb-1 block text-sm font-medium text-text-1">
             Message
           </label>
           <textarea
@@ -85,14 +85,14 @@ export default function ComposeAnnouncementModal({
             maxLength={2000}
             rows={5}
             placeholder="All teachers should…"
-            className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-lg border border-line-1 bg-surface-0 px-3 py-2.5 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
           />
         </div>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-lg px-4 py-2 text-sm text-zinc-400 transition hover:text-white"
+            className="rounded-lg px-4 py-2 text-sm text-text-2 transition hover:text-text-1"
           >
             Cancel
           </button>

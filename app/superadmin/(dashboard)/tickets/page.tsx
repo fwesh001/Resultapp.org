@@ -28,20 +28,20 @@ const STATUSES: Array<TicketStatus | "all"> = ["all", "open", "in_progress", "re
 const TYPES: Array<TicketType | "all"> = ["all", "bug", "feedback"];
 
 const STATUS_BADGE: Record<TicketStatus, string> = {
-  open: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  open: "bg-warning-soft text-warning border-warning/30",
   in_progress: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-  resolved: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  resolved: "bg-success-soft text-success border-success/40",
 };
 
 const TYPE_BADGE: Record<TicketType, string> = {
-  bug: "bg-red-500/15 text-red-300 border-red-500/30",
-  feedback: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+  bug: "bg-danger-soft text-danger border-danger/30",
+  feedback: "bg-accent-soft text-accent border-line-1",
 };
 
 const KIND_BADGE: Record<SupportTicket["submitter_kind"], string> = {
   admin: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-  staff: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
-  anonymous: "bg-zinc-700/40 text-zinc-400 border-zinc-600/40",
+  staff: "bg-surface-2 text-text-2 border-line-1",
+  anonymous: "bg-surface-2 text-text-2 border-line-1",
 };
 
 const NEXT_STATUS: Record<TicketStatus, TicketStatus> = {
@@ -159,12 +159,12 @@ export default function TicketsPage() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-purple-500/20 bg-purple-900/20">
-            <LifeBuoy className="h-5 w-5 text-purple-300" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-line-1 bg-surface-1">
+            <LifeBuoy className="h-5 w-5 text-accent" />
           </span>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-white">Support Tickets</h1>
-            <p className="text-sm text-zinc-400">
+            <h1 className="text-xl font-semibold tracking-tight text-text-1">Support Tickets</h1>
+            <p className="text-sm text-text-2">
               Bug reports and feedback from every tenant, newest first.
             </p>
           </div>
@@ -172,16 +172,16 @@ export default function TicketsPage() {
         <button
           type="button"
           onClick={() => void load()}
-          className="inline-flex items-center gap-2 rounded-lg border border-purple-500/30 px-3 py-2 text-sm text-purple-200 transition hover:bg-purple-900/30"
+          className="inline-flex items-center gap-2 rounded-lg border border-line-1 px-3 py-2 text-sm text-text-2 transition hover:bg-surface-2"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-purple-500/20 bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line-1 bg-surface-2 p-4">
         <div>
-          <label htmlFor="f-status" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <label htmlFor="f-status" className="mb-1 block text-xs font-medium uppercase tracking-wide text-text-2">
             Status
           </label>
 <Select
@@ -193,7 +193,7 @@ export default function TicketsPage() {
             />
         </div>
         <div>
-          <label htmlFor="f-type" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <label htmlFor="f-type" className="mb-1 block text-xs font-medium uppercase tracking-wide text-text-2">
             Type
           </label>
           <Select
@@ -208,23 +208,23 @@ export default function TicketsPage() {
           className="flex-1"
           onSubmit={(e) => { e.preventDefault(); resetToFirstPage(); setQuery(search); }}
         >
-          <label htmlFor="f-search" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <label htmlFor="f-search" className="mb-1 block text-xs font-medium uppercase tracking-wide text-text-2">
             Search email, tenant or message
           </label>
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
               <input
                 id="f-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="vhs, a@school.org, timeout…"
-                className="w-full rounded-lg border border-purple-500/20 bg-[#0B0514] py-2 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 focus:border-purple-500 focus:outline-none"
+                className="w-full rounded-lg border border-line-1 bg-surface-0 py-2 pl-9 pr-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
               />
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-500"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg transition hover:bg-accent-hover"
             >
               Search
             </button>
@@ -233,20 +233,20 @@ export default function TicketsPage() {
       </div>
 
       {error && (
-        <p role="alert" className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </p>
       )}
 
       {loading ? (
-        <p className="flex items-center gap-2 text-sm text-zinc-400">
+        <p className="flex items-center gap-2 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading tickets…
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-purple-500/20">
+        <div className="overflow-x-auto rounded-xl border border-line-1">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
-              <tr className="border-b border-purple-500/20 bg-white/[0.02] text-xs uppercase tracking-wide text-zinc-400">
+              <tr className="border-b border-line-1 bg-surface-2 text-xs uppercase tracking-wide text-text-2">
                 <th className="w-10 px-4 py-3"><span className="sr-only">Expand</span></th>
                 <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Summary</th>
@@ -264,14 +264,14 @@ export default function TicketsPage() {
                 const rating = typeof t.payload.rating === "number" ? t.payload.rating : null;
                 return (
                   <Fragment key={t.id}>
-                    <tr className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
+                    <tr className="border-b border-line-1 last:border-0 hover:bg-surface-2">
                       <td className="px-4 py-3">
                         <button
                           type="button"
                           onClick={() => setExpanded(isOpen ? null : t.id)}
                           aria-expanded={isOpen}
                           aria-label={isOpen ? "Hide details" : "Show details"}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/5 hover:text-white"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-text-2 transition hover:bg-surface-2 hover:text-text-1"
                         >
                           {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </button>
@@ -281,36 +281,36 @@ export default function TicketsPage() {
                           {t.type}
                         </span>
                       </td>
-                      <td className="max-w-[320px] px-4 py-3 text-zinc-300">
-                        <span className="line-clamp-2">{summaryOf(t) || <span className="text-zinc-600">—</span>}</span>
+                      <td className="max-w-[320px] px-4 py-3 text-text-2">
+                        <span className="line-clamp-2">{summaryOf(t) || <span className="text-text-3">—</span>}</span>
                         <span className="mt-1 flex items-center gap-2">
                           {shot && (
-                            <span className="inline-flex items-center gap-1 text-xs text-purple-300">
+                            <span className="inline-flex items-center gap-1 text-xs text-accent">
                               <Paperclip className="h-3 w-3" /> file
                             </span>
                           )}
                           {rating !== null && (
-                            <span className="inline-flex items-center gap-0.5 text-xs text-amber-300">
+                            <span className="inline-flex items-center gap-0.5 text-xs text-warning">
                               <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {rating}/5
                             </span>
                           )}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-zinc-300">{t.submitter_email || <span className="text-zinc-600">—</span>}</div>
+                        <div className="text-text-2">{t.submitter_email || <span className="text-text-3">—</span>}</div>
                         <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs ${KIND_BADGE[t.submitter_kind]}`}>
                           {t.submitter_kind}{t.submitter_role ? ` · ${t.submitter_role}` : ""}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">
-                        {t.tenant_id || <span className="font-sans text-zinc-600">anonymous</span>}
+                        {t.tenant_id || <span className="font-sans text-text-3">anonymous</span>}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs ${STATUS_BADGE[t.status]}`}>
                           {t.status.replace("_", " ")}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-zinc-400" title={new Date(t.created_at).toLocaleString()}>
+                      <td className="px-4 py-3 text-xs text-text-2" title={new Date(t.created_at).toLocaleString()}>
                         {relativeTime(t.created_at)}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -318,7 +318,7 @@ export default function TicketsPage() {
                           type="button"
                           onClick={() => void advance(t)}
                           disabled={busyId === t.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 px-3 py-1.5 text-xs text-purple-200 transition hover:bg-purple-900/30 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line-1 px-3 py-1.5 text-xs text-text-2 transition hover:bg-surface-2 disabled:opacity-50"
                         >
                           {busyId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                           {ACTION_LABEL[t.status]}
@@ -326,23 +326,23 @@ export default function TicketsPage() {
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr className="border-b border-white/5 bg-black/20">
+                      <tr className="border-b border-line-1 bg-surface-2">
                         <td colSpan={8} className="px-6 py-5">
                           <dl className="grid gap-5 md:grid-cols-2">
                             <div>
-                              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                              <dt className="text-xs font-medium uppercase tracking-wide text-text-3">
                                 {t.type === "bug" ? "What happened?" : "Idea"}
                               </dt>
-                              <dd className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">
+                              <dd className="mt-1 whitespace-pre-wrap text-sm text-text-1">
                                 {summaryOf(t) || "—"}
                               </dd>
                             </div>
                             {t.type === "bug" && (
                               <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                                <dt className="text-xs font-medium uppercase tracking-wide text-text-3">
                                   What did you expect?
                                 </dt>
-                                <dd className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">
+                                <dd className="mt-1 whitespace-pre-wrap text-sm text-text-1">
                                   {detailOf(t) || "—"}
                                 </dd>
                               </div>
@@ -355,29 +355,29 @@ export default function TicketsPage() {
                                 href={shot}
                                 target="_blank"
                                 rel="noreferrer noopener"
-                                className="inline-flex items-center gap-1.5 text-sm text-purple-300 underline underline-offset-4 hover:text-purple-200"
+                                className="inline-flex items-center gap-1.5 text-sm text-accent underline underline-offset-4 hover:text-accent-hover"
                               >
                                 <Paperclip className="h-4 w-4" /> View attachment
                               </a>
                             </p>
                           )}
 
-                          <dl className="mt-5 grid gap-x-8 gap-y-2 text-xs text-zinc-500 sm:grid-cols-2">
-                            <div><span className="text-zinc-600">Ticket:</span> <span className="font-mono">{t.id}</span></div>
-                            <div><span className="text-zinc-600">Created:</span> {new Date(t.created_at).toLocaleString()}</div>
+                          <dl className="mt-5 grid gap-x-8 gap-y-2 text-xs text-text-3 sm:grid-cols-2">
+                            <div><span className="text-text-3">Ticket:</span> <span className="font-mono">{t.id}</span></div>
+                            <div><span className="text-text-3">Created:</span> {new Date(t.created_at).toLocaleString()}</div>
                             {t.submitter_id && (
-                              <div><span className="text-zinc-600">Submitter ID:</span> <span className="font-mono">{t.submitter_id}</span></div>
+                              <div><span className="text-text-3">Submitter ID:</span> <span className="font-mono">{t.submitter_id}</span></div>
                             )}
                             {t.resolved_at && (
                               <div>
-                                <span className="text-zinc-600">Resolved:</span> {new Date(t.resolved_at).toLocaleString()}
+                                <span className="text-text-3">Resolved:</span> {new Date(t.resolved_at).toLocaleString()}
                                 {t.resolved_by ? ` by ${t.resolved_by}` : ""}
                               </div>
                             )}
                           </dl>
 
                           {t.resolution_note && (
-                            <p className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-200">
+                            <p className="mt-4 rounded-lg border border-success/40 bg-success-soft px-3 py-2 text-sm text-success">
                               {t.resolution_note}
                             </p>
                           )}
@@ -389,7 +389,7 @@ export default function TicketsPage() {
               })}
               {tickets.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-text-3">
                     No tickets match these filters.
                   </td>
                 </tr>
@@ -400,7 +400,7 @@ export default function TicketsPage() {
       )}
 
       {total > LIMIT && (
-        <div className="flex items-center justify-between text-sm text-zinc-400">
+        <div className="flex items-center justify-between text-sm text-text-2">
           <span>
             Page {page} of {maxPage} · {total} ticket{total === 1 ? "" : "s"}
           </span>
@@ -409,7 +409,7 @@ export default function TicketsPage() {
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="rounded-lg border border-purple-500/30 px-3 py-1.5 transition hover:bg-purple-900/30 disabled:opacity-40"
+              className="rounded-lg border border-line-1 px-3 py-1.5 transition hover:bg-surface-2 disabled:opacity-40"
             >
               Previous
             </button>
@@ -417,7 +417,7 @@ export default function TicketsPage() {
               type="button"
               onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
               disabled={page >= maxPage}
-              className="rounded-lg border border-purple-500/30 px-3 py-1.5 transition hover:bg-purple-900/30 disabled:opacity-40"
+              className="rounded-lg border border-line-1 px-3 py-1.5 transition hover:bg-surface-2 disabled:opacity-40"
             >
               Next
             </button>

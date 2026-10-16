@@ -41,13 +41,13 @@ const TOKEN_FILTERS = ["all", "CREDIT", "SLOT"] as const;
  * nobody can reconcile "the ledger says +500 slots, where did the revenue go".
  */
 const TYPE_BADGE: Record<string, string> = {
-  SLOT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  CREDIT_PURCHASE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  SLOT_PURCHASE: "border-success/40 bg-success-soft text-success",
+  CREDIT_PURCHASE: "border-success/40 bg-success-soft text-success",
   SLOT_WAIVER: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300",
   INITIAL_SLOTS: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-  SLOT_CONSUMPTION: "border-red-500/20 bg-red-500/10 text-red-300",
-  PUBLICATION_DEDUCTION: "border-red-500/20 bg-red-500/10 text-red-300",
-  SLOT_REFUND: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+  SLOT_CONSUMPTION: "border-danger/30 bg-danger-soft text-danger",
+  PUBLICATION_DEDUCTION: "border-danger/30 bg-danger-soft text-danger",
+  SLOT_REFUND: "border-warning/30 bg-warning-soft text-warning",
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -127,12 +127,12 @@ export default function LedgerPage() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
             <ReceiptText className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Ledger & Audit</h1>
-            <p className="text-sm text-purple-200/60">Immutable platform transactions</p>
+            <h1 className="text-2xl font-bold tracking-tight text-text-1">Ledger & Audit</h1>
+            <p className="text-sm text-text-2">Immutable platform transactions</p>
           </div>
         </div>
         {tab === "ledger" && (
@@ -140,14 +140,14 @@ export default function LedgerPage() {
             type="button"
             onClick={() => void handleExport()}
             disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-900/10 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line-1 bg-surface-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" /> {exporting ? "Exporting…" : "Download CSV"}
           </button>
         )}
       </div>
 
-      <div className="mt-6 grid max-w-md grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2">
+      <div className="mt-6 grid max-w-md grid-cols-2 gap-2 rounded-2xl border border-line-1 bg-surface-1 p-2">
         {(["ledger", "audit"] as const).map((t) => (
           <button
             key={t}
@@ -158,8 +158,8 @@ export default function LedgerPage() {
             }}
             className={
               tab === t
-                ? "rounded-xl bg-purple-600 px-3 py-2 text-sm font-semibold text-white"
-                : "rounded-xl px-3 py-2 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+                ? "rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-accent-fg"
+                : "rounded-xl px-3 py-2 text-sm font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
             }
           >
             {t === "ledger" ? "Transactions" : "Audit Trail"}
@@ -180,8 +180,8 @@ export default function LedgerPage() {
               aria-pressed={tokenType === t}
               className={
                 tokenType === t
-                  ? "rounded-full bg-purple-600 px-4 py-2 text-xs font-semibold text-white"
-                  : "rounded-full border border-purple-500/20 bg-purple-900/10 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20"
+                  ? "rounded-full bg-accent px-4 py-2 text-xs font-semibold text-accent-fg"
+                  : "rounded-full border border-line-1 bg-surface-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2"
               }
             >
               {t === "all" ? "All" : t === "CREDIT" ? "Credits" : "Slots"}
@@ -191,7 +191,7 @@ export default function LedgerPage() {
       )}
 
       {error && (
-        <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-4 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -199,11 +199,11 @@ export default function LedgerPage() {
 
       {tab === "ledger" ? (
         <>
-          <div className="mt-4 overflow-hidden rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] backdrop-blur">
+          <div className="mt-4 overflow-hidden rounded-2xl border border-line-1 bg-surface-1 backdrop-blur">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-purple-500/10 bg-purple-950/20 text-left text-xs font-semibold uppercase tracking-wide text-purple-300/60">
+                  <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">School</th>
                     <th className="px-4 py-3 text-right">Amount</th>
@@ -216,49 +216,49 @@ export default function LedgerPage() {
                   {loading ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-12 text-center">
-                        <Loader2 className="mx-auto h-5 w-5 animate-spin text-purple-300/60" />
+                        <Loader2 className="mx-auto h-5 w-5 animate-spin text-text-2" />
                       </td>
                     </tr>
                   ) : entries.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-purple-200/40">
+                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-text-3">
                         No transactions yet.
                       </td>
                     </tr>
                   ) : (
                     entries.map((e) => (
-                      <tr key={e.id} className="border-t border-purple-500/5 text-purple-100/80 hover:bg-purple-900/10">
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-purple-300/60">
+                      <tr key={e.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-text-2">
                           {new Date(e.created_at).toLocaleString()}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-medium text-white">
+                          <span className="font-medium text-text-1">
                             {e.school_name ? toTitleCase(e.school_name) : e.subdomain}
                           </span>
-                          <span className="ml-2 font-mono text-xs text-purple-300/40">{e.subdomain}</span>
+                          <span className="ml-2 font-mono text-xs text-text-3">{e.subdomain}</span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
-                          <span className="font-semibold text-white">
+                          <span className="font-semibold text-text-1">
                             {e.amount > 0 ? "+" : ""}{e.amount} {e.token_type === "CREDIT" ? "cr" : "sl"}
                           </span>
                           {(e.amount_ngn ?? 0) > 0 && (
-                            <span className="ml-2 text-xs text-emerald-300">{formatNaira(e.amount_ngn as number)}</span>
+                            <span className="ml-2 text-xs text-success">{formatNaira(e.amount_ngn as number)}</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-0.5 text-xs text-purple-200">
+                          <span className="rounded-full border border-line-1 bg-surface-1 px-2.5 py-0.5 text-xs text-text-2">
                             {e.token_type}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-purple-300/60">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-text-2">
                           <span
-                            className={`inline-block rounded-full border px-2.5 py-0.5 ${TYPE_BADGE[e.transaction_type] ?? "border-purple-500/15 bg-purple-900/20 text-purple-200"}`}
+                            className={`inline-block rounded-full border px-2.5 py-0.5 ${TYPE_BADGE[e.transaction_type] ?? "border-line-1 bg-surface-1 text-text-2"}`}
                             title={e.transaction_type}
                           >
                             {TYPE_LABEL[e.transaction_type] ?? e.transaction_type}
                           </span>
                         </td>
-                        <td className="max-w-48 truncate px-4 py-3 font-mono text-xs text-purple-300/40">{e.reference_id || "—"}</td>
+                        <td className="max-w-48 truncate px-4 py-3 font-mono text-xs text-text-3">{e.reference_id || "—"}</td>
                       </tr>
                     ))
                   )}
@@ -267,13 +267,13 @@ export default function LedgerPage() {
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-purple-300/40">Showing {entries.length} of {total}</p>
+            <p className="text-xs text-text-3">Showing {entries.length} of {total}</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 disabled={offset <= 0 || loading}
                 onClick={() => setOffset((o) => Math.max(0, o - LIMIT))}
-                className="inline-flex items-center gap-1 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-full border border-line-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
               >
                 <ChevronLeft className="h-3.5 w-3.5" /> Prev
               </button>
@@ -281,7 +281,7 @@ export default function LedgerPage() {
                 type="button"
                 disabled={offset + LIMIT >= total || loading}
                 onClick={() => setOffset((o) => o + LIMIT)}
-                className="inline-flex items-center gap-1 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-full border border-line-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-40"
               >
                 Next <ChevronRight className="h-3.5 w-3.5" />
               </button>
@@ -291,25 +291,25 @@ export default function LedgerPage() {
       ) : (
         <div className="mt-4 space-y-2">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-12 text-purple-200/60">
+            <div className="flex items-center justify-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-12 text-text-2">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading audit trail…
             </div>
           ) : audit.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-12 text-center">
-              <ScrollText className="h-6 w-6 text-purple-300/40" />
-              <p className="text-sm text-purple-200/40">No recorded admin actions yet.</p>
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-12 text-center">
+              <ScrollText className="h-6 w-6 text-text-3" />
+              <p className="text-sm text-text-3">No recorded admin actions yet.</p>
             </div>
           ) : (
             audit.map((a) => (
-              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-500/10 bg-purple-900/[0.04] px-4 py-3">
+              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="font-mono text-sm text-purple-200">{a.action}</p>
-                  <p className="mt-0.5 text-xs text-purple-300/50">
+                  <p className="font-mono text-sm text-text-2">{a.action}</p>
+                  <p className="mt-0.5 text-xs text-text-3">
                     {a.actor} {a.subdomain ? `• ${a.subdomain}` : "• platform"}
                     {a.details && Object.keys(a.details).length > 0 && ` • ${JSON.stringify(a.details)}`}
                   </p>
                 </div>
-                <span className="whitespace-nowrap text-xs text-purple-300/40">
+                <span className="whitespace-nowrap text-xs text-text-3">
                   {new Date(a.created_at).toLocaleString()}
                 </span>
               </div>

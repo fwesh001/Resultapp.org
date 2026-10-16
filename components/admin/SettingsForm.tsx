@@ -379,7 +379,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   }
 
   const inputClassName =
-    "mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 text-white placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50";
+    "mt-2 w-full rounded-xl border border-line-1 bg-surface-0 px-4 py-3 text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50";
 
   // THE SECURITY TAB IS DELIBERATELY OUTSIDE THE FORM.
   //
@@ -395,9 +395,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const isSecurity = activeTab === "security";
 
   const content = (
-    <div className="mt-6 space-y-4 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-6">
+    <div className="mt-6 space-y-4 rounded-xl border border-line-1 bg-surface-1 p-6">
       {error && (
-        <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -444,8 +444,8 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             }}
             className={`shrink-0 snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition ${
               activeTab === t.id
-                ? "bg-purple-600 font-semibold text-white"
-                : "text-purple-200/70 hover:bg-white/5 hover:text-white"
+                ? "bg-accent font-semibold text-text-1"
+                : "text-text-2 hover:bg-surface-2 hover:text-text-1"
             }`}
           >
             {t.label}
@@ -469,7 +469,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       <div>
         <label
           htmlFor="school-name"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           School name
         </label>
@@ -487,7 +487,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       <div>
         <label
           htmlFor="school-motto"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           Motto
         </label>
@@ -506,7 +506,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor="school-email"
-            className="block text-sm font-medium text-purple-200"
+            className="block text-sm font-medium text-text-2"
           >
             Email
           </label>
@@ -547,13 +547,13 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             an admin editing the motto never sees it and never has to fetch a
             code to save an unrelated field. */}
         {emailChanged ? (
-          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-4">
-            <p className="text-sm font-medium text-amber-200">
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-warning-soft p-4">
+            <p className="text-sm font-medium text-warning">
               Confirm the new login address
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-purple-200/70">
+            <p className="mt-1 text-xs leading-relaxed text-text-2">
               This address is how you sign in. We&apos;ll email a six-digit code
-              to <span className="font-mono text-white">{emailValue.trim()}</span> —
+              to <span className="font-mono text-text-1">{emailValue.trim()}</span> —
               enter it and press Verify, and the change is applied straight
               away. You&apos;ll be signed out and will sign in with the new
               address.
@@ -564,7 +564,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
                 type="button"
                 onClick={requestOtp}
                 disabled={otpBusy}
-                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-purple-500/25 px-4 py-2 text-sm font-medium text-purple-100 transition hover:bg-white/5 disabled:opacity-60"
+                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-line-1 px-4 py-2 text-sm font-medium text-accent-fg transition hover:bg-surface-2 disabled:opacity-60"
               >
                 {otpBusy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -579,7 +579,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
                   <div className="min-w-[10rem] flex-1">
                     <label
                       htmlFor="email-otp"
-                      className="block text-xs font-medium text-purple-200"
+                      className="block text-xs font-medium text-text-2"
                     >
                       Six-digit code
                     </label>
@@ -599,14 +599,14 @@ export default function SettingsForm({ school }: SettingsFormProps) {
                       }}
                       placeholder="000000"
                       aria-describedby="email-otp-hint"
-                      className="mt-2 w-full rounded-xl border border-purple-500/20 bg-[#0B0514] px-4 py-3 font-mono text-lg tracking-[0.3em] text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      className="mt-2 w-full rounded-xl border border-line-1 bg-surface-0 px-4 py-3 font-mono text-lg tracking-[0.3em] text-accent-fg placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/50"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={verifyOtp}
                     disabled={otpBusy || otpCode.length !== 6}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
                   >
                     {otpBusy ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -619,20 +619,20 @@ export default function SettingsForm({ school }: SettingsFormProps) {
                     type="button"
                     onClick={requestOtp}
                     disabled={otpBusy}
-                    className="inline-flex min-h-[44px] items-center px-3 py-2.5 text-xs font-medium text-purple-300/60 transition hover:text-white disabled:opacity-60"
+                    className="inline-flex min-h-[44px] items-center px-3 py-2.5 text-xs font-medium text-text-2 transition hover:text-text-1 disabled:opacity-60"
                   >
                     Resend
                   </button>
                 </div>
 
-                <p id="email-otp-hint" className="text-xs text-purple-300/50">
+                <p id="email-otp-hint" className="text-xs text-text-3">
                   {otpState === "verified"
                     ? "Code confirmed — applying your new address."
                     : "The code expires in a few minutes. Enter it, then press Verify."}
                 </p>
 
                 {otpError ? (
-                  <p role="alert" className="text-xs text-red-300">
+                  <p role="alert" className="text-xs text-danger">
                     {otpError}
                   </p>
                 ) : null}
@@ -645,7 +645,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       <div>
         <label
           htmlFor="school-phone"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           Phone
         </label>
@@ -663,7 +663,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       <div>
         <label
           htmlFor="school-address"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           School Address
         </label>
@@ -676,7 +676,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           placeholder="e.g. Off Student Village Road, Nasarawa"
           className={inputClassName}
         />
-        <p className="mt-1 text-xs text-purple-300/40">Shown beneath the school name on the report header.</p>
+        <p className="mt-1 text-xs text-text-3">Shown beneath the school name on the report header.</p>
       </div>
 
       </div>
@@ -715,11 +715,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       {/* Drawn signature — the primary path. Shown above the uploader so the
           recommended option is the first thing an admin reaches for. */}
-      <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-4">
+      <div className="rounded-xl border border-line-1 bg-surface-1 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-purple-100">Principal's signature</p>
-            <p className="mt-0.5 text-xs text-purple-300/50">
+            <p className="text-sm font-medium text-text-1">Principal's signature</p>
+            <p className="mt-0.5 text-xs text-text-3">
               {drawnSignature
                 ? "Using your drawn signature."
                 : school?.principalSignatureUrl
@@ -730,14 +730,14 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           <button
             type="button"
             onClick={() => setSigModalOpen(true)}
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
             <PenLine className="h-4 w-4" aria-hidden="true" />
             {drawnSignature ? "Redraw signature" : "Draw signature"}
           </button>
         </div>
         {drawnSignature && (
-          <div className="mt-3 flex h-20 items-end rounded-lg border border-purple-500/20 bg-white p-2">
+          <div className="mt-3 flex h-20 items-end rounded-lg border border-line-1 bg-white p-2">
             {/* Preview of what will print. eslint-disable: a data URI cannot go
                 through next/image without a loader configured for it. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -773,7 +773,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       <div>
         <label
           htmlFor="id-prefix"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           Admission ID Prefix
         </label>
@@ -791,15 +791,15 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           }}
           className={inputClassName}
         />
-        <p className="mt-1 text-xs text-purple-300/40">
-          Prefix for new Admission Nos (e.g. <span className="font-mono text-purple-200">vhs/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
+        <p className="mt-1 text-xs text-text-3">
+          Prefix for new Admission Nos (e.g. <span className="font-mono text-text-2">vhs/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
         </p>
       </div>
 
       <div>
         <label
           htmlFor="staff-id-prefix"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           Staff ID Prefix
         </label>
@@ -814,15 +814,15 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           maxLength={20}
           className={inputClassName}
         />
-        <p className="mt-1 text-xs text-purple-300/40">
-          Prefix for new Staff IDs (e.g. <span className="font-mono text-purple-200">STAFF/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
+        <p className="mt-1 text-xs text-text-3">
+          Prefix for new Staff IDs (e.g. <span className="font-mono text-text-2">STAFF/001</span>). Auto-assigned on bulk upload; existing IDs are never changed.
         </p>
       </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="current-term" className="block text-sm font-medium text-purple-200">
+          <label htmlFor="current-term" className="block text-sm font-medium text-text-2">
             Active Term
           </label>
           <Select
@@ -837,10 +837,10 @@ export default function SettingsForm({ school }: SettingsFormProps) {
               { value: "Term 3", label: "Term 3" },
             ]}
           />
-          <p className="mt-1 text-xs text-purple-300/40">Dashboard and reports default to this term.</p>
+          <p className="mt-1 text-xs text-text-3">Dashboard and reports default to this term.</p>
         </div>
         <div>
-          <label htmlFor="current-session" className="block text-sm font-medium text-purple-200">
+          <label htmlFor="current-session" className="block text-sm font-medium text-text-2">
             Academic Session
           </label>
           <input
@@ -853,14 +853,14 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             pattern="^\d{4}/\d{4}$"
             className={inputClassName}
           />
-          <p className="mt-1 text-xs text-purple-300/40">Leave blank to auto-derive (Sept rollover).</p>
+          <p className="mt-1 text-xs text-text-3">Leave blank to auto-derive (Sept rollover).</p>
         </div>
       </div>
 
       <div>
         <label
           htmlFor="new-term-begins"
-          className="block text-sm font-medium text-purple-200"
+          className="block text-sm font-medium text-text-2"
         >
           New Term Begins
         </label>
@@ -871,14 +871,14 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           defaultValue={school?.newTermBegins ? String(school.newTermBegins).slice(0, 10) : ""}
           className={inputClassName}
         />
-        <p className="mt-1 text-xs text-purple-300/40">
+        <p className="mt-1 text-xs text-text-3">
           Resumption date for the next term (e.g., 2026-01-09). Displayed as “09 Jan 2026” on report cards. Leave empty for “—”.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4">
-        <h3 className="text-sm font-semibold text-white">Principal&apos;s Remark Scheme</h3>
-        <p className="mt-1 text-xs text-purple-300/50">
+      <div className="rounded-2xl border border-line-1 bg-surface-1 p-4">
+        <h3 className="text-sm font-semibold text-text-1">Principal&apos;s Remark Scheme</h3>
+        <p className="mt-1 text-xs text-text-3">
           Grade bands that auto-generate principal remarks from overall averages. Used by the “Auto-Apply Principal Remarks” bulk action. Averages in gaps stay manual.
         </p>
         <div className="mt-3">
@@ -911,7 +911,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#0B0514] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-surface-0 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? "Saving..." : "Save Changes"}
         </button>
@@ -928,9 +928,9 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         >
           <PasswordChange subdomain={school?.slug ?? ""} />
 
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-white">Moderator Management</h3>
-            <p className="mt-1 text-xs text-purple-300/50">
+          <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-text-1">Moderator Management</h3>
+            <p className="mt-1 text-xs text-text-3">
               Give trusted staff a deputy role for the day-to-day portal without
               handing them your school settings, billing or audit log.
             </p>

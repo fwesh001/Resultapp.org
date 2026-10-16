@@ -74,10 +74,10 @@ function formatUptime(seconds: number | null | undefined): string {
 
 /** Colour ramp so an operator sees pressure without reading the number. */
 function usageTone(pct: number | null): { bar: string; text: string } {
-  if (pct === null) return { bar: "bg-purple-800", text: "text-purple-300/50" };
-  if (pct >= 90) return { bar: "bg-red-500", text: "text-red-300" };
-  if (pct >= 75) return { bar: "bg-amber-500", text: "text-amber-300" };
-  return { bar: "bg-emerald-500", text: "text-emerald-300" };
+  if (pct === null) return { bar: "bg-purple-800", text: "text-text-3" };
+  if (pct >= 90) return { bar: "bg-red-500", text: "text-danger" };
+  if (pct >= 75) return { bar: "bg-amber-500", text: "text-warning" };
+  return { bar: "bg-emerald-500", text: "text-success" };
 }
 
 function Meter({
@@ -96,13 +96,13 @@ function Meter({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs text-purple-200/60">{label}</span>
+        <span className="text-xs text-text-2">{label}</span>
         <span className={cn("font-mono text-xs font-semibold", tone.text)}>
           {percent === null ? "—" : `${percent.toFixed(1)}%`}
         </span>
       </div>
       <div
-        className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-purple-950/60"
+        className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-3"
         role="meter"
         aria-valuenow={percent ?? undefined}
         aria-valuemin={0}
@@ -111,7 +111,7 @@ function Meter({
       >
         <div className={cn("h-full rounded-full transition-all duration-500", tone.bar)} style={{ width: `${clamped}%` }} />
       </div>
-      <p className="mt-1 text-[11px] text-purple-300/40">
+      <p className="mt-1 text-[11px] text-text-3">
         {formatBytes(used)} used of {formatBytes(total)}
       </p>
     </div>
@@ -188,12 +188,12 @@ export default function PlatformVitalsPage() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
             <Activity className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Platform Vitals</h1>
-            <p className="text-sm text-purple-200/60">
+            <h1 className="text-2xl font-bold tracking-tight text-text-1">Platform Vitals</h1>
+            <p className="text-sm text-text-2">
               Live server telemetry
               {lastUpdated ? ` · updated ${lastUpdated}` : ""} · refreshes every 60s
             </p>
@@ -203,7 +203,7 @@ export default function PlatformVitalsPage() {
           type="button"
           onClick={() => void load(true)}
           disabled={refreshing}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-white/5 px-4 text-sm font-medium text-purple-200 transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line-1 bg-surface-2 px-4 text-sm font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1 disabled:opacity-60"
         >
           {refreshing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -215,7 +215,7 @@ export default function PlatformVitalsPage() {
       </div>
 
       {error && (
-        <div className="mt-6 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-6 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -223,14 +223,14 @@ export default function PlatformVitalsPage() {
 
       {/* Partial-failure notice — telemetry degrades per-metric, never all-or-nothing. */}
       {data && data.warnings.length > 0 && (
-        <div className="mt-6 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div className="mt-6 flex gap-2 rounded-xl border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>Partial data: {data.warnings.join(" · ")}</span>
         </div>
       )}
 
       {loading && !data ? (
-        <div className="mt-6 flex items-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-6 text-sm text-purple-200/60">
+        <div className="mt-6 flex items-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-6 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Collecting server metrics…
         </div>
       ) : (
@@ -245,10 +245,10 @@ export default function PlatformVitalsPage() {
 
           {/* 6 — uptime */}
           <Card icon={Timer} title="Uptime">
-            <div className="font-mono text-3xl font-bold tracking-tight text-white">
+            <div className="font-mono text-3xl font-bold tracking-tight text-text-1">
               {formatUptime(data?.uptime_seconds)}
             </div>
-            <p className="mt-1 text-xs text-purple-300/50">
+            <p className="mt-1 text-xs text-text-3">
               {bootedAtLabel}
             </p>
           </Card>
@@ -256,7 +256,7 @@ export default function PlatformVitalsPage() {
           {/* 3 — disk */}
           <Card icon={HardDrive} title="Disk Space">
             {data?.disk_total_bytes === null || data?.disk_total_bytes === undefined ? (
-              <p className="text-sm text-purple-300/50">Unavailable</p>
+              <p className="text-sm text-text-3">Unavailable</p>
             ) : (
               <>
                 <Meter
@@ -273,7 +273,7 @@ export default function PlatformVitalsPage() {
           {/* 4 — memory */}
           <Card icon={MemoryStick} title="Memory">
             {data?.mem_total_bytes === null || data?.mem_total_bytes === undefined ? (
-              <p className="text-sm text-purple-300/50">Unavailable</p>
+              <p className="text-sm text-text-3">Unavailable</p>
             ) : (
               <>
                 <Meter
@@ -290,14 +290,14 @@ export default function PlatformVitalsPage() {
           {/* 5 — postgres connections */}
           <Card icon={Database} title="PostgreSQL Connections">
             {data?.pg_connections === null || data?.pg_connections === undefined ? (
-              <p className="text-sm text-purple-300/50">Unavailable</p>
+              <p className="text-sm text-text-3">Unavailable</p>
             ) : (
               <>
                 <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-3xl font-bold tracking-tight text-white">
+                  <span className="font-mono text-3xl font-bold tracking-tight text-text-1">
                     {data.pg_connections}
                   </span>
-                  <span className="text-sm text-purple-300/50">
+                  <span className="text-sm text-text-3">
                     / {data.pg_max_connections ?? "?"} max
                   </span>
                 </div>
@@ -312,7 +312,7 @@ export default function PlatformVitalsPage() {
                     {Object.entries(data.pg_by_state).map(([state, count]) => (
                       <span
                         key={state}
-                        className="rounded-full border border-purple-500/15 bg-purple-900/20 px-2 py-0.5 font-mono text-[11px] text-purple-200/80"
+                        className="rounded-full border border-line-1 bg-surface-1 px-2 py-0.5 font-mono text-[11px] text-text-2"
                       >
                         {state}: {count}
                       </span>
@@ -329,7 +329,7 @@ export default function PlatformVitalsPage() {
             <Row label="Metrics" value="6 of 6" />
             <Row label="Collected" value={data?.collected_at ?? "—"} mono />
             <Row label="Partial" value={data?.warnings.length ? `${data.warnings.length} warning(s)` : "none"} />
-            <p className="mt-2 text-[11px] leading-5 text-purple-300/40">
+            <p className="mt-2 text-[11px] leading-5 text-text-3">
               Read from /proc and the platform registry. Each collector is
               independent, so one failure leaves the rest of this page live.
             </p>
@@ -350,9 +350,9 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 backdrop-blur">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-        <Icon className="h-4 w-4 text-purple-300" />
+    <section className="rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-text-1">
+        <Icon className="h-4 w-4 text-accent" />
         {title}
       </h2>
       <div className="mt-4 space-y-3">{children}</div>
@@ -363,11 +363,11 @@ function Card({
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-xs text-purple-200/60">{label}</span>
+      <span className="text-xs text-text-2">{label}</span>
       <span
         className={cn(
-          "truncate text-right text-sm text-white",
-          mono && "font-mono text-xs text-purple-100",
+          "truncate text-right text-sm text-text-1",
+          mono && "font-mono text-xs text-text-1",
         )}
         title={value}
       >

@@ -75,13 +75,13 @@ export function SuspendTenantModal({
           : undefined
       }
       size="sm"
-      className="border-purple-500/20 bg-[#0B0514] text-white"
+      className="border-line-1 bg-surface-0 text-text-1"
     >
       <div className="space-y-3">
         {suspending && (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="lifecycle-suspend-cause" className="text-sm font-medium text-purple-100">
-              Cause <span className="font-normal text-amber-300/70">(required)</span>
+            <label htmlFor="lifecycle-suspend-cause" className="text-sm font-medium text-text-1">
+              Cause <span className="font-normal text-warning">(required)</span>
             </label>
             <Select
               id="lifecycle-suspend-cause"
@@ -95,13 +95,13 @@ export function SuspendTenantModal({
                 ...SUSPENSION_REASONS.map((r): SelectOption => ({ value: r.value, label: r.label })),
               ]}
             />
-            {causeHint && <p className="text-xs text-purple-300/60">{causeHint}</p>}
+            {causeHint && <p className="text-xs text-text-2">{causeHint}</p>}
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="lifecycle-suspend-reason" className="text-sm font-medium text-purple-100">
+          <label htmlFor="lifecycle-suspend-reason" className="text-sm font-medium text-text-1">
             Note{" "}
-            <span className="font-normal text-purple-300/50">
+            <span className="font-normal text-text-3">
               (optional, free text — recorded in the audit log)
             </span>
           </label>
@@ -112,7 +112,7 @@ export function SuspendTenantModal({
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Unpaid invoice #1042"
             disabled={busy}
-            className="w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
         <div className="flex justify-end gap-2">
@@ -170,12 +170,12 @@ export function DeleteTenantModal({
           : undefined
       }
       size="sm"
-      className="border-red-500/20 bg-[#0B0514] text-white"
+      className="border-danger/30 bg-surface-0 text-text-1"
     >
       <div className="space-y-3">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="lifecycle-delete-confirm" className="text-sm font-medium text-purple-100">
-            Type <span className="font-mono font-semibold text-red-300">{tenant?.subdomain}</span> to confirm
+          <label htmlFor="lifecycle-delete-confirm" className="text-sm font-medium text-text-1">
+            Type <span className="font-mono font-semibold text-danger">{tenant?.subdomain}</span> to confirm
           </label>
           <input
             id="lifecycle-delete-confirm"
@@ -185,12 +185,12 @@ export function DeleteTenantModal({
             placeholder={tenant?.subdomain ?? ""}
             disabled={busy}
             autoComplete="off"
-            className="w-full rounded-xl border border-red-500/30 bg-purple-950/30 px-3 py-2 font-mono text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            className="w-full rounded-xl border border-danger/30 bg-surface-3 px-3 py-2 font-mono text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="lifecycle-delete-reason" className="text-sm font-medium text-purple-100">
-            Reason <span className="font-normal text-purple-300/50">(required, min 3 chars — audit log)</span>
+          <label htmlFor="lifecycle-delete-reason" className="text-sm font-medium text-text-1">
+            Reason <span className="font-normal text-text-3">(required, min 3 chars — audit log)</span>
           </label>
           <textarea
             id="lifecycle-delete-reason"
@@ -199,7 +199,7 @@ export function DeleteTenantModal({
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. School closed at end of session"
             disabled={busy}
-            className="w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
         <div className="flex justify-end gap-2">

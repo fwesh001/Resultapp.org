@@ -53,24 +53,24 @@ const SEVERITY_STYLE: Record<
   { border: string; icon: React.ElementType; iconClass: string }
 > = {
   success: {
-    border: "border-emerald-500/30",
+    border: "border-success/30",
     icon: CheckCircle2,
-    iconClass: "text-emerald-400",
+    iconClass: "text-success",
   },
   error: {
-    border: "border-red-500/30",
+    border: "border-danger/30",
     icon: AlertCircle,
-    iconClass: "text-red-400",
+    iconClass: "text-danger",
   },
   warning: {
-    border: "border-amber-500/30",
+    border: "border-warning/30",
     icon: TriangleAlert,
-    iconClass: "text-amber-300",
+    iconClass: "text-warning",
   },
   info: {
-    border: "border-purple-500/30",
+    border: "border-line-1",
     icon: Info,
-    iconClass: "text-purple-300",
+    iconClass: "text-accent",
   },
 };
 
@@ -246,15 +246,15 @@ export function Toaster() {
               onMouseEnter={() => pause(item.id)}
               onMouseLeave={() => resume(item)}
               className={cn(
-                "pointer-events-auto flex w-full items-start gap-3 rounded-2xl border bg-[#0B0514]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-md",
+                "pointer-events-auto flex w-full items-start gap-3 rounded-2xl border bg-surface-1/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-md",
                 style.border,
               )}
             >
               <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", style.iconClass)} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white">{item.title}</p>
+                <p className="text-sm font-semibold text-text-1">{item.title}</p>
                 {item.description && (
-                  <p className="mt-0.5 text-xs leading-5 text-purple-200/70">
+                  <p className="mt-0.5 text-xs leading-5 text-text-2">
                     {item.description}
                   </p>
                 )}
@@ -265,7 +265,7 @@ export function Toaster() {
                       item.action?.onClick();
                       dismiss(item.id);
                     }}
-                    className="mt-2 rounded-full border border-purple-500/30 bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-200 transition hover:bg-purple-600/30 hover:text-white"
+                    className="mt-2 rounded-full border border-line-1 bg-accent-soft px-3 py-1 text-xs font-medium text-text-2 transition hover:bg-accent-soft hover:text-text-1"
                   >
                     {item.action.label}
                   </button>
@@ -275,7 +275,7 @@ export function Toaster() {
                 type="button"
                 onClick={() => dismiss(item.id)}
                 aria-label="Dismiss notification"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-purple-300/60 transition hover:bg-white/5 hover:text-white"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               >
                 <X className="h-4 w-4" />
               </button>

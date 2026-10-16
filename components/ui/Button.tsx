@@ -27,8 +27,8 @@ const buttonVariants = cva(
     "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap",
     "font-medium",
     "transition-[color,background-color,border-color,box-shadow,opacity] duration-200",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500",
-    "focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0514]",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
   ),
@@ -36,33 +36,33 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: cn(
-          "bg-purple-600 text-white",
+          "bg-accent text-accent-fg",
           "shadow-[0_0_28px_rgba(147,51,234,0.30)]",
-          "[--btn-fill:#a855f7]"
+          "[--btn-fill:var(--accent-hover)]"
         ),
         outline: cn(
-          "border border-purple-500/25 bg-transparent text-purple-100",
-          "[--btn-fill:#a855f7]",
-          "[--btn-fg-hover:#ffffff]"
+          "border border-line-1 bg-transparent text-text-1",
+          "[--btn-fill:var(--accent-soft)]",
+          "[--btn-fg-hover:var(--accent-hover)]"
         ),
         ghost: cn(
-          "bg-transparent text-purple-200",
-          "[--btn-fill:rgb(168_85_247_/_0.16)]",
-          "[--btn-fg-hover:#ffffff]"
+          "bg-transparent text-text-2",
+          "[--btn-fill:var(--accent-soft)]",
+          "[--btn-fg-hover:var(--accent-hover)]"
         ),
         destructive: cn(
           "bg-red-600 text-white",
           "[--btn-fill:rgb(239_68_68_/_0.92)]"
         ),
-        link: "h-auto rounded-none p-0 text-purple-300 hover:text-purple-100",
+        link: "h-auto rounded-none p-0 text-accent hover:text-accent-hover",
 
         /** Back-compat aliases — the pre-cva API. `default` was the old name
          *  for a filled button; `secondary` was the old bordered one. */
-        default: "bg-purple-600 text-white [--btn-fill:#a855f7]",
+        default: "bg-accent text-accent-fg [--btn-fill:var(--accent-hover)]",
         secondary: cn(
-          "border border-purple-500/25 bg-transparent text-purple-100",
-          "[--btn-fill:#a855f7]",
-          "[--btn-fg-hover:#ffffff]"
+          "border border-line-1 bg-transparent text-text-1",
+          "[--btn-fill:var(--accent-soft)]",
+          "[--btn-fg-hover:var(--accent-hover)]"
         ),
       },
       size: {
@@ -134,7 +134,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           fullWidth && "w-full",
           pulse && "motion-safe:animate-pulse",
           isSuccess &&
-            "border border-emerald-400/60 bg-emerald-500/20 text-emerald-100 [--btn-fill:rgb(16_185_129_/_0.30)]",
+            "border border-success/50 bg-success-soft text-success [--btn-fill:rgb(16_185_129_/_0.30)]",
           className
         )}
         {...props}

@@ -37,15 +37,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
   }, [open ]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row">
+    <div className="flex min-h-screen flex-col bg-surface-0 md:flex-row">
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-40 flex items-center gap-3 border-b bg-white px-4 py-2 md:hidden">
+      <div className="sticky top-0 z-40 flex items-center gap-3 border-b bg-surface-1 px-4 py-2 md:hidden">
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
-          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border p-2 text-zinc-700 transition hover:bg-zinc-100"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border p-2 text-text-2 transition hover:bg-surface-2"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -67,7 +67,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute left-0 top-0 flex h-full w-64 flex-col border-r bg-white shadow-2xl">
+          <div className="absolute left-0 top-0 flex h-full w-64 flex-col border-r bg-surface-1 shadow-2xl">
             <div className="flex h-16 items-center gap-2 border-b px-6 font-semibold">
               <Logo size="sm" alt="" />
               resultapp
@@ -83,8 +83,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
                     className={cn(
                       "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-black text-white"
-                        : "text-zinc-600 hover:bg-zinc-100 hover:text-black",
+                        ? "bg-accent text-accent-fg"
+                        : "text-text-2 hover:bg-surface-2 hover:text-text-1",
                     )}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />

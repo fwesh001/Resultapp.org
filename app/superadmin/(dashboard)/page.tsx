@@ -45,7 +45,7 @@ export default function SuperadminDashboardPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-12 text-purple-200/60">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-12 text-text-2">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading platform stats…
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function SuperadminDashboardPage() {
   if (error || !stats) {
     return (
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-300">
+        <div className="rounded-2xl border border-danger/30 bg-danger-soft p-6 text-danger">
           <div className="flex gap-2">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error || "No stats available"}</span>
@@ -70,12 +70,12 @@ export default function SuperadminDashboardPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.35)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)]">
           <School className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Platform Dashboard</h1>
-          <p className="text-sm text-purple-200/60">Revenue and usage from immutable ledger records</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">Platform Dashboard</h1>
+          <p className="text-sm text-text-2">Revenue and usage from immutable ledger records</p>
         </div>
       </div>
 

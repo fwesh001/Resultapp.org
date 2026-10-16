@@ -162,7 +162,7 @@ export function Modal({
                 type="button"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close modal"
-                className="absolute right-4 top-4 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-purple-200 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                className="absolute right-4 top-4 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-text-2 transition-colors hover:bg-surface-2 hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>

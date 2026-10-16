@@ -283,17 +283,17 @@ export default function CommandCenterClient({
         <div>
           <Link
             href={`${base}`}
-            className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
+            className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-text-2 transition hover:text-text-1"
           >
             <ArrowLeft className="h-4 w-4" /> Back to dashboard
           </Link>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Result Command Center</h1>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-text-1">Result Command Center</h1>
+          <p className="mt-1 text-sm text-text-2">
             Track completion, nudge staff, and publish report cards for {schoolName}
             {session ? ` • ${session}` : ""}.
           </p>
         </div>
-        <label className="flex min-h-[44px] items-center gap-2 text-sm text-purple-200/70">
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-text-2">
           Term
 <Select
               id="cc-term"
@@ -306,12 +306,12 @@ export default function CommandCenterClient({
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-900/[0.04] px-4 py-6 text-sm text-purple-200/70">
+        <div className="flex items-center gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-6 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading command center…
         </div>
       )}
       {!loading && error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <div className="flex-1">
             <span>{error}</span>
@@ -326,35 +326,35 @@ export default function CommandCenterClient({
         <>
           {/* Zone A — stats */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
+            <div className="rounded-xl border border-line-1 bg-surface-1 p-5">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-purple-500/15 bg-purple-600/10">
-                  <Users className="h-5 w-5 text-purple-300" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line-1 bg-accent-soft">
+                  <Users className="h-5 w-5 text-accent" />
                 </span>
-                <p className="text-xs text-purple-200/60">Total Students</p>
+                <p className="text-xs text-text-2">Total Students</p>
               </div>
-              <p className="mt-3 text-2xl font-bold text-white">{totalStudents.toLocaleString()}</p>
+              <p className="mt-3 text-2xl font-bold text-text-1">{totalStudents.toLocaleString()}</p>
             </div>
-            <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
+            <div className="rounded-xl border border-line-1 bg-surface-1 p-5">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-purple-200/60">Published Results</p>
-                <span className="text-sm font-semibold text-purple-300">{completionPct}%</span>
+                <p className="text-xs text-text-2">Published Results</p>
+                <span className="text-sm font-semibold text-accent">{completionPct}%</span>
               </div>
-              <p className="mt-3 text-2xl font-bold text-white">
-                {publishedCount.toLocaleString()} <span className="text-sm font-normal text-purple-300/50">/ {totalStudents.toLocaleString()}</span>
+              <p className="mt-3 text-2xl font-bold text-text-1">
+                {publishedCount.toLocaleString()} <span className="text-sm font-normal text-text-3">/ {totalStudents.toLocaleString()}</span>
               </p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
                 <div className="h-full rounded-full bg-purple-500" style={{ width: `${Math.min(100, completionPct)}%` }} />
               </div>
             </div>
-            <div className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
+            <div className="rounded-xl border border-line-1 bg-surface-1 p-5">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-purple-500/15 bg-purple-600/10">
-                  <Coins className="h-5 w-5 text-purple-300" />
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line-1 bg-accent-soft">
+                  <Coins className="h-5 w-5 text-accent" />
                 </span>
-                <p className="text-xs text-purple-200/60">Available Credits</p>
+                <p className="text-xs text-text-2">Available Credits</p>
               </div>
-              <p className="mt-3 text-2xl font-bold text-white">{balance.toLocaleString()}</p>
+              <p className="mt-3 text-2xl font-bold text-text-1">{balance.toLocaleString()}</p>
 {/* A moderator still needs to SEE the balance — publishing costs
                   credits, so hiding the number would leave them publishing blind
                   and blaming the platform. What they cannot do is BUY more, so
@@ -362,12 +362,12 @@ export default function CommandCenterClient({
               {canSeeBilling ? (
                 <Link
                   href={`${base}/billing`}
-                  className="mt-2 inline-block text-xs font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white"
+                  className="mt-2 inline-block text-xs font-medium text-accent underline decoration-accent/30 underline-offset-4 hover:text-text-1"
                 >
                   Top up credits &rarr;
                 </Link>
               ) : (
-                <p className="mt-2 text-xs text-purple-200/50">
+                <p className="mt-2 text-xs text-text-3">
                   Ask the school&apos;s administrator to top up.
                 </p>
               )}
@@ -375,8 +375,8 @@ export default function CommandCenterClient({
           </div>
 
           {/* Publish bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-4">
-            <p className="text-sm text-purple-200/70">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-1 bg-surface-1 p-4">
+            <p className="text-sm text-text-2">
               {selectedNames.length > 0
                 ? `${selectedNames.length} class(es) selected — 1 credit per newly published card, re-prints free.`
                 : `${readyClasses.length} class(es) ready to publish. Select classes below or publish all at once.`}
@@ -386,7 +386,7 @@ export default function CommandCenterClient({
                 type="button"
                 disabled={publishing || readyClasses.length === 0}
                 onClick={() => void publishClasses(readyClasses.map((c) => c.class_name))}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-purple-600 px-5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Publish all ready
@@ -395,7 +395,7 @@ export default function CommandCenterClient({
                 type="button"
                 disabled={publishing || selectedNames.length === 0}
                 onClick={() => void publishClasses(selectedNames)}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-purple-500/20 bg-purple-600/10 px-5 text-sm font-medium text-purple-200 transition hover:bg-purple-600/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line-1 bg-accent-soft px-5 text-sm font-medium text-accent transition hover:bg-surface-2 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Publish selected ({selectedNames.length})
               </button>
@@ -403,11 +403,11 @@ export default function CommandCenterClient({
           </div>
 
           {/* Zone B — class roster */}
-          <div className="overflow-hidden rounded-xl border border-purple-500/15 bg-purple-900/[0.04]">
+          <div className="overflow-hidden rounded-xl border border-line-1 bg-surface-1">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-purple-500/10 text-xs uppercase tracking-wide text-purple-300/60">
+                  <tr className="border-b border-line-1 text-xs uppercase tracking-wide text-text-2">
                     <th className="px-4 py-3 font-medium"><span className="sr-only">Select</span></th>
                     <th className="px-4 py-3 font-medium">Class</th>
                     <th className="px-4 py-3 font-medium">Students</th>
@@ -417,10 +417,10 @@ export default function CommandCenterClient({
                     <th className="px-4 py-3 font-medium"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-purple-500/10">
+                <tbody className="divide-y divide-line-1">
                   {classes.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-purple-200/50">
+                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-text-3">
                         No classes found. Ask an admin to add students first.
                       </td>
                     </tr>
@@ -431,25 +431,25 @@ export default function CommandCenterClient({
                     const m = missing[c.class_name];
                     return (
                       <Fragment key={c.class_name}>
-                        <tr className="hover:bg-purple-900/10">
+                        <tr className="hover:bg-surface-2">
                           <td className="px-4 py-3">
                             <input
                               type="checkbox"
                               checked={!!selected[c.class_name]}
                               onChange={() => toggleSelect(c.class_name)}
                               aria-label={`Select ${c.class_name} for publication`}
-                              className="h-5 w-5 rounded accent-purple-600"
+                              className="h-5 w-5 rounded accent-accent"
                             />
                           </td>
-                          <td className="px-4 py-3 font-medium text-white">{c.class_name}</td>
-                          <td className="px-4 py-3 text-purple-200/80">{c.student_count}</td>
-                          <td className="px-4 py-3 text-purple-200/80">{c.graded_count}</td>
-                          <td className="px-4 py-3 text-purple-200/80">{c.published_count}</td>
+                          <td className="px-4 py-3 font-medium text-text-1">{c.class_name}</td>
+                          <td className="px-4 py-3 text-text-2">{c.student_count}</td>
+                          <td className="px-4 py-3 text-text-2">{c.graded_count}</td>
+                          <td className="px-4 py-3 text-text-2">{c.published_count}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                               isReady
-                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                                : "border-amber-500/20 bg-amber-500/10 text-amber-300"
+                                ? "border-success/40 bg-success-soft text-success"
+                                : "border-amber-500/20 bg-warning-soft text-warning"
                             }`}>
                               {isReady ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
                               {c.status}
@@ -460,7 +460,7 @@ export default function CommandCenterClient({
                               type="button"
                               onClick={() => void toggleExpand(c.class_name)}
                               aria-expanded={isOpen}
-                              className="inline-flex min-h-[44px] items-center rounded-full border border-purple-500/15 bg-white/[0.02] px-4 text-xs font-medium text-purple-200 transition hover:bg-purple-900/20 hover:text-white"
+                              className="inline-flex min-h-[44px] items-center rounded-full border border-line-1 bg-surface-1 px-4 text-xs font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
                             >
                               {isOpen ? "Hide details" : missingLoading === c.class_name ? "Loading…" : "View missing"}
                             </button>
@@ -468,26 +468,26 @@ export default function CommandCenterClient({
                         </tr>
                         {isOpen && (
                           <tr>
-                            <td colSpan={7} className="bg-[#0B0514]/60 px-4 py-4">
+                            <td colSpan={7} className="bg-surface-0/60 px-4 py-4">
                               {!m ? (
-                                <p className="flex items-center gap-2 text-sm text-purple-200/60">
+                                <p className="flex items-center gap-2 text-sm text-text-2">
                                   <Loader2 className="h-4 w-4 animate-spin" /> Loading missing grades…
                                 </p>
                               ) : m.subjects.length === 0 ? (
-                                <p className="text-sm text-emerald-300">All subjects have grades — ready to publish {m.graded_students.length} student(s).</p>
+                                <p className="text-sm text-success">All subjects have grades — ready to publish {m.graded_students.length} student(s).</p>
                               ) : (
                                 <div className="space-y-2">
                                   {m.subjects.map((s) => (
-                                    <div key={s.subject_name} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-500/10 bg-purple-900/[0.03] px-3 py-2">
+                                    <div key={s.subject_name} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line-1 bg-surface-2 px-3 py-2">
                                       <div className="text-sm">
-                                        <span className="font-medium text-white">{s.subject_name}</span>
-                                        <span className="text-purple-300/60"> • {s.staff_name} • {s.pending_count} pending</span>
+                                        <span className="font-medium text-text-1">{s.subject_name}</span>
+                                        <span className="text-text-2"> • {s.staff_name} • {s.pending_count} pending</span>
                                       </div>
                                       <button
                                         type="button"
                                         onClick={() => void nudgeStaff(c.class_name, s)}
                                         disabled={nudging === `${c.class_name}::${s.subject_name}`}
-                                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 hover:text-emerald-200 disabled:opacity-50"
+                                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-success/40 bg-success-soft px-4 text-xs font-medium text-success transition hover:bg-surface-2 hover:text-success disabled:opacity-50"
                                       >
                                         <Bell className="h-3.5 w-3.5" />
                                         {nudging === `${c.class_name}::${s.subject_name}`
@@ -496,7 +496,7 @@ export default function CommandCenterClient({
                                       </button>
                                     </div>
                                   ))}
-                                  <p className="text-xs text-purple-300/50">
+                                  <p className="text-xs text-text-3">
                                     {m.graded_students.length} student(s) fully graded and publishable • {m.total_pending} subject-grade(s) still pending.
                                   </p>
                                 </div>
@@ -512,7 +512,7 @@ export default function CommandCenterClient({
             </div>
           </div>
 
-          <p className="text-xs leading-5 text-purple-300/40">
+          <p className="text-xs leading-5 text-text-3">
             Publication deducts 1 credit per newly published report card. Drafts, previews, and re-prints are free.
             Nudges land in the staffer&apos;s in-app inbox and deep-link straight into grading.
           </p>

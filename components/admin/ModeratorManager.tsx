@@ -152,7 +152,7 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
 
   if (loading) {
     return (
-      <p className="flex items-center gap-2 py-6 text-sm text-purple-200/60">
+      <p className="flex items-center gap-2 py-6 text-sm text-text-2">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading staff…
       </p>
     );
@@ -160,12 +160,12 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-        <p className="text-sm text-red-300">{error}</p>
+      <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
+        <p className="text-sm text-danger">{error}</p>
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-purple-500/25 px-4 py-2 text-sm font-medium text-purple-200 transition hover:bg-white/5"
+          className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-line-1 px-4 py-2 text-sm font-medium text-text-2 transition hover:bg-surface-2"
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
         </button>
@@ -175,7 +175,7 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
 
   if (staff.length === 0) {
     return (
-      <p className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-4 text-sm text-purple-200/60">
+      <p className="rounded-xl border border-line-1 bg-surface-1 p-4 text-sm text-text-2">
         No staff on the roster yet. Upload a staff list or add people from the
         Command Center first.
       </p>
@@ -184,10 +184,10 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-3">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-purple-300" aria-hidden="true" />
-        <p className="text-xs leading-relaxed text-purple-200/70">
-          A <strong className="text-white">Moderator</strong> is a deputy. They can
+      <div className="flex items-start gap-2 rounded-xl border border-line-1 bg-surface-1 p-3">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+        <p className="text-xs leading-relaxed text-text-2">
+          A <strong className="text-text-1">Moderator</strong> is a deputy. They can
           run the day-to-day portal — dashboard, allocations, results, clearance,
           templates, exports and notifications — but cannot touch school settings,
           billing, the audit log, or this screen.
@@ -203,18 +203,18 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
           return (
             <li
               key={row.staff_id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-3 sm:p-4"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-1 bg-surface-1 p-3 sm:p-4"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-white">
+                <p className="truncate text-sm font-medium text-text-1">
                   {row.full_name || row.staff_id}
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-purple-300/60">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-2">
                   <span className="font-mono">{row.staff_id}</span>
                   <span aria-hidden="true">·</span>
                   <span>{toTitleCase(row.role)}</span>
                   {row.is_moderator ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-300">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-success/40 bg-success-soft px-2 py-0.5 font-medium text-success">
                       <ShieldCheck className="h-3 w-3" aria-hidden="true" /> Moderator
                     </span>
                   ) : null}
@@ -237,8 +237,8 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
                 }
                 className={`inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   row.is_moderator
-                    ? "border border-purple-500/25 text-purple-200 hover:bg-white/5"
-                    : "bg-purple-600 text-white hover:bg-purple-500"
+                    ? "border border-line-1 text-text-2 hover:bg-surface-2"
+                    : "bg-accent text-accent-fg hover:bg-accent-hover"
                 }`}
               >
                 {working ? (
@@ -256,7 +256,7 @@ export default function ModeratorManager({ subdomain, isOnlyAdmin = false }: Mod
       </ul>
 
       {isOnlyAdmin ? (
-        <p className="flex items-start gap-2 text-xs text-amber-300/80">
+        <p className="flex items-start gap-2 text-xs text-warning/80">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           This school has one admin left, so demotion is blocked. Promote another
           admin first if you need to hand over.

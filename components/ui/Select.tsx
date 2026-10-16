@@ -270,7 +270,7 @@ export function Select({
     label && hideLabel ? (
       <span className="sr-only">{label}</span>
     ) : label ? (
-      <label htmlFor={triggerId} className="text-sm font-medium text-purple-100">
+      <label htmlFor={triggerId} className="text-sm font-medium text-text-1">
         {label}
       </label>
     ) : null;
@@ -299,13 +299,13 @@ export function Select({
           onClick={() => (open ? close() : openMenu())}
           onKeyDown={handleKeyDown}
           className={cn(
-            "flex w-full items-center justify-between gap-2 rounded-xl border text-left text-sm ring-offset-[#0B0514] transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
+            "flex w-full items-center justify-between gap-2 rounded-xl border text-left text-sm ring-offset-surface-0 transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
             size === "sm" ? "h-9 px-2" : "h-10 px-3 py-2",
             surface === "light"
               ? "border-amber-500/30 bg-white text-amber-900 focus-visible:border-amber-500 focus-visible:ring-amber-500/30 hover:border-amber-500/50"
-              : "bg-purple-950/30 text-purple-50 focus-visible:ring-purple-500 focus-visible:border-purple-500 hover:border-purple-700/70",
-            error ? "border-red-500/60 focus-visible:ring-red-500" : undefined,
-            !selected && !open && (surface === "light" ? "text-amber-900/50" : "text-purple-300/50"),
+              : "bg-surface-3 text-text-1 focus-visible:ring-accent focus-visible:border-accent hover:border-line-2",
+            error ? "border-danger/60 focus-visible:ring-danger" : undefined,
+            !selected && !open && (surface === "light" ? "text-amber-900/50" : "text-text-3"),
             triggerClassName
           )}
         >
@@ -313,7 +313,7 @@ export function Select({
           <ChevronDown
             className={cn(
               "shrink-0 transition-transform duration-150",
-              surface === "light" ? "text-amber-700" : "text-purple-300",
+              surface === "light" ? "text-amber-700" : "text-text-3",
               size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4",
               open && "rotate-180"
             )}
@@ -322,7 +322,7 @@ export function Select({
         </button>
 
         {error && (
-          <p id={errorId} className="text-xs text-red-400">
+          <p id={errorId} className="text-xs text-danger">
             {error}
           </p>
         )}
@@ -348,7 +348,7 @@ export function Select({
               "fixed z-[9999] max-h-72 overflow-y-auto rounded-xl border p-1 shadow-2xl shadow-black/50",
               surface === "light"
                 ? "border-amber-500/30 bg-white"
-                : "border-purple-700/50 bg-[#150C28]",
+                : "border-line-1 bg-surface-1",
               listboxClassName
             )}
           >
@@ -356,7 +356,7 @@ export function Select({
               <div
                 className={cn(
                   "px-3 py-2 text-sm",
-                  surface === "light" ? "text-amber-900/60" : "text-purple-300/60"
+                  surface === "light" ? "text-amber-900/60" : "text-text-3"
                 )}
               >
                 No options
@@ -383,14 +383,14 @@ export function Select({
                           ? "bg-amber-500/20 text-amber-950"
                           : "text-amber-900 hover:bg-amber-500/10"
                         : isActive
-                          ? "bg-purple-600/25 text-white"
-                          : "text-purple-100 hover:bg-purple-600/10"
+                          ? "bg-accent-soft text-text-1"
+                          : "text-text-1 hover:bg-surface-2"
                     )}
                   >
                     <span className="truncate">{children ? children(opt) : opt.label}</span>
                     {isSelected && (
                       <Check
-                        className={cn("h-4 w-4 shrink-0", surface === "light" ? "text-amber-700" : "text-purple-300")}
+                        className={cn("h-4 w-4 shrink-0", surface === "light" ? "text-amber-700" : "text-text-3")}
                         aria-hidden="true"
                       />
                     )}

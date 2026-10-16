@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GraduationCap, Menu, X } from "lucide-react";
 import { toTitleCase } from "@/lib/format";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 interface NavbarProps {
   schoolName: string;
@@ -70,6 +71,7 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
               {link.label}
             </Link>
           ))}
+          <ThemeToggle />
         </div>
 
         {/* Mobile hamburger */}
@@ -82,6 +84,7 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
+        <ThemeToggle className="ml-auto md:hidden" />
       </nav>
 
       {/* Mobile dropdown */}

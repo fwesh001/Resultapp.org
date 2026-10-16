@@ -178,7 +178,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-12 text-purple-200/60">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-line-1 bg-surface-1 p-12 text-text-2">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading tenant…
         </div>
       </div>
@@ -187,12 +187,12 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <Link href="/superadmin/tenants" className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 hover:text-white">
+      <Link href="/superadmin/tenants" className="inline-flex items-center gap-1.5 text-sm text-text-2 hover:text-text-1">
         <ArrowLeft className="h-4 w-4" /> Tenants
       </Link>
 
       {error && (
-        <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-4 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -201,8 +201,8 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
       {school && (
         <>
           {school.deleted_at && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <p className="text-sm text-red-200">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-danger/30 bg-danger-soft p-4">
+              <p className="text-sm text-danger">
                 This school was soft-deleted{` — portals return 404, ledger history preserved.`}
               </p>
               <button
@@ -217,9 +217,9 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
           )}
           <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white">{toTitleCase(school.school_name)}</h1>
-              <p className="mt-1 font-mono text-sm text-purple-300/60">{school.subdomain}.resultapp.org</p>
-              <p className="mt-1 text-xs text-purple-200/50">
+              <h1 className="text-2xl font-bold tracking-tight text-text-1">{toTitleCase(school.school_name)}</h1>
+              <p className="mt-1 font-mono text-sm text-text-2">{school.subdomain}.resultapp.org</p>
+              <p className="mt-1 text-xs text-text-3">
                 {school.email || "no email"} {school.phone ? `• ${school.phone}` : ""} • since{" "}
                 {school.created_at ? new Date(school.created_at).toLocaleDateString() : "—"}
               </p>
@@ -227,10 +227,10 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
             <span
               className={`rounded-full border px-3 py-1 text-xs font-medium ${
                 school.deleted_at
-                  ? "border-red-500/30 bg-red-500/15 text-red-200"
+                  ? "border-danger/30 bg-danger-soft text-danger"
                   : school.is_active === false
-                    ? "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                    ? "border-line-1 bg-surface-2 text-text-2"
+                    : "border-success/40 bg-success-soft text-success"
               }`}
             >
               {school.deleted_at ? "Deleted" : school.is_active === false ? "Suspended" : (school.subscription_status || "Unpaid")}
@@ -238,30 +238,30 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.06] p-5">
-              <div className="flex items-center gap-2 text-sm text-purple-200/60">
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+              <div className="flex items-center gap-2 text-sm text-text-2">
                 <Coins className="h-4 w-4" /> Publishing Credits
               </div>
-              <p className="mt-2 text-2xl font-bold text-white">{school.credit_balance ?? 0}</p>
+              <p className="mt-2 text-2xl font-bold text-text-1">{school.credit_balance ?? 0}</p>
             </div>
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.06] p-5">
-              <div className="flex items-center gap-2 text-sm text-purple-200/60">
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+              <div className="flex items-center gap-2 text-sm text-text-2">
                 <Layers className="h-4 w-4" /> Slot Balance
               </div>
-              <p className="mt-2 text-2xl font-bold text-white">{school.slots_balance ?? 0}</p>
+              <p className="mt-2 text-2xl font-bold text-text-1">{school.slots_balance ?? 0}</p>
             </div>
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.06] p-5">
-              <div className="flex items-center gap-2 text-sm text-purple-200/60">
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+              <div className="flex items-center gap-2 text-sm text-text-2">
                 <Power className="h-4 w-4" /> Status
               </div>
-              <p className="mt-2 text-2xl font-bold text-white">{school.is_active === false ? "Suspended" : "Active"}</p>
+              <p className="mt-2 text-2xl font-bold text-text-1">{school.is_active === false ? "Suspended" : "Active"}</p>
             </div>
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-              <h2 className="text-sm font-semibold text-white">Grant free tokens</h2>
-              <p className="mt-1 text-xs text-purple-200/60">Free grants — recorded with ₦0, excluded from MRR.</p>
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+              <h2 className="text-sm font-semibold text-text-1">Grant free tokens</h2>
+              <p className="mt-1 text-xs text-text-2">Free grants — recorded with ₦0, excluded from MRR.</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <div className="flex gap-1.5" role="group" aria-label="Token type">
                   {(["CREDIT", "SLOT"] as const).map((t) => (
@@ -272,8 +272,8 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                       aria-pressed={grantType === t}
                       className={
                         grantType === t
-                          ? "rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white"
-                          : "rounded-full border border-purple-500/20 px-3 py-1.5 text-xs text-purple-200 hover:bg-purple-900/20"
+                          ? "rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg"
+                          : "rounded-full border border-line-1 px-3 py-1.5 text-xs text-text-2 hover:bg-surface-2"
                       }
                     >
                       {t === "CREDIT" ? "Credits" : "Slots"}
@@ -286,27 +286,27 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                   value={grantAmount}
                   onChange={(e) => setGrantAmount(e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="50"
-                  className="w-24 rounded-xl border border-purple-500/20 bg-[#0B0514] px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                  className="w-24 rounded-xl border border-line-1 bg-surface-0 px-3 py-2 text-sm text-text-1 focus:border-accent focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => void handleGrant()}
                   disabled={acting === "grant"}
-                  className="rounded-full bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+                  className="rounded-full bg-accent px-4 py-2 text-xs font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-50"
                 >
                   {acting === "grant" ? "Granting…" : "Grant"}
                 </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-              <h2 className="text-sm font-semibold text-white">Danger zone</h2>
+            <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+              <h2 className="text-sm font-semibold text-text-1">Danger zone</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setShowSuspend(true)}
                   disabled={acting === "status"}
-                  className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                  className="rounded-full border border-warning/30 bg-warning-soft px-4 py-2 text-xs font-semibold text-warning hover:bg-amber-500/20 disabled:opacity-50"
                 >
                   {school.is_active === false ? "Reactivate tenant" : "Suspend tenant"}
                 </button>
@@ -314,7 +314,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                   type="button"
                   onClick={() => setShowResetPassword(true)}
                   disabled={acting === "reset"}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 px-4 py-2 text-xs font-medium text-purple-200 hover:bg-purple-900/20 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line-1 px-4 py-2 text-xs font-medium text-text-2 hover:bg-surface-2 disabled:opacity-50"
                 >
                   <KeyRound className="h-3.5 w-3.5" /> Reset admin password
                 </button>
@@ -323,30 +323,30 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
                     type="button"
                     onClick={() => setShowDelete(true)}
                     disabled={acting === "delete"}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-4 py-2 text-xs font-semibold text-danger hover:bg-red-500/20 disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete school
                   </button>
                 )}
               </div>
               {tempPassword && (
-                <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 font-mono text-sm text-emerald-200">
+                <p className="mt-3 rounded-xl border border-success/40 bg-success-soft px-3 py-2 font-mono text-sm text-success">
                   Temp password: {tempPassword}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-            <h2 className="text-sm font-semibold text-white">Audit trail — {school.subdomain}</h2>
+          <div className="mt-4 rounded-2xl border border-line-1 bg-surface-1 p-5">
+            <h2 className="text-sm font-semibold text-text-1">Audit trail — {school.subdomain}</h2>
             {audit.length === 0 ? (
-              <p className="mt-2 text-xs text-purple-300/40">No recorded admin actions for this tenant.</p>
+              <p className="mt-2 text-xs text-text-3">No recorded admin actions for this tenant.</p>
             ) : (
               <div className="mt-3 space-y-2">
                 {audit.map((a) => (
-                  <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-500/10 bg-[#0B0514]/40 px-3 py-2 text-xs">
-                    <span className="font-mono text-purple-200">{a.action}</span>
-                    <span className="text-purple-300/50">{new Date(a.created_at).toLocaleString()}</span>
+                  <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line-1 bg-surface-0/40 px-3 py-2 text-xs">
+                    <span className="font-mono text-text-2">{a.action}</span>
+                    <span className="text-text-3">{new Date(a.created_at).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
