@@ -26,12 +26,18 @@ SAFETY
     - Refuses to run if a keep-list tenant is missing from the DB, or if the
       resolved keep-list is not a subset of --keep. That catches a typo in
       --keep BEFORE anything is destroyed.
-    - Everything row-related happens in ONE transaction per tenant with
+    - Everything row-related happens in ONE real transaction per tenant with
       session_replication_role=replica, so FK triggers cannot abort the run
       halfway and leave a tenant half-deleted. Any failure rolls back whole.
+      This needs the TRANSACTIONAL connector, not the autocommit one: under
+      autocommit conn.commit() is a no-op and "rolls back whole" was a lie.
     - Domains are removed only after all row commits succeed, and a domain
       failure is reported without undoing committed row deletes (a live
       orphan domain is recoverable; lost rows are not).
+    - After purging, every tenant-keyed table is re-scanned for rows whose
+      schools parent is gone. A purge that leaves orphans behind exits non-zero
+      rather than reporting success, because a silent orphan is what made this
+      database unrestorable in the first place.
 
 ENV
     Reads the same PG_* vars as the app (load backend/.env first) plus
@@ -111,12 +117,30 @@ def _count(conn, table: str, sub: str) -> int:
     return int(row[0]) if row else 0
 
 
-def _tenant_id_tables(conn) -> List[str]:
-    """Tables keyed by `tenant_id` (the schools.id UUID) instead of subdomain.
+def _tenant_id_tables(conn) -> List[Tuple[str, str]]:
+    """Tables with a `tenant_id` column, paired with the schools column it holds.
 
     These are invisible to a subdomain-only sweep. They are empty for most
     tenants today, but a table like support_tickets or notifications can hold
     real rows, and leaving them behind orphans a deleted school.
+
+    THE KEY IS THE SUBDOMAIN, NOT schools.id
+    ------------------------------------------
+    An earlier version of this assumed `tenant_id` held the schools.id UUID and
+    deleted with `WHERE tenant_id = <uuid>`. That matched ZERO rows, because
+    every tenant_id column in this schema actually stores the SUBDOMAIN STRING
+    -- their foreign keys all say so:
+
+        notifications       FOREIGN KEY (tenant_id) REFERENCES schools(subdomain)
+        support_tickets     FOREIGN KEY (tenant_id) REFERENCES schools(subdomain)
+
+    The deletes silently succeeded, so purging reported "0 rows" and left the
+    tenant's notifications behind as orphans whose schools row no longer existed.
+    That is what made pg_dump unrestorable: the post-data FK validation aborted
+    on every restore.
+
+    So the referenced column is read from the foreign key rather than assumed,
+    and only falls back to probing the data when a table has no FK at all.
     """
     cur = conn.cursor()
     cur.execute(
@@ -126,12 +150,51 @@ def _tenant_id_tables(conn) -> List[str]:
         GROUP BY table_name ORDER BY table_name;
         """
     )
-    return [r[0] for r in (cur.fetchall() or [])]
+    tables = [r[0] for r in (cur.fetchall() or [])]
+
+    # schools.subdomain and schools.id, for probing tables with no FK.
+    cur.execute("SELECT subdomain, id::text FROM schools;")
+    rows = cur.fetchall() or []
+    subs = {r[0] for r in rows}
+    uuids = {r[1] for r in rows}
+
+    out: List[Tuple[str, str]] = []
+    for table in tables:
+        cur.execute(
+            """
+            SELECT a.attname
+            FROM pg_constraint con
+            JOIN pg_class src ON src.oid = con.conrelid
+            JOIN pg_class tgt ON tgt.oid = con.confrelid
+            JOIN unnest(con.confkey) AS fk(attnum) ON TRUE
+            JOIN pg_attribute a ON a.attrelid = tgt.oid AND a.attnum = fk.attnum
+            WHERE con.contype = 'f' AND src.relname = %s AND tgt.relname = 'schools'
+            LIMIT 1;
+            """,
+            (table,),
+        )
+        row = cur.fetchone()
+        if row:
+            out.append((table, row[0]))
+            continue
+        # No FK to consult, so decide from what the column actually holds.
+        cur.execute(f'SELECT DISTINCT "tenant_id"::text FROM "{table}" WHERE "tenant_id" IS NOT NULL LIMIT 200;')
+        vals = {r[0] for r in (cur.fetchall() or [])}
+        if vals & uuids and not (vals & subs):
+            out.append((table, "id"))
+        else:
+            out.append((table, "subdomain"))
+    return out
 
 
-def _purge_tenant(conn, sub: str, tables: List[str], tid_tables: List[str],
+def _purge_tenant(conn, sub: str, tables: List[str], tid_tables: List[Tuple[str, str]],
                   tenant_id: Optional[str], execute: bool) -> Dict[str, int]:
-    """Delete one tenant's rows. One transaction; FK triggers disabled."""
+    """Delete one tenant's rows. One transaction; FK triggers disabled.
+
+    `tid_tables` is (table, schools_column) pairs -- see _tenant_id_tables for
+    why the key is read rather than assumed. `tenant_id` remains the schools.id
+    UUID, used only by tables that genuinely reference schools.id.
+    """
     deleted: Dict[str, int] = {}
     cur = conn.cursor()
     try:
@@ -143,26 +206,36 @@ def _purge_tenant(conn, sub: str, tables: List[str], tid_tables: List[str],
             if n:
                 deleted[table] = n
                 if execute:
-                    cur.execute(f"DELETE FROM {table} WHERE subdomain = %s;", (sub,))
-        if tenant_id:
-            for table in tid_tables:
-                cur.execute(f"SELECT COUNT(*) FROM {table} WHERE tenant_id = %s;", (tenant_id,))
-                row = cur.fetchone()
-                n = int(row[0]) if row else 0
-                if n:
-                    deleted[f"{table}(tenant_id)"] = n
-                    if execute:
-                        cur.execute(f"DELETE FROM {table} WHERE tenant_id = %s;", (tenant_id,))
+                    cur.execute(f'DELETE FROM "{table}" WHERE subdomain = %s;', (sub,))
+        for table, key_col in tid_tables:
+            # The column stores whichever schools column its FK points at.
+            # Passing the UUID where a subdomain is expected deletes nothing and
+            # orphans the row; passing a subdomain where a UUID is expected does
+            # the same. One wrong guess, silently.
+            value = tenant_id if key_col == "id" else sub
+            cur.execute(f'SELECT COUNT(*) FROM "{table}" WHERE "tenant_id" = %s;', (value,))
+            row = cur.fetchone()
+            n = int(row[0]) if row else 0
+            if n:
+                label = f"{table}(tenant_id={key_col})"
+                deleted[label] = n
+                if execute:
+                    cur.execute(f'DELETE FROM "{table}" WHERE "tenant_id" = %s;', (value,))
+        # Restore triggers BEFORE committing: a committed session must never
+        # leave replication_role off, or every later write in this connection
+        # silently skips its constraints.
+        cur.execute("SET session_replication_role = DEFAULT;")
         if execute:
             conn.commit()
     except Exception:
         conn.rollback()
         raise
     finally:
-        try:
-            cur.execute("SET session_replication_role = DEFAULT;")
-        except Exception:
-            pass
+        if execute:
+            try:
+                cur.execute("SET session_replication_role = DEFAULT;")
+            except Exception:
+                pass
     return deleted
 
 
@@ -201,6 +274,34 @@ def _delete_domain(sub: str, cfg: Optional[Dict[str, str]]) -> str:
     return f"failed (HTTP {resp.status_code})"
 
 
+def _orphans_left(conn, tid_tables: List[Tuple[str, str]]) -> Dict[str, int]:
+    """Rows in tenant-keyed tables whose schools parent no longer exists.
+
+    The check that makes a silent purge failure loud. Every purge that leaves
+    these behind is a purge that broke the database's restorability, so it must
+    not be reported as a clean run.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND column_name IN ('subdomain', 'tenant_id')
+        AND table_name <> 'schools' ORDER BY table_name;
+        """
+    )
+    found: Dict[str, int] = {}
+    for table, col in cur.fetchall() or []:
+        cur.execute(
+            f'SELECT count(*) FROM "{table}" t WHERE "{col}" IS NOT NULL '
+            f'AND NOT EXISTS (SELECT 1 FROM schools s WHERE s.subdomain = t."{col}");'
+        )
+        row = cur.fetchone()
+        n = int(row[0]) if row else 0
+        if n:
+            found[f"{table}.{col}"] = n
+    return found
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Hard-purge tenants and unregister domains.")
     ap.add_argument("--execute", action="store_true", help="Actually delete (default: dry run).")
@@ -230,7 +331,11 @@ def main() -> int:
             )
             return 2
 
-    conn = db._connect_as_superuser()
+    # TRANSACTIONAL, not the autocommit connector. The per-tenant rollback
+    # guarantee documented above is only real on a connection that has a
+    # transaction to roll back; under autocommit conn.rollback() is a no-op and
+    # a mid-purge failure would leave a half-deleted tenant behind.
+    conn = db._connect_as_superuser_transactional()
     try:
         all_subs, targets = _target_subdomains(conn, keep)
         keep_missing = [k for k in keep if k not in all_subs]
@@ -283,6 +388,22 @@ def main() -> int:
         for sub in purged:
             status = "skipped (--skip-domains)" if args.skip_domains else _delete_domain(sub, cfg)
             print(f"[domain] {sub}.resultapp.org -> {status}")
+
+        # The loud failure this script used to lack. A purge that leaves rows
+        # pointing at a schools row that no longer exists is a purge that has
+        # broken pg_dump restorability -- which is exactly the bug that put
+        # eight orphaned notifications in production. Report it, exit non-zero.
+        conn.commit()
+        orphans = _orphans_left(conn, tid_tables)
+        print("\n--- post-purge orphan check ---")
+        if orphans:
+            print("[FAIL] rows still reference a schools parent that does not exist:")
+            for key, n in orphans.items():
+                print(f"    {key}: {n}")
+            print("  A restore of this database will now ABORT. Fix these before trusting a backup.")
+            print(f"\nDone. Purged {len(purged)} tenant(s); {len(failed)} failure(s); ORPHANS REMAIN.")
+            return 1
+        print("[ok] no tenant-keyed row references a missing schools parent")
 
         print(f"\nDone. Purged {len(purged)} tenant(s); {len(failed)} failure(s).")
         print("Remainder (kept):", sorted(keep))
