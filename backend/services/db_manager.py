@@ -741,6 +741,47 @@ def init_schools_registry() -> None:
                 UNIQUE(subdomain, student_id, term, academic_session)
             );
         """)
+        # -------------------------------------------------------------------
+        # class_name_snapshot  (End of Session, Phase 6)
+        #
+        # THE BUG THIS FIXES
+        # ------------------
+        # A report card is a record of one term. Its student bio was read LIVE
+        # from tenant_students at render time, which means the class printed on
+        # a parent's copy of last Term's report is whatever the student is in
+        # TODAY. Close a session and a graduate's final report card suddenly
+        # claims a class they were never in.
+        #
+        # It is not only the display line. report.py uses class_name to:
+        #   - re-resolve the grading TEMPLATE bound to that class (:806)
+        #   - select the PEER COHORT for ranking (:813)
+        #   - look up the FORM TEACHER whose signature signs the card (:850)
+        # So a promotion silently re-renders an old result with the new
+        # class's template, ranks the student against their new classmates, and
+        # signs it with the new form teacher. All four now read the snapshot.
+        #
+        # NULLABLE on purpose. A publication whose student row is gone (an
+        # orphan from a pre-cascade delete — purge_orphan_students.py exists to
+        # mop up after exactly that) can have no snapshot, and every reader uses
+        # COALESCE(snapshot, live) so those rows keep rendering.
+        #
+        # NOT part of the UNIQUE key. The snapshot is an attribute OF a
+        # publication, not part of its identity — adding it there would let one
+        # student be published twice for the same term, and the free-reprint
+        # logic depends on that row existing exactly once.
+        # -------------------------------------------------------------------
+        cur.execute(
+            "ALTER TABLE result_publications "
+            "ADD COLUMN IF NOT EXISTS class_name_snapshot VARCHAR(60);"
+        )
+        # The BACKFILL is NOT here. result_publications is created by
+        # init_schools_registry, which main.py runs BEFORE init_roster_registry
+        # — so on a brand-new database tenant_students does not exist yet and the
+        # UPDATE would raise "relation does not exist", get swallowed by this
+        # function's warn-only wrapper, and leave the column permanently
+        # unbackfilled with nothing in the journal above WARNING. It lives in
+        # init_roster_registry instead, which is guaranteed to run after
+        # tenant_students exists.
         cur.execute("""
             CREATE INDEX IF NOT EXISTS ix_publications_lookup
             ON result_publications (subdomain, student_id, term);
@@ -2953,13 +2994,19 @@ def publish_student_results(
             cur.execute(
                 f"""
                 INSERT INTO {RESULT_PUBLICATIONS_TABLE}
-                    (subdomain, student_id, term, academic_session, published_by)
-                SELECT %s, sid, %s, %s, %s
+                    (subdomain, student_id, term, academic_session, published_by,
+                     class_name_snapshot)
+                SELECT %s, sid, %s, %s, %s, s.class_name
                 FROM UNNEST(%s::text[]) AS sid
+                -- LEFT, not INNER: publishing must NEVER fail because a roster
+                -- row is missing. A publication with a NULL snapshot renders
+                -- exactly as it does today (COALESCE falls through to live).
+                LEFT JOIN {TENANT_STUDENTS_TABLE} s
+                  ON s.subdomain = %s AND LOWER(s.student_id) = LOWER(sid)
                 ON CONFLICT (subdomain, student_id, term, academic_session) DO NOTHING
                 RETURNING id;
                 """,
-                (subdomain, term, academic_session, published_by, to_publish),
+                (subdomain, term, academic_session, published_by, to_publish, subdomain),
             )
             published_now = len(cur.fetchall())
             if published_now:
@@ -3582,6 +3629,40 @@ def init_roster_registry() -> None:
         cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{TENANT_GRADES_TABLE}_student_id ON {TENANT_GRADES_TABLE}(student_id);")
 
         conn.commit()
+        # Publication class snapshots (End of Session, Phase 6).
+        #
+        # HERE, not next to the column definition: result_publications is
+        # created by init_schools_registry, which main.py runs BEFORE this
+        # function, so tenant_students did not exist yet at that point and a
+        # backfill placed there would raise, be swallowed by the warn-only
+        # wrapper, and silently never run.
+        #
+        # One statement, so it is naturally idempotent: re-running it only
+        # touches rows still NULL, so a row already stamped at publish time is
+        # never overwritten by today's class.
+        try:
+            cur.execute(f"""
+                UPDATE {RESULT_PUBLICATIONS_TABLE} p
+                   SET class_name_snapshot = s.class_name
+                  FROM {TENANT_STUDENTS_TABLE} s
+                 WHERE s.subdomain = p.subdomain
+                   AND LOWER(s.student_id) = LOWER(p.student_id)
+                   AND p.class_name_snapshot IS NULL;
+            """)
+            if cur.rowcount:
+                logger.info(
+                    "[DB] Backfilled class_name_snapshot on %s publication(s)", cur.rowcount
+                )
+        except Exception as _snap_err:
+            # Never fatal. A missing snapshot degrades to the live class, which
+            # is exactly today's behaviour — so this must not take the roster
+            # init down with it.
+            logger.warning(
+                "[DB] class_name_snapshot backfill skipped (%s); readers fall back "
+                "to the live class until the next boot",
+                _snap_err,
+            )
+
         logger.info("[DB] Roster tables ready (tenant_students, tenant_staff, tenant_allocations, tenant_subjects, tenant_grades)")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize roster registry: {e}")

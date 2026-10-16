@@ -1372,6 +1372,146 @@ check("apply cannot promote a cohort twice under concurrency", () => {
     : `${commitsAfter} commits after the run lock is taken; only the final one is safe`;
 });
 
+// ---------------------------------------------------------------------------
+// Phase 6 — class_name_snapshot. A report card is a record of one term, so it
+// must not be re-rendered from whatever class the student is in TODAY.
+//
+// The failure is invisible on the screen the developer is looking at. Nothing
+// throws, the card renders, the numbers are right — and a parent's copy of last
+// Term's report now claims a class the student was never in. Worse, class_name
+// is not just a display line: report.py re-resolves the grading TEMPLATE and
+// looks up the FORM TEACHER from it, so a cohort close silently re-renders an
+// old result with the new class's template and the new class's signature.
+//
+// Failure mode if reverted: no error, anywhere. The column goes unused, every
+// reader silently falls back to the live class, and the bug is only ever found
+// by a parent.
+// ---------------------------------------------------------------------------
+
+/** Strip Python AND in-SQL comments, so prose cannot satisfy a structural check. */
+const code = (s) =>
+  s
+    .split("\n")
+    .filter((l) => !/^\s*(#|--)/.test(l))
+    .join("\n");
+
+/** Slice one top-level function out of a Python source file. */
+function fnSlice(src, name) {
+  const i = src.indexOf(`def ${name}`);
+  if (i === -1) return null;
+  const rest = src.slice(i + 1);
+  const m = /\n(def |@|class )/.exec(rest);
+  return m ? src.slice(i, i + 1 + m.index) : src.slice(i);
+}
+
+check("publishing stamps the class onto the publication row", () => {
+  const src = read(DB);
+  const fn = fnSlice(src, "publish_student_results");
+  if (!fn) return "cannot locate publish_student_results";
+  const body = code(fn);
+
+  if (!/INSERT INTO \{RESULT_PUBLICATIONS_TABLE\}/.test(body)) {
+    return "the publications INSERT is gone";
+  }
+  if (!/class_name_snapshot\)/.test(body)) {
+    return "the INSERT does not list class_name_snapshot — publications record no class at all";
+  }
+  if (!/SELECT %s, sid, %s, %s, %s, s\.class_name/.test(body)) {
+    return "the snapshot value is not the student's class at publish time";
+  }
+  // LEFT, not INNER. Publishing bills a credit per row inserted; an INNER JOIN
+  // would silently publish FEWER students (and bill less) when a roster row is
+  // missing, or fail the whole batch. Neither is visible in the UI.
+  if (!/LEFT JOIN \{TENANT_STUDENTS_TABLE\} s/.test(body)) {
+    return /INNER JOIN \{TENANT_STUDENTS_TABLE\}/.test(body)
+      ? "the roster join is INNER — a missing student drops them from the batch"
+      : "the snapshot is not read via a LEFT JOIN on tenant_students";
+  }
+  // The whole point: a re-publish must NOT rewrite history. DO NOTHING keeps the
+  // original row, and therefore the original class.
+  if (!/ON CONFLICT \(subdomain, student_id, term, academic_session\) DO NOTHING/.test(body)) {
+    return "the INSERT can overwrite an existing publication — re-publishing would rewrite the recorded class";
+  }
+  return /DO UPDATE/.test(body)
+    ? "the INSERT uses DO UPDATE, which lets a later publish overwrite the first class"
+    : true;
+});
+
+check("the report card reads its class from the publication, not the live roster", () => {
+  const src = read(path.join("backend", "routers", "report.py"));
+  const body = code(src);
+
+  // The snapshot must be resolved for the term/session this card is FOR. A
+  // lookup with no term scope returns an arbitrary publication and is worse
+  // than none at all — it is confidently wrong.
+  const snap = /SELECT class_name_snapshot FROM result_publications[\s\S]{0,300}?term = %s AND academic_session = %s/.test(body);
+  if (!snap) {
+    return "the snapshot is not read, or is read without scoping to the term and session of the card";
+  }
+
+  // Resolved once, then assigned to the bio that the template, peers and
+  // form-teacher all read from. If class_name were still d.get("class_name")
+  // the snapshot would be computed and thrown away.
+  if (!/"class_name": _effective_class/.test(body)) {
+    return "the bio still reports the live class — the snapshot is fetched but discarded";
+  }
+  if (!/_effective_class = \(_snap or _live_class\)/.test(body)) {
+    return "the effective class does not fall back to the live class when no snapshot exists";
+  }
+
+  // The template is re-resolved from this class (":806") and the form teacher
+  // too, so both must read the effective value, not the row's class_name.
+  if (!/class_name = student\.get\("class_name"\)/.test(body)) {
+    return "the downstream class no longer comes from the bio";
+  }
+
+  // The PEER COHORT is the subtle one. Ranking against students who are in the
+  // class NOW silently re-bases an old result onto a new year group. The cohort
+  // must come from publications, scoped to the same term/session.
+  const cohort = /SELECT p\.student_id[\s\S]{0,600}?FROM \{RESULT_PUBLICATIONS_TABLE\} p[\s\S]{0,600}?p\.term = %s[\s\S]{0,200}?p\.academic_session = %s/.test(body);
+  if (!cohort) {
+    return "the peer cohort is not sourced from result_publications for this term/session — ranking follows the live class";
+  }
+  if (!/COALESCE\(p\.class_name_snapshot, s\.class_name\) = %s/.test(body)) {
+    return "the peer cohort does not match on the resolved class — unsnapshotted students silently drop out of their own ranking";
+  }
+  // A student missing from their own cohort would rank against nobody.
+  return /if sid not in class_student_ids:/.test(body)
+    ? true
+    : "a published student can fall out of their own peer cohort and be ranked against nobody";
+});
+
+check("historical exports print and filter on the recorded class", () => {
+  const src = read(path.join("backend", "routers", "export.py"));
+
+  for (const name of ["_student_rows", "_results_rows"]) {
+    const fn = fnSlice(src, name);
+    if (!fn) return `cannot locate ${name}`;
+    const body = code(fn);
+
+    // The SELECT LIST specifically — not "the expression appears somewhere in
+    // this function". The filter and ORDER BY clauses below also contain it, so
+    // a whole-function search passes even when the column a human actually
+    // reads has been reverted to the live class. That is the whole bug.
+    const selectList = /SELECT([\s\S]*?)\s+FROM\s/.exec(body);
+    if (!selectList) return `${name} has no readable SELECT list`;
+    if (!/COALESCE\(p\.class_name_snapshot, s\.class_name\)\s+AS class_name/.test(selectList[1])) {
+      return `${name} does not display the resolved class — a reprinted broadsheet relabels every student`;
+    }
+
+    // Filter AND order must use the same expression as the display, or the sheet
+    // contradicts itself: a class filter that silently returns nothing, or rows
+    // ordered by a column nobody sees.
+    if (/AND s\.class_name = %s/.test(body)) {
+      return `${name} filters on the live class while displaying the recorded one — the filter returns nothing for any promoted student`;
+    }
+    if (/ORDER BY s\.class_name/.test(body)) {
+      return `${name} orders by the live class while displaying the recorded one`;
+    }
+  }
+  return true;
+});
+
 check("malformed subdomains return 400/404, not 500", () => {
   const src = read(MAIN);
   if (!/@app\.exception_handler\(ValueError\)/.test(src)) {

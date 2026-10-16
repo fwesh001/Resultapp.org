@@ -328,14 +328,16 @@ def _summary_rows(cur, tid, school, term, session):
 
 
 def _student_rows(cur, tid, term, session, clearance_filter, class_name):
-    from services.db_manager import TENANT_STUDENTS_TABLE, STUDENT_CLEARANCE_TABLE
+    from services.db_manager import TENANT_STUDENTS_TABLE, STUDENT_CLEARANCE_TABLE, RESULT_PUBLICATIONS_TABLE
 
     # The LEFT JOIN + COALESCE pair is load-bearing and is copied verbatim in
     # spirit from clearance.py: an INNER JOIN would silently drop every student
     # the bursar never touched, which is the exact opposite of the truth
     # (untouched == cleared).
     sql = f"""
-        SELECT s.student_id, s.full_name, s.class_name, s.gender,
+        SELECT s.student_id, s.full_name,
+               COALESCE(p.class_name_snapshot, s.class_name) AS class_name,
+               s.gender,
                COALESCE(c.is_financially_cleared, TRUE) AS cleared,
                c.hold_reason
         FROM {TENANT_STUDENTS_TABLE} s
@@ -344,16 +346,27 @@ def _student_rows(cur, tid, term, session, clearance_filter, class_name):
           AND LOWER(c.student_id) = LOWER(s.student_id)
           AND c.term = %s
           AND c.academic_session = %s
+        -- The class the export is FOR, not the class the student is in today.
+        -- Without this, reprinting last term's broadsheet after a cohort close
+        -- relabels every student with the class they have just moved into. See
+        -- the result_publications class_name_snapshot migration.
+        LEFT JOIN {RESULT_PUBLICATIONS_TABLE} p
+          ON  p.subdomain = s.subdomain
+          AND LOWER(p.student_id) = LOWER(s.student_id)
+          AND p.term = %s
+          AND p.academic_session = %s
         WHERE s.subdomain = %s
     """
-    params = [term, session, tid]
+    params = [term, session, term, session, tid]
 
     if class_name:
-        sql += " AND s.class_name = %s"
+        # Filter on the RESOLVED class, not s.class_name, or the filter and the
+        # displayed column disagree and a class filter silently returns nothing.
+        sql += " AND COALESCE(p.class_name_snapshot, s.class_name) = %s"
         params.append(class_name)
 
     # Ordered ascending because constant_memory cannot revisit flushed rows.
-    sql += " ORDER BY s.class_name ASC, s.full_name ASC"
+    sql += " ORDER BY COALESCE(p.class_name_snapshot, s.class_name) ASC, s.full_name ASC"
 
     cur.execute(sql, params)
     rows = []
@@ -461,14 +474,18 @@ def _subject_rows(cur, tid):
 
 def _results_rows(cur, tid, term, session, class_name):
     """Per-student publication state for the term."""
-    from services.db_manager import TENANT_STUDENTS_TABLE
+    from services.db_manager import TENANT_STUDENTS_TABLE, RESULT_PUBLICATIONS_TABLE
 
+    # Same resolved-class rule as _student_rows: a publication list is a record
+    # of what was published for one term, so it must show the class each student
+    # was published UNDER, not the class they are in now.
     sql = f"""
-        SELECT s.student_id, s.full_name, s.class_name,
+        SELECT s.student_id, s.full_name,
+               COALESCE(p.class_name_snapshot, s.class_name) AS class_name,
                CASE WHEN p.student_id IS NULL THEN 'Not Published' ELSE 'Published' END AS status,
                COALESCE(p.published_at::text, '') AS published_at
         FROM {TENANT_STUDENTS_TABLE} s
-        LEFT JOIN result_publications p
+        LEFT JOIN {RESULT_PUBLICATIONS_TABLE} p
           ON  p.subdomain = s.subdomain
           AND LOWER(p.student_id) = LOWER(s.student_id)
           AND p.term = %s
@@ -477,9 +494,9 @@ def _results_rows(cur, tid, term, session, class_name):
     """
     params = [term, session, tid]
     if class_name:
-        sql += " AND s.class_name = %s"
+        sql += " AND COALESCE(p.class_name_snapshot, s.class_name) = %s"
         params.append(class_name)
-    sql += " ORDER BY s.class_name ASC, s.full_name ASC"
+    sql += " ORDER BY COALESCE(p.class_name_snapshot, s.class_name) ASC, s.full_name ASC"
 
     cur.execute(sql, params)
     return [(r[0], r[1], r[2], r[3], r[4]) for r in cur.fetchall()]

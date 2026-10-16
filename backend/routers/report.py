@@ -663,7 +663,7 @@ def get_report_bundle(
 
     # Fetch student bio from tenant_students
     student = None
-    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, _connect_as_superuser, _row_to_dict
+    from services.db_manager import TENANT_STUDENTS_TABLE, TENANT_GRADES_TABLE, TENANT_STAFF_TABLE, TENANT_FORM_ASSIGNMENTS_TABLE, RESULT_PUBLICATIONS_TABLE, _connect_as_superuser, _row_to_dict
 
     conn = None
     try:
@@ -708,10 +708,36 @@ def get_report_bundle(
             d = _row_to_dict(row, cur)
             # Trust the stored casing (it is what every other query matches on).
             sid = d.get("student_id") or sid
+
+            # The class this RESULT was earned in, not the class the student is
+            # in today. Falls back to live when there is no publication row for
+            # this term/session (an unpublished draft preview, or an orphan
+            # publication whose student row is gone).
+            #
+            # Resolved ONCE here so the single value drives the template
+            # re-resolution, the peer cohort, the form-teacher lookup and the
+            # displayed bio. Reading live for any of them re-renders last
+            # term's card with this term's class, template, ranking and
+            # signature — which is the bug the snapshot exists to prevent.
+            _live_class = d.get("class_name")
+            try:
+                cur.execute(
+                    "SELECT class_name_snapshot FROM result_publications "
+                    "WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s) "
+                    "AND term = %s AND academic_session = %s LIMIT 1",
+                    (tid, sid, term, _session),
+                )
+                _snaprow = cur.fetchone()
+                _snap = _snaprow[0] if _snaprow else None
+            except Exception:
+                # An unreadable publications table must not blank the report.
+                _snap = None
+            _effective_class = (_snap or _live_class)
+
             student = {
                 "student_id": d.get("student_id"),
                 "full_name": d.get("full_name"),
-                "class_name": d.get("class_name"),
+                "class_name": _effective_class,
                 "gender": d.get("gender"),
             }
         else:
@@ -807,15 +833,50 @@ def get_report_bundle(
             template_payload = _template_payload(template)
             academic_structure = getattr(template, "academic_structure", None) if template else None
             grouped_template = _build_grouped_template(academic_structure)
-            # Fetch classmates for ranking
+            # Fetch classmates for ranking.
+            #
+            # Peers are students who sat this term in the SAME CLASS AS
+            # RECORDED AT PUBLICATION, not students who are in that class right
+            # now. After a cohort close those two sets diverge completely: a
+            # promoted student's old result would otherwise be ranked against
+            # the classmates they just joined, in a class whose template is
+            # bound to a different year group.
+            #
+            # The subquery therefore keys on result_publications, scoped to the
+            # same term/session this card is for. Students published before the
+            # snapshot column existed fall back to their live class via
+            # COALESCE, which preserves the old behaviour for exactly the rows
+            # that have no snapshot rather than dropping them from the ranking
+            # entirely.
             try:
+                cur.execute(
+                    f"""
+                    SELECT p.student_id
+                    FROM {RESULT_PUBLICATIONS_TABLE} p
+                    LEFT JOIN {TENANT_STUDENTS_TABLE} s
+                      ON s.subdomain = p.subdomain
+                     AND LOWER(s.student_id) = LOWER(p.student_id)
+                    WHERE p.subdomain = %s
+                      AND p.term = %s
+                      AND p.academic_session = %s
+                      AND COALESCE(p.class_name_snapshot, s.class_name) = %s
+                    """,
+                    (tid, term, _session, class_name),
+                )
+                class_student_ids = [r[0] for r in cur.fetchall() if r[0]]
+            except Exception:
+                # Fall back to the live class rather than showing no ranking at
+                # all — a worse answer is better than no answer on a report a
+                # parent is already holding.
                 cur.execute(
                     f"SELECT student_id FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s AND class_name = %s",
                     (tid, class_name),
                 )
                 class_student_ids = [r[0] for r in cur.fetchall() if r[0]]
-            except Exception:
-                class_student_ids = [sid]
+            if sid not in class_student_ids:
+                # A published-but-unsnapshotted student can fall out of their
+                # own cohort. Without this they would be ranked against nobody.
+                class_student_ids.append(sid)
 
             # Publication timestamp for the Date lines. Scoped to the same
             # session the gate used — the previous session-agnostic fallback
