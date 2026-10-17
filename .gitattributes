@@ -1,0 +1,11 @@
+# Binary assets: never line-ending-normalize. (core.autocrlf=true on this
+# machine has mangled binary content in the past when the 8-bit heuristic
+# misses NUL bytes — e.g. palette-indexed ICO rasters.)
+*.ico  binary
+*.png  binary
+*.avif binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.webmanifest binary
+*.cdr  binary
