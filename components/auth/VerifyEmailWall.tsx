@@ -54,43 +54,43 @@ export function VerifyEmailWall({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+      <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-4">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
         <div>
-          <p className="text-sm font-semibold text-amber-100">
+          <p className="text-sm font-semibold text-warning">
             Your email address isn&apos;t verified yet
           </p>
-          <p className="mt-1 text-xs leading-5 text-amber-100/70">
+          <p className="mt-1 text-xs leading-5 text-warning/70">
             You can carry on and use your portal now. Verifying just secures password
             resets and gives you a recovery email if you get locked out.
           </p>
         </div>
       </div>
 
-      <div className="rounded-xl border border-purple-500/15 bg-purple-950/20 p-3">
-        <p className="text-xs text-purple-200/60">
+      <div className="rounded-xl border border-line-2 bg-surface-2 p-3">
+        <p className="text-xs text-text-3">
           We sent a verification link to{" "}
-          <span className="font-mono text-purple-100">{email || "your address"}</span>.
+          <span className="font-mono text-text-2">{email || "your address"}</span>.
         </p>
       </div>
 
       {/* Prominent on purpose — see the component docblock. */}
-      <p className="text-xs leading-5 text-purple-200/70">
-        <strong className="font-semibold text-purple-100">Check your spam folder.</strong>{" "}
+      <p className="text-xs leading-5 text-text-2">
+        <strong className="font-semibold text-text-2">Check your spam folder.</strong>{" "}
         While resultapp.org is being set up we send from a personal address, so the message often
         lands in Promotions or Junk.
       </p>
 
       {error && (
-        <p className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+        <p className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
           {error}
         </p>
       )}
 
       {sent ? (
-        <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-          <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-          <p className="text-xs leading-5 text-emerald-100">
+        <div className="flex items-start gap-2 rounded-xl border border-success/30 bg-success-soft p-3">
+          <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+          <p className="text-xs leading-5 text-success">
             If that address has an account, a fresh link is on its way.
           </p>
         </div>
@@ -99,7 +99,7 @@ export function VerifyEmailWall({
           type="button"
           onClick={() => void handleResend()}
           disabled={sending}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-purple-500/25 bg-white/5 px-6 py-2.5 text-sm font-medium text-purple-200 transition hover:bg-white/10 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-line-1 bg-surface-2 px-6 py-2.5 text-sm font-medium text-text-2 transition hover:bg-surface-3 disabled:opacity-60"
         >
           {sending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -113,7 +113,7 @@ export function VerifyEmailWall({
       <button
         type="button"
         onClick={onContinue}
-        className="w-full rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+        className="w-full rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover"
       >
         Continue to my portal
       </button>

@@ -32,7 +32,7 @@ export function PasswordToggle({
       aria-label={visible ? `Hide ${label}` : `Show ${label}`}
       aria-pressed={visible}
       // Inside a <form>; without type="button" this would submit it.
-      className="flex h-full w-11 items-center justify-center rounded-r-xl text-purple-300/70 transition hover:text-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500"
+      className="flex h-full w-11 items-center justify-center rounded-r-xl text-text-3 transition hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
     >
       {visible ? (
         <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -99,7 +99,7 @@ export function PasswordField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-purple-100">
+      <label htmlFor={id} className="text-sm font-medium text-text-2">
         {label}
       </label>
       <div className="relative">
@@ -111,10 +111,10 @@ export function PasswordField({
           }
           aria-invalid={error ? true : undefined}
           className={
-            "flex h-10 w-full rounded-xl border bg-purple-950/30 py-2 pl-3 pr-11 text-sm text-purple-50 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 " +
+            "flex h-10 w-full rounded-xl border bg-surface-3 py-2 pl-3 pr-11 text-sm text-text-1 ring-offset-surface-0 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 " +
             (error
-              ? "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500"
-              : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500") +
+              ? "border-danger/60 focus-visible:ring-danger focus-visible:border-danger"
+              : "border-line-1 focus-visible:ring-accent focus-visible:border-accent") +
             (className ? ` ${className}` : "")
           }
           {...props}
@@ -128,11 +128,11 @@ export function PasswordField({
         </div>
       </div>
       {error ? (
-        <p id={`${id}-error`} className="text-xs text-red-400">
+        <p id={`${id}-error`} className="text-xs text-danger">
           {error}
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="text-xs text-purple-300/50">
+        <p id={`${id}-hint`} className="text-xs text-text-3">
           {hint}
         </p>
       ) : null}

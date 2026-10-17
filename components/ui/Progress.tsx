@@ -29,9 +29,9 @@ export interface ProgressProps {
 }
 
 const TONE: Record<NonNullable<ProgressProps["tone"]>, string> = {
-  brand: "bg-purple-500",
-  success: "bg-emerald-500",
-  danger: "bg-red-500",
+  brand: "bg-accent",
+  success: "bg-success",
+  danger: "bg-danger",
 };
 
 export function Progress({
@@ -50,7 +50,7 @@ export function Progress({
   return (
     <div className={cn("w-full", className)}>
       {showValue && (
-        <p className="mb-1.5 text-xs font-semibold text-purple-200/70">
+        <p className="mb-1.5 text-xs font-semibold text-text-2">
           {rounded}%
         </p>
       )}
@@ -61,7 +61,7 @@ export function Progress({
         aria-valuemax={100}
         aria-label={label}
         className={cn(
-          "w-full overflow-hidden rounded-full bg-purple-950/60",
+          "w-full overflow-hidden rounded-full bg-surface-3",
           size === "sm" ? "h-1.5" : "h-2.5",
         )}
       >

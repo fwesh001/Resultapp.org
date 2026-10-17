@@ -33,10 +33,10 @@ export function NetworkIndicator({
   // hydration does not flash a false state.
   const offline = isOnline === false;
   const tone = undetermined
-    ? "border-purple-500/25 bg-purple-500/10 text-purple-200/80"
+    ? "border-line-1 bg-accent-soft text-text-2"
     : offline
-      ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-200";
+      ? "border-warning/30 bg-warning-soft text-warning"
+      : "border-success/30 bg-success-soft text-success";
 
   const Icon = undetermined ? HardDriveDownload : offline ? CloudOff : Wifi;
 
@@ -69,7 +69,7 @@ export function NetworkIndicator({
 
       {!persistenceAvailable && (
         <span
-          className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 text-[11px] font-medium text-red-200"
+          className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-2.5 text-[11px] font-medium text-danger"
           title="This browser is blocking local storage (private mode or storage full), so drafts cannot be kept if the tab closes. Keep this tab open."
           role="status"
         >
@@ -79,7 +79,7 @@ export function NetworkIndicator({
 
       {isPendingWrite && persistenceAvailable && (
         <span
-          className="text-[11px] text-purple-300/50"
+          className="text-[11px] text-text-3"
           title="Your latest keystrokes are being written to this device."
         >
           saving…

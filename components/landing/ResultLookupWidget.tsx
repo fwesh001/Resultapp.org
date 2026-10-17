@@ -130,7 +130,7 @@ const [showPassword, setShowPassword] = useState(false);
     >
       <label
         htmlFor="student-id"
-        className="block text-sm font-medium text-text-1"
+        className="block text-sm font-medium text-white"
       >
         Student ID
       </label>
@@ -150,15 +150,15 @@ const [showPassword, setShowPassword] = useState(false);
       />
       {/* Explains the auto-prefix, and reassures anyone who types the full ID
           anyway — their input is still honoured verbatim. */}
-      <p id="student-id-hint" className="mt-2 text-xs text-text-3">
+      <p id="student-id-hint" className="mt-2 text-xs text-zinc-200">
         Just the admission number — the school prefix{" "}
-        <span className="font-mono text-text-2">{idPrefix || subdomain}/</span> is added
+        <span className="font-mono text-white">{idPrefix || subdomain}/</span> is added
         automatically.
       </p>
 
       <label
         htmlFor="student-password"
-        className="mt-4 block text-sm font-medium text-text-1"
+        className="mt-4 block text-sm font-medium text-white"
       >
         Password
       </label>
@@ -181,10 +181,10 @@ const [showPassword, setShowPassword] = useState(false);
           />
         </div>
       </div>
-      <p className="mt-2 text-xs text-text-3">
+      <p className="mt-2 text-xs text-zinc-200">
         First time here? Use the default password{" "}
-        <span className="font-mono text-text-2">123456</span>, then change it in the{" "}
-        <span className="font-medium text-text-2">Student Portal</span>.
+        <span className="font-mono text-white">123456</span>, then change it in the{" "}
+        <span className="font-medium text-white">Student Portal</span>.
       </p>
 
       {error ? (
@@ -198,7 +198,7 @@ const [showPassword, setShowPassword] = useState(false);
 
       <label
         htmlFor="term"
-        className="mt-4 block text-sm font-medium text-text-1"
+        className="mt-4 block text-sm font-medium text-white"
       >
         Term
       </label>
@@ -222,7 +222,7 @@ const [showPassword, setShowPassword] = useState(false);
       <button
         type="submit"
         disabled={busy}
-        className="mt-6 w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface-0 disabled:opacity-60"
+        className="mt-6 w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-60"
       >
         {busy ? "Checking…" : "View Report Card"}
       </button>

@@ -13,7 +13,7 @@ export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLo
       <div className="w-32 h-32 flex items-center justify-center relative">
         {/* Ring 1 (Outer) - 3s linear infinite rotateZ 0->360 rotateX 0->180 */}
         <motion.div
-          className="absolute w-full h-full border-t-2 border-b-2 border-purple-600/80 rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+          className="absolute w-full h-full border-t-2 border-b-2 border-accent rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
           initial={{ rotateZ: 0, rotateX: 0 }}
           animate={{ rotateZ: 360, rotateX: 180 }}
           transition={{
@@ -25,7 +25,7 @@ export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLo
 
         {/* Ring 2 (Middle) - 2.5s rotateZ 360->0 rotateY 0->180 */}
         <motion.div
-          className="absolute w-24 h-24 border-l-2 border-r-2 border-purple-400/80 rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+          className="absolute w-24 h-24 border-l-2 border-r-2 border-accent/80 rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
           initial={{ rotateZ: 360, rotateY: 0 }}
           animate={{ rotateZ: 0, rotateY: 180 }}
           transition={{
@@ -37,7 +37,7 @@ export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLo
 
         {/* Ring 3 (Inner) - 2s rotateX 360->0 */}
         <motion.div
-          className="absolute w-16 h-16 border-t-2 border-b-2 border-purple-200/80 rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+          className="absolute w-16 h-16 border-t-2 border-b-2 border-accent/40 rounded-full shadow-[0_0_15px_rgba(147,51,234,0.3)]"
           initial={{ rotateX: 360 }}
           animate={{ rotateX: 0 }}
           transition={{
@@ -49,7 +49,7 @@ export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLo
 
         {/* Core */}
         <motion.div
-          className="w-6 h-6 bg-purple-500 rounded-full shadow-[0_0_20px_#a855f7]"
+          className="w-6 h-6 bg-accent rounded-full shadow-[0_0_20px_#a855f7]"
           animate={{
             scale: [0.8, 1.2],
             opacity: [0.7, 1],
@@ -65,7 +65,7 @@ export default function ResultLoader({ message = "COMPILING_DATA..." }: ResultLo
 
       {/* Loading Text */}
       <motion.p
-        className="text-purple-300 font-mono text-sm tracking-widest mt-8"
+        className="text-text-2 font-mono text-sm tracking-widest mt-8"
         animate={{ opacity: [0.4, 1, 0.4] }}
         transition={{
           duration: 1.5,

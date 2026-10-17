@@ -30,7 +30,7 @@ export default function ThemeToggle({ className = "" }: Props) {
     return (
       <span
         aria-hidden="true"
-        className={`inline-block h-9 w-9 rounded-lg border border-line-1 ${className}`}
+        className={`inline-block min-h-[44px] min-w-[44px] rounded-lg border border-line-1 ${className}`}
       />
     );
   }
@@ -44,9 +44,9 @@ export default function ThemeToggle({ className = "" }: Props) {
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       aria-pressed={isDark}
       title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line-1 bg-surface-1 text-text-2 transition hover:bg-surface-2 hover:text-text-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
+      className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 bg-surface-1 p-2 text-text-2 transition hover:bg-surface-2 hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
     >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </button>
   );
 }

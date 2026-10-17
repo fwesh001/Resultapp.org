@@ -169,7 +169,7 @@ export default function WorkspaceLocatorForm() {
   return (
     <form onSubmit={role === "student" ? handleSubmit : handleVerifiedSubmit} className="space-y-5">
       <fieldset>
-        <legend className="text-sm font-medium text-purple-100">Who are you signing in as?</legend>
+        <legend className="text-sm font-medium text-text-2">Who are you signing in as?</legend>
         <div role="radiogroup" aria-label="Sign in as" className="mt-2 grid grid-cols-3 gap-2">
           {ROLES.map(({ id, label, hint, icon: Icon }) => {
             const active = role === id;
@@ -182,13 +182,13 @@ export default function WorkspaceLocatorForm() {
                 onClick={() => selectRole(id)}
                 className={`flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center transition ${
                   active
-                    ? "border-purple-400/60 bg-purple-500/15 text-white"
-                    : "border-purple-500/20 bg-purple-950/30 text-purple-200/70 hover:border-purple-400/40 hover:bg-purple-500/5"
+                    ? "border-accent/60 bg-accent-soft text-text-1"
+                    : "border-line-1 bg-surface-3 text-text-2 hover:border-accent/40 hover:bg-accent-soft"
                 }`}
               >
-                <Icon className={`h-5 w-5 ${active ? "text-purple-300" : "text-purple-300/60"}`} />
+                <Icon className={`h-5 w-5 ${active ? "text-accent" : "text-text-3"}`} />
                 <span className="text-sm font-semibold">{label}</span>
-                <span className="text-[11px] leading-tight text-purple-300/50">{hint}</span>
+                <span className="text-[11px] leading-tight text-text-3">{hint}</span>
               </button>
             );
           })}
@@ -196,7 +196,7 @@ export default function WorkspaceLocatorForm() {
       </fieldset>
 
       <div>
-        <label htmlFor="workspace-subdomain" className="text-sm font-medium text-purple-100">
+        <label htmlFor="workspace-subdomain" className="text-sm font-medium text-text-2">
           School portal ID
         </label>
         <div className="mt-2 flex">
@@ -216,22 +216,22 @@ export default function WorkspaceLocatorForm() {
             spellCheck={false}
             disabled={busy}
             aria-describedby="workspace-subdomain-hint"
-            className="flex h-10 w-full rounded-l-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 font-mono text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50"
+            className="flex h-10 w-full rounded-l-xl border border-line-1 bg-surface-3 px-3 py-2 font-mono text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
           />
-          <span className="inline-flex items-center rounded-r-xl border border-l-0 border-purple-800/50 bg-purple-950/30 px-3 font-mono text-sm text-purple-300/70">
+          <span className="inline-flex items-center rounded-r-xl border border-l-0 border-line-1 bg-surface-3 px-3 font-mono text-sm text-text-3">
             .resultapp.org
           </span>
         </div>
-        <p id="workspace-subdomain-hint" className="mt-1.5 flex items-center gap-1.5 text-xs text-purple-300/50">
+        <p id="workspace-subdomain-hint" className="mt-1.5 flex items-center gap-1.5 text-xs text-text-3">
           <Globe className="h-3 w-3" />
-          You&apos;ll continue at <span className="font-mono text-purple-200">{preview}.resultapp.org</span>
+          You&apos;ll continue at <span className="font-mono text-text-2">{preview}.resultapp.org</span>
         </p>
       </div>
 
       {error && (
         <div
           role="alert"
-          className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300"
+          className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger"
         >
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
@@ -243,7 +243,7 @@ export default function WorkspaceLocatorForm() {
       <Button
         type="submit"
         disabled={busy}
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+        className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
         size="lg"
       >
         {busy ? (

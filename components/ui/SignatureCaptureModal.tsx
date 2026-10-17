@@ -310,14 +310,14 @@ export default function SignatureCaptureModal({
       size="lg"
     >
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-purple-300/50">
+        <p className="text-xs text-text-3">
           Used only to sign report cards. It is stored securely and is not shared.
         </p>
 
         {/* The canvas is the primary control, so it is a real focusable element
             with an accessible name — drawing is otherwise invisible to a
             screen reader. */}
-        <div className="rounded-xl border border-purple-500/20 bg-white p-2">
+        <div className="rounded-xl border border-line-1 bg-white p-2">
           <canvas
             ref={canvasRef}
             role="img"
@@ -380,7 +380,7 @@ export default function SignatureCaptureModal({
           </Button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-purple-500/15 pt-3">
+        <div className="flex items-center justify-between gap-2 border-t border-line-2 pt-3">
           {/* "Skip" rather than Cancel-only: a pad that can only be dismissed
               as a failure feels broken to a first-time user. */}
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>

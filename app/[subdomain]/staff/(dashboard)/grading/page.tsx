@@ -455,24 +455,24 @@ export default function SmartStaffHubPage() {
         <div className="mb-6">
           <Link
             href={`/${tenantId}/staff`}
-            className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
+            className="inline-flex items-center gap-1.5 text-sm text-text-3 transition hover:text-text-1"
           >
             <ArrowLeft className="h-4 w-4" /> Back to dashboard
           </Link>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-text-1">
                 <Logo size="sm" alt="" className="rounded-lg" />
                 Smart Staff Hub
               </h1>
-              <p className="mt-1 max-w-2xl text-sm text-purple-200/60">
+              <p className="mt-1 max-w-2xl text-sm text-text-3">
                 Failsafe grading workflow — select a class, pick an assessment pill, and enter scores. Drafts auto-save to your browser; we’ll confirm before discarding unsaved work.
               </p>
-              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-900/10 px-2.5 py-1 text-xs text-purple-300/70">
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-line-1 bg-surface-2 px-2.5 py-1 text-xs text-text-3">
                 <ShieldCheck className="h-3 w-3" /> {tenantId}.resultapp.org • {term}
               </p>
             </div>
-            <label className="flex items-center gap-2 text-sm text-purple-200/70">
+            <label className="flex items-center gap-2 text-sm text-text-2">
               Term
 <Select
                   aria-label="Term"
@@ -490,19 +490,19 @@ export default function SmartStaffHubPage() {
 
         {/* Hub loading / error */}
         {hubLoading && (
-          <div className="flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-900/[0.04] px-4 py-6 text-sm text-purple-200/70 backdrop-blur">
+          <div className="flex items-center gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-6 text-sm text-text-2 backdrop-blur">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading your allocations…
           </div>
         )}
         {!hubLoading && hubError && (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+          <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <div className="flex-1">
               <span>{hubError}</span>
               <button
                 type="button"
                 onClick={() => void fetchHub()}
-                className="ml-2 font-medium underline underline-offset-4 hover:text-red-200"
+                className="ml-2 font-medium underline underline-offset-4 hover:text-danger"
               >
                 Retry
               </button>
@@ -512,20 +512,20 @@ export default function SmartStaffHubPage() {
 
         {/* Empty states */}
         {!hubLoading && !hubError && allocations.length === 0 && (
-          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 p-8 text-center backdrop-blur">
-            <Users className="mx-auto h-8 w-8 text-amber-300" />
-            <h3 className="mt-3 text-sm font-semibold text-white">No allocations yet</h3>
-            <p className="mt-1 text-sm text-purple-200/60">
+          <div className="rounded-2xl border border-warning/30 bg-warning-soft p-8 text-center">
+            <Users className="mx-auto h-8 w-8 text-warning" />
+            <h3 className="mt-3 text-sm font-semibold text-text-1">No allocations yet</h3>
+            <p className="mt-1 text-sm text-text-3">
               Your Principal hasn&apos;t assigned any classes. Please check back later or contact admin.
             </p>
           </div>
         )}
 
         {!hubLoading && !hubError && allocations.length > 0 && !template && (
-          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 p-6 text-center">
-            <AlertCircle className="mx-auto h-6 w-6 text-amber-300" />
-            <h3 className="mt-2 text-sm font-semibold text-white">No grading template</h3>
-            <p className="mt-1 text-sm text-purple-200/60">
+          <div className="rounded-2xl border border-warning/30 bg-warning-soft p-6 text-center">
+            <AlertCircle className="mx-auto h-6 w-6 text-warning" />
+            <h3 className="mt-2 text-sm font-semibold text-text-1">No grading template</h3>
+            <p className="mt-1 text-sm text-text-3">
               Ask an admin to create a grading template before entering scores. Pills will appear once a template exists.
             </p>
           </div>
@@ -540,21 +540,21 @@ export default function SmartStaffHubPage() {
               return (
                 <div
                   key={a.id}
-                  className="rounded-2xl border border-purple-500/20 bg-purple-900/[0.04] p-5 backdrop-blur transition hover:bg-purple-900/10"
+                  className="rounded-2xl border border-line-1 bg-surface-1 p-5 backdrop-blur transition hover:bg-surface-2"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600/15 ring-1 ring-purple-500/20">
-                    <BookOpen className="h-5 w-5 text-purple-300" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft ring-1 ring-accent/30">
+                    <BookOpen className="h-5 w-5 text-accent" />
                   </div>
-                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-purple-300/60">
+                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-text-3">
                     {classDecoded}
                   </p>
-                  <h3 className="mt-1 text-base font-semibold text-white">
+                  <h3 className="mt-1 text-base font-semibold text-text-1">
                     {classDecoded} • {subjectDecoded}
                   </h3>
-                  <p className="mt-1 text-xs text-purple-200/50">Assigned as {a.staff_name}</p>
+                  <p className="mt-1 text-xs text-text-3">Assigned as {a.staff_name}</p>
 
                   {assessments.length === 0 ? (
-                    <p className="mt-3 rounded-xl border border-amber-500/15 bg-amber-500/10 p-2 text-xs text-amber-300">
+                    <p className="mt-3 rounded-xl border border-warning/30 bg-warning-soft p-2 text-xs text-warning">
                       Template has no assessment items.
                     </p>
                   ) : (
@@ -564,9 +564,9 @@ export default function SmartStaffHubPage() {
                           key={ass.key}
                           type="button"
                           onClick={() => openAssessment(a.class_name, a.subject_name, ass)}
-                          className="rounded-full border border-purple-500/15 bg-purple-900/20 px-3 py-1.5 text-xs font-medium text-purple-200 transition hover:bg-purple-800/30 hover:text-white"
+                          className="rounded-full border border-line-2 bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-2 transition hover:bg-surface-3 hover:text-text-1"
                         >
-                          {ass.key} <span className="font-normal text-purple-300/60">(Max: {ass.max})</span>
+                          {ass.key} <span className="font-normal text-text-3">(Max: {ass.max})</span>
                         </button>
                       ))}
                     </div>
@@ -574,7 +574,7 @@ export default function SmartStaffHubPage() {
 
                   <Link
                     href={`/${tenantId}/staff/grading/${encodeURIComponent(a.class_name)}/${encodeURIComponent(a.subject_name)}?term=${encodeURIComponent(term)}`}
-                    className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full border border-purple-500/15 bg-white/[0.02] py-2 text-xs font-medium text-purple-200 transition hover:bg-purple-900/20 hover:text-white"
+                    className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full border border-line-1 bg-surface-2 py-2 text-xs font-medium text-text-2 transition hover:bg-surface-3 hover:text-text-1"
                   >
                     Open full sheet
                   </Link>
@@ -584,9 +584,9 @@ export default function SmartStaffHubPage() {
           </div>
         )}
 
-        <div className="mt-6 rounded-xl border border-purple-500/10 bg-purple-900/[0.03] p-4">
-          <p className="text-xs leading-5 text-purple-300/40">
-            Workload derived from <span className="font-mono text-purple-200">tenant_allocations</span>. Pills are parsed from the active grading template&apos;s{" "}
+        <div className="mt-6 rounded-xl border border-line-2 bg-surface-2 p-4">
+          <p className="text-xs leading-5 text-text-3">
+            Workload derived from <span className="font-mono text-text-2">tenant_allocations</span>. Pills are parsed from the active grading template&apos;s{" "}
             <span className="font-mono">academic_structure</span>.
           </p>
         </div>
@@ -601,17 +601,17 @@ export default function SmartStaffHubPage() {
         }
         description={`${decodedActiveClass} • ${decodedActiveSubject} • ${term}`}
         size="lg"
-        className="border-purple-500/20 bg-[#0B0514] text-white"
+        className="border-line-1 bg-surface-1 text-text-1"
       >
         {activeAssessment && (
           <div className="space-y-3">
             {bundleLoading && (
-              <div className="flex items-center gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] px-4 py-4 text-sm text-purple-200/70">
+              <div className="flex items-center gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-4 text-sm text-text-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading students…
               </div>
             )}
             {!bundleLoading && bundleError && (
-              <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <div className="flex-1">
                   <span>{bundleError}</span>
@@ -626,7 +626,7 @@ export default function SmartStaffHubPage() {
               </div>
             )}
             {!bundleLoading && !bundleError && bundle && bundle.students.length === 0 && (
-              <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4 text-center text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-center text-sm text-warning">
                 No students in {decodedActiveClass} yet. Ask an admin to register students first.
               </div>
             )}
@@ -637,10 +637,10 @@ export default function SmartStaffHubPage() {
                     const err = fieldErrors[s.student_id];
                     const val = drafts[s.student_id] ?? "";
                     return (
-                      <div key={s.id} className="flex items-center gap-3 rounded-xl border border-purple-500/10 bg-purple-900/[0.02] px-3 py-2">
-                        <span className="min-w-0 flex-1 truncate text-sm text-white">
+                      <div key={s.id} className="flex items-center gap-3 rounded-xl border border-line-2 bg-surface-2 px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate text-sm text-text-1">
                           {s.full_name}{" "}
-                          <span className="font-mono text-xs text-purple-300/40">{s.student_id}</span>
+                          <span className="font-mono text-xs text-text-3">{s.student_id}</span>
                         </span>
                         <input
                           type="number"
@@ -661,8 +661,8 @@ export default function SmartStaffHubPage() {
                           aria-label={`Score for ${s.full_name}`}
                           className={
                             err
-                              ? "h-10 w-24 shrink-0 rounded-xl border border-red-500/60 bg-[#0B0514] px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                              : "h-10 w-24 shrink-0 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                              ? "h-10 w-24 shrink-0 rounded-xl border border-danger/60 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-danger focus:outline-none focus:ring-2 focus:ring-danger/40"
+                              : "h-10 w-24 shrink-0 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
                           }
                         />
                       </div>
@@ -670,18 +670,18 @@ export default function SmartStaffHubPage() {
                   })}
                 </div>
                 {hasFieldError && (
-                  <p className="flex items-center gap-1.5 text-xs text-red-300">
+                  <p className="flex items-center gap-1.5 text-xs text-danger">
                     <AlertCircle className="h-3.5 w-3.5" /> Some scores exceed the maximum — fix the red fields to save.
                   </p>
                 )}
-<p className="text-xs text-purple-300/40">
+<p className="text-xs text-text-3">
                     Drafts auto-save to this device for{" "}
-                    <span className="font-semibold text-purple-200/60">{term}</span>. Closing will prompt if unsaved.
+                    <span className="font-semibold text-text-3">{term}</span>. Closing will prompt if unsaved.
                   </p>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-purple-300/30">
+                  <p className="text-xs text-text-3">
                     Draft auto-saves to this device for{" "}
-                    <span className="font-semibold text-purple-200/60">{term}</span>
+                    <span className="font-semibold text-text-3">{term}</span>
                   </p>
                   <NetworkIndicator
                     isOnline={isOnline}
@@ -693,7 +693,7 @@ export default function SmartStaffHubPage() {
                   type="button"
                   onClick={() => void handleSave()}
                   disabled={saving || hasFieldError || enteredCount === 0}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (
                     <>

@@ -90,19 +90,19 @@ export default async function StudentDashboardPage({
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
       <div className="flex items-start gap-3">
-        <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-2.5">
-          <GraduationCap className="h-5 w-5 text-purple-300" />
+        <div className="rounded-xl border border-line-1 bg-surface-2 p-2.5">
+          <GraduationCap className="h-5 w-5 text-accent" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">
             Your Results
           </h1>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <p className="mt-1 text-sm text-text-3">
             {identity.fullName || identity.studentId}
             {identity.className ? (
               <>
                 {" · "}
-                <span className="text-purple-300">{toTitleCase(identity.className)}</span>
+                <span className="text-accent">{toTitleCase(identity.className)}</span>
               </>
             ) : null}
           </p>
@@ -110,14 +110,14 @@ export default async function StudentDashboardPage({
       </div>
 
       {historyError ? (
-        <div className="mt-6 rounded-2xl border border-amber-400/25 bg-amber-500/5 p-5 text-sm text-amber-100/80">
+        <div className="mt-6 rounded-2xl border border-warning/30 bg-warning-soft p-5 text-sm text-warning">
           We could not load your results right now. Please try again in a moment.
         </div>
       ) : results.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-purple-500/20 bg-purple-900/[0.07] p-8 text-center">
-          <FileText className="mx-auto h-8 w-8 text-purple-300/40" />
-          <h2 className="mt-3 text-base font-semibold text-white">No results published yet</h2>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-purple-200/60">
+        <div className="mt-6 rounded-2xl border border-line-1 bg-surface-1 p-8 text-center">
+          <FileText className="mx-auto h-8 w-8 text-text-3" />
+          <h2 className="mt-3 text-base font-semibold text-text-1">No results published yet</h2>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-text-3">
             Results appear here as soon as your school publishes them. Nothing is missing — the
             school has simply not released a result yet.
           </p>
@@ -143,32 +143,32 @@ export default async function StudentDashboardPage({
               <li key={`${session}-${term}`}>
                 <Link
                   href={href}
-                  className="group flex items-center gap-4 rounded-2xl border border-purple-500/20 bg-purple-900/[0.07] p-4 transition hover:border-purple-400/40 hover:bg-purple-900/15"
+                  className="group flex items-center gap-4 rounded-2xl border border-line-1 bg-surface-1 p-4 transition hover:border-line-2 hover:bg-surface-2"
                 >
-                  <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-2.5">
-                    <FileText className="h-4 w-4 text-purple-300" />
+                  <div className="rounded-xl border border-line-1 bg-surface-2 p-2.5">
+                    <FileText className="h-4 w-4 text-accent" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-white">{term || "Result"}</span>
+                      <span className="font-semibold text-text-1">{term || "Result"}</span>
                       {session ? (
-                        <span className="rounded-full border border-purple-500/25 bg-purple-900/30 px-2 py-0.5 font-mono text-[0.7rem] text-purple-200/80">
+                        <span className="rounded-full border border-line-2 bg-surface-2 px-2 py-0.5 font-mono text-[0.7rem] text-text-2">
                           {session}
                         </span>
                       ) : null}
                       {isLatest ? (
-                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[0.7rem] font-medium text-emerald-300">
+                        <span className="rounded-full border border-success/30 bg-success-soft px-2 py-0.5 text-[0.7rem] font-medium text-success">
                           Latest
                         </span>
                       ) : null}
                     </div>
                     {published ? (
-                      <span className="mt-1 flex items-center gap-1 text-xs text-purple-300/50">
+                      <span className="mt-1 flex items-center gap-1 text-xs text-text-3">
                         <CalendarDays className="h-3 w-3" /> Published {published}
                       </span>
                     ) : null}
                   </div>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-purple-300/40 transition group-hover:translate-x-0.5 group-hover:text-purple-200" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-text-3 transition group-hover:translate-x-0.5 group-hover:text-text-2" />
                 </Link>
               </li>
             );

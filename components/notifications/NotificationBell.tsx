@@ -384,7 +384,7 @@ export default function NotificationBell({
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
+        className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 bg-surface-1 text-text-2 transition hover:bg-surface-2 hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (

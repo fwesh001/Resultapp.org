@@ -69,13 +69,13 @@ const [showConfirm, setShowConfirm] = useState(false);
   if (success) {
     return (
       <div className="space-y-4">
-        <div className="flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+        <div className="flex gap-2 rounded-xl border border-success/30 bg-success-soft p-3 text-sm text-success">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>Admin password set. You can now sign in.</span>
         </div>
         <a
           href={loginHref}
-          className="block w-full rounded-full bg-purple-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-purple-500"
+          className="block w-full rounded-full bg-accent px-4 py-3 text-center text-sm font-semibold text-accent-fg transition hover:bg-accent-hover"
         >
           Go to Admin Sign In →
         </a>
@@ -131,7 +131,7 @@ const [showConfirm, setShowConfirm] = useState(false);
       />
 
       {error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -140,7 +140,7 @@ const [showConfirm, setShowConfirm] = useState(false);
       <Button
         type="submit"
         disabled={loading}
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+        className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
         size="lg"
       >
         {loading ? (

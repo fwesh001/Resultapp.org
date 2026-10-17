@@ -455,20 +455,20 @@ export default function FocusedGradingPage() {
       <div>
         <Link
           href={`/${tenantId}/staff`}
-          className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
+          className="inline-flex items-center gap-1.5 text-sm text-text-3 transition hover:text-text-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-text-1">
               {decodedClassName} • {decodedSubjectName}
             </h1>
-            <p className="mt-1 text-sm text-purple-200/60">
+            <p className="mt-1 text-sm text-text-3">
               {bundle ? `${bundle.students.length} student${bundle.students.length === 1 ? "" : "s"} • ${bundle.template.name}` : "Focused grading sheet"}
             </p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-purple-200/70">
+          <label className="flex items-center gap-2 text-sm text-text-2">
             Term
 <Select
                 aria-label="Term"
@@ -486,19 +486,19 @@ export default function FocusedGradingPage() {
 
       {/* Loading / error */}
       {loading && (
-        <div className="flex items-center gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] px-4 py-6 text-sm text-purple-200/70">
+        <div className="flex items-center gap-2 rounded-xl border border-line-1 bg-surface-1 px-4 py-6 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading grading sheet…
         </div>
       )}
       {!loading && error && (
-        <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+        <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <div className="flex-1">
             <span>{error}</span>
             <button
               type="button"
               onClick={() => void fetchBundle()}
-              className="ml-2 font-medium underline underline-offset-4 hover:text-red-200"
+              className="ml-2 font-medium underline underline-offset-4 hover:text-danger"
             >
               Retry
             </button>
@@ -510,10 +510,10 @@ export default function FocusedGradingPage() {
       {!loading && !error && bundle && (
         <>
           {bundle.students.length === 0 ? (
-            <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 p-8 text-center">
-              <Users className="mx-auto h-8 w-8 text-amber-300" />
-              <h3 className="mt-3 text-sm font-semibold text-white">No students in {decodedClassName} yet</h3>
-              <p className="mt-1 text-sm text-purple-200/60">
+            <div className="rounded-2xl border border-warning/30 bg-warning-soft p-8 text-center">
+              <Users className="mx-auto h-8 w-8 text-warning" />
+              <h3 className="mt-3 text-sm font-semibold text-text-1">No students in {decodedClassName} yet</h3>
+              <p className="mt-1 text-sm text-text-3">
                 Ask an admin to register students for this class first.
               </p>
             </div>
@@ -528,15 +528,15 @@ export default function FocusedGradingPage() {
                     key={a.key}
                     type="button"
                     onClick={() => openFocused(a)}
-                    className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 text-left backdrop-blur transition hover:bg-purple-900/10"
+                    className="rounded-2xl border border-line-1 bg-surface-1 p-5 text-left backdrop-blur transition hover:bg-surface-2"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600/15 ring-1 ring-purple-500/20">
-                      <BookOpen className="h-5 w-5 text-purple-300" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft ring-1 ring-accent/30">
+                      <BookOpen className="h-5 w-5 text-accent" />
                     </div>
-                    <h3 className="mt-3 text-base font-semibold text-white">
-                      {a.key} <span className="font-normal text-purple-300/60">(Max: {a.max})</span>
+                    <h3 className="mt-3 text-base font-semibold text-text-1">
+                      {a.key} <span className="font-normal text-text-3">(Max: {a.max})</span>
                     </h3>
-                    <p className="mt-1 text-xs text-purple-200/50">
+                    <p className="mt-1 text-xs text-text-3">
                       {a.category} • {filled}/{bundle.students.length} entered
                     </p>
                   </button>
@@ -549,15 +549,15 @@ export default function FocusedGradingPage() {
                   key="behavioural"
                   type="button"
                   onClick={openBehavioural}
-                  className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5 text-left backdrop-blur transition hover:bg-purple-900/10"
+                  className="rounded-2xl border border-line-1 bg-surface-1 p-5 text-left backdrop-blur transition hover:bg-surface-2"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600/15 ring-1 ring-purple-500/20">
-                    <HeartHandshake className="h-5 w-5 text-purple-300" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft ring-1 ring-accent/30">
+                    <HeartHandshake className="h-5 w-5 text-accent" />
                   </div>
-                  <h3 className="mt-3 text-base font-semibold text-white">
-                    Behavioural Traits <span className="font-normal text-purple-300/60">(A–E)</span>
+                  <h3 className="mt-3 text-base font-semibold text-text-1">
+                    Behavioural Traits <span className="font-normal text-text-3">(A–E)</span>
                   </h3>
-                  <p className="mt-1 text-xs text-purple-200/50">
+                  <p className="mt-1 text-xs text-text-3">
                     {traits.length} traits • tap a student to grade
                   </p>
                 </button>
@@ -574,7 +574,7 @@ export default function FocusedGradingPage() {
         title={focused ? `Entering scores for ${focused.key} • Max: ${focused.max}` : ""}
         description={`${decodedClassName} • ${decodedSubjectName} • ${term}`}
         size="lg"
-        className="border-purple-500/20 bg-[#0B0514] text-white"
+        className="border-line-1 bg-surface-1 text-text-1"
       >
         {focused && bundle && (
           <div className="space-y-3">
@@ -582,10 +582,10 @@ export default function FocusedGradingPage() {
               {bundle.students.map((s) => {
                 const err = fieldErrors[s.student_id];
                 return (
-                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-purple-500/10 bg-purple-900/[0.02] px-3 py-2">
-                    <span className="min-w-0 flex-1 truncate text-sm text-white">
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-line-2 bg-surface-2 px-3 py-2">
+                    <span className="min-w-0 flex-1 truncate text-sm text-text-1">
                       {s.full_name}{" "}
-                      <span className="font-mono text-xs text-purple-300/40">{s.student_id}</span>
+                      <span className="font-mono text-xs text-text-3">{s.student_id}</span>
                     </span>
                     <input
                       type="number"
@@ -608,8 +608,8 @@ export default function FocusedGradingPage() {
                       aria-label={`Score for ${s.full_name}`}
                       className={
                         err
-                          ? "h-10 w-24 shrink-0 rounded-xl border border-red-500/60 bg-[#0B0514] px-3 text-sm text-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                          : "h-10 w-24 shrink-0 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/30 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                          ? "h-10 w-24 shrink-0 rounded-xl border border-danger/60 bg-surface-3 px-3 text-sm text-text-1 focus:border-danger focus:outline-none focus:ring-2 focus:ring-danger/40"
+                          : "h-10 w-24 shrink-0 rounded-xl border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
                       }
                     />
                   </div>
@@ -617,14 +617,14 @@ export default function FocusedGradingPage() {
               })}
             </div>
             {hasFieldError && (
-              <p className="flex items-center gap-1.5 text-xs text-red-300">
+              <p className="flex items-center gap-1.5 text-xs text-danger">
                 <AlertCircle className="h-3.5 w-3.5" /> Some scores exceed the maximum — fix the red fields to save.
               </p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-purple-300/30">
+              <p className="text-xs text-text-3">
                 Draft auto-saves to this device for{" "}
-                <span className="font-semibold text-purple-200/60">{term}</span>
+                <span className="font-semibold text-text-3">{term}</span>
               </p>
               <NetworkIndicator
                 isOnline={isOnline}
@@ -636,7 +636,7 @@ export default function FocusedGradingPage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={saving || hasFieldError || enteredCount === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? (
                 <>
@@ -659,7 +659,7 @@ export default function FocusedGradingPage() {
         title="Behavioural Traits • A–E"
         description={`${decodedClassName} • ${decodedSubjectName} • ${term} — tap a student, grade each trait, save.`}
         size="lg"
-        className="border-purple-500/20 bg-[#0B0514] text-white"
+        className="border-line-1 bg-surface-1 text-text-1"
       >
         {bundle && (
           <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
@@ -671,29 +671,29 @@ export default function FocusedGradingPage() {
               return (
                 <div
                   key={s.id}
-                  className="rounded-xl border border-purple-500/15 bg-purple-900/[0.04]"
+                  className="rounded-xl border border-line-1 bg-surface-1"
                 >
                   <button
                     type="button"
                     onClick={() => expandStudent(s.student_id)}
                     className="flex w-full items-center gap-2 px-4 py-3 text-left"
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm text-white">
+                    <span className="min-w-0 flex-1 truncate text-sm text-text-1">
                       {s.full_name}{" "}
-                      <span className="font-mono text-xs text-purple-300/40">{s.student_id}</span>
+                      <span className="font-mono text-xs text-text-3">{s.student_id}</span>
                     </span>
-                    <span className="text-xs text-purple-300/50">
+                    <span className="text-xs text-text-3">
                       {doneCount}/{traits.length}
                     </span>
                     <ChevronDown
-                      className={`h-4 w-4 shrink-0 text-purple-300 transition ${expanded ? "rotate-180" : ""}`}
+                      className={`h-4 w-4 shrink-0 text-accent transition ${expanded ? "rotate-180" : ""}`}
                     />
                   </button>
                   {expanded && (
-                    <div className="space-y-2 border-t border-purple-500/10 px-4 py-3">
+                    <div className="space-y-2 border-t border-line-1 px-4 py-3">
                       {traits.map((t) => (
                         <div key={t} className="flex items-center gap-3">
-                          <span className="min-w-0 flex-1 truncate text-xs text-purple-200/80">{t}</span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-text-2">{t}</span>
 <Select
                               size="sm"
                               triggerClassName="w-24"
@@ -717,7 +717,7 @@ export default function FocusedGradingPage() {
                         type="button"
                         onClick={() => void handleTraitSave(s.student_id)}
                         disabled={traitSaving}
-                        className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {traitSaving ? (
                           <>

@@ -16,19 +16,19 @@ export const metadata = {
  */
 export default function RootLoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="mt-6 rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+        <div className="mt-6 rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
           <div className="flex items-center gap-3">
             <Logo size="md" alt="" className="rounded-xl" />
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">Sign in</h1>
-              <p className="text-xs font-mono text-purple-300/60">resultapp.org</p>
+              <h1 className="text-lg font-semibold tracking-tight text-text-1">Sign in</h1>
+              <p className="text-xs font-mono text-text-3">resultapp.org</p>
             </div>
           </div>
 
-          <h2 className="mt-6 text-xl font-bold tracking-tight text-white">Find your school</h2>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <h2 className="mt-6 text-xl font-bold tracking-tight text-text-1">Find your school</h2>
+          <p className="mt-1 text-sm text-text-3">
             Tell us how you&apos;re signing in and we&apos;ll take you to your school&apos;s portal.
           </p>
 
@@ -36,7 +36,7 @@ export default function RootLoginPage() {
             <WorkspaceLocatorForm />
           </div>
 
-          <p className="mt-4 text-center text-xs text-purple-300/30">
+          <p className="mt-4 text-center text-xs text-accent/30">
             ResultApp • Unified Sign in
           </p>
         </div>

@@ -45,10 +45,10 @@ export function FeedbackForm() {
 
   if (status === "sent") {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-8 text-center">
-        <CheckCircle2 className="h-10 w-10 text-emerald-400" />
-        <h3 className="mt-3 text-lg font-semibold text-white">Feedback sent!</h3>
-        <p className="mt-1 text-sm text-purple-200/60">We love your ideas — thank you.</p>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-success/30 bg-success-soft p-8 text-center">
+        <CheckCircle2 className="h-10 w-10 text-success" />
+        <h3 className="mt-3 text-lg font-semibold text-text-1">Feedback sent!</h3>
+        <p className="mt-1 text-sm text-text-3">We love your ideas — thank you.</p>
       </div>
     );
   }
@@ -56,25 +56,25 @@ export function FeedbackForm() {
   const submitting = status === "submitting";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-6 backdrop-blur">
-      <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200">
+    <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-line-1 bg-surface-1 p-6">
+      <div className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
         <Lightbulb className="h-3.5 w-3.5" /> Share an Idea
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="feedback-idea" className="text-sm font-medium text-purple-100">Your idea</label>
+        <label htmlFor="feedback-idea" className="text-sm font-medium text-text-2">Your idea</label>
         <textarea
           id="feedback-idea"
           name="idea"
           required
           rows={4}
           placeholder="I wish ResultApp could..."
-          className="flex min-h-[120px] w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="flex min-h-[120px] w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <span id="feedback-rating-label" className="text-sm font-medium text-purple-100">Rate your experience</span>
+        <span id="feedback-rating-label" className="text-sm font-medium text-text-2">Rate your experience</span>
         <div className="flex items-center gap-1" role="group" aria-labelledby="feedback-rating-label">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
@@ -89,18 +89,18 @@ export function FeedbackForm() {
             >
               <Star
                 className={`h-7 w-7 transition ${
-                  (hover || rating) >= n ? "fill-purple-500 text-purple-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]" : "text-purple-800"
+                  (hover || rating) >= n ? "fill-purple-500 text-text-10 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]" : "text-text-3"
                 }`}
               />
             </button>
           ))}
-          <span className="ml-2 text-sm text-purple-300">{rating ? `${rating}/5` : "Tap a star"}</span>
+          <span className="ml-2 text-sm text-accent">{rating ? `${rating}/5` : "Tap a star"}</span>
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="feedback-email" className="text-sm font-medium text-purple-100">
-          Your email <span className="font-normal text-purple-300/50">(optional, for follow-up)</span>
+        <label htmlFor="feedback-email" className="text-sm font-medium text-text-2">
+          Your email <span className="font-normal text-text-3">(optional, for follow-up)</span>
         </label>
         <input
           id="feedback-email"
@@ -108,12 +108,12 @@ export function FeedbackForm() {
           type="email"
           autoComplete="email"
           placeholder="you@school.org"
-          className="w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
 
       {error && (
-        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-300">
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
         </p>
       )}
@@ -121,7 +121,7 @@ export function FeedbackForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.35)] hover:bg-purple-500 motion-safe:animate-pulse hover:motion-safe:animate-none disabled:cursor-not-allowed disabled:opacity-60 disabled:motion-safe:animate-none"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg shadow-[0_0_28px_rgba(147,51,234,0.35)] hover:bg-accent-hover motion-safe:animate-pulse hover:motion-safe:animate-none disabled:cursor-not-allowed disabled:opacity-60 disabled:motion-safe:animate-none"
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         {submitting ? "Sending…" : "Send Feedback"}

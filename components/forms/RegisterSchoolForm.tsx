@@ -276,7 +276,7 @@ function PasswordField({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-purple-100">
+      <label htmlFor={id} className="text-sm font-medium text-text-2">
         {label}
       </label>
       <div className="relative">
@@ -290,10 +290,10 @@ function PasswordField({
           autoComplete={autoComplete}
           required
           disabled={disabled}
-          className={`flex h-10 w-full rounded-xl border bg-purple-950/30 py-2 pl-3 pr-11 text-sm text-purple-50 ring-offset-[#0B0514] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`flex h-10 w-full rounded-xl border bg-surface-3 py-2 pl-3 pr-11 text-sm text-text-1 ring-offset-surface-0 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${
             error
-              ? "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500"
-              : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
+              ? "border-danger/60 focus-visible:ring-danger focus-visible:border-danger"
+              : "border-line-1 focus-visible:ring-accent focus-visible:border-accent"
           }`}
         />
         <button
@@ -302,12 +302,12 @@ function PasswordField({
           disabled={disabled}
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
           aria-pressed={visible}
-          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-purple-300/70 transition hover:text-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-text-3 transition hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           {visible ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
         </button>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }
@@ -1647,16 +1647,16 @@ export function RegisterSchoolForm() {
   if (successData) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
-          <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft ring-1 ring-success/30">
+          <CheckCircle2 className="h-8 w-8 text-success" />
         </div>
 
-        <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">School provisioned!</h3>
-        <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+        <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">School provisioned!</h3>
+        <p className="mt-2 max-w-md text-sm leading-6 text-text-3">
           {portalReady
             ? "Your school portal is live. Please check your email at "
             : "Your payment is confirmed and your school is registered. Please check your email at "}
-          <span className="font-medium text-white">{values.adminEmail}</span> for login credentials and next steps.
+          <span className="font-medium text-text-1">{values.adminEmail}</span> for login credentials and next steps.
         </p>
 
         {portalReady ? (
@@ -1665,28 +1665,28 @@ export function RegisterSchoolForm() {
             href={adminLoginUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-600 px-5 py-2.5 font-mono text-sm font-semibold text-white shadow-[0_0_20px_rgba(147,51,234,0.35)] transition hover:bg-purple-500"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-mono text-sm font-semibold text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.35)] transition hover:bg-accent-hover"
           >
             <Globe className="h-4 w-4" />
             {successData.domain}
             <ExternalLink className="h-3.5 w-3.5 opacity-70" />
           </a>
         ) : (
-          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-purple-950/60 px-5 py-2.5 font-mono text-sm font-semibold text-purple-200/70 ring-1 ring-purple-500/20">
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-surface-3 px-5 py-2.5 font-mono text-sm font-semibold text-text-2 ring-1 ring-accent/30">
             <Globe className="h-4 w-4" />
             {successData.domain}
           </p>
         )}
 
-        <div className="mt-6 w-full rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-left backdrop-blur">
-          <div className="flex items-center gap-2 text-sm font-medium text-white">
-            <Sparkles className="h-4 w-4 text-purple-400" />
+        <div className="mt-6 w-full rounded-2xl border border-line-2 bg-surface-2 p-4 text-left backdrop-blur">
+          <div className="flex items-center gap-2 text-sm font-medium text-text-1">
+            <Sparkles className="h-4 w-4 text-accent" />
             What happens next?
           </div>
-          <ul className="mt-3 space-y-2 text-sm text-purple-200/70">
-            <li>• Portal <span className="font-mono text-purple-200">{successData.domain}</span> {portalReady ? "is live over HTTPS" : "is being issued its SSL certificate"}</li>
-            <li>• Admin login sent to <span className="text-white">{values.adminEmail}</span></li>
-            <li>• Signing in at <span className="font-mono text-purple-200">{successData.domain}/admin/login</span> {portalReady ? "now" : "as soon as it is ready"}</li>
+          <ul className="mt-3 space-y-2 text-sm text-text-2">
+            <li>• Portal <span className="font-mono text-text-2">{successData.domain}</span> {portalReady ? "is live over HTTPS" : "is being issued its SSL certificate"}</li>
+            <li>• Admin login sent to <span className="text-text-1">{values.adminEmail}</span></li>
+            <li>• Signing in at <span className="font-mono text-text-2">{successData.domain}/admin/login</span> {portalReady ? "now" : "as soon as it is ready"}</li>
           </ul>
         </div>
 
@@ -1698,22 +1698,22 @@ export function RegisterSchoolForm() {
                SSL-handshake page. Showing the bar here — instead of bouncing
                the customer into that error — is what stops a successful
                registration from looking like a failure. */
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-5 text-left">
+            <div className="rounded-2xl border border-line-2 bg-surface-2 p-5 text-left">
               <div className="flex items-center justify-between gap-3">
-                <p className="flex items-center gap-2 text-sm font-medium text-white">
+                <p className="flex items-center gap-2 text-sm font-medium text-text-1">
                   {!progressTimedOut && (
-                    <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-accent" />
                   )}
                   {displayStage}
                 </p>
-                <span className="font-mono text-sm tabular-nums text-purple-200">
+                <span className="font-mono text-sm tabular-nums text-text-2">
                   {displayPercent}%
                 </span>
               </div>
 
               <div
                 ref={progressBarRef}
-                className="mt-3 h-2 w-full overflow-hidden rounded-full bg-purple-950/60"
+                className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-3"
                 role="progressbar"
                 aria-valuenow={displayPercent}
                 aria-valuemin={0}
@@ -1726,7 +1726,7 @@ export function RegisterSchoolForm() {
                 />
               </div>
 
-              <p className="mt-3 text-xs leading-5 text-purple-200/60">
+              <p className="mt-3 text-xs leading-5 text-text-3">
                 {progressTimedOut
                   ? "This is taking longer than usual — your subdomain is registered and your payment is safe. You can wait a little longer or open it now and refresh shortly."
                   : stalled
@@ -1737,7 +1737,7 @@ export function RegisterSchoolForm() {
               {progressTimedOut && (
                 <a
                   href={adminLoginUrl}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-4 py-2.5 font-semibold text-white hover:bg-purple-500"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-4 py-2.5 font-semibold text-accent-fg hover:bg-accent-hover"
                 >
                   <Globe className="h-4 w-4" />
                   Open my portal now
@@ -1748,29 +1748,29 @@ export function RegisterSchoolForm() {
                 <button
                   type="button"
                   onClick={cancelHandoff}
-                  className="mt-3 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                  className="mt-3 w-full text-center text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
                 >
                   Stay on this page
                 </button>
               )}
             </div>
           ) : handoffIn !== null ? (
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-4">
-              <p className="flex items-center justify-center gap-2 text-sm font-medium text-white">
-                <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+            <div className="rounded-2xl border border-line-1 bg-surface-2 p-4">
+              <p className="flex items-center justify-center gap-2 text-sm font-medium text-text-1">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
                 Taking you to your admin login in {handoffIn}s…
               </p>
               <button
                 type="button"
                 onClick={() => (window.location.href = adminLoginUrl)}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 font-semibold text-[#0B0514] hover:bg-zinc-100"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-4 py-2.5 font-semibold text-accent-fg hover:bg-accent-hover"
               >
                 Open admin login now
               </button>
               <button
                 type="button"
                 onClick={cancelHandoff}
-                className="mt-2 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                className="mt-2 w-full text-center text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
               >
                 Stay on this page
               </button>
@@ -1778,7 +1778,7 @@ export function RegisterSchoolForm() {
           ) : (
             <>
               <Button
-                className="w-full rounded-full bg-white font-semibold text-[#0B0514] hover:bg-zinc-100"
+                className="w-full rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover"
                 size="lg"
                 onClick={() => (window.location.href = adminLoginUrl)}
               >
@@ -1787,7 +1787,7 @@ export function RegisterSchoolForm() {
               <button
                 type="button"
                 onClick={resetWizard}
-                className="mt-3 text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                className="mt-3 text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
               >
                 Register another school
               </button>
@@ -1795,7 +1795,7 @@ export function RegisterSchoolForm() {
           )}
         </div>
 
-        <p className="mt-3 text-xs text-purple-300/40">
+        <p className="mt-3 text-xs text-text-3">
           Need help? Contact support@resultapp.org • {successData.domain}
         </p>
       </div>
@@ -1822,19 +1822,19 @@ export function RegisterSchoolForm() {
           const active = currentStep === s.n;
           return (
             <span key={s.n} className="flex items-center gap-2">
-              {i > 0 && <span className="h-px w-6 bg-purple-500/20 sm:w-8" />}
+              {i > 0 && <span className="h-px w-6 bg-line-1 sm:w-8" />}
               <span
                 className={
                   active
-                    ? "flex h-7 w-7 items-center justify-center rounded-full bg-purple-600 text-white shadow-[0_0_14px_rgba(147,51,234,0.45)] ring-1 ring-purple-500/30"
+                    ? "flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-fg shadow-[0_0_14px_rgba(147,51,234,0.45)] ring-1 ring-accent/30"
                     : done
                       ? "flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white"
-                      : "flex h-7 w-7 items-center justify-center rounded-full border border-purple-500/20 bg-purple-950/30 text-purple-300"
+                      : "flex h-7 w-7 items-center justify-center rounded-full border border-line-1 bg-surface-3 text-text-3"
                 }
               >
                 {done ? <CheckCircle2 className="h-4 w-4" /> : s.n}
               </span>
-              <span className={active ? "font-medium text-white" : done ? "text-emerald-300/80" : "text-purple-300/60"}>
+              <span className={active ? "font-medium text-text-1" : done ? "text-success/80" : "text-text-3"}>
                 {s.label}
               </span>
             </span>
@@ -1855,53 +1855,53 @@ export function RegisterSchoolForm() {
         {renderStepIndicator()}
         {paidConflict ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/20">
-              <AlertCircle className="h-8 w-8 text-amber-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-warning-soft ring-1 ring-warning/30">
+              <AlertCircle className="h-8 w-8 text-warning" />
             </div>
-            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Subdomain just taken</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
-              Your payment went through, but <span className="font-mono font-medium text-white">{values.subdomain.trim()}.resultapp.org</span> was
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">Subdomain just taken</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-text-3">
+              Your payment went through, but <span className="font-mono font-medium text-text-1">{values.subdomain.trim()}.resultapp.org</span> was
               registered by someone else first. Do not pay again — contact{" "}
-              <span className="font-medium text-white">support@resultapp.org</span> with reference{" "}
-              <span className="font-mono font-medium text-white">{paidConflict.transactionId}</span> for
+              <span className="font-medium text-text-1">support@resultapp.org</span> with reference{" "}
+              <span className="font-mono font-medium text-text-1">{paidConflict.transactionId}</span> for
               a manual setup or refund.
             </p>
             <button
               type="button"
               onClick={() => setCurrentStep(1)}
-              className="mt-6 w-full rounded-full bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500"
+              className="mt-6 w-full rounded-full bg-accent py-3 font-semibold text-accent-fg hover:bg-accent-hover"
             >
               Choose a different subdomain
             </button>
           </div>
         ) : provisioning ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-purple-400" />
-            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Creating your portal…</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+            <Loader2 className="h-10 w-10 animate-spin text-accent" />
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">Creating your portal…</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-text-3">
               Payment confirmed. Provisioning your database, site, and admin account — this may take a minute.
               Please keep this tab open.
             </p>
           </div>
         ) : paymentPending ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15 ring-1 ring-amber-500/20">
-              <Clock className="h-8 w-8 text-amber-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-warning-soft ring-1 ring-warning/30">
+              <Clock className="h-8 w-8 text-warning" />
             </div>
-            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">
               Payment still processing
             </h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">
+            <p className="mt-2 max-w-md text-sm leading-6 text-text-3">
               {globalError ||
                 "Your payment has been received but the provider has not confirmed it yet. Bank transfers can take a few minutes to clear."}
             </p>
-            <p className="mt-2 max-w-md text-xs leading-5 text-purple-300/50">
+            <p className="mt-2 max-w-md text-xs leading-5 text-text-3">
               Your money is safe and your portal will be built automatically once the payment
               clears. Nothing has been created yet, and you will not be charged twice.
             </p>
             <div className="mt-6 flex w-full flex-col gap-2">
               <Button
-                className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
+                className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover"
                 size="lg"
                 onClick={retryProvision}
               >
@@ -1910,7 +1910,7 @@ export function RegisterSchoolForm() {
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                className="text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
               >
                 Back to checkout
               </button>
@@ -1918,17 +1918,17 @@ export function RegisterSchoolForm() {
           </div>
         ) : globalError ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 ring-1 ring-red-500/20">
-              <AlertCircle className="h-8 w-8 text-red-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-danger-soft ring-1 ring-danger/30">
+              <AlertCircle className="h-8 w-8 text-danger" />
             </div>
-            <h3 className="mt-6 text-2xl font-bold tracking-tight text-white">Provisioning failed</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-purple-200/60">{globalError}</p>
-            <p className="mt-2 max-w-md text-xs leading-5 text-purple-300/50">
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-text-1">Provisioning failed</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-text-3">{globalError}</p>
+            <p className="mt-2 max-w-md text-xs leading-5 text-text-3">
               Your payment is safe — retrying reuses transaction {transactionId} and never double-provisions.
             </p>
             <div className="mt-6 flex w-full flex-col gap-2">
               <Button
-                className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500"
+                className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover"
                 size="lg"
                 onClick={retryProvision}
               >
@@ -1937,7 +1937,7 @@ export function RegisterSchoolForm() {
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+                className="text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
               >
                 Back to checkout
               </button>
@@ -1979,14 +1979,14 @@ export function RegisterSchoolForm() {
     return (
       <div>
         {renderStepIndicator()}
-        <h3 className="text-lg font-bold tracking-tight text-white">Review &amp; pay</h3>
-<div className="mt-4 rounded-2xl border border-purple-500/15 bg-purple-900/10 p-4 text-sm">
+        <h3 className="text-lg font-bold tracking-tight text-text-1">Review &amp; pay</h3>
+<div className="mt-4 rounded-2xl border border-line-2 bg-surface-2 p-4 text-sm">
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">Admin</span>
-            <span className="font-medium text-white">
+            <span className="text-text-3">Admin</span>
+            <span className="font-medium text-text-1">
               {values.adminName.trim() || "—"}
               {isEmailVerified && (
-                <span className="ml-1.5 inline-flex align-middle text-emerald-300" title="Email verified">
+                <span className="ml-1.5 inline-flex align-middle text-success" title="Email verified">
                   <MailCheck className="h-3.5 w-3.5" aria-hidden />
                   <span className="sr-only">email verified</span>
                 </span>
@@ -1994,21 +1994,21 @@ export function RegisterSchoolForm() {
             </span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">Email</span>
-            <span className="font-medium text-white">{values.adminEmail.trim() || "—"}</span>
+            <span className="text-text-3">Email</span>
+            <span className="font-medium text-text-1">{values.adminEmail.trim() || "—"}</span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">Subdomain</span>
-            <span className="font-mono font-medium text-white">{previewDomain}</span>
+            <span className="text-text-3">Subdomain</span>
+            <span className="font-mono font-medium text-text-1">{previewDomain}</span>
           </div>
           <div className="flex justify-between py-1">
-            <span className="text-purple-200/60">Student slots</span>
-            <span className="font-medium text-white">
+            <span className="text-text-3">Student slots</span>
+            <span className="font-medium text-text-1">
               {orderCount} × {formatNaira(orderTier.pricePerStudent)}
-              {orderTier.badge ? <span className="ml-2 text-xs text-emerald-300">{orderTier.badge}</span> : null}
+              {orderTier.badge ? <span className="ml-2 text-xs text-success">{orderTier.badge}</span> : null}
             </span>
           </div>
-          <div className="my-2 border-t border-purple-500/10" />
+          <div className="my-2 border-t border-line-2" />
           {/* The bill is the SERVER's split, not the list price. Showing
               orderTotal here told a fully-waived buyer they still owed
               ₦45,000 one screen before a portal appeared for free, which reads
@@ -2018,27 +2018,27 @@ export function RegisterSchoolForm() {
           {waiverPreview ? (
             <>
               <div className="flex justify-between py-1">
-                <span className="text-purple-200/60">Waived</span>
-                <span className="font-medium text-emerald-300">
+                <span className="text-text-3">Waived</span>
+                <span className="font-medium text-success">
                   −{formatNaira(waiverPreview.waived_ngn ?? 0)}
                 </span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-purple-200/60">
+                <span className="text-text-3">
                   {waiverPreview.waived_slots} of {orderCount} slots covered
                 </span>
-                <span className="font-medium text-emerald-300">
+                <span className="font-medium text-success">
                   {waiverPreview.discount_percentage}% off
                 </span>
               </div>
             </>
           ) : null}
-          <div className="flex justify-between py-1 text-base font-bold text-white">
+          <div className="flex justify-between py-1 text-base font-bold text-text-1">
             <span>{waiverBypass ? "Total due — fully covered" : "Total due"}</span>
-            <span className={waiverBypass ? "text-emerald-300" : undefined}>
+            <span className={waiverBypass ? "text-success" : undefined}>
               {formatNaira(waiverPreview ? Number(waiverPreview.charged_ngn ?? orderTotal) : orderTotal)}
               {waiverPreview ? (
-                <span className="ml-2 text-xs font-normal text-purple-300/40 line-through">
+                <span className="ml-2 text-xs font-normal text-text-3 line-through">
                   {formatNaira(orderTotal)}
                 </span>
               ) : null}
@@ -2051,7 +2051,7 @@ export function RegisterSchoolForm() {
               not to advertise, so keeping it while removing its counterpart
               would leave a trace of the promotion with none of the substance. */}
           {freeCreditsEnabled ? (
-            <p className="mt-1 text-xs text-purple-300/50">
+            <p className="mt-1 text-xs text-text-3">
               {qualifiesFreeCredits
                 ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch.`
                 : "Publishing credits are topped up separately from your portal."}
@@ -2060,8 +2060,8 @@ export function RegisterSchoolForm() {
         </div>
 
         {globalError && (
-          <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <div className="mt-4 flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
             <span>{globalError}</span>
           </div>
         )}
@@ -2074,7 +2074,7 @@ export function RegisterSchoolForm() {
             Placed directly above the Pay button: consent is a precondition of
             paying, and burying it under a long summary made it easy to miss
             while still leaving the button visible. */}
-        <div className="mt-4 rounded-2xl border border-purple-500/20 bg-purple-900/[0.06] p-4">
+        <div className="mt-4 rounded-2xl border border-line-2 bg-surface-2 p-4">
           <label htmlFor="acceptTerms" className="flex cursor-pointer items-start gap-3">
             <input
               id="acceptTerms"
@@ -2084,18 +2084,18 @@ export function RegisterSchoolForm() {
               className="mt-0.5 h-5 w-5 shrink-0 rounded accent-purple-600"
               aria-describedby="acceptTerms-error"
             />
-            <span className="text-xs leading-5 text-purple-200/75">
+            <span className="text-xs leading-5 text-text-3">
               I have read and accept the{" "}
               <Link
                 href="/terms"
-                className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+                className="font-medium text-accent underline decoration-accent/40 underline-offset-4 transition hover:text-text-1"
               >
                 Terms of Service
               </Link>{" "}
               (v{TERMS_VERSION}) and the{" "}
               <Link
                 href="/privacy"
-                className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+                className="font-medium text-accent underline decoration-accent/40 underline-offset-4 transition hover:text-text-1"
               >
                 Privacy Policy
               </Link>{" "}
@@ -2103,7 +2103,7 @@ export function RegisterSchoolForm() {
               authorised to bind it. Payments are final sale — see the{" "}
               <Link
                 href="/refund-policy"
-                className="font-medium text-purple-300 underline decoration-purple-500/40 underline-offset-4 transition hover:text-white"
+                className="font-medium text-accent underline decoration-accent/40 underline-offset-4 transition hover:text-text-1"
               >
                 Refund Policy
               </Link>
@@ -2111,7 +2111,7 @@ export function RegisterSchoolForm() {
             </span>
           </label>
           {errors.acceptTerms && (
-            <p id="acceptTerms-error" role="alert" className="mt-2 pl-8 text-xs text-red-300">
+            <p id="acceptTerms-error" role="alert" className="mt-2 pl-8 text-xs text-danger">
               {errors.acceptTerms}
             </p>
           )}
@@ -2139,7 +2139,7 @@ export function RegisterSchoolForm() {
         </Button>
 
         {payHint && (
-          <p id="pay-hint" role="status" className="mt-2 text-center text-xs leading-5 text-purple-300/60">
+          <p id="pay-hint" role="status" className="mt-2 text-center text-xs leading-5 text-text-3">
             {payHint}
           </p>
         )}
@@ -2159,9 +2159,9 @@ export function RegisterSchoolForm() {
             never be told "nothing was created" and left with no way forward —
             they may already have been charged. */}
         {(pendingRef || txRef) && (
-          <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100/80">
-            <p className="font-medium text-amber-100">Already paid?</p>
-            <p className="mt-1 text-amber-100/70">
+          <div className="mt-3 rounded-2xl border border-warning/30 bg-warning-soft p-3 text-xs leading-5 text-warning">
+            <p className="font-medium text-warning">Already paid?</p>
+            <p className="mt-1 text-warning/70">
               Reference{" "}
               <span className="font-mono">
                 {(pendingRef || txRef || "").slice(0, 34)}
@@ -2189,11 +2189,11 @@ export function RegisterSchoolForm() {
         <button
           type="button"
           onClick={() => goBack(2)}
-          className="mt-3 w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+          className="mt-3 w-full text-center text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
         >
           ← Back to account security
         </button>
-        <p className="mt-3 text-center text-xs leading-5 text-purple-300/40">
+        <p className="mt-3 text-center text-xs leading-5 text-text-3">
           No database or portal is created until payment succeeds.
         </p>
       </div>
@@ -2207,7 +2207,7 @@ export function RegisterSchoolForm() {
     return (
       <form onSubmit={handleStep1Next} noValidate className="space-y-5">
         {renderStepIndicator()}
-        <h3 className="text-lg font-bold tracking-tight text-white">School details</h3>
+        <h3 className="text-lg font-bold tracking-tight text-text-1">School details</h3>
 
         {/* School Name */}
         <Input
@@ -2224,8 +2224,8 @@ export function RegisterSchoolForm() {
 
       {/* Subdomain */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="input-subdomain" className="text-sm font-medium text-purple-100">
-          Subdomain <span className="text-red-400">*</span>
+        <label htmlFor="input-subdomain" className="text-sm font-medium text-text-2">
+          Subdomain <span className="text-danger">*</span>
         </label>
         <div className="flex">
           <input
@@ -2236,30 +2236,30 @@ export function RegisterSchoolForm() {
             placeholder="vhs"
             required
             disabled={isSubmitting}
-            className={`flex h-10 w-full rounded-l-xl border bg-purple-950/30 px-3 py-2 text-sm text-purple-50 placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
+            className={`flex h-10 w-full rounded-l-xl border bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
               errors.subdomain
-                ? "border-red-500/60 focus-visible:ring-red-500 focus-visible:border-red-500"
-                : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
+                ? "border-danger/60 focus-visible:ring-danger focus-visible:border-danger"
+                : "border-line-1 focus-visible:ring-accent focus-visible:border-accent"
             }`}
           />
-          <span className="inline-flex items-center rounded-r-xl border border-l-0 border-purple-800/50 bg-purple-950/30 px-3 text-sm font-medium text-purple-300/70">
+          <span className="inline-flex items-center rounded-r-xl border border-l-0 border-line-1 bg-surface-3 px-3 text-sm font-medium text-text-3">
             .{baseDomain}
           </span>
         </div>
         {errors.subdomain ? (
-          <p className="text-xs text-red-400">{errors.subdomain}</p>
+          <p className="text-xs text-danger">{errors.subdomain}</p>
         ) : (
-          <p className="flex items-center gap-1.5 text-xs text-purple-300/50">
+          <p className="flex items-center gap-1.5 text-xs text-text-3">
             <Globe className="h-3 w-3" />
             Your school will be live at:{" "}
             <span
-              className={`font-mono font-medium ${isPreviewCustom ? "text-emerald-300" : "text-purple-200/60"}`}
+              className={`font-mono font-medium ${isPreviewCustom ? "text-success" : "text-text-3"}`}
             >
               {previewDomain}
             </span>
-            {checkingSubdomain && <span className="text-purple-300/40">• checking…</span>}
+            {checkingSubdomain && <span className="text-text-3">• checking…</span>}
             {!checkingSubdomain && subdomainTaken && (
-              <span className="font-medium text-amber-300">• just taken — pick another</span>
+              <span className="font-medium text-warning">• just taken — pick another</span>
             )}
           </p>
         )}
@@ -2283,19 +2283,19 @@ export function RegisterSchoolForm() {
             Deliberately NOT a gate on leaving Step 1: if Brevo is
             misconfigured the user would be stranded with no recourse, so
             this only disables the Pay button in Step 3 (with an explanation). */}
-        <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.06] p-4">
+        <div className="rounded-2xl border border-line-2 bg-surface-2 p-4">
           {isEmailVerified ? (
-            <p className="flex items-center gap-2 text-sm font-medium text-emerald-200">
-              <MailCheck className="h-4 w-4 text-emerald-400" aria-hidden />
+            <p className="flex items-center gap-2 text-sm font-medium text-success">
+              <MailCheck className="h-4 w-4 text-success" aria-hidden />
               Email verified — you can continue
             </p>
           ) : (
             <>
-              <p className="flex items-center gap-2 text-sm font-medium text-purple-100">
-                <ShieldCheck className="h-4 w-4 text-purple-300" aria-hidden />
+              <p className="flex items-center gap-2 text-sm font-medium text-text-2">
+                <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
                 Verify this email
               </p>
-              <p className="mt-1 text-xs leading-5 text-purple-200/60">
+              <p className="mt-1 text-xs leading-5 text-text-3">
                 We&apos;ll email a 6-digit code. Required before you can pay.
               </p>
 
@@ -2321,14 +2321,14 @@ export function RegisterSchoolForm() {
                         aria-label="6-digit verification code"
                         aria-describedby={otpError ? "otp-error" : undefined}
                         disabled={otpVerifying}
-                        className={`h-10 w-full rounded-xl border bg-purple-950/30 px-3 py-2 font-mono text-sm tracking-[0.4em] text-purple-50 placeholder:tracking-[0.4em] placeholder:text-purple-300/40 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
+                        className={`h-10 w-full rounded-xl border bg-surface-3 px-3 py-2 font-mono text-sm tracking-[0.4em] text-text-1 placeholder:tracking-[0.4em] placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
                           otpError
-                            ? "border-red-500/60 focus-visible:ring-red-500"
-                            : "border-purple-800/50 focus-visible:ring-purple-500 focus-visible:border-purple-500"
+                            ? "border-danger/60 focus-visible:ring-danger"
+                            : "border-line-1 focus-visible:ring-accent focus-visible:border-accent"
                         }`}
                       />
                       <Button
-                        className="shrink-0 gap-1.5 rounded-full font-semibold text-white"
+                        className="shrink-0 gap-1.5 rounded-full font-semibold text-text-1"
                         disabled={otpVerifying}
                         onClick={verifyOtp}
                       >
@@ -2341,7 +2341,7 @@ export function RegisterSchoolForm() {
                       type="button"
                       onClick={sendOtp}
                       disabled={otpSending || otpResendIn > 0}
-                      className="self-start text-xs font-medium text-purple-300/70 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+                      className="self-start text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-accent-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
                     >
                       {otpSending
                         ? "Sending…"
@@ -2366,7 +2366,7 @@ export function RegisterSchoolForm() {
           )}
 
           {otpError && (
-            <p id="otp-error" role="alert" className="mt-2 text-xs leading-5 text-red-300">
+            <p id="otp-error" role="alert" className="mt-2 text-xs leading-5 text-danger">
               {otpError}
             </p>
           )}
@@ -2374,15 +2374,15 @@ export function RegisterSchoolForm() {
 
         {/* Global error (handles 409 etc) */}
         {globalError && (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
             <span>{globalError}</span>
           </div>
         )}
 
         <Button
           type="submit"
-          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-accent-hover hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={isSubmitting}
           size="lg"
         >
@@ -2397,14 +2397,14 @@ export function RegisterSchoolForm() {
         </Button>
 
         {isSubmitting && (
-          <p className="text-center text-xs text-purple-300/50">
+          <p className="text-center text-xs text-text-3">
             Verifying your subdomain is still available…
           </p>
         )}
 
-        <p className="text-center text-xs leading-5 text-purple-300/40">
+        <p className="text-center text-xs leading-5 text-text-3">
           Your portal at{" "}
-          <span className="font-mono font-medium text-purple-200">{previewDomain}</span> will be
+          <span className="font-mono font-medium text-text-2">{previewDomain}</span> will be
           created securely.
         </p>
       </form>
@@ -2418,7 +2418,7 @@ export function RegisterSchoolForm() {
     return (
       <form onSubmit={handleStep2Next} noValidate className="space-y-5">
         {renderStepIndicator()}
-        <h3 className="text-lg font-bold tracking-tight text-white">Account security</h3>
+        <h3 className="text-lg font-bold tracking-tight text-text-1">Account security</h3>
 
         {/* Admin Name — used for the Flutterwave customer name and the welcome
             email. Previously derived from the email prefix, which read as
@@ -2476,8 +2476,8 @@ export function RegisterSchoolForm() {
               disabled={isSubmitting}
               className={`inline-flex min-h-[44px] items-center rounded-full border px-4 text-xs font-medium transition disabled:opacity-50 ${
                 values.studentCount.trim() === String(n)
-                  ? "border-purple-500 bg-purple-600 text-white shadow-[0_0_16px_rgba(147,51,234,0.4)]"
-                  : "border-purple-500/15 bg-purple-900/10 text-purple-200 hover:border-purple-500/30 hover:text-white"
+                  ? "border-accent bg-accent text-accent-fg shadow-[0_0_16px_rgba(147,51,234,0.4)]"
+                  : "border-line-2 bg-surface-2 text-text-2 hover:border-line-1 hover:text-text-1"
               }`}
             >
               {n} students
@@ -2507,7 +2507,7 @@ export function RegisterSchoolForm() {
           the token's own row and returns the authoritative split, and the
           backend recomputes that again when it burns the token. Nothing this
           component displays can change what anyone is charged. */}
-      <div className="mt-2 rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4">
+      <div className="mt-2 rounded-2xl border border-success/30 bg-success-soft p-4">
         <button
           type="button"
           onClick={() => setWaiverOpen((v) => !v)}
@@ -2515,12 +2515,12 @@ export function RegisterSchoolForm() {
           aria-expanded={waiverOpen}
           className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-50"
         >
-          <span className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+          <span className="flex items-center gap-2 text-sm font-medium text-success">
             <Ticket className="h-4 w-4" />
             Have a waiver code?
           </span>
           <ChevronDown
-            className={`h-4 w-4 text-emerald-300/60 transition ${waiverOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 text-success transition ${waiverOpen ? "rotate-180" : ""}`}
           />
         </button>
 
@@ -2557,8 +2557,8 @@ export function RegisterSchoolForm() {
               <div
                 className={`rounded-xl border p-3 text-xs ${
                   waiverPreview.bypass_gateway
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                    : "border-purple-500/25 bg-purple-500/[0.08] text-purple-100"
+                    ? "border-success/30 bg-success-soft text-success"
+                    : "border-line-1 bg-surface-2 text-text-2"
                 }`}
               >
                 <p className="font-medium">
@@ -2568,24 +2568,24 @@ export function RegisterSchoolForm() {
                 </p>
                 <dl className="mt-2 space-y-1">
                   <div className="flex justify-between">
-                    <dt className="text-emerald-100/60">Covered</dt>
+                    <dt className="text-success/60">Covered</dt>
                     <dd>
                       {waiverPreview.waived_slots} of {orderCount} slots (
                       {formatNaira(waiverPreview.waived_ngn)} off)
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-emerald-100/60">You pay</dt>
+                    <dt className="text-success/60">You pay</dt>
                     <dd className="font-semibold">{formatNaira(waiverPreview.charged_ngn)}</dd>
                   </div>
                 </dl>
                 {waiverPreview.bypass_gateway && (
-                  <p className="mt-2 text-emerald-200/80">
+                  <p className="mt-2 text-success">
                     Fully covered — no payment will be taken.
                   </p>
                 )}
                 {waiverPreview.forfeited_slots > 0 && (
-                  <p className="mt-2 font-medium text-amber-200">
+                  <p className="mt-2 font-medium text-warning">
                     Use it or lose it: {waiverPreview.forfeited_slots} slot
                     {waiverPreview.forfeited_slots === 1 ? "" : "s"} of this code will be
                     permanently forfeited and cannot be recovered.
@@ -2608,18 +2608,18 @@ export function RegisterSchoolForm() {
         <div
           className={
             qualifiesFreeCredits
-              ? "rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
-              : "rounded-xl border border-purple-500/10 bg-purple-950/10 p-3"
+              ? "rounded-xl border border-success/30 bg-success-soft p-3"
+              : "rounded-xl border border-line-2 bg-surface-2 p-3"
           }
         >
           <p
             className={
               qualifiesFreeCredits
-                ? "flex items-center gap-2 text-xs font-medium text-emerald-200"
-                : "flex items-center gap-2 text-xs font-medium text-purple-200/80"
+                ? "flex items-center gap-2 text-xs font-medium text-success"
+                : "flex items-center gap-2 text-xs font-medium text-text-2"
             }
           >
-            <Sparkles className={qualifiesFreeCredits ? "h-3.5 w-3.5 text-emerald-400" : "h-3.5 w-3.5 text-purple-300/60"} />
+            <Sparkles className={qualifiesFreeCredits ? "h-3.5 w-3.5 text-success" : "h-3.5 w-3.5 text-text-3"} />
             {qualifiesFreeCredits
               ? `Includes ${FREE_CREDIT_GRANT} free publishing credits at launch`
               : "Publishing credits are not included at this size"}
@@ -2627,8 +2627,8 @@ export function RegisterSchoolForm() {
           <p
             className={
               qualifiesFreeCredits
-                ? "mt-1 text-xs leading-5 text-emerald-100/60"
-                : "mt-1 text-xs leading-5 text-purple-300/50"
+                ? "mt-1 text-xs leading-5 text-success/60"
+                : "mt-1 text-xs leading-5 text-text-3"
             }
           >
             {qualifiesFreeCredits
@@ -2639,18 +2639,18 @@ export function RegisterSchoolForm() {
       ) : null}
 
       {/* Subtle helper card */}
-      <div className="rounded-xl border border-purple-500/10 bg-purple-950/10 p-3">
-        <p className="flex items-center gap-2 text-xs font-medium text-purple-200/80">
-          <Users className="h-3.5 w-3.5 text-purple-400" />
+      <div className="rounded-xl border border-line-2 bg-surface-2 p-3">
+        <p className="flex items-center gap-2 text-xs font-medium text-text-2">
+          <Users className="h-3.5 w-3.5 text-accent" />
           Provisioning preview
         </p>
-        <p className="mt-1 text-xs leading-5 text-purple-300/50">
+        <p className="mt-1 text-xs leading-5 text-text-3">
           School:{" "}
-          <span className="font-medium text-purple-200">
+          <span className="font-medium text-text-2">
             {values.schoolName.trim() || "—"}
           </span>{" "}
           • Students:{" "}
-          <span className="font-medium text-purple-200">
+          <span className="font-medium text-text-2">
             {values.studentCount.trim() || "—"}
           </span>
         </p>
@@ -2658,8 +2658,8 @@ export function RegisterSchoolForm() {
 
       {/* Global error (handles 409 etc) */}
         {globalError && (
-          <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
             <span>{globalError}</span>
           </div>
         )}
@@ -2669,7 +2669,7 @@ export function RegisterSchoolForm() {
             their order even if mail is broken. */}
         <Button
           type="submit"
-          className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-purple-500 hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg shadow-[0_0_28px_rgba(147,51,234,0.40)] hover:bg-accent-hover hover:shadow-[0_0_40px_rgba(147,51,234,0.55)] disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={isSubmitting}
           size="lg"
         >
@@ -2679,7 +2679,7 @@ export function RegisterSchoolForm() {
         <button
           type="button"
           onClick={() => goBack(1)}
-          className="w-full text-center text-xs font-medium text-purple-300/60 underline decoration-purple-500/30 underline-offset-4 hover:text-purple-200"
+          className="w-full text-center text-xs font-medium text-text-3 underline decoration-accent/30 underline-offset-4 hover:text-text-2"
         >
           ← Back to school details
         </button>

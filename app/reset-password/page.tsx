@@ -108,35 +108,35 @@ const [showConfirm, setShowConfirm] = useState(false);
           : undefined
       }
       footer={
-        <Link href="/login" className="underline underline-offset-4 hover:text-white">
+        <Link href="/login" className="underline underline-offset-4 hover:text-text-1">
           Back to sign in
         </Link>
       }
     >
       {done ? (
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+        <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success-soft p-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
           <div>
-            <p className="text-sm leading-6 text-emerald-100">
+            <p className="text-sm leading-6 text-success">
               Password updated. Your email address is now verified too.
             </p>
             <Link
               href="/login"
-              className="mt-3 flex w-full items-center justify-center rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+              className="mt-3 flex w-full items-center justify-center rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover"
             >
               Sign in
             </Link>
           </div>
         </div>
       ) : linkState === "checking" ? (
-        <div className="flex items-center gap-3 text-sm text-purple-200/70">
+        <div className="flex items-center gap-3 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Checking your link…
         </div>
       ) : blocked ? (
         <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-            <p className="text-sm leading-6 text-amber-100">
+          <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <p className="text-sm leading-6 text-warning">
               {linkState === "expired"
                 ? "This reset link has expired. Reset links last 1 hour."
                 : "This reset link is invalid or has already been used."}
@@ -144,7 +144,7 @@ const [showConfirm, setShowConfirm] = useState(false);
           </div>
           <Link
             href="/forgot-password"
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover"
           >
             <KeyRound className="h-4 w-4" /> Request a new link
           </Link>
@@ -152,7 +152,7 @@ const [showConfirm, setShowConfirm] = useState(false);
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="rp-pass" className="text-sm font-medium text-purple-100">
+            <label htmlFor="rp-pass" className="text-sm font-medium text-text-2">
               New password
             </label>
             <div className="relative">
@@ -164,7 +164,7 @@ const [showConfirm, setShowConfirm] = useState(false);
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 pr-11 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                className="flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 pr-11 text-sm text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
               <div className="absolute inset-y-0 right-0">
                 <PasswordToggle
@@ -177,7 +177,7 @@ const [showConfirm, setShowConfirm] = useState(false);
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="rp-confirm" className="text-sm font-medium text-purple-100">
+            <label htmlFor="rp-confirm" className="text-sm font-medium text-text-2">
               Confirm new password
             </label>
             <div className="relative">
@@ -189,7 +189,7 @@ const [showConfirm, setShowConfirm] = useState(false);
                 minLength={8}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 py-2 pr-11 text-sm text-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                className="flex h-10 w-full rounded-xl border border-line-1 bg-surface-3 px-3 py-2 pr-11 text-sm text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
               <div className="absolute inset-y-0 right-0">
                 <PasswordToggle
@@ -202,7 +202,7 @@ const [showConfirm, setShowConfirm] = useState(false);
           </div>
 
           {error && (
-            <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+            <div className="flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -211,13 +211,13 @@ const [showConfirm, setShowConfirm] = useState(false);
           <button
             type="submit"
             disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Update password
           </button>
 
-          <p className="text-xs text-purple-300/40">
+          <p className="text-xs text-text-3">
             This link works once and expires in 1 hour.
           </p>
         </form>
@@ -231,7 +231,7 @@ export default function ResetPasswordPage() {
     <Suspense
       fallback={
         <AuthShell title="Choose a new password">
-          <div className="flex items-center gap-3 text-sm text-purple-200/70">
+          <div className="flex items-center gap-3 text-sm text-text-2">
             <Loader2 className="h-4 w-4 animate-spin" /> Checking your link…
           </div>
         </AuthShell>

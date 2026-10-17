@@ -154,7 +154,7 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
         disabled={loading}
       />
       {identifierHint && (
-        <p className="-mt-2 text-xs text-purple-300/50">{identifierHint}</p>
+        <p className="-mt-2 text-xs text-text-3">{identifierHint}</p>
       )}
       <Input
         label={passwordLabel}
@@ -178,8 +178,8 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
         <div
           className={
             errorCode === "PASSWORD_NOT_SET"
-              ? "rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200"
-              : "flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300"
+              ? "rounded-xl border border-warning/30 bg-warning-soft p-3 text-sm text-warning"
+              : "flex gap-2 rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger"
           }
         >
           <div className="flex gap-2">
@@ -189,7 +189,7 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
           {errorCode === "PASSWORD_NOT_SET" && setupHref && (
             <a
               href={setupHref}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning-soft"
             >
               {setupLinkLabel} →
             </a>
@@ -200,7 +200,7 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
       <Button
         type="submit"
         disabled={loading}
-        className="w-full gap-2 rounded-full bg-purple-600 font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+        className="w-full gap-2 rounded-full bg-accent font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
         size="lg"
       >
         {loading ? (
@@ -214,7 +214,7 @@ footerHint = "Dual-login: Staff ID or Email + PIN",
         )}
       </Button>
 
-      <div className="flex items-center justify-center gap-1.5 text-xs text-purple-300/40">
+      <div className="flex items-center justify-center gap-1.5 text-xs text-text-3">
         <User className="h-3 w-3" /> {footerHint}
       </div>
     </form>

@@ -66,9 +66,9 @@ export function DraftRecoveryPrompt({
       size="sm"
     >
       <div className="space-y-4">
-        <div className="flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
-          <Save className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
-          <p className="text-xs leading-5 text-amber-100/80">
+        <div className="flex gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3">
+          <Save className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+          <p className="text-xs leading-5 text-warning/80">
             {legacy
               ? "This draft was saved by an earlier version of the app and has no timestamp or term recorded. Restoring is safe — it only fills the fields you can see."
               : `Restoring replaces the values shown for ${term} on this device only. Nothing is sent to the server until you press Save.`}
@@ -89,7 +89,7 @@ export function DraftRecoveryPrompt({
             type="button"
             onClick={onDiscard}
             variant="outline"
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border-amber-500/25 bg-transparent px-5 text-sm text-amber-200 hover:bg-amber-500/10 sm:w-auto"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border-warning/30 bg-transparent px-5 text-sm text-warning hover:bg-warning-soft sm:w-auto"
           >
             <Trash2 className="h-4 w-4" /> Discard draft
           </Button>
@@ -121,11 +121,11 @@ export function DraftRecoveryBanner({
     <div
       role="status"
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100",
+        "flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3 text-xs text-warning",
         className,
       )}
     >
-      <CloudOff className="h-4 w-4 shrink-0 text-amber-300" />
+      <CloudOff className="h-4 w-4 shrink-0 text-warning" />
       <span className="min-w-0 flex-1">
         Unsaved draft found — {count} {count === 1 ? "entry" : "entries"}
         {savedAt ? ` from ${relativeTime(savedAt)}` : ""}.
@@ -144,7 +144,7 @@ export function DraftRecoveryBanner({
           onClick={onDismiss}
           size="sm"
           variant="outline"
-          className="gap-1.5 rounded-full border-amber-500/25 bg-transparent text-xs text-amber-200 hover:bg-amber-500/15"
+          className="gap-1.5 rounded-full border-warning/30 bg-transparent text-xs text-warning hover:bg-warning-soft"
         >
           <Trash2 className="h-3.5 w-3.5" /> Discard
         </Button>

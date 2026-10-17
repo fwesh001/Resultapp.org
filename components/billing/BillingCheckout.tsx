@@ -755,7 +755,7 @@ export function BillingCheckout({
             disabled={isPaying || upgrading}
           />
           <div
-            className="pointer-events-none absolute top-1/2 hidden h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-purple-400 shadow-[0_0_14px_6px_rgba(168,85,247,0.45)] sm:block"
+            className="pointer-events-none absolute top-1/2 hidden h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_14px_6px_rgba(168,85,247,0.45)] sm:block"
             style={{ left: `calc(${sliderPct}% - 5px)` }}
           />
         </div>
@@ -764,7 +764,7 @@ export function BillingCheckout({
             <span className={`rounded-full border px-2.5 py-1 ${countNum < 500 ? "border-accent bg-accent text-accent-fg" : "border-line-1 bg-surface-1 text-text-2"}`}>
               50–499 → ₦100
             </span>
-            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-violet-500 bg-violet-600 text-white" : "border-line-1 bg-surface-1 text-text-2"}`}>
+            <span className={`rounded-full border px-2.5 py-1 ${countNum >= 500 && countNum < 1000 ? "border-accent bg-accent text-accent-fg" : "border-line-1 bg-surface-1 text-text-2"}`}>
               500–999 → ₦90
             </span>
             <span className={`rounded-full border px-2.5 py-1 ${countNum >= 1000 ? "border-emerald-500 bg-emerald-600 text-white" : "border-line-1 bg-surface-1 text-text-2"}`}>
@@ -869,10 +869,10 @@ export function BillingCheckout({
         onClick={handlePay}
         disabled={isPaying || upgrading || countNum <= 0 || (isSlot && !!waiverToken.trim() && !waiverTokenId)}
         size="lg"
-        className={`w-full gap-2 rounded-full font-semibold text-white disabled:opacity-60 ${
+        className={`w-full gap-2 rounded-full disabled:opacity-60 ${
           isBypass
             ? "bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_28px_rgba(8,145,178,0.35)]"
-            : "bg-red-600 hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.35)]"
+            : "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.35)]"
         }`}
       >
         {isPaying || upgrading ? (

@@ -164,50 +164,50 @@ export default function StaffProfilePage() {
       <div>
         <Link
           href={`/${tenantId}/staff`}
-          className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
+          className="inline-flex items-center gap-1.5 text-sm text-text-3 transition hover:text-text-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
         <div className="mt-2 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600/15 ring-1 ring-purple-500/20">
-            <UserCircle className="h-5 w-5 text-purple-300" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft ring-1 ring-accent/30">
+            <UserCircle className="h-5 w-5 text-accent" />
           </span>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">My Profile</h1>
-            <p className="text-sm text-purple-200/60">Digital signature for report cards</p>
+            <h1 className="text-xl font-bold tracking-tight text-text-1">My Profile</h1>
+            <p className="text-sm text-text-3">Digital signature for report cards</p>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 p-8 text-sm text-purple-200/60">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-line-1 p-8 text-sm text-text-3">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading profile…
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-300">{error}</div>
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-6 text-sm text-danger">{error}</div>
       ) : staff ? (
         <>
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-            <p className="text-base font-semibold text-white">{staff.full_name}</p>
-            <p className="mt-1 font-mono text-xs text-purple-300/60">
+          <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+            <p className="text-base font-semibold text-text-1">{staff.full_name}</p>
+            <p className="mt-1 font-mono text-xs text-text-3">
               {staff.staff_id} {staff.role ? `• ${staff.role}` : ""}
             </p>
             {formClasses.length > 0 && (
-              <p className="mt-1 text-xs text-emerald-300/80">Form teacher for {formClasses.join(", ")}</p>
+              <p className="mt-1 text-xs text-success">Form teacher for {formClasses.join(", ")}</p>
             )}
           </div>
 
-          <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-              <PenLine className="h-4 w-4 text-purple-300" /> Signature
+          <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-text-1">
+              <PenLine className="h-4 w-4 text-accent" /> Signature
             </h2>
-            <p className="mt-1 text-xs text-purple-300/50">
+            <p className="mt-1 text-xs text-text-3">
               Draw it below, or upload a PNG/JPG. Shown on report cards instead of your typed name.
             </p>
 
             {/* Drawn signature is the primary path and saves in one step. */}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-500/20 bg-purple-900/20 p-4">
-              <div className="min-w-0 text-xs text-purple-300/60">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-1 bg-surface-2 p-4">
+              <div className="min-w-0 text-xs text-text-3">
                 {signatureData
                   ? "Using your drawn signature."
                   : signatureUrl
@@ -218,7 +218,7 @@ export default function StaffProfilePage() {
                 type="button"
                 onClick={() => setSigModalOpen(true)}
                 disabled={saving}
-                className="inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+                className="inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
               >
                 <PenLine className="h-4 w-4" aria-hidden="true" />
                 {signatureData ? "Redraw signature" : "Draw signature"}
@@ -226,7 +226,7 @@ export default function StaffProfilePage() {
             </div>
 
             {signatureData && (
-              <div className="mt-3 flex h-20 items-end rounded-lg border border-purple-500/20 bg-white p-2">
+              <div className="mt-3 flex h-20 items-end rounded-lg border border-line-1 bg-white p-2">
                 {/* Preview of the saved drawing. eslint-disable: a data URI
                     cannot go through next/image without a loader. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -254,7 +254,7 @@ export default function StaffProfilePage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+              className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save uploaded image
@@ -264,7 +264,7 @@ export default function StaffProfilePage() {
                 type="button"
                 onClick={() => void handleUrlRemove()}
                 disabled={saving}
-                className="ml-2 inline-flex min-h-[44px] items-center rounded-full border border-red-500/20 px-5 py-2.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                className="ml-2 inline-flex min-h-[44px] items-center rounded-full border border-danger/40 px-5 py-2.5 text-sm text-danger transition hover:bg-danger-soft disabled:opacity-50"
               >
                 Remove
               </button>

@@ -436,19 +436,19 @@ export default function FormGridPage() {
       <div>
         <Link
           href={`/${tenantId}/staff`}
-          className="inline-flex items-center gap-1.5 text-sm text-purple-300/60 transition hover:text-white"
+          className="inline-flex items-center gap-1.5 text-sm text-text-3 transition hover:text-text-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600/15 ring-1 ring-emerald-500/25">
-            <HeartHandshake className="h-5 w-5 text-emerald-300" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-soft ring-1 ring-success/30">
+            <HeartHandshake className="h-5 w-5 text-success" />
           </span>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">
+            <h1 className="text-xl font-bold tracking-tight text-text-1">
               {decodedClassName} — Behavioural Grid
             </h1>
-            <p className="text-sm text-purple-200/60">
+            <p className="text-sm text-text-3">
               Form-teacher workspace • {term} • academic subjects hidden
             </p>
           </div>
@@ -462,7 +462,7 @@ export default function FormGridPage() {
                 className={
                   term === t
                     ? "rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white"
-                    : "rounded-full border border-purple-500/20 px-4 py-1.5 text-xs text-purple-200 hover:bg-white/5"
+                    : "rounded-full border border-line-2 px-4 py-1.5 text-xs text-text-2 hover:bg-surface-2"
                 }
               >
                 {t}
@@ -473,7 +473,7 @@ export default function FormGridPage() {
       </div>
 
       {!loading && !error && grid?.is_form_teacher && (
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-2" role="tablist" aria-label="Form-teacher workspace">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line-1 bg-surface-1 p-2" role="tablist" aria-label="Form-teacher workspace">
           {(
             [
               { id: "entry", label: "Student Entry" },
@@ -489,7 +489,7 @@ export default function FormGridPage() {
               className={
                 activeTab === t.id
                   ? "rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white"
-                  : "rounded-xl px-3 py-2.5 text-sm font-medium text-purple-200/70 transition hover:bg-white/5 hover:text-white"
+                  : "rounded-xl px-3 py-2.5 text-sm font-medium text-text-2 transition hover:bg-surface-2 hover:text-text-1"
               }
             >
               {t.label}
@@ -499,21 +499,21 @@ export default function FormGridPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-purple-500/15 p-8 text-sm text-purple-200/60">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-line-1 p-8 text-sm text-text-3">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading form grid…
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-300">{error}</div>
+        <div className="rounded-xl border border-danger/30 bg-danger-soft p-6 text-sm text-danger">{error}</div>
       ) : grid && !grid.is_form_teacher ? (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-200">
+        <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-6 text-sm text-warning">
           <ShieldAlert className="h-5 w-5 shrink-0" />
           <p>You are not the assigned Form Teacher for {decodedClassName}. Behavioural records are restricted to the designated form teacher.</p>
         </div>
       ) : grid && activeTab === "settings" ? (
-        <div className="space-y-3 rounded-2xl border border-emerald-500/15 bg-white/[0.02] p-5" role="tabpanel" aria-label="Auto-Remark Settings">
+        <div className="space-y-3 rounded-2xl border border-line-1 bg-surface-2 p-5" role="tabpanel" aria-label="Auto-Remark Settings">
           <div>
-            <h2 className="text-base font-semibold text-white">Auto-remark bands for {decodedClassName}</h2>
-            <p className="mt-1 text-sm text-purple-200/60">
+            <h2 className="text-base font-semibold text-text-1">Auto-remark bands for {decodedClassName}</h2>
+            <p className="mt-1 text-sm text-text-3">
               When you expand a student with an empty remark, their average auto-fills the matching text. You can always edit before saving.
             </p>
           </div>
@@ -522,7 +522,7 @@ export default function FormGridPage() {
       ) : grid ? (
         <div className="space-y-2">
           {grid.subjects.length === 0 && (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+            <div className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm text-warning">
               No subjects are allocated to this class yet — saving is disabled until an admin allocates at least one subject.
             </div>
           )}
@@ -536,30 +536,30 @@ export default function FormGridPage() {
             return (
               <div
                 key={s.id}
-                className="overflow-hidden rounded-xl border border-emerald-500/15 bg-white/[0.02]"
+                className="overflow-hidden rounded-xl border border-line-1 bg-surface-2"
               >
                 <button
                   type="button"
                   onClick={() => expandStudent(s.student_id)}
                   className="flex w-full items-center gap-2 px-4 py-3 text-left"
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm text-white">
+                  <span className="min-w-0 flex-1 truncate text-sm text-text-1">
                     {s.full_name}{" "}
-                    <span className="font-mono text-xs text-purple-300/40">{s.student_id}</span>
+                    <span className="font-mono text-xs text-text-3">{s.student_id}</span>
                   </span>
-                  <span className="text-xs text-purple-300/50">
+                  <span className="text-xs text-accent/50">
                     {doneCount}/{grid.allowed_traits.length}
-                    {avg !== null && <span className="ml-2 text-emerald-300/80">avg {avg}%</span>}
+                    {avg !== null && <span className="ml-2 text-success">avg {avg}%</span>}
                   </span>
                   <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-emerald-300 transition ${expanded ? "rotate-180" : ""}`}
+                    className={`h-4 w-4 shrink-0 text-success transition ${expanded ? "rotate-180" : ""}`}
                   />
                 </button>
                 {expanded && (
-                  <div className="space-y-2 border-t border-emerald-500/10 px-4 py-3">
+                  <div className="space-y-2 border-t border-line-2 px-4 py-3">
                     {grid.allowed_traits.map((t) => (
                       <div key={t} className="flex items-center gap-3">
-                        <span className="min-w-0 flex-1 truncate text-xs text-purple-200/80">{t}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-text-2">{t}</span>
 <Select
                             size="sm"
                             triggerClassName="w-24"
@@ -580,27 +580,27 @@ export default function FormGridPage() {
                       </div>
                     ))}
                     {autoSaveStatus[s.student_id] === "saving" && (
-                      <p className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200">
+                      <p className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs text-accent">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving remark…
                       </p>
                     )}
                     {autoSaveStatus[s.student_id] === "saved" && (
-                      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                      <p className="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-soft px-3 py-1.5 text-xs text-success">
                         <Sparkles className="h-3.5 w-3.5" /> ✨ Auto-saved from your scheme (avg {avg !== null ? `${avg}%` : "—"}) — edit and click save to override.
                       </p>
                     )}
                     {autoSaveStatus[s.student_id] === "failed" && (
-                      <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
+                      <p className="flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning-soft px-3 py-1.5 text-xs text-warning">
                         Auto-save failed — click Save to retry.
                       </p>
                     )}
                     {!autoSaveStatus[s.student_id] && autoFilled.has(s.student_id) && (
-                      <p className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                      <p className="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-soft px-3 py-1.5 text-xs text-success">
                         <Sparkles className="h-3.5 w-3.5" /> Auto-filled from your scheme (avg {avg !== null ? `${avg}%` : "—"}) — edit freely before saving.
                       </p>
                     )}
                     <label className="flex items-start gap-2 pt-1">
-                      <MessageSquareText className="mt-2 h-4 w-4 shrink-0 text-emerald-300/70" />
+                      <MessageSquareText className="mt-2 h-4 w-4 shrink-0 text-success" />
                       <textarea
                         value={remarkDrafts[s.student_id] ?? ""}
                         onChange={(e) => {
@@ -612,7 +612,7 @@ export default function FormGridPage() {
                         maxLength={500}
                         placeholder="Form teacher remark (optional, max 500 chars)…"
                         aria-label={`Remark for ${s.full_name}`}
-                        className="w-full rounded-lg border border-purple-800/50 bg-purple-950/30 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
+                        className="w-full rounded-lg border border-line-1 bg-surface-3 px-3 py-2 text-sm text-text-1 placeholder:text-text-3 focus:border-success focus:outline-none"
                       />
                     </label>
                     <button
@@ -641,10 +641,10 @@ export default function FormGridPage() {
 
       {/* Offline-first affordances: connection state + draft recovery. */}
       <div className="mx-auto mt-4 max-w-5xl">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.03] px-3 py-2">
-          <p className="text-xs text-purple-300/40">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line-1 bg-surface-1 px-3 py-2">
+          <p className="text-xs text-text-3">
             Traits and remarks auto-save to this device for{" "}
-            <span className="font-semibold text-purple-200/60">{term}</span>.
+            <span className="font-semibold text-text-3">{term}</span>.
           </p>
           <NetworkIndicator
             isOnline={isOnline}

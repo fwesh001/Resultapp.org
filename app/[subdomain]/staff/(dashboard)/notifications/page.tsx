@@ -15,7 +15,7 @@ export default async function StaffNotificationsPage({
   const subdomain = school?.slug ?? routeSubdomain.toLowerCase().trim();
 
   return (
-    <Suspense fallback={<p className="p-8 text-sm text-zinc-400">Loading notifications…</p>}>
+    <Suspense fallback={<p className="p-8 text-sm text-text-3">Loading notifications…</p>}>
       <NotificationInbox tenantId={subdomain} basePath={`/${subdomain}/staff`} portal="staff" />
     </Suspense>
   );

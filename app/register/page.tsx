@@ -14,7 +14,7 @@ export const metadata = {
 export default function RegisterPage() {
   return (
     <>
-      <div className="min-h-screen bg-[#0B0514]">
+      <div className="min-h-screen bg-surface-0">
       <main id="main-content" className="grid lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
       {/* LEFT — Brand / Visual (sticky desktop, short banner mobile) */}
       <div className="relative hidden overflow-hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
@@ -66,9 +66,9 @@ export default function RegisterPage() {
       </div>
 
       {/* RIGHT — Scrollable Form */}
-      <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-[#0B0514] lg:h-screen lg:min-h-0 lg:overflow-y-auto lg:overflow-x-hidden">
+      <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-surface-0 lg:h-screen lg:min-h-0 lg:overflow-y-auto lg:overflow-x-hidden">
         {/* subtle ambient for right — no full-bleed image per user request */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0B0514] via-[#0F0A1E] to-[#0B0514]" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-surface-0" />
         <div aria-hidden className="pointer-events-none absolute left-1/2 top-[-120px] h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(147,51,234,0.12),transparent_70%)] blur-[1px]" />
 
         {/* mobile hero banner */}
@@ -92,8 +92,8 @@ export default function RegisterPage() {
 
         {/* desktop top bar (small) */}
         <div className="relative hidden items-center justify-end px-8 py-5 lg:flex">
-          <span className="inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-200">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-line-1 bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-2">
+            <ShieldCheck className="h-3.5 w-3.5 text-success" />
             Secured by Flutterwave
           </span>
         </div>
@@ -102,27 +102,27 @@ export default function RegisterPage() {
           <div className="w-full max-w-[560px]">
             {/* heading (desktop right also shows, mobile banner already) */}
             <div className="mb-6 hidden lg:block">
-              <h1 className="text-2xl font-bold tracking-tight text-white">Create your school portal</h1>
-              <p className="mt-2 text-sm leading-6 text-purple-200/60">
-                Get your automated portal at <span className="font-mono font-medium text-purple-200">yourschool.resultapp.org</span> in minutes. Pay only per student.
+              <h1 className="text-2xl font-bold tracking-tight text-text-1">Create your school portal</h1>
+              <p className="mt-2 text-sm leading-6 text-text-3">
+                Get your automated portal at <span className="font-mono font-medium text-text-2">yourschool.resultapp.org</span> in minutes. Pay only per student.
               </p>
             </div>
 
 
             {/* form card — dark — 3-step wizard
                 (school details → account security → review & pay) */}
-            <div className="rounded-[1.6rem] border border-purple-500/15 bg-purple-900/[0.07] p-5 backdrop-blur-xl sm:p-6 md:p-7">
+            <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-5 sm:p-6 md:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold tracking-tight text-white">School registration</h2>
-                <p className="mt-1 text-sm text-purple-200/60">Enter your school details to continue to checkout.</p>
+                <h2 className="text-base font-semibold tracking-tight text-text-1">School registration</h2>
+                <p className="mt-1 text-sm text-text-3">Enter your school details to continue to checkout.</p>
               </div>
 
               <RegisterSchoolForm />
               {/* Phase 3: paid flow remains available: import { SchoolRegistrationForm } from "@/components/forms/SchoolRegistrationForm" */}
 
-              <p className="mt-6 text-center text-xs text-purple-200/50">
+              <p className="mt-6 text-center text-xs text-text-3">
                 Already have a portal?{" "}
-                <Link href="/login" className="font-medium text-purple-300 underline decoration-purple-500/30 underline-offset-4 hover:text-white">
+                <Link href="/login" className="font-medium text-accent underline decoration-accent/30 underline-offset-4 hover:text-text-1">
                   Sign in
                 </Link>
               </p>
@@ -134,25 +134,25 @@ export default function RegisterPage() {
                 "Admin account + student slots credited automatically",
               ].map((item) => (
                 <li key={item} className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                  <span className="text-purple-200/60">{item}</span>
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                  <span className="text-text-3">{item}</span>
                 </li>
               ))}
             </ul>
 
-            <div className="mt-5 rounded-xl border border-purple-500/15 bg-[#0F0A1E]/60 p-4 backdrop-blur">
-              <p className="text-sm font-medium text-white">How it works</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-purple-200/60">
+            <div className="mt-5 rounded-xl border border-line-2 bg-surface-2 p-4">
+              <p className="text-sm font-medium text-text-1">How it works</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-text-3">
                 <li>Confirm your school, subdomain and admin email</li>
                 <li>Set the admin login and student capacity</li>
                 <li>Review, pay, and we provision your portal automatically</li>
                 <li>
-                  Portal at <span className="font-mono text-purple-200">subdomain.resultapp.org</span> is auto-created
+                  Portal at <span className="font-mono text-text-2">subdomain.resultapp.org</span> is auto-created
                 </li>
               </ol>
             </div>
 
-            <p className="mt-6 text-center text-xs text-purple-200/70">
+            <p className="mt-6 text-center text-xs text-text-2">
               Questions? Email support@resultapp.org • WhatsApp +234 702 506 7494
             </p>
           </div>

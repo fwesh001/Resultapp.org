@@ -89,11 +89,11 @@ export default function StaffPasswordCard({ tenantId }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-purple-500/15 bg-purple-900/[0.04] p-5">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-        <KeyRound className="h-4 w-4 text-purple-300" /> Password
+    <div className="rounded-2xl border border-line-1 bg-surface-1 p-5">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-text-1">
+        <KeyRound className="h-4 w-4 text-accent" /> Password
       </h2>
-      <p className="mt-1 text-xs text-purple-300/50">
+      <p className="mt-1 text-xs text-text-3">
         Your staff account starts on a shared default. Set a password only you know.
       </p>
 
@@ -134,7 +134,7 @@ export default function StaffPasswordCard({ tenantId }: Props) {
         {error ? (
           <p
             role="alert"
-            className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-200"
+            className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-xs leading-5 text-danger"
           >
             {error}
           </p>
@@ -143,7 +143,7 @@ export default function StaffPasswordCard({ tenantId }: Props) {
         <button
           type="submit"
           disabled={busy}
-          className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
+          className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {busy ? "Updating…" : "Change password"}

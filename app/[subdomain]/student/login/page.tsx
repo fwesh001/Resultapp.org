@@ -41,33 +41,33 @@ export default async function StudentLoginPage({
   const schoolName = school?.name ? toTitleCase(school.name) : subdomain;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4 py-10">
       <div className="w-full max-w-md">
         <Link
           href={`/${subdomain}`}
-          className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-purple-300/60 hover:text-white"
+          className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-text-2 hover:text-text-1"
         >
           <ArrowLeft className="h-4 w-4" /> Back to {schoolName}
         </Link>
 
-        <div className="mt-6 rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+        <div className="mt-6 rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
           <div className="flex items-center gap-3">
             <Logo size="md" alt="" className="rounded-xl" />
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">Student Portal</h1>
-              <p className="text-xs font-mono text-purple-300/60">
+              <h1 className="text-lg font-semibold tracking-tight text-text-1">Student Portal</h1>
+              <p className="text-xs font-mono text-text-3">
                 {demoHost ? `demo.resultapp.org/${subdomain}` : `${subdomain}.resultapp.org`}
               </p>
             </div>
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
               <ShieldCheck className="h-3 w-3" /> Secure
             </span>
           </div>
 
-          <h2 className="mt-6 text-xl font-bold tracking-tight text-white">Welcome back</h2>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <h2 className="mt-6 text-xl font-bold tracking-tight text-text-1">Welcome back</h2>
+          <p className="mt-1 text-sm text-text-3">
             Sign in to see your results for{" "}
-            <span className="font-medium text-white">{schoolName}</span>.
+            <span className="font-medium text-text-1">{schoolName}</span>.
           </p>
 
           <div className="mt-6">
@@ -78,25 +78,25 @@ export default async function StudentLoginPage({
             />
           </div>
 
-          <p className="mt-4 rounded-xl border border-purple-500/15 bg-purple-500/10 px-3 py-2 text-xs leading-5 text-purple-200/70">
+          <p className="mt-4 rounded-xl border border-line-1 bg-surface-2 px-3 py-2 text-xs leading-5 text-text-2">
             First time here? Use your admission number with the default password{" "}
-            <span className="font-mono font-medium text-white">123456</span>, then change it.
+            <span className="font-mono font-medium text-text-1">123456</span>, then change it.
           </p>
 
           {demoHost && (
-            <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-100/80">
+            <p className="mt-3 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-xs leading-5 text-warning">
               Demo — try{" "}
               <span className="font-mono font-medium">STD001</span> with password{" "}
               <span className="font-mono font-medium">123456</span>. Fictional data, resets hourly.
             </p>
           )}
 
-          <p className="mt-4 text-center text-xs text-purple-300/30">
+          <p className="mt-4 text-center text-xs text-text-3">
             ResultApp • Student Portal • <span className="font-mono">{subdomain}</span>
           </p>
         </div>
 
-        <p className="mt-6 flex items-start gap-2 px-2 text-center text-[0.7rem] leading-5 text-purple-300/30">
+        <p className="mt-6 flex items-start gap-2 px-2 text-center text-[0.7rem] leading-5 text-text-3">
           <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Result cards are private. Signing in confirms you are this student so we can show your

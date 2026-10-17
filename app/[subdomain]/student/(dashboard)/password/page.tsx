@@ -21,19 +21,19 @@ export default async function StudentPasswordPage({
   return (
     <div className="mx-auto w-full max-w-md px-4 py-8 sm:px-6">
       <div className="flex items-start gap-3">
-        <div className="rounded-xl border border-purple-500/20 bg-purple-900/20 p-2.5">
-          <KeyRound className="h-5 w-5 text-purple-300" />
+        <div className="rounded-xl border border-line-2 bg-surface-2 p-2.5">
+          <KeyRound className="h-5 w-5 text-accent" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Change password</h1>
-          <p className="mt-1 text-sm text-purple-200/60">
+          <h1 className="text-2xl font-bold tracking-tight text-text-1">Change password</h1>
+          <p className="mt-1 text-sm text-text-3">
             Signed in as{" "}
-            <span className="font-mono text-purple-300">{identity.studentId}</span>
+            <span className="font-mono text-accent">{identity.studentId}</span>
           </p>
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-purple-500/20 bg-purple-900/[0.07] p-5 sm:p-6">
+      <div className="mt-6 rounded-2xl border border-line-1 bg-surface-1 p-5 sm:p-6">
         <PasswordChangeForm tenantId={subdomain} />
       </div>
     </div>

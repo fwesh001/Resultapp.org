@@ -6,7 +6,7 @@ import ResultLoader from "@/components/ui/ResultLoader";
  */
 export default function StaffDashboardLoading() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0514]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-0">
       <ResultLoader />
     </div>
   );

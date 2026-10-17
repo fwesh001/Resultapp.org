@@ -105,13 +105,13 @@ function VerifyEmailForm() {
           : undefined
       }
       footer={
-        <Link href="/login" className="underline underline-offset-4 hover:text-white">
+        <Link href="/login" className="underline underline-offset-4 hover:text-text-1">
           Back to sign in
         </Link>
       }
     >
       {phase === "verifying" && (
-        <div className="flex items-center gap-3 text-sm text-purple-200/70">
+        <div className="flex items-center gap-3 text-sm text-text-2">
           <Loader2 className="h-4 w-4 animate-spin" />
           Verifying your link…
         </div>
@@ -119,13 +119,13 @@ function VerifyEmailForm() {
 
       {phase === "success" && (
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
-            <p className="text-sm leading-6 text-emerald-100">{message}</p>
+          <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success-soft p-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+            <p className="text-sm leading-6 text-success">{message}</p>
           </div>
           <Link
             href="/login"
-            className="flex w-full items-center justify-center rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+            className="flex w-full items-center justify-center rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover"
           >
             Continue to sign in
           </Link>
@@ -134,17 +134,17 @@ function VerifyEmailForm() {
 
       {phase === "invalid" && (
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-            <p className="text-sm leading-6 text-amber-100">{message}</p>
+          <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <p className="text-sm leading-6 text-warning">{message}</p>
           </div>
 
           {resent ? (
-            <div className="flex items-start gap-3 rounded-xl border border-purple-500/20 bg-purple-900/20 p-3">
-              <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-purple-300" />
-              <p className="text-xs leading-5 text-purple-200/70">
+            <div className="flex items-start gap-3 rounded-xl border border-line-2 bg-surface-2 p-3">
+              <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+              <p className="text-xs leading-5 text-text-2">
                 If that address has an account, a fresh link is on its way.
-                <strong className="font-semibold text-purple-100"> Check your spam folder</strong> — it may
+                <strong className="font-semibold text-text-2"> Check your spam folder</strong> — it may
                 land in Promotions or Junk while we send from a personal address.
               </p>
             </div>
@@ -153,14 +153,14 @@ function VerifyEmailForm() {
               type="button"
               onClick={() => void handleResend()}
               disabled={resending}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-60"
             >
               {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Send a new verification link
             </button>
           ) : null}
 
-          <p className="text-center text-xs text-purple-300/40">
+          <p className="text-center text-xs text-text-3">
             Links expire after 24 hours and can only be used once.
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function VerifyEmailPage() {
     <Suspense
       fallback={
         <AuthShell title="Email verification">
-          <div className="flex items-center gap-3 text-sm text-purple-200/70">
+          <div className="flex items-center gap-3 text-sm text-text-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Verifying your link…
           </div>

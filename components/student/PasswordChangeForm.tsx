@@ -85,13 +85,13 @@ const [showConfirm, setShowConfirm] = useState(false);
   if (done) {
     return (
       <div className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10">
-          <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-emerald-300" aria-hidden="true">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-success/30 bg-success-soft">
+          <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-success" aria-hidden="true">
             <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h2 className="mt-4 text-base font-semibold text-white">Password updated</h2>
-        <p className="mt-1 text-sm text-purple-200/60">
+        <h2 className="mt-4 text-base font-semibold text-text-1">Password updated</h2>
+        <p className="mt-1 text-sm text-text-3">
           Use it the next time you sign in. Keep it somewhere only you know.
         </p>
       </div>
@@ -102,7 +102,7 @@ const [showConfirm, setShowConfirm] = useState(false);
     <form onSubmit={handleSubmit} noValidate>
       <div className="space-y-4">
         <div>
-          <label htmlFor="currentPassword" className="block text-xs font-medium text-purple-200/80">
+          <label htmlFor="currentPassword" className="block text-xs font-medium text-text-2">
             Current password
           </label>
           <div className="relative mt-1.5">
@@ -113,7 +113,7 @@ const [showConfirm, setShowConfirm] = useState(false);
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
-              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+              className="w-full rounded-xl border border-line-1 bg-surface-3 px-3.5 py-2.5 pr-11 text-sm text-text-1 outline-none transition placeholder:text-text-3 focus:border-accent/60"
             />
             <div className="absolute inset-y-0 right-0">
               <PasswordToggle
@@ -126,7 +126,7 @@ const [showConfirm, setShowConfirm] = useState(false);
         </div>
 
         <div>
-          <label htmlFor="newPassword" className="block text-xs font-medium text-purple-200/80">
+          <label htmlFor="newPassword" className="block text-xs font-medium text-text-2">
             New password
           </label>
           <div className="relative mt-1.5">
@@ -138,7 +138,7 @@ const [showConfirm, setShowConfirm] = useState(false);
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={MIN_PASSWORD}
-              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+              className="w-full rounded-xl border border-line-1 bg-surface-3 px-3.5 py-2.5 pr-11 text-sm text-text-1 outline-none transition placeholder:text-text-3 focus:border-accent/60"
             />
             <div className="absolute inset-y-0 right-0">
               <PasswordToggle
@@ -148,13 +148,13 @@ const [showConfirm, setShowConfirm] = useState(false);
               />
             </div>
           </div>
-          <p className="mt-1 text-[0.7rem] text-purple-300/50">
+          <p className="mt-1 text-[0.7rem] text-text-3">
             At least {MIN_PASSWORD} characters.
           </p>
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-xs font-medium text-purple-200/80">
+          <label htmlFor="confirmPassword" className="block text-xs font-medium text-text-2">
             Confirm new password
           </label>
           <div className="relative mt-1.5">
@@ -166,7 +166,7 @@ const [showConfirm, setShowConfirm] = useState(false);
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={MIN_PASSWORD}
-              className="w-full rounded-xl border border-purple-500/25 bg-purple-950/40 px-3.5 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-purple-300/30 focus:border-purple-400/60"
+              className="w-full rounded-xl border border-line-1 bg-surface-3 px-3.5 py-2.5 pr-11 text-sm text-text-1 outline-none transition placeholder:text-text-3 focus:border-accent/60"
             />
             <div className="absolute inset-y-0 right-0">
               <PasswordToggle
@@ -182,7 +182,7 @@ const [showConfirm, setShowConfirm] = useState(false);
       {error ? (
         <p
           role="alert"
-          className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-200"
+          className="mt-4 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-xs leading-5 text-danger"
         >
           {error}
         </p>
@@ -191,7 +191,7 @@ const [showConfirm, setShowConfirm] = useState(false);
       <button
         type="submit"
         disabled={busy}
-        className="mt-5 w-full rounded-xl bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-400 disabled:opacity-50"
+        className="mt-5 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
       >
         {busy ? "Updating…" : "Update password"}
       </button>

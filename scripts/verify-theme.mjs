@@ -201,6 +201,23 @@ for (const [name, src] of [
   check(`${name} mounts the theme toggle`, /<ThemeToggle/.test(stripComments(src)));
   check(`${name} imports ThemeToggle`, /import ThemeToggle/.test(stripComments(src)));
 }
+// The bell and the toggle are the two triggers visible in the same navbar
+// row; if they drift (bug: 44px bell vs 36px toggle) the row visibly wobbles
+// and the toggle became untappable on touch intents. Unify them at the
+// app-wide 44px touch-target idiom.
+{
+  const TRIGGER = (s) =>
+    /min-h-\[44px\] min-w-\[44px\] items-center justify-center rounded-lg border border-line-1 bg-surface-1/.test(s) &&
+    /focus-visible:ring-2 focus-visible:ring-accent/.test(s);
+  check("ThemeToggle uses the 44px trigger idiom", TRIGGER(stripComments(toggle)),
+    "the toggle must match NotificationBell's 44px trigger shape");
+  check("NotificationBell uses the 44px trigger idiom",
+    TRIGGER(stripComments(bell)),
+    "the bell must match ThemeToggle's 44px trigger shape");
+  check("NotificationBell has no leftover p-2 padding on the trigger",
+    !/min-h-\[44px\][^\n]*\bp-2\b/.test(stripComments(bell)),
+    "padding was the small-bell bug; centering handles the sizing now");
+}
 check(
   "the Command Center reaches the toggle at BOTH breakpoints",
   // Count, not a regex over "md:flex": the sidebar's own wrapper also uses
@@ -281,12 +298,47 @@ check(
   /bg-black\/40/.test(widgetSrc) && !/rounded-2xl[^\n]*bg-surface-1/.test(widgetSrc),
   "an opaque surface hides the Hero image behind it"
 );
-check("Result Checker keeps its backdrop blur", /backdrop-blur/.test(widgetSrc));
+check(
+  "Result Checker keeps its backdrop blur", /backdrop-blur/.test(widgetSrc));
 check(
   "Result Checker inputs are dark recessed wells, not light tokens",
   /bg-\[#0B0514\]/.test(widgetSrc),
   "an input must stay opaque so typed text never overlaps the Hero"
 );
+// The glass card stays dark in both themes (approved exemption), so its own
+// labels/hints must carry hardcoded LIGHT ink -- token ink on glass flips to
+// near-black in light mode and disappears against the Hero.
+check(
+  "Result Checker on-glass ink is hardcoded light",
+  /text-white/.test(widgetSrc) && /text-zinc-200/.test(widgetSrc),
+  "labels/hints on the glass card must be text-white/text-zinc-200"
+);
+// And the inverse: no token ink may appear on the glass card. A text-text-*
+// ink there is near-black on light themes and vanishes over the Hero.
+check(
+  "Result Checker uses no token inks (glass stays dark)",
+  !/text-text-\d/.test(widgetSrc),
+  "on-glass ink must stay hardcoded light, not token-driven"
+);
+check(
+  "Result Checker submit keeps the accent token",
+  /bg-accent/.test(widgetSrc) && !/bg-purple-600|bg-\[#9333EA\]|bg-\[#A855F7\]/i.test(widgetSrc),
+  "the CTA is themed; only the card itself is exempt"
+);
+// Named-exempt always-dark assets: these MUST keep their hardcoded dark
+// styling (image-backed hero/pricing zones + always-dark brand band). An
+// accidental token pass over them is as much a regression as the reverse.
+const DARK_ASSETS = [
+  ["FaqSection", "components/landing/FaqSection.tsx", /bg-purple-900\/10/],
+  ["FeaturesGrid", "components/landing/FeaturesGrid.tsx", /bg-\[#130926\]/],
+  ["PricingCalculator", "components/ui/PricingCalculator.tsx", /bg-\[#0B0514\]/],
+  ["landing Footer (tenant public page)", "components/landing/Footer.tsx", /bg-\[#0B0514\]/],
+  ["PageHero (image-backed)", "components/ui/PageHero.tsx", /#0B0514/],
+];
+for (const [name, path, need] of DARK_ASSETS) {
+  check(`${name} stays hardcoded dark (approved exemption)`,
+    need.test(stripComments(read(path))), `missing marker ${need}`);
+}
 check(
   "the report card still forces a white print surface",
   /print:bg-white/.test(read("app/[subdomain]/report/[...studentId]/page.tsx"))
@@ -312,7 +364,7 @@ const RAW_BRAND = /\[#(0B0514|0F0A1E|130926|140A24|150826|150A26|150C28|080412)\
 // A saturated fill carries its own contrast in both modes, so text-white is
 // legitimate there. Everything else must be a token, or light mode puts near-
 // black ink on a white surface and the text disappears.
-const SATURATED = /bg-(red|indigo|emerald|amber|zinc|success|danger|warning|accent)-(400|500|600|700|800)\b/;
+const SATURATED = /bg-(red|indigo|emerald|amber|zinc|success|danger|warning|accent)-(400|500|600|700|800)\b|bg-\[#25D366\]/;
 const MIGRATED = [
   ["Command Center shell", superadminShell],
   ["Command Center sidebar", superadminSidebar],
@@ -371,9 +423,14 @@ check("Modal uses a surface token, not a dark: variant pair",
 const PORTAL_DIRS = [
   "app/[subdomain]/admin",
   "app/[subdomain]/moderator",
+  "app/[subdomain]/staff",
+  "app/[subdomain]/student",
   "components/admin",
   "components/layout",
   "components/superadmin",
+  "components/billing",
+  "components/staff",
+  "components/student",
   "app/superadmin",
 ];
 // Saturated fill preservation for text-white, shared with section 7.
@@ -401,7 +458,7 @@ for (const d of PORTAL_DIRS) walkPortal(d);
 // directory was renamed and the sweep is scanning a ghost.
 for (const d of PORTAL_DIRS) {
   check(`the portal sweep reached ${d}`,
-    [...portalFiles.keys()].some((f) => f.startsWith(d) && !f.includes("/", d.length + 1)),
+    [...portalFiles.keys()].some((f) => f.startsWith(`${d}/`)),
     "directory missing — the sweep is scanning a path that no longer exists");
 }
 {
@@ -421,6 +478,113 @@ for (const d of PORTAL_DIRS) {
     pale.length ? `${pale.length} line(s), first: ${pale[0]}` : "");
   check("no purple fills or borders left in the portal", purple.length === 0,
     purple.length ? `${purple.length} line(s), first: ${purple[0]}` : "");
+}
+
+// ===================== 7c. ROOT AUTH + FLAT MARKETING ========================
+// The marketing home/pricing zones render over fixed viewport images with
+// dark scrims, so their hardcoded white-on-glass ink is BY DESIGN (see the
+// DARK_ASSETS block). But the flat canvases -- /login, /register (right
+// column), /forgot-password, /reset-password, /verify-email, about/contact/
+// support, and every form they mount -- were still purple-dark and washed
+// out the moment the toggle was added to the marketing Navbar. They speak
+// tokens now. Register's left column / mobile banner is image glass and is
+// asserted separately (below) rather than walked, so the exempt lines can
+// never drag the walk list into hand-maintenance.
+const AUTH_DIRS = [
+  "app/login",
+  "app/forgot-password",
+  "app/reset-password",
+  "app/verify-email",
+  "app/(landing)/about",
+  "app/(landing)/contact",
+  "app/(landing)/support",
+  "components/auth",
+  "components/ui",
+  "components/forms",
+];
+// components/ui and components/forms hold both themed and deliberately-dark
+// files on two image zones; list the known always-dark holdouts so the walk
+// does not flag them, while walking everything else in those dirs.
+const AUTH_DARK_HOLDOUTS = [
+  "components/ui/PricingCalculator.tsx",
+  "components/ui/PageHero.tsx",
+  "components/ui/LoadingOverlay.tsx", // unused today; keep flagged as dark
+  "components/ui/ResultLoader.tsx",   // renders on loading states over dark scrims
+  "components/ui/SignatureCaptureModal.tsx",
+  "components/ui/Select.tsx",         // surface-prop paper variants, prop-driven
+  "components/ui/Button.tsx",         // saturated destructive variant
+  "components/ui/TemplateBuilder.tsx",
+  "components/ui/ConfirmDialog.tsx",
+  "components/ui/NetworkIndicator.tsx",
+  "components/ui/Progress.tsx",
+  "components/ui/PasswordField.tsx",
+  "components/ui/InfoTooltip.tsx",
+  "components/ui/DraftRecoveryPrompt.tsx",
+];
+const authFiles = new Map();
+const walkAuth = (dir) => {
+  const base = join(root, dir);
+  if (!existsSync(base)) return;
+  for (const e of readdirSync(base, { withFileTypes: true })) {
+    const full = join(base, e.name);
+    if (e.isDirectory()) walkAuth(`${dir}/${e.name}`);
+    else if (
+      (e.name.endsWith(".tsx") || e.name.endsWith(".ts")) &&
+      !AUTH_DARK_HOLDOUTS.includes(`${dir}/${e.name}`)
+    ) {
+      authFiles.set(`${dir}/${e.name}`, stripComments(readFileSync(full, "utf8")));
+    }
+  }
+};
+for (const d of AUTH_DIRS) walkAuth(d);
+for (const d of AUTH_DIRS) {
+  check(`the auth sweep reached ${d}`,
+    [...authFiles.keys()].some((f) => f.startsWith(`${d}/`)),
+    "directory missing — the sweep is scanning a path that no longer exists");
+}
+{
+  const white = [];
+  const pale = [];
+  const purple = [];
+  const darkModeVariants = [];
+  const brandHex = [];
+  for (const [file, s] of authFiles) {
+    for (const l of s.split("\n")) {
+      if (/\btext-white\b/.test(l) && !SATURATED.test(l)) white.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (PORTAL_PALE_INK.test(l)) pale.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (PORTAL_PURPLE.test(l) && !PORTAL_PURPLE_OK.test(l)) purple.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (/\bdark:/.test(l)) darkModeVariants.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (RAW_BRAND.test(l)) brandHex.push(`${file}: ${l.trim().slice(0, 80)}`);
+    }
+  }
+  check("no text-white on unsaturated lines in auth/flat-marketing", white.length === 0,
+    white.length ? `${white.length} line(s), first: ${white[0]}` : "");
+  check("no pale dark-mode ink ramps in auth/flat-marketing", pale.length === 0,
+    pale.length ? `${pale.length} line(s), first: ${pale[0]}` : "");
+  check("no purple fills or borders left in auth/flat-marketing", purple.length === 0,
+    purple.length ? `${purple.length} line(s), first: ${purple[0]}` : "");
+  check("no dark: variants in auth/flat-marketing", darkModeVariants.length === 0,
+    darkModeVariants.length ? `${darkModeVariants.length} line(s), first: ${darkModeVariants[0]}` : "");
+  check("no hard-coded brand-dark hex in auth/flat-marketing", brandHex.length === 0,
+    brandHex.length ? `${brandHex.length} line(s), first: ${brandHex[0]}` : "");
+}
+// Register page structure: left column and mobile banner are image glass and
+// MUST stay hardcoded; the right column (actual form) must be tokenized.
+{
+  const s = stripComments(read("app/register/page.tsx"));
+  check("register right column canvas is tokenized", /bg-surface-0 lg:h-screen/.test(s),
+    "the flat form canvas kept its charcoal bg-[#0B0514]");
+  check("register outer page canvas is tokenized", /className="min-h-screen bg-surface-0"/.test(s));
+  check("register painted right-column gradient is gone",
+    !/bg-gradient-to-b from-\[#0B0514\] via-\[#0F0A1E\]/.test(s));
+  check("register form card uses surface-1", /border border-line-1 bg-surface-1 p-5/.test(s));
+  check("register left column keeps its image-glass scrim (exemption intact)",
+    /bg-\[#0B0514\]\/25/.test(s),
+    "the left panel doubles the Hero image; flattening it breaks the visual");
+  check("register left column keeps white headline ink (exemption intact)",
+    /text-white xl:text-4xl/.test(s));
+  check("register mobile banner keeps glass chip (exemption intact)",
+    /border-white\/10 bg-white\/5/.test(s));
 }
 
 // UploadField specifically: it used to carry its own tone switch.

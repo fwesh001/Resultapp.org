@@ -153,7 +153,7 @@ export default function InfoTooltip({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-purple-300/50 transition hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-3 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <HelpCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
         {label ? <span className="sr-only">{label}</span> : null}
@@ -165,7 +165,7 @@ export default function InfoTooltip({
           id={id}
           role="tooltip"
           aria-live="polite"
-          className={`absolute left-1/2 z-50 ${vertical} ${widthClass} -translate-x-1/2 rounded-xl border border-purple-500/25 bg-[#150826] px-3 py-2.5 text-xs leading-relaxed text-purple-100/90 shadow-[0_10px_30px_rgba(0,0,0,0.45)]`}
+          className={`absolute left-1/2 z-50 ${vertical} ${widthClass} -translate-x-1/2 rounded-xl border border-line-1 bg-surface-1 px-3 py-2.5 text-xs leading-relaxed text-text-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)]`}
         >
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">{children}</div>
@@ -180,7 +180,7 @@ export default function InfoTooltip({
                   close();
                 }}
                 aria-label="Close"
-                className="-mr-1 -mt-0.5 shrink-0 rounded-full p-1 text-purple-300/50 transition hover:text-white"
+                className="-mr-1 -mt-0.5 shrink-0 rounded-full p-1 text-text-3 transition hover:text-text-1"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
