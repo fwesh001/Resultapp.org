@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { PageHero } from "@/components/ui/PageHero";
 import Image from "next/image";
 import Link from "next/link";
 import { Target, Shield } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "About ResultApp",
+  description:
+    "ResultApp is built for Nigerian schools: automated grading, digital report cards, custom school portals, and pay-per-student billing. Meet the mission.",
+};
 
 export default function AboutPage() {
   return (

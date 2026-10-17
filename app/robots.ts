@@ -13,7 +13,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/superadmin"],
+      // /admin/, /staff/ and /student/ are the private portals (they also
+      // resolve under [subdomain] segments on the apex); /api/ is machine
+      // surface; /superadmin is internal ops. All stay out of the index.
+      disallow: ["/admin/", "/staff/", "/student/", "/api/", "/superadmin"],
     },
     sitemap: "https://resultapp.org/sitemap.xml",
   };

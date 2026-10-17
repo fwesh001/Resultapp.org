@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { PageHero } from "@/components/ui/PageHero";
 import { ContactForm } from "@/components/forms/ContactForm";
 import { MapPin, Mail, MessageCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Contact Us",
+  description:
+    "Talk to the ResultApp team about bringing result compilation to your school — sales, partnership and product questions all get fast answers.",
+};
 
 export default function ContactPage() {
   return (
