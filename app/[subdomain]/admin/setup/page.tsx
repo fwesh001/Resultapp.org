@@ -22,30 +22,30 @@ export default async function AdminSetupPage({
   const school = await getTenant(subdomain);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0B0514] px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4 py-10">
       <div className="w-full max-w-md">
-        <Link href={`/${subdomain}/admin/login`} className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-purple-300/60 hover:text-white">
+        <Link href={`/${subdomain}/admin/login`} className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-text-2 hover:text-text-1">
           <ArrowLeft className="h-4 w-4" /> Back to Admin Sign In
         </Link>
 
-        <div className="mt-6 rounded-[1.6rem] border border-purple-500/20 bg-purple-900/[0.07] p-6 backdrop-blur-xl sm:p-8">
+        <div className="mt-6 rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
           <div className="flex items-center gap-3">
             <Logo size="md" alt="" className="rounded-xl" />
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-white">Admin Portal</h1>
-              <p className="text-xs font-mono text-purple-300/60">{subdomain}.resultapp.org</p>
+              <h1 className="text-lg font-semibold tracking-tight text-text-1">Admin Portal</h1>
+              <p className="text-xs font-mono text-text-3">{subdomain}.resultapp.org</p>
             </div>
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-medium text-success">
               <ShieldCheck className="h-3 w-3" /> Secure
             </span>
           </div>
 
-          <div className="mt-6 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="mt-6 flex gap-2 rounded-xl border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
             <KeyRound className="h-4 w-4 shrink-0" />
             <span>
               Please set up your admin password using the reset link. Your school was created
               before admin sign-in existed — choose a password once for{" "}
-              <span className="font-medium text-white">{school?.name ? toTitleCase(school.name) : subdomain}</span>,
+              <span className="font-medium text-text-1">{school?.name ? toTitleCase(school.name) : subdomain}</span>,
               then sign in normally.
             </span>
           </div>
@@ -54,7 +54,7 @@ export default async function AdminSetupPage({
             <AdminSetupForm tenantId={subdomain} loginHref={`/${subdomain}/admin/login`} />
           </div>
 
-          <p className="mt-4 text-center text-xs text-purple-300/30">
+          <p className="mt-4 text-center text-xs text-text-3">
             ResultApp • Admin Authentication • <span className="font-mono">{subdomain}</span>
           </p>
         </div>

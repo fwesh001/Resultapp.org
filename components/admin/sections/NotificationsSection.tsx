@@ -38,7 +38,7 @@ export async function NotificationsSection({
   return (
     <Suspense
       fallback={
-        <p className="p-8 text-sm text-zinc-400">Loading notifications…</p>
+        <p className="p-8 text-sm text-text-3">Loading notifications…</p>
       }
     >
       <NotificationInbox

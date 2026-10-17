@@ -347,6 +347,82 @@ check("staff sidebar active state uses the accent token", /bg-accent-soft/.test(
 check("Modal uses a surface token, not a dark: variant pair",
   /bg-surface-1/.test(modal) && !/dark:bg-zinc-900/.test(stripComments(modal)));
 
+// ===================== 7b. THE WHOLE ADMIN + MODERATOR PORTAL ===============
+// Per-file lists rot: the first pass covered every manager, and the NEXT day
+// five pages were still unreadable in light mode because the shared section
+// headers -- a different file nobody listed -- still said text-white. Walking
+// the whole portal tree is the only version of this that survives contact
+// with the next slice. (This is exactly the failure class from the report:
+// white headers on a light page.)
+//
+// What is banned, and why:
+//   * fg-purple-* ramps (text-purple-100..500): designed as dark-mode ink;
+//     on the light surface they are pale-on-white.
+//   * text-white outside a saturated fill (see SATURATED above).
+//   * any bg-/border-purple: purple is the accent; every other purple is a
+//     holdover from before tokens existed.
+//   * the light-mode ink ramps text-amber/red/emerald-100..300 and
+//     text-zinc-100..400: pale status text on the translucent status panels
+//     washes out in light mode. Status ink is warning/danger/success now.
+// Toggle tracks keep their saturated fills and white knobs by approved
+// exemption, and bg-white in SettingsForm is the signature paper preview, so
+// only TEXT utilities are policed here -- except purple, where even a fill
+// outside `bg-accent` is a regression.
+const PORTAL_DIRS = [
+  "app/[subdomain]/admin",
+  "app/[subdomain]/moderator",
+  "components/admin",
+  "components/layout",
+  "components/superadmin",
+  "app/superadmin",
+];
+// Saturated fill preservation for text-white, shared with section 7.
+const PORTAL_PALE_INK = /\btext-purple-(?:100|200|300|400|500)\b|\btext-(?:amber|red|emerald)-(?:100|200|300)\b|\btext-zinc-(?:100|200|300|400)\b/;
+const PORTAL_PURPLE = /\b(?:bg|border)-purple(?:-\d+)?(?:\/\d+)?\b/;
+// bg-purple-500 progress fills were the one purple the first pass kept; they
+// read as a deliberate exception rather than a holdover, so name it precisely
+// rather than letting the blanket purple ban consume a false positive.
+const PORTAL_PURPLE_OK = /(?:bg|border)-purple-400\/30\b/;
+const portalFiles = new Map();
+const walkPortal = (dir) => {
+  const base = join(root, dir);
+  if (!existsSync(base)) return;
+  for (const e of readdirSync(base, { withFileTypes: true })) {
+    const full = join(base, e.name);
+    if (e.isDirectory()) walkPortal(`${dir}/${e.name}`);
+    else if (e.name.endsWith(".tsx") || e.name.endsWith(".ts")) {
+      portalFiles.set(`${dir}/${e.name}`, stripComments(readFileSync(full, "utf8")));
+    }
+  }
+};
+for (const d of PORTAL_DIRS) walkPortal(d);
+// The point of a "we scanned everything" assertion is not a magic file count;
+// each tree naming in PORTAL_DIRS must actually have contributed files, or the
+// directory was renamed and the sweep is scanning a ghost.
+for (const d of PORTAL_DIRS) {
+  check(`the portal sweep reached ${d}`,
+    [...portalFiles.keys()].some((f) => f.startsWith(d) && !f.includes("/", d.length + 1)),
+    "directory missing — the sweep is scanning a path that no longer exists");
+}
+{
+  const white = [];
+  const pale = [];
+  const purple = [];
+  for (const [file, s] of portalFiles) {
+    for (const l of s.split("\n")) {
+      if (/\btext-white\b/.test(l) && !SATURATED.test(l) && !PORTAL_PURPLE_OK.test(l)) white.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (PORTAL_PALE_INK.test(l)) pale.push(`${file}: ${l.trim().slice(0, 80)}`);
+      if (PORTAL_PURPLE.test(l) && !PORTAL_PURPLE_OK.test(l)) purple.push(`${file}: ${l.trim().slice(0, 80)}`);
+    }
+  }
+  check("no text-white on unsaturated lines anywhere in the portal", white.length === 0,
+    white.length ? `${white.length} line(s), first: ${white[0]}` : "");
+  check("no pale dark-mode ink ramps in the portal", pale.length === 0,
+    pale.length ? `${pale.length} line(s), first: ${pale[0]}` : "");
+  check("no purple fills or borders left in the portal", purple.length === 0,
+    purple.length ? `${purple.length} line(s), first: ${purple[0]}` : "");
+}
+
 // UploadField specifically: it used to carry its own tone switch.
 check(
   "UploadField no longer has a manual tone prop",

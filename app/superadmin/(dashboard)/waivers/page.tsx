@@ -462,7 +462,7 @@ export default function SuperadminWaiversPage() {
             onClick={() => setRestores((v) => !v)}
             className={cn(
               "relative mt-0.5 inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors",
-              restores ? "bg-amber-500" : "bg-purple-800/60",
+              restores ? "bg-amber-500" : "bg-surface-3",
             )}
           >
             <span

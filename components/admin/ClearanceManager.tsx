@@ -312,9 +312,9 @@ export default function ClearanceManager({
             {loading ? "—" : rows.length - owingCount}
           </p>
         </div>
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+        <div className="rounded-2xl border border-warning/30 bg-warning-soft p-4">
           <p className="text-xs uppercase tracking-wide text-warning">On Hold</p>
-          <p className="mt-1 text-2xl font-semibold text-amber-200">{loading ? "—" : owingCount}</p>
+          <p className="mt-1 text-2xl font-semibold text-warning">{loading ? "—" : owingCount}</p>
         </div>
       </div>
 
@@ -380,7 +380,7 @@ export default function ClearanceManager({
           {stagedCount > 0 && (
             <>
               {" · "}
-              <span className="font-semibold text-amber-300">{stagedCount} unsaved</span>
+              <span className="font-semibold text-warning">{stagedCount} unsaved</span>
             </>
           )}
         </span>
@@ -410,9 +410,9 @@ export default function ClearanceManager({
       </div>
 
       {stagedCount > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
-          <p className="text-xs text-amber-100">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2">
+          <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+          <p className="text-xs text-warning">
             {stagedCount} change{stagedCount === 1 ? "" : "s"} staged but not saved.
           </p>
           <div className="ml-auto flex gap-2">
@@ -500,7 +500,7 @@ export default function ClearanceManager({
                         className={
                           cleared
                             ? "inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success-soft px-2.5 py-1 text-xs font-medium text-success"
-                            : "inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200"
+                            : "inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning"
                         }
                       >
                         {cleared ? "Cleared" : "Owing"}

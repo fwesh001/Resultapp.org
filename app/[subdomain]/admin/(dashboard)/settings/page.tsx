@@ -31,7 +31,7 @@ export default async function SettingsPage({
       <h1 className="text-2xl font-bold tracking-tight">
         School Profile &amp; Branding
       </h1>
-      <p className="mt-1 text-sm text-purple-200/60">
+      <p className="mt-1 text-sm text-text-3">
         Update your school&apos;s public profile and report-card branding.
       </p>
 

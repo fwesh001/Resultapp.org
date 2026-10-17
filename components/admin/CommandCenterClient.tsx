@@ -344,7 +344,7 @@ export default function CommandCenterClient({
                 {publishedCount.toLocaleString()} <span className="text-sm font-normal text-text-3">/ {totalStudents.toLocaleString()}</span>
               </p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
-                <div className="h-full rounded-full bg-purple-500" style={{ width: `${Math.min(100, completionPct)}%` }} />
+                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, completionPct)}%` }} />
               </div>
             </div>
             <div className="rounded-xl border border-line-1 bg-surface-1 p-5">

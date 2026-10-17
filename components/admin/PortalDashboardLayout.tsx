@@ -84,24 +84,24 @@ export async function PortalDashboardLayout({
       portal={portal}
     >
       {suspended && (
-        <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm text-amber-200">
+        <div className="border-b border-warning/30 bg-warning-soft px-6 py-3 text-sm text-warning">
           Portal suspended — public, staff, and report access is paused.{" "}
           {showBillingLink ? (
             <>
               <a
                 href={`/${slug}/admin/billing`}
-                className="font-semibold underline underline-offset-4 hover:text-white"
+                className="font-semibold underline underline-offset-4 hover:text-text-1"
               >
                 Top up to restore access →
               </a>{" "}
-              <span className="text-amber-200/70">
+              <span className="text-warning/80">
                 (A top-up restores access immediately if this suspension was for
                 non-payment. If it was for abuse, a legal matter, or a security
                 concern, a payment will not lift it — contact support.)
               </span>
             </>
           ) : (
-            <span className="text-amber-200/70">
+            <span className="text-warning/80">
               Ask the school&apos;s administrator to top up. (A top-up restores access
               immediately if this suspension was for non-payment. If it was for abuse,
               a legal matter, or a security concern, a payment will not lift it.)

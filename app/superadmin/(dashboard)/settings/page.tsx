@@ -179,7 +179,7 @@ export default function SuperadminSettingsPage() {
               onClick={() => void handleToggleFreeCredits(!(freeCredits?.enabled ?? false))}
               className={cn(
                 "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 disabled:cursor-not-allowed disabled:opacity-60",
-                freeCredits?.enabled ? "bg-emerald-500" : "bg-purple-800/60"
+                freeCredits?.enabled ? "bg-emerald-500" : "bg-surface-3"
               )}
             >
               <span

@@ -34,19 +34,19 @@ export async function TemplatesSection({
       <div className="mb-6">
         <Link
           href={`/${tenantId}`}
-          className="text-sm text-purple-300 hover:text-white"
+          className="text-sm text-accent hover:text-accent-hover"
         >
           ← Back to {school ? toTitleCase(school.name) : "school portal"}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-text-1">
           Report Card Templates
         </h1>
-        <p className="mt-1 text-sm text-purple-200/60">
+        <p className="mt-1 text-sm text-text-3">
           Configure how scores and traits appear on your school&apos;s report
           card. Bind templates to classes or leave them global.
         </p>
         {!school && (
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 text-xs text-warning">
             <ShieldCheck className="h-3 w-3" /> School record for
             &quot;{tenantId}&quot; not found yet — you can still set everything up;
             saving activates once setup completes.

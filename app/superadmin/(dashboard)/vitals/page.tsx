@@ -74,7 +74,7 @@ function formatUptime(seconds: number | null | undefined): string {
 
 /** Colour ramp so an operator sees pressure without reading the number. */
 function usageTone(pct: number | null): { bar: string; text: string } {
-  if (pct === null) return { bar: "bg-purple-800", text: "text-text-3" };
+  if (pct === null) return { bar: "bg-accent", text: "text-text-3" };
   if (pct >= 90) return { bar: "bg-red-500", text: "text-danger" };
   if (pct >= 75) return { bar: "bg-amber-500", text: "text-warning" };
   return { bar: "bg-emerald-500", text: "text-success" };

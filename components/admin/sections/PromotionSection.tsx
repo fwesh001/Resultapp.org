@@ -35,15 +35,15 @@ export async function PromotionSection({
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">
+        <h1 className="text-2xl font-bold tracking-tight text-text-1">
           End of Session
         </h1>
-        <p className="mt-1 text-sm text-purple-200/60">
+        <p className="mt-1 text-sm text-text-3">
           Promote, repeat, graduate or withdraw the whole cohort for{" "}
-          <span className="font-mono font-medium text-white">
+          <span className="font-mono font-medium text-text-1">
             {school?.name || tenantId}
           </span>
-          <span className="ml-2 rounded-full border border-purple-500/15 bg-purple-900/20 px-2.5 py-1 text-xs font-mono text-purple-200">
+          <span className="ml-2 rounded-full border border-line-2 bg-surface-2 px-2.5 py-1 text-xs font-mono text-text-2">
             {tenantId}
           </span>
         </p>

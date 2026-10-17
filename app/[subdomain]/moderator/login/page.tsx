@@ -113,11 +113,11 @@ export default function ModeratorElevationPage() {
         {state === "working" ? (
           <div
             aria-hidden="true"
-            className="mx-auto mb-5 h-8 w-8 animate-spin rounded-full border-2 border-purple-400/30 border-t-purple-300"
+            className="mx-auto mb-5 h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent"
           />
         ) : null}
 
-        <h1 className="text-lg font-semibold tracking-tight text-white">
+        <h1 className="text-lg font-semibold tracking-tight text-text-1">
           {view.title}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-text-2">{view.body}</p>
@@ -131,7 +131,7 @@ export default function ModeratorElevationPage() {
         {view.action && (
           <Link
             href={view.action.href}
-            className="mt-6 inline-block rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-500"
+            className="mt-6 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg transition hover:bg-accent-hover"
           >
             {view.action.label}
           </Link>

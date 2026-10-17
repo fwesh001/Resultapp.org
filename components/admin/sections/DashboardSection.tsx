@@ -350,7 +350,7 @@ export async function DashboardSection({
           </p>
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-surface-2">
             <div
-              className="h-full rounded-full bg-purple-500"
+              className="h-full rounded-full bg-accent"
               style={{ width: `${liveOk ? Math.min(100, liveCompletion) : 0}%` }}
             />
           </div>

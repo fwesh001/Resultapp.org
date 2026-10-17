@@ -985,7 +985,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   </button>
                 ))}
                 {availableClasses.length === 0 && (
-                  <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">No classes yet</span>
+                  <span className="rounded-full border border-warning/30 bg-warning-soft px-3 py-1.5 text-xs text-warning">No classes yet</span>
                 )}
               </div>
 
@@ -1295,7 +1295,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-text-1">Class</label>
             {availableClasses.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning">
                 Register students first to generate classes. Classes are derived from the Students roster.
               </div>
             ) : (
@@ -1311,7 +1311,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-text-1">Subject</label>
             {subjects.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning">
                 No subjects yet. Add subjects in the Subjects tab or Quick Add.
               </div>
             ) : (
@@ -1327,7 +1327,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-text-1">Staff</label>
             {staff.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning">
                 No staff yet. Add staff in the Staff tab.
               </div>
             ) : (
@@ -1360,7 +1360,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-text-1">Class</label>
             {availableClasses.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning">
                 Register students first to generate classes. Classes are derived from the Students roster.
               </div>
             ) : (
@@ -1376,7 +1376,7 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-text-1">Staff</label>
             {staff.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-300">
+              <div className="rounded-xl border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning">
                 No staff yet. Add staff in the Staff tab.
               </div>
             ) : (

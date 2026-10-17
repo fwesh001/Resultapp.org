@@ -157,7 +157,7 @@ export default function AuditLogClient({
       </div>
 
       {forbidden ? (
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-5 text-sm text-amber-100">
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning-soft p-5 text-sm text-warning">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
           <p>
             The audit trail is visible to the school admin only. Moderators cannot read the log —
@@ -165,7 +165,7 @@ export default function AuditLogClient({
           </p>
         </div>
       ) : error ? (
-        <p className="mt-6 rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200">
+        <p className="mt-6 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
           {error}
         </p>
       ) : loading ? (
@@ -186,7 +186,7 @@ export default function AuditLogClient({
                 <span
                   className={
                     e.actor_type === "moderator"
-                      ? "rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[0.7rem] font-medium text-amber-300"
+                      ? "rounded-full border border-warning/30 bg-warning-soft px-2 py-0.5 text-[0.7rem] font-medium text-warning"
                       : "rounded-full border border-line-1 bg-surface-2 px-2 py-0.5 text-[0.7rem] font-medium text-text-3"
                   }
                 >

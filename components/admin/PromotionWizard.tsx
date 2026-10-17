@@ -55,25 +55,25 @@ const OUTCOME_META: Record<
   promote: {
     label: "Promote",
     icon: ArrowRight,
-    tone: "text-emerald-300",
+    tone: "text-success",
     blurb: "Moves to the next class and keeps their portal access.",
   },
   repeat: {
     label: "Repeat",
     icon: RotateCcw,
-    tone: "text-amber-300",
+    tone: "text-warning",
     blurb: "Stays in the same class. Their earlier promotion date is kept.",
   },
   graduate: {
     label: "Graduate",
     icon: GraduationCap,
-    tone: "text-purple-300",
+    tone: "text-accent",
     blurb: "Leaves the roster. Their slot is released immediately.",
   },
   withdraw: {
     label: "Withdraw",
     icon: UserMinus,
-    tone: "text-red-300",
+    tone: "text-danger",
     blurb:
       "Leaves the roster. The slot is released at the start of the next session, in case they return.",
   },
@@ -361,11 +361,11 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
   // ---- render -------------------------------------------------------------
   if (result) {
     return (
-      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <CheckCircle2 className="h-5 w-5 text-emerald-300" /> Session closed
+      <div className="rounded-2xl border border-success/30 bg-success-soft p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-text-1">
+          <CheckCircle2 className="h-5 w-5 text-success" /> Session closed
         </h2>
-        <p className="mt-1 text-sm text-purple-200/70">
+        <p className="mt-1 text-sm text-text-2">
           {fromSession} → {toSession}
         </p>
         <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -388,7 +388,7 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
             </div>
           ))}
         </dl>
-        <p className="mt-4 text-xs text-purple-300/70">
+        <p className="mt-4 text-xs text-text-2">
           Slots released now: <strong>{String(result.slots_released_now ?? 0)}</strong>.
           Withdrawal refunds parked until{" "}
           <strong>{String(result.to_session ?? toSession)}</strong>.
@@ -459,7 +459,7 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+          className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
@@ -480,7 +480,7 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
               not match what you teach.
             </p>
             {mapEdited && (
-              <p className="mt-2 text-xs font-medium text-amber-300">
+              <p className="mt-2 text-xs font-medium text-warning">
                 You have edited this map. It overrides the automatic progression.
               </p>
             )}
@@ -520,7 +520,7 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
                       />
                     </div>
                     {isTerminal && (
-                      <span className="text-xs font-medium text-purple-300">
+                      <span className="text-xs font-medium text-accent">
                         graduates
                       </span>
                     )}
@@ -618,7 +618,7 @@ export default function PromotionWizard({ tenantId }: { tenantId: string }) {
                         key={key}
                         className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${
                           touched
-                            ? "bg-amber-500/[0.08] ring-1 ring-amber-500/25"
+                            ? "bg-warning-soft ring-1 ring-warning/25"
                             : "bg-surface-0"
                         }`}
                       >
