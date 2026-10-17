@@ -39,13 +39,10 @@ export const metadata: Metadata = {
     "school portal",
     "Resultapp",
   ],
-  icons: {
-    // Explicit PNG, because the source asset is a PNG carrying an .ico
-    // extension. Relying on the file convention leaves some crawlers picking
-    // the wrong MIME type.
-    icon: [{ url: "/logo.png", type: "image/png" }],
-    apple: [{ url: "/logo.png", type: "image/png" }],
-  },
+  // Favicons come from file conventions now (app/favicon.ico + app/icon.png +
+  // app/apple-icon.png), which emit the correct link tags themselves. The old
+  // manual pointer at /logo.png is gone: that asset is portrait 1045x1449 and
+  // blurred away at tab sizes — it stays an <Image> product mark only.
   openGraph: {
     type: "website",
     siteName: "Resultapp.org",
