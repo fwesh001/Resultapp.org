@@ -728,10 +728,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 <h3 className="text-sm font-semibold text-text-1">Registered Students ({filteredStudents.length} of {totals.Students} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button onClick={() => setBulkEntity("students")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
-                    <Upload className="h-4 w-4" /> Bulk Upload
+                    <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Bulk Upload</span>
                   </Button>
                   <Button onClick={openAddStudent} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
-                    <Plus className="h-4 w-4" /> Add Student
+                    <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add Student</span>
                   </Button>
                 </div>
               </div>
@@ -809,10 +809,10 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 <h3 className="text-sm font-semibold text-text-1">Staff Members ({filteredStaff.length} of {totals.Staff} • page {page})</h3>
                 <div className="flex gap-2">
                   <Button onClick={() => setBulkEntity("staff")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
-                    <Upload className="h-4 w-4" /> Bulk Upload
+                    <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Bulk Upload</span>
                   </Button>
                   <Button onClick={openAddStaff} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
-                    <Plus className="h-4 w-4" /> Add Staff
+                    <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add Staff</span>
                   </Button>
                 </div>
               </div>
@@ -897,13 +897,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                     className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2 disabled:opacity-50"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Quick Add Standard Subjects
+                    <span className="hidden sm:inline">Quick Add Standard Subjects</span>
                   </Button>
                   <Button onClick={() => setBulkEntity("subjects")} variant="outline" className="gap-1.5 rounded-full border-line-1 bg-surface-1 px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
-                    <Upload className="h-4 w-4" /> Bulk Upload
+                    <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Bulk Upload</span>
                   </Button>
                   <Button onClick={() => setShowSubjectModal(true)} className="gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:bg-accent-hover">
-                    <Plus className="h-4 w-4" /> Add Subject
+                    <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add Subject</span>
                   </Button>
                 </div>
               </div>

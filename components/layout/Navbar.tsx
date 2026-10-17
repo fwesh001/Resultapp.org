@@ -95,6 +95,13 @@ export function Navbar() {
               </Link>
             ))}
             <Link
+              href="/login"
+              onClick={() => setOpen(false)}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-line-1 bg-surface-1 px-5 text-sm font-semibold text-text-2 transition hover:bg-surface-2 hover:text-text-1"
+            >
+              Sign In
+            </Link>
+            <Link
               href="/register"
               onClick={() => setOpen(false)}
               className="mt-2 inline-flex min-h-[44px] items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg shadow-[0_0_20px_rgba(147,51,234,0.3)] hover:bg-accent-hover"

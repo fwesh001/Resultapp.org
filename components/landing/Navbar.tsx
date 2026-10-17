@@ -74,17 +74,21 @@ export default function Navbar({ schoolName, subdomain, logoUrl }: NavbarProps) 
           <ThemeToggle />
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2 md:hidden"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-        <ThemeToggle className="ml-auto md:hidden" />
+        {/* Mobile triggers — the theme toggle and the burger live in ONE right
+            cluster. The old layout hung an ml-auto toggle after the burger,
+            which packed the burger against the school name. */}
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-line-1 p-2 text-text-2 transition hover:bg-surface-2"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </nav>
 
       {/* Mobile dropdown */}
