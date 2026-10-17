@@ -56,10 +56,10 @@ export function LegalToc({ entries }: LegalTocProps) {
 
   return (
     <nav aria-label="Table of contents">
-      <p className="text-xs font-semibold uppercase tracking-wide text-purple-300/70">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-3">
         On this page
       </p>
-      <ul className="mt-4 space-y-1 border-l border-purple-500/15">
+      <ul className="mt-4 space-y-1 border-l border-line-2">
         {entries.map((entry) => {
           const isActive = entry.id === active;
           return (
@@ -69,8 +69,8 @@ export function LegalToc({ entries }: LegalTocProps) {
                 aria-current={isActive ? "true" : undefined}
                 className={`-ml-px block border-l py-1.5 pl-4 text-sm leading-5 transition-colors ${
                   isActive
-                    ? "border-purple-400 font-medium text-white"
-                    : "border-transparent text-purple-200/55 hover:border-purple-500/40 hover:text-purple-100"
+                    ? "border-accent font-medium text-text-1"
+                    : "border-transparent text-text-3 hover:border-accent/40 hover:text-text-2"
                 }`}
               >
                 {entry.label}

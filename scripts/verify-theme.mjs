@@ -501,7 +501,10 @@ const AUTH_DIRS = [
   "components/auth",
   "components/ui",
   "components/forms",
+  "components/legal",
 ];
+// Not-found is a single file (no route dir of its own) — walked explicitly.
+const AUTH_EXTRA_FILES = ["app/not-found.tsx"];
 // components/ui and components/forms hold both themed and deliberately-dark
 // files on two image zones; list the known always-dark holdouts so the walk
 // does not flag them, while walking everything else in those dirs.
@@ -537,10 +540,17 @@ const walkAuth = (dir) => {
   }
 };
 for (const d of AUTH_DIRS) walkAuth(d);
+for (const f of AUTH_EXTRA_FILES) {
+  authFiles.set(f, stripComments(read(f)));
+}
 for (const d of AUTH_DIRS) {
   check(`the auth sweep reached ${d}`,
     [...authFiles.keys()].some((f) => f.startsWith(`${d}/`)),
     "directory missing — the sweep is scanning a path that no longer exists");
+}
+for (const f of AUTH_EXTRA_FILES) {
+  check(`the auth sweep reached ${f}`, authFiles.has(f),
+    "file missing — the sweep is scanning a path that no longer exists");
 }
 {
   const white = [];

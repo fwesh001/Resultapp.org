@@ -75,38 +75,38 @@ export default function NotFound() {
   const homeHref = subdomain && !tenantGone ? `/${subdomain}` : "/";
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0B0514] p-4 text-purple-50">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-surface-0 p-4 text-text-1">
       {/* Ambient depth */}
       <div
-        className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-purple-900/30 blur-3xl"
+        className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-accent-soft blur-3xl"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -bottom-40 -right-24 h-96 w-96 rounded-full bg-emerald-900/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-40 -right-24 h-96 w-96 rounded-full bg-success-soft blur-3xl"
         aria-hidden="true"
       />
       {/* Ghost watermark (large screens only) */}
       <span
-        className="pointer-events-none absolute max-w-full select-none text-[20rem] font-extrabold leading-none text-white/[0.03] max-md:hidden"
+        className="pointer-events-none absolute max-w-full select-none text-[20rem] font-extrabold leading-none text-text-1/[0.03] max-md:hidden"
         aria-hidden="true"
       >
         {watermark}
       </span>
 
       {/* Focused card */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-purple-500/20 bg-purple-950/30 p-8 text-center shadow-2xl shadow-black/50 backdrop-blur-md">
-        <p className="text-[clamp(4.5rem,20vw,7rem)] font-extrabold leading-none tracking-tight text-white drop-shadow-[0_0_28px_rgba(147,51,234,0.45)]">
+      <div className="relative w-full max-w-sm rounded-3xl border border-line-1 bg-surface-1 p-8 text-center shadow-2xl shadow-black/20">
+        <p className="text-[clamp(4.5rem,20vw,7rem)] font-extrabold leading-none tracking-tight text-text-1 drop-shadow-[0_0_28px_rgba(147,51,234,0.45)]">
           404
         </p>
 
         {/* Teacher's stamp */}
         <div className="mt-3 flex justify-center">
-          <span className="inline-block -rotate-3 rounded-md border border-red-500/40 bg-red-950/40 px-3 py-1 text-xs font-bold tracking-widest text-red-400">
+          <span className="inline-block -rotate-3 rounded-md border border-danger/40 bg-danger-soft px-3 py-1 text-xs font-bold tracking-widest text-danger">
             F9 • NOT FOUND
           </span>
         </div>
 
-        <p className="mt-4 text-sm text-purple-200/80">
+        <p className="mt-4 text-sm text-text-2">
           {subdomain && tenantGone
             ? `There is no school at ${subdomain}.resultapp.org — it may never have been registered, or it may have been removed.`
             : "This page isn't on the register."}
@@ -114,7 +114,7 @@ export default function NotFound() {
 
         <Link
           href={homeHref}
-          className="mt-6 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 transition hover:bg-purple-500"
+          className="mt-6 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-accent-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover"
         >
           <Home className="h-4 w-4 shrink-0" />
           Back to homepage
@@ -122,13 +122,13 @@ export default function NotFound() {
         <button
           type="button"
           onClick={() => router.back()}
-          className="mt-2 inline-flex min-h-[48px] items-center justify-center gap-2 px-4 text-sm text-purple-300/70 transition hover:text-white"
+          className="mt-2 inline-flex min-h-[48px] items-center justify-center gap-2 px-4 text-sm text-text-3 transition hover:text-text-1"
         >
           <Undo2 className="h-4 w-4 shrink-0" />
           Go back
         </button>
 
-        <p className="mt-4 text-xs text-purple-400/50">
+        <p className="mt-4 text-xs text-text-3">
           If you typed this address, check the spelling.
         </p>
       </div>

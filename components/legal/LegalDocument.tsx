@@ -25,13 +25,13 @@ export function LegalDocument({ document }: LegalDocumentProps) {
   }));
 
   return (
-    <div className="min-h-screen bg-[#0B0514] text-purple-50">
+    <div className="min-h-screen bg-surface-0 text-text-1">
       <PageHero title={document.title} subtitle={document.subtitle} />
 
       {/* Version strip */}
-      <div className="border-b border-purple-500/10">
+      <div className="border-b border-line-2">
         <div className="mx-auto max-w-6xl px-6">
-          <p className="py-3 text-xs text-purple-300/50">
+          <p className="py-3 text-xs text-text-3">
             Version {document.version} &middot; Effective {document.effectiveDate}
           </p>
         </div>
@@ -49,14 +49,14 @@ export function LegalDocument({ document }: LegalDocumentProps) {
           {/* Body */}
           <div className="min-w-0">
             {document.summary.length > 0 && (
-              <div className="rounded-2xl border border-purple-500/20 bg-purple-900/10 p-6 backdrop-blur">
-                <h2 className="text-sm font-semibold text-white">In short</h2>
+              <div className="rounded-2xl border border-line-2 bg-surface-2 p-6">
+                <h2 className="text-sm font-semibold text-text-1">In short</h2>
                 <ul className="mt-4 space-y-3">
                   {document.summary.map((item, index) => (
-                    <li key={index} className="flex gap-3 text-sm leading-6 text-purple-200/70">
+                    <li key={index} className="flex gap-3 text-sm leading-6 text-text-2">
                       <span
                         aria-hidden="true"
-                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-500"
+                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
                       />
                       <LegalEmphasis>{item}</LegalEmphasis>
                     </li>
@@ -90,7 +90,7 @@ function LegalEmphasis({ children }: { children: string }) {
     <>
       {children.split("**").map((part, index) =>
         index % 2 === 1 ? (
-          <strong key={index} className="font-semibold text-purple-100">
+          <strong key={index} className="font-semibold text-text-2">
             {part}
           </strong>
         ) : (
