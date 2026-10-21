@@ -1382,6 +1382,14 @@ try:
 except Exception as e:  # pragma: no cover
     logger.warning(f"[App] Platform auth router not mounted: {e}")
 
+try:
+    from routers.platform_admins import router as platform_admins_router
+
+    app.include_router(platform_admins_router)
+    logger.info("[App] Platform admins router mounted (/api/v1/platform/admins)")
+except Exception as e:  # pragma: no cover
+    logger.warning(f"[App] Platform admins router not mounted: {e}")
+
 # ---------------------------------------------------------------------------
 # Staff Focused Grading — per-tenant score entry
 # ---------------------------------------------------------------------------
