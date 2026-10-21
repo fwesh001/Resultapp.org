@@ -9,7 +9,7 @@ import { PasswordToggle } from "@/components/ui/PasswordField";
 import { Button } from "@/components/ui/Button";
 import { VerifyEmailWall } from "@/components/auth/VerifyEmailWall";
 
-/** Platform sign-in — per-user email+password, or legacy env password when email is blank. */
+/** Platform sign-in — per-user email+password. */
 export default function SuperadminLoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -24,20 +24,22 @@ export default function SuperadminLoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!email.trim()) {
+      // The legacy env-password path was retired in production with page
+      // allocation: an identity-less session has no role and no scope.
+      setError("Platform admin email is required");
+      return;
+    }
     if (!password) {
       setError("Password is required");
       return;
     }
     setLoading(true);
     try {
-      // Email present → per-user platform login; blank → legacy env fallback.
-      const body = email.trim()
-        ? { email: email.trim().toLowerCase(), password }
-        : { password };
       const res = await fetch("/api/superadmin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -75,16 +77,17 @@ export default function SuperadminLoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
-        label="Email (optional — per-user sign in)"
+        label="Platform admin email"
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@resultapp.org"
         autoComplete="username"
         disabled={loading}
+        required
       />
       <Input
-        label={email.trim() ? "Password" : "Superadmin Password"}
+        label="Password"
         type={showPassword ? "text" : "password"}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
@@ -94,7 +97,7 @@ export default function SuperadminLoginForm() {
         disabled={loading}
         trailing={
           <PasswordToggle
-            label={email.trim() ? "password" : "superadmin password"}
+            label="password"
             visible={showPassword}
             onToggle={() => setShowPassword((v) => !v)}
           />

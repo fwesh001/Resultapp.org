@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 
 /**
  * Global free-credit toggle proxy (superadmin-only).
@@ -77,7 +77,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("settings");
   if (guard) return guard;
 
   const secret = getProxySecret();

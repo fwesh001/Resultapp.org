@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 
 /**
  * Super Admin proxy — real-time tenants list.
@@ -27,7 +27,9 @@ function getBackendBase(): string {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSuperadmin();
+  // "adjustments" members need the school directory to pick a target for
+  // allocate/deduct (names + balances), even without the Tenants page.
+  const guard = await requireSuperadminPage("tenants", "adjustments");
   if (guard) return guard;
 
   const secret = getSecret();

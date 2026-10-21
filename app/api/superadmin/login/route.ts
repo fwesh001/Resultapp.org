@@ -8,12 +8,18 @@ import { setSessionCookie, SESSION_COOKIES } from "@/lib/session";
  * 1. Per-user: Body { email, password } → FastAPI POST /api/v1/platform/login.
  *    Cookie claims: { superadmin: true, admin_id, email, role }.
  * 2. Legacy fallback: Body { password } → SUPERADMIN_PASSWORD env check.
- *    Cookie claims: { superadmin: true } (no identity — accepted by guards).
+ *    REMOVED in production once platform RBAC landed: identity-less sessions
+ *    have no role and no page scope, so they could bypass page allocation.
+ *    Dev keeps the path for break-glass.
  *
  * Both paths mint an HMAC-signed cookie. Before P0-0 this value was unsigned
  * JSON, so `superadmin_session={"superadmin":true}` was a complete platform
  * takeover with no credential.
  */
+
+const PROD =
+  (process.env.NODE_ENV ?? "development") === "production" ||
+  (process.env.ENV ?? "").trim().toLowerCase() === "production";
 
 function getSecret(): string {
   return (
@@ -107,7 +113,23 @@ export async function POST(req: NextRequest) {
   }
 
   // --- Path 2: legacy env-password fallback (no identity) ---
+  // PHASED OUT in production (platform RBAC, LEGAL_REMEDIATION.md item 21):
+  // an identity-less session carries no role and no page scope, so under the
+  // Team page-allocation model it can only bypass scope decisions. Production
+  // therefore refuses the path outright and points the operator at the
+  // per-user form; dev keeps it as a break-glass hike.
   const expected = (process.env.SUPERADMIN_PASSWORD || "").trim();
+
+  if (PROD && expected) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Per-user sign-in is required. Use your platform admin email and password — the shared env password login has been retired.",
+      },
+      { status: 403 },
+    );
+  }
 
   if (!expected) {
     return NextResponse.json(

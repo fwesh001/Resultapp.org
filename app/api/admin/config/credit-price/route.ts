@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 
 function getProxySecret(): string {
   return (
@@ -38,8 +38,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  // Mutating the global price is superadmin-only (GET stays open for tenant billing).
-  const guard = await requireSuperadmin();
+  // Mutating the global price is superadmin-only and settings-page-scoped
+  // (GET stays open for tenant billing to read the NN price).
+  const guard = await requireSuperadminPage("settings");
   if (guard) return guard;
 
   const secret = getProxySecret();

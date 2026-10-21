@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, requireSecret, upstreamError } from "@/app/api/superadmin/_lib";
 
 /** GET /api/superadmin/tenants/[tenantId] — single tenant detail. */
@@ -7,7 +7,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ tenantId: string }> },
 ) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("tenants");
   if (guard) return guard;
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;

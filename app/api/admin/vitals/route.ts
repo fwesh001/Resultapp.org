@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 
 /**
  * Platform Vitals proxy — GET /api/admin/vitals
@@ -8,9 +8,11 @@ import { requireSuperadmin } from "@/lib/superadminAuth";
  * memory, PostgreSQL connections, and uptime.
  *
  * SECURITY (this is the important part):
- *   - `requireSuperadmin()` runs BEFORE anything else. It verifies the signed
- *     `superadmin_session` cookie via HMAC — an unsigned or forged cookie is
- *     rejected outright. No session means no telemetry, full stop.
+ *   - `requireSuperadminPage("vitals")` runs BEFORE anything else. It verifies
+ *     the signed `superadmin_session` cookie via HMAC — an unsigned or forged
+ *     cookie is rejected outright — AND that the signed-in member's DB page
+ *     scope includes the Vitals page. No session means no telemetry, full
+ *     stop; a session without the page means the same thing here.
  *   - The shared secret is injected here, server-side, and never reaches the
  *     browser. The client only ever sees the sanitised metrics payload.
  *   - Deliberately NOT reusing app/api/health/route.ts: that route is a
@@ -41,7 +43,7 @@ function getBackendBase(): string {
 }
 
 export async function GET() {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("vitals");
   if (guard) return guard;
 
   const secret = getProxySecret();

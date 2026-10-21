@@ -5,13 +5,17 @@ import Link from "next/link";
 import { ShieldCheck, Menu, X } from "lucide-react";
 import SuperadminSidebar from "@/components/superadmin/SuperadminSidebar";
 import ThemeToggle from "@/components/theme/ThemeToggle";
+import type { PlatformPageId } from "@/lib/platformPages";
 
 interface Props {
   children: React.ReactNode;
+  /** Resolved page scope — see SuperadminSidebar.allowedPages. */
+  allowedPages?: readonly PlatformPageId[] | null;
+  viewerLabel?: string | null;
 }
 
 /** Responsive shell mirroring AdminShell: fixed sidebar on md+, drawer on mobile. */
-export default function SuperadminShell({ children }: Props) {
+export default function SuperadminShell({ children, allowedPages = null, viewerLabel = null }: Props) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -29,14 +33,14 @@ export default function SuperadminShell({ children }: Props) {
   return (
     <div className="flex h-screen bg-surface-0 text-text-1">
       <div className="hidden md:flex">
-        <SuperadminSidebar />
+        <SuperadminSidebar allowedPages={allowedPages} viewerLabel={viewerLabel} />
       </div>
 
       {open && (
         <div ref={drawerRef} role="dialog" aria-modal="true" aria-label="Superadmin menu" className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute left-0 top-0 h-full shadow-2xl">
-            <SuperadminSidebar onNavigate={() => setOpen(false)} />
+            <SuperadminSidebar allowedPages={allowedPages} viewerLabel={viewerLabel} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}

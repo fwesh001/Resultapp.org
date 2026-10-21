@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, requireSecret } from "@/app/api/superadmin/_lib";
 
 /** GET /api/superadmin/ledger/export — streams backend CSV straight through. */
 export async function GET(req: NextRequest) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("ledger");
   if (guard) return guard;
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;

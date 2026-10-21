@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readSuperadminIdentity, requireSuperadmin } from "@/lib/superadminAuth";
+import { readSuperadminIdentity, requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, requireSecret, upstreamError } from "@/app/api/superadmin/_lib";
 
 /**
@@ -18,7 +18,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("tickets");
   if (guard) return guard;
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;

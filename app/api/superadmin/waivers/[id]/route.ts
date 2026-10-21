@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, upstreamError, requireSecret } from "../../_lib";
 
 /**
@@ -15,7 +15,7 @@ import { getBackendBase, upstreamError, requireSecret } from "../../_lib";
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("waivers");
   if (guard) return guard;
 
   const { secret, error } = requireSecret();

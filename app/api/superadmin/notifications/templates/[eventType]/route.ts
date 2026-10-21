@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, requireSecret, upstreamError } from "@/app/api/superadmin/_lib";
 
 /** PUT /api/superadmin/notifications/templates/[eventType] — edit a system template. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ eventType: string }> }) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("notifications");
   if (guard) return guard;
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;

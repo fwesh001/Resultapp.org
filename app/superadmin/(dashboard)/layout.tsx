@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadmin, resolveSuperadminAccess } from "@/lib/superadminAuth";
 import SuperadminShell from "@/components/superadmin/SuperadminShell";
 
 export const dynamic = "force-dynamic";
@@ -7,14 +7,15 @@ export const dynamic = "force-dynamic";
 /**
  * Guarded superadmin section.
  *
- * Calls the shared `requireSuperadmin` guard, which verifies the HMAC
- * signature before reading any claim. The previous inline version did
- * `JSON.parse` on the raw cookie, so `{"superadmin":true}` was a complete
- * platform takeover with no credential (LEGAL_REMEDIATION.md P0-0).
- *
- * `requireSuperadmin` also issues a deleting Set-Cookie on rejection, but a
- * Server Component cannot apply it — that response header is dropped here, so
- * we redirect to login and the login page overwrites the stale cookie.
+ * Two guards, in order:
+ * 1. `requireSuperadmin` — verifies the HMAC signature before reading any
+ *    claim (LEGAL_REMEDIATION.md P0-0) and that the session says superadmin.
+ *    Rejection redirects to login (a Server Component cannot apply the
+ *    deleting Set-Cookie header that guard issues).
+ * 2. `resolveSuperadminAccess` — resolves WHO is signed in and WHICH Command
+ *    Center pages they hold (platform RBAC, P1 item 21). The resolved list is
+ *    handed to the shell so the sidebar shows exactly the allocated sections,
+ *    and every page re-checks itself server-side via lib/superadminGuard.
  */
 export default async function SuperadminDashboardLayout({
   children,
@@ -24,6 +25,14 @@ export default async function SuperadminDashboardLayout({
   if (await requireSuperadmin()) {
     redirect("/superadmin/login");
   }
+  const access = await resolveSuperadminAccess();
 
-  return <SuperadminShell>{children}</SuperadminShell>;
+  return (
+    <SuperadminShell
+      allowedPages={access?.pages ?? null}
+      viewerLabel={access?.degraded ? `${access.email ?? "unknown"} (scope unresolved)` : (access?.email ?? null)}
+    >
+      {children}
+    </SuperadminShell>
+  );
 }

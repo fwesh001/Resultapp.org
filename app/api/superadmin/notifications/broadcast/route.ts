@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/superadminAuth";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, requireSecret, upstreamError } from "@/app/api/superadmin/_lib";
 
 /** POST /api/superadmin/notifications/broadcast — author + dispatch a manual broadcast. */
 export async function POST(req: NextRequest) {
-  const guard = await requireSuperadmin();
+  const guard = await requireSuperadminPage("notifications");
   if (guard) return guard;
   const { secret, error } = requireSecret() as { secret?: string; error?: NextResponse };
   if (error) return error;
