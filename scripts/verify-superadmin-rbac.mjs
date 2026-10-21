@@ -263,6 +263,21 @@ check("update_platform_admin does not hand-roll a transaction on autocommit", ()
   !updateFnSrc.includes('cur.execute("BEGIN;")') &&
   !updateFnSrc.includes("conn.commit()") &&
   updateFnSrc.includes("_connect_as_superuser()"));
+// Regression guard: resolve_platform_admin_pages() once claimed REPLACES but
+// merged (base.append) — an admin with an explicit allocation kept every
+// default page, so trims appeared to save while enforcement ignored them.
+const resolveFnSrc = (() => {
+  const start = dbSrc.indexOf("def resolve_platform_admin_pages(");
+  const end = dbSrc.indexOf("\ndef ", start + 1);
+  return dbSrc
+    .slice(start, end === -1 ? undefined : end)
+    .split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+})();
+check("backend page resolver replaces (not merges) role defaults on allocation", () =>
+  resolveFnSrc.includes("return [p for p in PLATFORM_PAGES if p in allocated]") &&
+  !resolveFnSrc.includes("base.append(pid)"));
 
 // Backend router mounted.
 const mainSrc = readFileSync(path.join(root, "backend", "main.py"), "utf8");
