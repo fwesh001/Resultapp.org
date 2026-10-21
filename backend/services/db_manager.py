@@ -18,6 +18,7 @@ import string
 import os
 import hmac
 import hashlib
+import re
 import json as _json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
@@ -440,6 +441,14 @@ def init_schools_registry() -> None:
         cur.execute("""
             CREATE INDEX IF NOT EXISTS ix_platform_admins_email
             ON platform_admins (LOWER(email));
+        """)
+        # Page allocation (Platform RBAC). NULL = let the role decide; a JSON
+        # object {"pages": [...]} is an explicit allow-list that overrides the
+        # role default for that member (owner always sees everything).
+        # See resolve_platform_admin_pages + routers/platform_admins.py.
+        cur.execute("""
+            ALTER TABLE platform_admins
+            ADD COLUMN IF NOT EXISTS page_scope JSONB;
         """)
         # ---- Email verification + password recovery (Phase: auth flow) ----
         # Tokens are stored as SHA-256 HASHES, never plaintext. The raw token
@@ -1332,6 +1341,93 @@ PENDING_REGISTRATIONS_TABLE = "pending_registrations"
 VALID_PLATFORM_ROLES = ("owner", "admin", "support")
 
 
+# ---------------------------------------------------------------------------
+# Platform RBAC — page allocation for the Command Center
+#
+# Every section of /superadmin has an id. `owner` sees all of them; other
+# roles see their role default UNLESS the member carries an explicit
+# `page_scope` allow-list. Deliberately an ALLOW-LIST (never a deny-list) —
+# the same design rule lib/capabilities.ts states for tenant moderators: a
+# deny-list silently grants every future page to everyone; an allow-list
+# leaves a new section unavailable until a human deliberately grants it.
+#
+# The list lives in ONE place here; lib/platformPages.ts mirrors it for the
+# Team UI's allocator labels only — the DB result is authoritative.
+# ---------------------------------------------------------------------------
+
+#: Command Center section ids, in sidebar order.
+PLATFORM_PAGES = (
+    "dashboard",
+    "tenants",
+    "adjustments",
+    "tickets",
+    "ledger",
+    "waivers",
+    "notifications",
+    "vitals",
+    "settings",
+    "team",
+)
+
+#: What a plain `admin` role sees when page_scope is NULL: the operational
+#: Command Center, but NOT Team (owner-only) — granting Team to a non-owner
+#: would take member management out of the owner's hands.
+DEFAULT_PLATFORM_ADMIN_PAGES = tuple(p for p in PLATFORM_PAGES if p != "team")
+
+#: What `support` (a "mod") sees when page_scope is NULL: NOTHING, until the
+#: owner allocates. A mod that should just read tickets gets exactly those
+#: pages allocated in the Team screen.
+DEFAULT_PLATFORM_SUPPORT_PAGES: tuple = ()
+
+#: Team is owner-only no matter what something else claims — enforced here so
+#: an accidental page_scope entry cannot delegate member management.
+OWNER_ONLY_PAGES: tuple = ("team",)
+
+
+def _normalise_page_scope(page_scope: Any) -> List[str]:
+    """Validate a stored/claimed page allocation. Returns the allowed subset."""
+    if not isinstance(page_scope, dict):
+        return []
+    pages = page_scope.get("pages")
+    if not isinstance(pages, (list, tuple)):
+        return []
+    out: List[str] = []
+    for p in pages:
+        pid = str(p or "").strip().lower()
+        if pid in PLATFORM_PAGES and pid not in OWNER_ONLY_PAGES and pid not in out:
+            out.append(pid)
+    return out
+
+
+def resolve_platform_admin_pages(role: Optional[str], page_scope: Any) -> List[str]:
+    """Effective Command Center pages for a member.
+
+    owner → everything (Team included, always). Everyone else → the merged
+    allow-list: role default when page_scope is NULL/empty, else the explicit
+    allocation. `team` can never come out of a non-owner's list — see
+    OWNER_ONLY_PAGES.
+    """
+    role = (role or "").strip().lower()
+    if role == "owner":
+        return list(PLATFORM_PAGES)
+    if role == "admin":
+        base = list(DEFAULT_PLATFORM_ADMIN_PAGES)
+    else:
+        base = list(DEFAULT_PLATFORM_SUPPORT_PAGES)
+    allocated = _normalise_page_scope(page_scope)
+    if allocated:
+        # An explicit allocation REPLACES the default for that member. The
+        # defaults exist so the platform works before anyone opens the Team
+        # screen, not as a permanent floor — the owner's checkboxes are the
+        # decision once they touch it.
+        for pid in allocated:
+            if pid not in base:
+                base.append(pid)
+        # Keep sidebar order stable regardless of how boxes were ticked.
+        return [p for p in PLATFORM_PAGES if p in base]
+    return [p for p in PLATFORM_PAGES if p in base]
+
+
 def log_admin_action(
     action: str,
     subdomain: Optional[str] = None,
@@ -1943,7 +2039,294 @@ def set_platform_admin_active(email: str, is_active: bool) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Credit & Command â€” token ledger + publication gate (zero-downtime, additive)
+# Platform admin management — Team screen (owner-only surface, superadmin UI)
+#
+# These read/write platform_admins for the Next.js Team proxy. The BACKEND
+# cannot see cookies, so owner enforcement lives in the proxy (it verifies the
+# signed session); these helpers do the DATA guards — self-demotion and
+# last-owner — because those are invariants on the data, not on transport.
+# ---------------------------------------------------------------------------
+
+PLATFORM_ADMIN_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _platform_admin_strength(pw: str) -> None:
+    """Same rules the CLI seeder enforces. Raises ValueError on failure."""
+    if len(pw) < 12:
+        raise ValueError("Password must be at least 12 characters")
+    if not any(c.isalpha() for c in pw):
+        raise ValueError("Password must contain at least one letter")
+    if not any(c.isdigit() for c in pw):
+        raise ValueError("Password must contain at least one number")
+
+
+def list_platform_admins() -> List[Dict[str, Any]]:
+    """All platform admins (incl. disabled), plus effective pages per member."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, email, role, is_active, created_at, page_scope
+            FROM {PLATFORM_ADMINS_TABLE}
+            ORDER BY created_at ASC, email ASC;
+            """
+        )
+        rows = cur.fetchall()
+        admins: List[Dict[str, Any]] = []
+        for r in rows:
+            d = _row_to_dict(r, cur)
+            d["id"] = str(d["id"])
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            d["pages"] = resolve_platform_admin_pages(d.get("role"), d.get("page_scope"))
+            d["page_scope"] = _normalise_page_scope(d.get("page_scope"))
+            admins.append(d)
+        return admins
+    except Exception as e:
+        logger.exception(f"[DB] list_platform_admins failed: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_platform_admin_detail(admin_id: str) -> Optional[Dict[str, Any]]:
+    """One member by UUID — the enforcement lookup for requireSuperadminPage.
+
+    Returns {id, email, role, is_active, page_scope (normalised), pages
+    (effective list)} or None when the id is unknown/disabled is NOT a filter
+    (callers need to know the row exists even when disabled, so the signed-in
+    member of a freshly disabled account gets a clean denial, not a 404).
+    """
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, email, role, is_active, created_at, page_scope
+            FROM {PLATFORM_ADMINS_TABLE}
+            WHERE id::text = %s
+            LIMIT 1;
+            """,
+            (admin_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        d = _row_to_dict(row, cur)
+        d["id"] = str(d["id"])
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        d["pages"] = resolve_platform_admin_pages(d.get("role"), d.get("page_scope"))
+        d["page_scope"] = _normalise_page_scope(d.get("page_scope"))
+        return d
+    except Exception as e:
+        logger.exception(f"[DB] get_platform_admin_detail failed for {admin_id}: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def _count_other_active_owners(cur, exclude_id: str) -> int:
+    cur.execute(
+        f"""
+        SELECT COUNT(*) FROM {PLATFORM_ADMINS_TABLE}
+        WHERE role = 'owner' AND is_active = TRUE AND id::text <> %s;
+        """,
+        (exclude_id,),
+    )
+    return int(cur.fetchone()[0] or 0)
+
+
+def _assert_last_owner_guard(cur, admin_id: str, new_role: Optional[str], new_active: Optional[bool]) -> None:
+    """Refuse demoting/deactivating the LAST active owner. Raises ValueError."""
+    cur.execute(
+        f"SELECT role, is_active FROM {PLATFORM_ADMINS_TABLE} WHERE id::text = %s LIMIT 1;",
+        (admin_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        raise ValueError("Unknown platform admin")
+    old_role, old_active = row
+    # Owner-only pages stay owner-only: a non-owner cannot gain Team from
+    # anywhere — resolve_platform_admin_pages already filters it, but refuse
+    # the write here too so no role change can even attempt it.
+    if new_role is not None and new_role == "owner":
+        raise ValueError("Role 'owner' is assigned by SQL bootstrap, not by the Team screen")
+    loses_owner = old_role == "owner" and (
+        (new_role is not None and new_role != "owner") or new_active is False
+    )
+    if not loses_owner:
+        return
+    if _count_other_active_owners(cur, admin_id) < 1:
+        raise ValueError(
+            "Cannot remove the last active owner — promote another owner first"
+        )
+
+
+def update_platform_admin(
+    admin_id: str,
+    actor_id: Optional[str] = None,
+    role: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    pages: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Update role / active / page allocation. Raises ValueError on bad input.
+
+    Data-level guards:
+    - a member cannot change their OWN role or active state (self-demotion
+      lockout), and
+    - the last active owner cannot be demoted or deactivated.
+    `pages` is stored verbatim (owner may include anything globally valid);
+    resolve_platform_admin_pages still strips owner-only ids for non-owners.
+    """
+    admin_id = (admin_id or "").strip()
+    if not admin_id:
+        raise ValueError("admin_id is required")
+    if actor_id and actor_id.strip() == admin_id and (role is not None or is_active is not None):
+        raise ValueError("You cannot change your own role or deactivate yourself")
+    if role is not None and role not in VALID_PLATFORM_ROLES:
+        raise ValueError(f"role must be one of {', '.join(VALID_PLATFORM_ROLES)}")
+    scope: Optional[Dict[str, Any]] = None
+    if pages is not None:
+        cleaned = _normalise_page_scope({"pages": list(pages)})
+        scope = {"pages": cleaned}
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+        _assert_last_owner_guard(cur, admin_id, role, is_active)
+        cur.execute(
+            f"""
+            UPDATE {PLATFORM_ADMINS_TABLE}
+            SET role        = COALESCE(%s, role),
+                is_active   = COALESCE(%s, is_active),
+                page_scope  = COALESCE(%s, page_scope)
+            WHERE id::text = %s
+            RETURNING id, email, role, is_active, created_at, page_scope;
+            """,
+            (role, is_active, _json.dumps(scope) if scope is not None else None, admin_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            cur.execute("ROLLBACK;")
+            raise ValueError("Unknown platform admin")
+        conn.commit()
+        d = _row_to_dict(row, cur)
+        d["id"] = str(d["id"])
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+        d["pages"] = resolve_platform_admin_pages(d.get("role"), d.get("page_scope"))
+        d["page_scope"] = _normalise_page_scope(d.get("page_scope"))
+        return d
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"[DB] update_platform_admin failed for {admin_id}: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def set_platform_admin_password_by_id(admin_id: str, plaintext_password: str) -> bool:
+    """Rotate a member's password from the Team screen. Same strength rules."""
+    admin_id = (admin_id or "").strip()
+    if not admin_id:
+        raise ValueError("admin_id is required")
+    _platform_admin_strength(plaintext_password)
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {PLATFORM_ADMINS_TABLE}
+            SET password_hash = crypt(%s, gen_salt('bf'))
+            WHERE id::text = %s;
+            """,
+            (plaintext_password, admin_id),
+        )
+        conn.commit()
+        return (cur.rowcount or 0) > 0
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"[DB] set_platform_admin_password_by_id failed for {admin_id}: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def change_platform_admin_password(email: str, current_password: str, new_password: str) -> bool:
+    """Change OWN password (Security tab). Verifies the current one first.
+
+    Returns True on success; False when the current password is wrong.
+    Raises ValueError for weak new passwords.
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        raise ValueError("email is required")
+    _platform_admin_strength(new_password)
+    if verify_platform_admin(email, current_password) is None:
+        return False
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE {PLATFORM_ADMINS_TABLE}
+            SET password_hash = crypt(%s, gen_salt('bf'))
+            WHERE LOWER(email) = LOWER(%s);
+            """,
+            (new_password, email),
+        )
+        conn.commit()
+        return (cur.rowcount or 0) > 0
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"[DB] change_platform_admin_password failed for {email}: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def count_active_platform_admins() -> int:
+    """Live platform admin rows — used to phase out the legacy env login."""
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FROM {PLATFORM_ADMINS_TABLE} WHERE is_active = TRUE;"
+        )
+        return int(cur.fetchone()[0] or 0)
+    except Exception as e:
+        logger.error(f"[DB] count_active_platform_admins failed: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Credit & Command — token ledger + publication gate (zero-downtime, additive)
 # ---------------------------------------------------------------------------
 
 CREDIT_LEDGER_TABLE = "credit_ledger"
@@ -3755,6 +4138,17 @@ DEFAULT_NOTIFICATION_TEMPLATES: List[Dict[str, Any]] = [
         "title_template": "Your Moderator access has ended",
         "body_template": "{{school_name}} has removed your Moderator access. Your Staff Portal account is unaffected and your {{role}} role stays the same. If you had the Moderator Console open, close the tab - its sessions expire within a couple of hours, and opening it again will be refused.",
         "default_color": "#EF4444",
+    },
+    # Credit/slot allocation & deduction by the platform team. TARGETED to the
+    # school's admin (target_user_type='admin' in adjust_tenant_tokens), so the
+    # reason and the new balance land in the admin's bell — not in every
+    # staff member's inbox — while keeping the money trail in billing_ledger.
+    {
+        "event_type": "TOKEN_ADJUSTED",
+        "category": "BILLING",
+        "title_template": "{{direction}} {{amount}} {{token_label}}",
+        "body_template": "The ResultApp platform {{direction}} {{amount}} {{token_label}} for {{school_name}} ({{subdomain}}). New balance: {{balance}}. Reason: \"{{reason}}\". Reply to a support ticket if this looks wrong.",
+        "default_color": "#8B5CF6",
     },
 ]
 
