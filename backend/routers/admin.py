@@ -862,6 +862,255 @@ class TenantGrantRequest(BaseModel):
     amount: int = 0
 
 
+class TenantAdjustRequest(BaseModel):
+    """Allocate OR deduct a tenant's credits/slots, with a required reason.
+
+    Replaces the free grant as the supported path from the superadmin UI:
+    both directions carry a reason (min 3 chars), the deduction is REJECTED
+    when it exceeds the school's balance (balances never go negative), and
+    the action is announced to the school's admin through the notification
+    engine (TOKEN_ADJUSTED template) — best-effort, never blocking the
+    ledger write.
+    """
+
+    token_type: str = "CREDIT"
+    direction: str = "allocate"
+    amount: int = 0
+    reason: str = ""
+    actor_email: Optional[str] = None
+    actor_id: Optional[str] = None
+
+
+@router.post("/tenants/{subdomain}/adjust", summary="Allocate or deduct credits/slots with a reason (superadmin)")
+def adjust_tenant_tokens(subdomain: str, payload: TenantAdjustRequest):
+    """One transaction: ledger row + balance move.
+
+    allocate → GRANT_CREDITS / GRANT_SLOTS (amount_ngn=0, MRR-neutral — same
+    ledger semantics as the legacy /grant endpoint, which stays working).
+    deduct   → DEDUCT_CREDITS / DEDUCT_SLOTS, refused with 409 when the
+    school holds less than the amount being taken.
+
+    The TOKEN_ADJUSTED notification is dispatched AFTER COMMIT so a
+    notification failure can never roll banking back onto itself.
+    """
+    import time as _time
+
+    from services.db_manager import (
+        BILLING_LEDGER_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        log_admin_action,
+    )
+    from main import SUBDOMAIN_RE, RESERVED_SUBDOMAINS
+
+    tid = (subdomain or "").lower().strip()
+    if not SUBDOMAIN_RE.match(tid) or tid in RESERVED_SUBDOMAINS:
+        raise HTTPException(status_code=400, detail="Invalid subdomain")
+    ttype = (payload.token_type or "").strip().upper()
+    if ttype not in ("CREDIT", "SLOT"):
+        raise HTTPException(status_code=400, detail="token_type must be CREDIT or SLOT")
+    direction = (payload.direction or "").strip().lower()
+    if direction not in ("allocate", "deduct"):
+        raise HTTPException(status_code=400, detail="direction must be allocate or deduct")
+    amount = int(payload.amount or 0)
+    if amount <= 0 or amount > 10000:
+        raise HTTPException(status_code=400, detail="amount must be 1-10000")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="A reason (min 3 characters) is required")
+
+    balance_col = "credit_balance" if ttype == "CREDIT" else "slots_balance"
+    txn = (f"{'GRANT' if direction == 'allocate' else 'DEDUCT'}_"
+           f"{'CREDITS' if ttype == 'CREDIT' else 'SLOTS'}")
+    ref = f"{direction[:3]}:{tid}:{ttype.lower()}:{amount}:{int(_time.time())}"
+    conn = None
+    try:
+        from services.db_manager import _connect_as_superuser_transactional
+
+        # Atomic write (ledger + balance) — the autocommit helper would make
+        # BEGIN a client-side illusion (see its docstring / register_school).
+        conn = _connect_as_superuser_transactional()
+        cur = conn.cursor()
+        # Row lock so a concurrent adjustment cannot race the balance read.
+        cur.execute(
+            f"SELECT {balance_col} FROM {SCHOOLS_REGISTRY_TABLE} WHERE subdomain = %s FOR UPDATE;",
+            (tid,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        current = int(row[0] or 0)
+        if direction == "deduct" and amount > current:
+            conn.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"Insufficient balance: tenant has {current} {balance_col.rsplit('_', 1)[0]}(s), cannot deduct {amount}",
+            )
+        new_balance = current + amount if direction == "allocate" else current - amount
+        sign = "+" if direction == "allocate" else "-"
+        verb = "Allocation" if direction == "allocate" else "Deduction"
+        cur.execute(
+            f"""
+            INSERT INTO {BILLING_LEDGER_TABLE}
+                (subdomain, token_type, amount, transaction_type, reference_id, description, amount_ngn)
+            VALUES (%s, %s, %s, %s, %s, %s, 0)
+            ON CONFLICT (reference_id) DO NOTHING
+            RETURNING id;
+            """,
+            (
+                tid,
+                ttype,
+                amount,
+                txn,
+                ref,
+                f"{verb}: {sign}{amount} {ttype.lower()} for '{tid}' — reason: {reason}",
+            ),
+        )
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET {balance_col} = %s, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING {balance_col};
+            """,
+            (new_balance, tid),
+        )
+        if cur.fetchone() is None:  # pragma: no cover — row was locked above
+            conn.rollback()
+            raise HTTPException(status_code=404, detail=f"No school found for tenant '{tid}'")
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn:
+                conn.rollback()
+        except Exception:
+            pass
+        _logger.exception(f"[admin] adjust failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Adjustment failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    log_admin_action(
+        "tenant.adjust",
+        tid,
+        {
+            "token_type": ttype,
+            "direction": direction,
+            "amount": amount,
+            "reason": reason,
+            "new_balance": new_balance,
+        },
+        actor=payload.actor_email or "superadmin",
+        actor_id=payload.actor_id,
+    )
+
+    # Announcement to the school's admin bell. Best-effort: template unknown,
+    # school email missing or the fan-out failing never un-grants anything.
+    notified = False
+    try:
+        from services.db_manager import get_school_by_subdomain
+        from services.notifications import dispatch_event
+
+        school = get_school_by_subdomain(tid)
+        school_email = (school or {}).get("email")
+        school_name = (school or {}).get("school_name") or tid
+        if school_email:
+            notified = dispatch_event(
+                "TOKEN_ADJUSTED",
+                tid,
+                {
+                    "school_name": school_name,
+                    "subdomain": tid,
+                    "direction": "added" if direction == "allocate" else "removed",
+                    "amount": amount,
+                    "token_label": "credits" if ttype == "CREDIT" else "slots",
+                    "reason": reason,
+                    "balance": new_balance,
+                },
+                target_user_id=school_email,
+                target_user_type="admin",
+            )
+    except Exception as e:
+        _logger.warning(f"[admin] TOKEN_ADJUSTED dispatch failed for {tid}: {e}")
+
+    _logger.info(
+        f"[admin] Adjusted {direction} {amount} {ttype} for '{tid}' → {new_balance}"
+        f" (reason: {reason})"
+    )
+    return {
+        "success": True,
+        "subdomain": tid,
+        "token_type": ttype,
+        "direction": direction,
+        "amount": amount,
+        "reason": reason,
+        "new_balance": new_balance,
+        "notified": bool(notified),
+    }
+
+
+@router.get("/tenants/adjustments", summary="Adjustment history from the billing ledger (superadmin)")
+def list_token_adjustments(subdomain: Optional[str] = None, limit: int = 50, offset: int = 0):
+    """Ledger rows written by /adjust (and the legacy /grant), newest first.
+
+    The ledger is the financial source of truth; the audit trail carries the
+    acting superadmin's identity separately.
+    """
+    from services.db_manager import BILLING_LEDGER_TABLE, _connect_as_superuser, _row_to_dict
+
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        where = ""
+        args: list = []
+        if subdomain:
+            where = "WHERE subdomain = %s"
+            args.append((subdomain or "").lower().strip())
+        cur.execute(
+            f"""
+            SELECT COUNT(*) FROM {BILLING_LEDGER_TABLE}
+            {where + (' AND ' if where else 'WHERE ')}
+              transaction_type IN ('GRANT_CREDITS','GRANT_SLOTS','DEDUCT_CREDITS','DEDUCT_SLOTS');
+            """,
+            tuple(args),
+        )
+        total = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT id, subdomain, token_type, transaction_type, amount, reference_id,
+                   description, amount_ngn, created_at
+            FROM {BILLING_LEDGER_TABLE}
+            {where + (' AND ' if where else 'WHERE ')}
+              transaction_type IN ('GRANT_CREDITS','GRANT_SLOTS','DEDUCT_CREDITS','DEDUCT_SLOTS')
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s;
+            """,
+            tuple([*args, limit, offset]),
+        )
+        entries = []
+        for r in cur.fetchall():
+            d = _row_to_dict(r, cur)
+            if isinstance(d.get("created_at"), datetime):
+                d["created_at"] = d["created_at"].isoformat()
+            entries.append(d)
+        return {"entries": entries, "total": total}
+    except Exception as e:
+        _logger.exception(f"[admin] adjustments history failed: {e}")
+        raise HTTPException(status_code=500, detail="Adjustment history failed")
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.post("/tenants/{subdomain}/grant", summary="Grant free credits/slots (superadmin)")
 def grant_tenant_tokens(subdomain: str, payload: TenantGrantRequest):
     """Free manual grant — amount_ngn stays 0 (excluded from MRR). Audited."""
