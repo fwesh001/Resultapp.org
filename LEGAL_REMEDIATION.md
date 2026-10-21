@@ -658,7 +658,7 @@ POST — `app/api/billing/upgrade/route.ts` is mounted and guarded only by
   ledger-writing path as the top-ups. Do not leave a second, weaker way to
   change billing state.
 
-### 21. No role separation on tenant lifecycle actions
+### 21. No role separation on tenant lifecycle actions — CLOSED 2026-10
 
 `lib/superadminAuth.ts` checks only that `superadmin === true`. It never reads
 `role`, even though `platform_admins.role` is constrained to
@@ -673,6 +673,35 @@ now the control that decides whether abuse suspensions are liftable by payment.
 - **Fix:** enforce role checks in `requireSuperadmin` callers — read-only roles
   must not reach lifecycle or financial endpoints. Role is already in the signed
   session payload, so no re-fetch is needed.
+- **Closed (2026-10, Command Center page-allocation work):** role is now
+  the backbone of a per-section ALLOW-LIST (never deny-list):
+  - `platform_admins` gained `page_scope JSONB` (idempotent migration at boot);
+    ownership PROMOTION stays a one-time SQL bootstrap (the Team screen can
+    create `admin`/`support` but never `owner`).
+  - The backend is authoritative per request: `GET /api/v1/platform/admins/{id}`
+    returns the member's resolved page set (`resolve_platform_admin_pages` in
+    `db_manager.py` — owner: all; admin: all but Team; support: none until
+    allocated; `team` is owner-only in the resolver AND the data layer).
+  - `resolveSuperadminAccess()` / `requireSuperadminPage(...)` in
+    `lib/superadminAuth.ts` enforce that set on every `/api/superadmin` route
+    and on each page (server wrappers in `app/superadmin/(dashboard)`
+    calling `enforceSuperadminPage` in `lib/superadminGuard.tsx`); the DB is
+    queried per request, NOT read from the 12-hour cookie, so a reallocation
+    applies on the next navigation. All lookups fail CLOSED (unreachable
+    backend ⇒ scope `[]`).
+  - Per-user enforcement (owner checks on member management) lives in the
+    Next.js proxy — backend routes are cookie-blind by design. Self-demotion
+    and last-active-owner protections are additionally enforced on the data
+    layer in `db_manager.update_platform_admin`.
+  - Cross-checked by a negative suite: `node scripts/verify-superadmin-rbac.mjs`
+    (72 assertions: team never leaks into non-owner sets, every route names
+    its pages, wrappers call the guard, prod refuses identity-less login).
+  - The legacy identity-less `SUPERADMIN_PASSWORD` login is REFUSED in
+    production (it cannot carry role/scope); dev keeps it as break-glass.
+  - Residual, honestly stated: section granularity is COMMAND CENTER pages, not
+    per-button; an allocated member with `tenants` still reaches that page's
+    lifecycle actions. Financial mutations now require an explicit allocation,
+    and there is no role that silently inherits everything except owner.
 
 ### 22. `restore_tenant` does not clear `is_active`
 
