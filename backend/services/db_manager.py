@@ -1419,12 +1419,13 @@ def resolve_platform_admin_pages(role: Optional[str], page_scope: Any) -> List[s
         # An explicit allocation REPLACES the default for that member. The
         # defaults exist so the platform works before anyone opens the Team
         # screen, not as a permanent floor — the owner's checkboxes are the
-        # decision once they touch it.
-        for pid in allocated:
-            if pid not in base:
-                base.append(pid)
+        # decision once they touch it. (Mirrors resolvePlatformPages in
+        # lib/platformPages.ts; a merge here once made admins immune to
+        # trimming — allocations appeared to save while nothing changed.)
+        # `_normalise_page_scope` has already dropped unknown ids and any
+        # owner-only entry, so `allocated` is safe as the whole set.
         # Keep sidebar order stable regardless of how boxes were ticked.
-        return [p for p in PLATFORM_PAGES if p in base]
+        return [p for p in PLATFORM_PAGES if p in allocated]
     return [p for p in PLATFORM_PAGES if p in base]
 
 
