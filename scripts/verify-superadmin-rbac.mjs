@@ -245,6 +245,24 @@ check("last-owner guard exists", () =>
   dbSrc.includes("_assert_last_owner_guard") && dbSrc.includes("last active owner"));
 check("self-modification guard exists", () =>
   dbSrc.includes("You cannot change your own role or deactivate yourself"));
+// Regression guard: update_platform_admin() once sent a manual "BEGIN;" on the
+// autocommit connection and then called conn.commit() — psycopg2 never tracked
+// that server-side transaction, commit() was a no-op, and every page-allocation
+// write silently rolled back while the API still returned 200. The function must
+// stay a single-statement autocommit write (or use the transactional helper).
+const updateFnSrc = (() => {
+  const start = dbSrc.indexOf("def update_platform_admin(");
+  const end = dbSrc.indexOf("\ndef ", start + 1);
+  return dbSrc
+    .slice(start, end === -1 ? undefined : end)
+    .split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+})();
+check("update_platform_admin does not hand-roll a transaction on autocommit", () =>
+  !updateFnSrc.includes('cur.execute("BEGIN;")') &&
+  !updateFnSrc.includes("conn.commit()") &&
+  updateFnSrc.includes("_connect_as_superuser()"));
 
 // Backend router mounted.
 const mainSrc = readFileSync(path.join(root, "backend", "main.py"), "utf8");
