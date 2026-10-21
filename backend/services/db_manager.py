@@ -2196,11 +2196,15 @@ def update_platform_admin(
         cleaned = _normalise_page_scope({"pages": list(pages)})
         scope = {"pages": cleaned}
 
+    # Single-statement autocommit write — mirroring set_platform_admin_active().
+    # A previous revision manually sent "BEGIN;" on this autocommit connection and
+    # then called conn.commit(): psycopg2 never tracked that server-side
+    # transaction, so commit() was a no-op and every allocation write silently
+    # rolled back on close (while RETURNING had already fed the caller a 200).
     conn = None
     try:
         conn = _connect_as_superuser()
         cur = conn.cursor()
-        cur.execute("BEGIN;")
         _assert_last_owner_guard(cur, admin_id, role, is_active)
         cur.execute(
             f"""
@@ -2215,9 +2219,7 @@ def update_platform_admin(
         )
         row = cur.fetchone()
         if row is None:
-            cur.execute("ROLLBACK;")
             raise ValueError("Unknown platform admin")
-        conn.commit()
         d = _row_to_dict(row, cur)
         d["id"] = str(d["id"])
         if isinstance(d.get("created_at"), datetime):
