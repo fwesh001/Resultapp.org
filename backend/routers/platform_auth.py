@@ -108,3 +108,62 @@ def platform_me(email: Optional[str] = None):
                 conn.close()
             except Exception:
                 pass
+
+
+class PlatformChangePasswordRequest(BaseModel):
+    """Change OWN password from the Command Center (Settings → Security).
+
+    Replaces the SSH rotation script (scripts/set-platform-admin-password.py)
+    for the normal case; the script stays as break-glass tooling.
+    """
+
+    current_password: str = Field(..., description="Existing password")
+    new_password: str = Field(..., description="Replacement password (min 12 chars)")
+
+
+@router.post("/change-password", summary="Change a platform admin's own password")
+def platform_change_password(
+    payload: PlatformChangePasswordRequest,
+    x_admin_id: Optional[str] = Header(None, alias="X-Admin-Id"),
+    x_admin_email: Optional[str] = Header(None, alias="X-Admin-Email"),
+):
+    """Verifies the CURRENT password server-side, applies the same strength
+    rules the CLI enforces, and stores only the pgcrypto bcrypt hash.
+
+    Stateless sessions are NOT revoked by a password change — a live 12-hour
+    cookie keeps verifying until expiry (ToS §5.5 documents this residual).
+    The acting member's email comes from the verified session via the proxy's
+    X-Admin-Email header (audit attribution only — the credential check is
+    `current_password`, so a hijacked header changes nothing of substance:
+    they must already know the current password to rotate it).
+    """
+    from services.db_manager import change_platform_admin_password, log_admin_action
+
+    email = (x_admin_email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing acting member identity — sign in with the per-user superadmin form",
+        )
+    current = payload.current_password or ""
+    new_password = payload.new_password or ""
+    if not current or not new_password:
+        raise HTTPException(status_code=400, detail="current_password and new_password are required")
+
+    try:
+        updated = change_platform_admin_password(email, current, new_password)
+    except ValueError as e:
+        # Strength rules — surfaced verbatim so the UI message matches the CLI.
+        raise HTTPException(status_code=400, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    log_admin_action(
+        "platform_admin.password_changed",
+        None,
+        {"email": email},
+        actor=email,
+        actor_id=x_admin_id,
+    )
+    logger.info(f"[platform_auth] password changed {email}")
+    return {"success": True}
