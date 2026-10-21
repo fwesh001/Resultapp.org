@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { provisionHeldRegistration } from "@/lib/pendingRegistrations";
+import { requireSuperadminPage } from "@/lib/superadminAuth";
 import { getBackendBase, upstreamError, requireSecret } from "../../superadmin/_lib";
 
 /**
@@ -64,9 +65,18 @@ export async function POST(req: NextRequest) {
 }
 
 async function sweep(req: NextRequest, mode: "cron" | "manual") {
-  const auth = checkAuth(req, mode);
-  if (!auth.ok) {
-    return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+  if (mode === "manual") {
+    // Manual triggers come from the superadmin Waivers page. This verifies the
+    // SIGNED session (not just a same-named cookie) and that the member's page
+    // scope includes Waivers — under page allocation, firing provisioning runs
+    // is a Waivers-page capability, not something every platform session does.
+    const guard = await requireSuperadminPage("waivers");
+    if (guard) return guard;
+  } else {
+    const auth = checkAuth(req, mode);
+    if (!auth.ok) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+    }
   }
 
   const { secret, error } = requireSecret();
@@ -187,7 +197,7 @@ async function sweep(req: NextRequest, mode: "cron" | "manual") {
 }
 
 /**
- * Cron auth, or an authenticated superadmin.
+ * Cron auth (manual mode is handled by the page guard in sweep() — see there).
  *
  * WAYS A CALLER CAN AUTHENTICATE, in the order they are checked:
  *
@@ -211,63 +221,59 @@ function checkAuth(
   req: NextRequest,
   mode: "cron" | "manual",
 ): { ok: true } | { ok: false; status: number; error: string } {
-  if (mode === "manual") {
-    // Manual triggers come from the superadmin console, which carries its own
-    // session cookie. Presence-checked rather than verified here; the page and
-    // the API route both sit behind requireSuperadmin's own checks.
-    if (req.cookies.get("superadmin_session")?.value !== undefined) return { ok: true };
-    return {
-      ok: false,
-      status: 401,
-      error: "Sign in as a superadmin to trigger the sweep manually.",
-    };
+  if (mode === "cron") {
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    if (!cronSecret) {
+      console.error(
+        "[waiver/sweep] CRON_SECRET is not set — abandoned 100% waiver registrations " +
+          "CANNOT be recovered on this deployment. Set it in the Vercel environment variables.",
+      );
+      return {
+        ok: false,
+        status: 503,
+        error:
+          "CRON_SECRET is not configured on this deployment, so the sweep cannot run. " +
+          "Add it to the Vercel environment variables (any random string), then retry with " +
+          "?key=<that value>.",
+      };
+    }
+
+    const supplied =
+      (() => {
+        const auth = req.headers.get("authorization") ?? "";
+        return auth.startsWith("Bearer ") ? auth.slice(7) : "";
+      })() ||
+      req.headers.get("x-cron-secret")?.trim() ||
+      req.nextUrl.searchParams.get("key")?.trim() ||
+      "";
+
+    if (!supplied) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Missing credential. Call this URL with ?key=<CRON_SECRET>.",
+      };
+    }
+
+    // Length check first, then a full-length XOR accumulate. Same shape as
+    // lib/flutterwave's timingSafeEqual wrapper: comparing only equal-length
+    // strings keeps the loop from leaking the secret's length through timing.
+    if (supplied.length !== cronSecret.length) {
+      return { ok: false, status: 401, error: "Invalid credential." };
+    }
+    let diff = 0;
+    for (let i = 0; i < supplied.length; i++) {
+      diff |= supplied.charCodeAt(i) ^ cronSecret.charCodeAt(i);
+    }
+    if (diff !== 0) {
+      return { ok: false, status: 401, error: "Invalid credential." };
+    }
+    return { ok: true };
   }
 
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  if (!cronSecret) {
-    console.error(
-      "[waiver/sweep] CRON_SECRET is not set — abandoned 100% waiver registrations " +
-        "CANNOT be recovered on this deployment. Set it in the Vercel environment variables.",
-    );
-    return {
-      ok: false,
-      status: 503,
-      error:
-        "CRON_SECRET is not configured on this deployment, so the sweep cannot run. " +
-        "Add it to the Vercel environment variables (any random string), then retry with " +
-        "?key=<that value>.",
-    };
-  }
-
-  const supplied =
-    (() => {
-      const auth = req.headers.get("authorization") ?? "";
-      return auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    })() ||
-    req.headers.get("x-cron-secret")?.trim() ||
-    req.nextUrl.searchParams.get("key")?.trim() ||
-    "";
-
-  if (!supplied) {
-    return {
-      ok: false,
-      status: 401,
-      error: "Missing credential. Call this URL with ?key=<CRON_SECRET>.",
-    };
-  }
-
-  // Length check first, then a full-length XOR accumulate. Same shape as
-  // lib/flutterwave's timingSafeEqual wrapper: comparing only equal-length
-  // strings keeps the loop from leaking the secret's length through timing.
-  if (supplied.length !== cronSecret.length) {
-    return { ok: false, status: 401, error: "Invalid credential." };
-  }
-  let diff = 0;
-  for (let i = 0; i < supplied.length; i++) {
-    diff |= supplied.charCodeAt(i) ^ cronSecret.charCodeAt(i);
-  }
-  if (diff !== 0) {
-    return { ok: false, status: 401, error: "Invalid credential." };
-  }
+  // Manual mode never reaches here: sweep() verifies the signed superadmin
+  // session AND the Waivers page scope with requireSuperadminPage first (see
+  // below), which also upgrades the old presence-only cookie check to a real
+  // signature verification.
   return { ok: true };
 }
