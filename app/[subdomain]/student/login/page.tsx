@@ -85,9 +85,9 @@ export default async function StudentLoginPage({
 
           {demoHost && (
             <p className="mt-3 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-xs leading-5 text-warning">
-              Demo — try{" "}
-              <span className="font-mono font-medium">STD001</span> with password{" "}
-              <span className="font-mono font-medium">123456</span>. Fictional data, resets hourly.
+              Demo — try <span className="font-mono font-medium">STD001</span> with password{" "}
+              <span className="font-mono font-medium">123456</span>. Held pupils (STD002) stay
+              blocked by design; the persona list is in the demo guide. Fictional data, resets hourly.
             </p>
           )}
 

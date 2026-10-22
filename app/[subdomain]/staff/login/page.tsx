@@ -53,7 +53,9 @@ export default async function StaffLoginPage({
           {demoHost && (
             <p className="mt-3 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-xs leading-5 text-warning">
               Demo login — Staff ID <span className="font-mono font-medium">DEMO-ADM</span> with
-              PIN <span className="font-mono font-medium">123456</span>. Fictional data, resets hourly.
+              PIN <span className="font-mono font-medium">123456</span>. Three teacher logins
+              (DEMO-T01–T03) are listed in the demo guide that just opened — or tap the{" "}
+              <span className="font-medium">?</span> button. Fictional data, resets hourly.
             </p>
           )}
 
