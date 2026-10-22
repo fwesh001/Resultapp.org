@@ -288,6 +288,17 @@ body {
   border-bottom-right-radius: inherit;
 }
 
+/* Free-stack variant used by <MobileActionBar variant="free">: no padded
+   parent to span, so margins normalise to the page grid, the bar rounds and
+   borders itself, and the bottom inset clears iOS home-indicator space.
+   Declared after .action-bar-sticky — same specificity, later wins. */
+.mobile-action-bar {
+  margin: 0;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  border: 1px solid rgb(168 85 247 / 0.15);
+  border-radius: 1rem;
+}
+
 @media print {
   .action-bar-sticky {
     display: none;
