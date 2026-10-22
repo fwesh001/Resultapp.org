@@ -261,7 +261,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
       {activeTab === "slots" ? (
         <>
           {/* Slots balance card */}
-          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
+          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-4 sm:p-8">
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-text-3">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading slots…
@@ -306,7 +306,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
           </div>
 
           {/* Slots packages + top-up (tiered) */}
-          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
+          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-4 sm:p-8">
             <h2 className="text-base font-semibold text-text-1">Buy slot package</h2>
             <p className="mt-1 text-sm text-text-3">
               {formatNaira(pkgTier.pricePerStudent)} per slot
@@ -332,7 +332,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
             <p className="mt-3 text-sm text-text-2">
               Package total: <span className="font-semibold text-text-1">{formatNaira(pkgTotal)}</span>
             </p>
-            <div className="mt-5 rounded-2xl border border-line-2 bg-surface-2 p-4 sm:p-5">
+            <div className="mt-5 rounded-2xl border border-line-2 bg-surface-2 p-3 sm:p-5">
               <BillingCheckout
                 key={`slot-${pkg}`}
                 mode="slot"
@@ -353,7 +353,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
       ) : (
         <>
           {/* Credits balance card */}
-          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
+          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-4 sm:p-8">
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-text-3">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading credits…
@@ -395,7 +395,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
           </div>
 
             {/* Credits packages + top-up (flat live rate) */}
-          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
+          <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-4 sm:p-8">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h2 className="text-base font-semibold text-text-1">Buy credit package</h2>
@@ -434,7 +434,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
             <p className="mt-3 text-sm text-text-2">
               Package total: <span className="font-semibold text-text-1">{formatNaira(creditTotal)}</span>
             </p>
-            <div className="mt-5 rounded-2xl border border-line-2 bg-surface-2 p-4 sm:p-5">
+            <div className="mt-5 rounded-2xl border border-line-2 bg-surface-2 p-3 sm:p-5">
               <BillingCheckout
                 key={`credit-${creditPkg}`}
                 mode="credit"
@@ -454,7 +454,7 @@ export default function BillingClient({ tenantId, schoolName, customerEmail, cus
       )}
 
       {/* Ledger history */}
-      <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-6 sm:p-8">
+      <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-4 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-base font-semibold text-text-1">
             <History className="h-4 w-4 text-accent" /> Transaction history
