@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { HelpCircle, X } from "lucide-react";
 
 /**
@@ -126,6 +126,29 @@ export default function InfoTooltip({
 
   const showOnHover = !coarse;
   const vertical = placement === "top" ? "bottom-full mb-2" : "top-full mt-2";
+
+  // Clamp the open panel inside the viewport.
+  //
+  // The panel is centered on the trigger (`left-1/2 -translate-x-1/2`), so a
+  // trigger near the page's right edge — where header "more info" icons
+  // always live — pushes a w-72 bubble ~100px past the right edge on a
+  // phone, hard-clipping every line. CSS centering cannot know where the
+  // trigger is, so once the panel is in the DOM it measures itself and
+  // nudges its own transform back inside with a 6px gutter. The class
+  // stays as the SSR/first-paint fallback; the inline style wins after.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = panelRef.current;
+    if (!el) return;
+    const vw = document.documentElement.clientWidth;
+    const r = el.getBoundingClientRect();
+    const gutter = 6;
+    let dx = 0;
+    if (r.left < gutter) dx = gutter - r.left;
+    else if (r.right > vw - gutter) dx = vw - gutter - r.right;
+    el.style.transform =
+      dx === 0 ? "translateX(-50%)" : `translateX(calc(-50% + ${Math.round(dx)}px))`;
+  }, [open]);
 
   return (
     <span className={`relative inline-flex ${className}`}>
