@@ -23,7 +23,7 @@ export function Footer() {
             <p className="text-sm font-semibold tracking-wide text-text-2">Company</p>
             <ul className="mt-3 space-y-2 text-sm text-text-3">
               <li><Link href="/about" className="transition-colors hover:text-text-1">About</Link></li>
-              <li><Link href="/support" className="transition-colors hover:text-text-1">Support</Link></li>
+              <li><Link href="/support" prefetch={false} className="transition-colors hover:text-text-1">Support</Link></li>
               <li><Link href="/contact" className="transition-colors hover:text-text-1">Contact</Link></li>
             </ul>
           </div>

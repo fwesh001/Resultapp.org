@@ -87,7 +87,9 @@ export default async function AdminLoginPage({
 
           <p className="mt-4 text-center text-xs text-text-3">
             ResultApp • Admin Authentication • <span className="font-mono">{subdomain}</span> •{" "}
-            <Link href="/forgot-password" className="underline underline-offset-4 hover:text-text-1">
+            {/* prefetch={false}: demo-host escape-hatch redirect trips CORS
+                preflight noise when Next prefetches the RSC payload. */}
+            <Link href="/forgot-password" prefetch={false} className="underline underline-offset-4 hover:text-text-1">
               Forgot password?
             </Link>
           </p>

@@ -75,7 +75,10 @@ export default function DemoLandingPage() {
         <p className="mt-8 text-xs text-purple-300/40">
           Demo data is fictional and resets automatically. Ready for the real
           thing?{" "}
-          <Link href="/register" className="underline underline-offset-4 hover:text-white">
+          {/* prefetch={false}: on the demo host the middleware escape-hatch
+              redirects /register to the apex, and an RSC prefetch of that
+              redirect trip-wires CORS preflight noise in the console. */}
+          <Link href="/register" prefetch={false} className="underline underline-offset-4 hover:text-white">
             Register your school
           </Link>
         </p>
