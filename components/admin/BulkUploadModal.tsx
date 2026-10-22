@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/toast";
 
 export type BulkEntity = "students" | "staff" | "subjects";
 
@@ -114,7 +115,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ inserted: number; skipped: number; reason?: string } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   const validRows = useMemo(() => rows.filter((r) => r.errors.length === 0), [rows]);
@@ -232,6 +233,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
       const payload = validRows.map(toPayloadRow);
       let inserted = 0;
       let skipped = 0;
+      let reason: string | undefined;
       for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
         const chunk = payload.slice(i, i + CHUNK_SIZE);
         setProgress({ done: Math.min(i + CHUNK_SIZE, payload.length), total: payload.length });
@@ -243,6 +245,7 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         const data = (await res.json().catch(() => ({}))) as {
           inserted?: number;
           skipped?: number;
+          reason?: string;
           error?: string;
         };
         if (!res.ok) {
@@ -250,9 +253,21 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
         }
         inserted += data.inserted ?? 0;
         skipped += data.skipped ?? 0;
+        reason = data.reason ?? reason;
       }
-      setResult({ inserted, skipped });
+      setResult({ inserted, skipped, reason });
       onImported();
+      // Auto-close on a clean import. The modal used to stay open with the
+      // Import button re-enabled, so the natural second click re-submitted the
+      // same file and the backend minted fresh admission numbers for identical
+      // rows — a paid double import. A toast carries the summary; re-opening
+      // starts from a blank state.
+      toast.success(
+        reason === "already_registered"
+          ? `All ${skipped} ${entity} already registered — nothing imported`
+          : `Imported ${inserted} ${entity}${skipped > 0 ? ` (${skipped} skipped)` : ""}`,
+      );
+      onOpenChange(false);
     } catch (e) {
       setImportError(e instanceof Error ? e.message : "Import failed");
     } finally {
@@ -404,8 +419,14 @@ export function BulkUploadModal({ open, onOpenChange, entity, tenantId, onImport
           <div className="flex gap-2 rounded-xl border border-success/40 bg-success-soft p-3 text-sm text-success">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             <span>
-              Imported {result.inserted} {entity}
-              {result.skipped > 0 && ` (${result.skipped} skipped as duplicates)`}.
+              {result.reason === "already_registered" ? (
+                <>All {result.skipped} {entity} already registered — nothing imported again.</>
+              ) : (
+                <>
+                  Imported {result.inserted} {entity}
+                  {result.skipped > 0 && ` (${result.skipped} skipped as duplicates)`}.
+                </>
+              )}
             </span>
           </div>
         )}
