@@ -192,6 +192,12 @@ check("publication probe is case-insensitive (compact / uppercase IDs stay publi
     ? true
     : "credits/publications matches student_id case-sensitively — an uppercase-stored id (demo STD001) reads as unpublished and every report page fail-closes to a draft preview";
 });
+check("archived academic_session override executes real SQL (not db.query(<str>))", () => {
+  const report = read(path.join("backend", "routers", "report.py"));
+  return /db\.execute\(\s*text\(/.test(report) && !/db\.query\(\s*[f]?"""/.test(report)
+    ? true
+    : "the academic_session override check started with db.query(<raw string>) — SQLAlchemy 2.0 raises ArgumentError, the except silently keeps the current session, and every archived report link 404s";
+});
 check("seeder grants Command-Center credits", () =>
   /grant_initial_credits\(subdomain, DEMO_CREDIT_GRANT\)/.test(demoSvc)
     ? true
