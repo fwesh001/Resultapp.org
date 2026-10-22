@@ -30,7 +30,17 @@ export function validateBandsClient(bands: RemarkBand[]): string | null {
   return null;
 }
 
-/** Shared grade-band scheme editor (principal + form-teacher surfaces). */
+/**
+ * Shared grade-band scheme editor (principal + form-teacher surfaces).
+ *
+ * Palette is token-based (`text-text-*`, `surface-*`, `line-*`, `danger`)
+ * because this component is embedded on a `bg-surface-2` staff card AND
+ * inside an admin `SectionCard` (`bg-surface-1`). The old hard-coded dark
+ * ramp (`text-purple-300/50` labels, `bg-purple-950/30 text-white` inputs)
+ * rendered white-on-lavender, invisible-in-light-theme text. The accent prop
+ * now also drives the focus ring, so the staff (emerald) and admin (purple)
+ * surfaces match their surrounding CTAs.
+ */
 export default function SchemeBuilder({
   initial,
   onSave,
@@ -47,8 +57,8 @@ export default function SchemeBuilder({
   const [error, setError] = useState<string | null>(null);
 
   const solid = accent === "emerald" ? "bg-emerald-600 hover:bg-emerald-500" : "bg-purple-600 hover:bg-purple-500";
-  const inputCls =
-    "h-10 rounded-xl border border-purple-800/50 bg-purple-950/30 px-3 text-sm text-white placeholder:text-purple-300/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500";
+  const focusRing = accent === "emerald" ? "focus-visible:ring-emerald-500" : "focus-visible:ring-accent";
+  const inputCls = `h-10 rounded-xl border border-line-2 bg-surface-1 px-3 text-sm text-text-1 placeholder:text-text-3 focus-visible:outline-none focus-visible:ring-2 ${focusRing}`;
 
   function update(idx: number, patch: Partial<RemarkBand>) {
     setBands((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
@@ -81,17 +91,17 @@ export default function SchemeBuilder({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-purple-300/50">
+      <p className="text-xs text-text-3">
         Bands map an average % to remark text (inclusive bounds). Gaps are allowed — averages in gaps get no auto-remark and stay manual.
       </p>
       {bands.length === 0 && (
-        <p className="rounded-xl border border-dashed border-purple-500/25 px-4 py-6 text-center text-sm text-purple-300/50">
+        <p className="rounded-xl border border-dashed border-line-2 px-4 py-6 text-center text-sm text-text-3">
           No bands yet. Add your first band below.
         </p>
       )}
       {bands.map((b, i) => (
-        <div key={i} className="flex flex-col gap-2 rounded-xl border border-purple-500/15 bg-purple-900/[0.04] p-3 sm:flex-row sm:items-center">
-          <label className="flex flex-1 items-center gap-2 text-xs text-purple-300/60">
+        <div key={i} className="flex flex-col gap-2 rounded-xl border border-line-1 bg-surface-2/60 p-3 sm:flex-row sm:items-center">
+          <label className="flex flex-1 items-center gap-2 text-xs text-text-2">
             Min %
             <input
               type="number"
@@ -103,7 +113,7 @@ export default function SchemeBuilder({
               className={`${inputCls} w-full`}
             />
           </label>
-          <label className="flex flex-1 items-center gap-2 text-xs text-purple-300/60">
+          <label className="flex flex-1 items-center gap-2 text-xs text-text-2">
             Max %
             <input
               type="number"
@@ -128,7 +138,7 @@ export default function SchemeBuilder({
             type="button"
             onClick={() => remove(i)}
             aria-label={`Remove band ${i + 1}`}
-            className="inline-flex items-center justify-center self-end rounded-full border border-red-500/15 bg-red-500/5 p-2 text-red-300 hover:bg-red-500/15 sm:self-center"
+            className="inline-flex items-center justify-center self-end rounded-full border border-danger/30 bg-danger-soft p-2 text-danger hover:border-danger/60 sm:self-center"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -139,7 +149,7 @@ export default function SchemeBuilder({
           type="button"
           onClick={() => setBands((prev) => (prev.length >= 20 ? prev : [...prev, { ...EMPTY_BAND }]))}
           disabled={bands.length >= 20}
-          className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 px-4 py-2 text-sm text-purple-200 hover:bg-white/5 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-surface-1 px-4 py-2 text-sm text-text-1 hover:bg-surface-3 disabled:opacity-40"
         >
           <Plus className="h-4 w-4" /> Add band
         </button>
@@ -153,7 +163,7 @@ export default function SchemeBuilder({
         </button>
       </div>
       {error && (
-        <p role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
+        <p role="alert" className="rounded-xl border border-danger/40 bg-surface-1 px-4 py-2.5 text-sm text-danger">
           {error}
         </p>
       )}
