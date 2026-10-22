@@ -181,6 +181,11 @@ check("seeder pins the academic session (no clock drift 404s)", () =>
     ? true
     : "current_term/current_session left NULL — derived session silently desyncs the seeded publications"
 );
+check("seeder pre-verifies the admin email (fictional inbox cannot open a link)", () =>
+  /is_email_verified = TRUE, verification_token_hash = NULL/.test(demoSvc)
+    ? true
+    : "admin login renders VerifyEmailWall for demo-<id>@demo.resultapp.org — no prospect can verify that address"
+);
 check("seeder grants Command-Center credits", () =>
   /grant_initial_credits\(subdomain, DEMO_CREDIT_GRANT\)/.test(demoSvc)
     ? true

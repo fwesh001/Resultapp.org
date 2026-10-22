@@ -143,6 +143,16 @@ def main():
     check("exactly one moderator promotion -> DEMO-T03",
           len(moderator) == 1 and moderator[0][2] == (DEMO_SUB, "DEMO-T03"), repr(moderator))
 
+    verified = execs_for("SET is_email_verified = TRUE")
+    check(
+        "admin email pre-verified (fictional inbox cannot open a link)",
+        len(verified) == 1
+        and verified[0][2] == (DEMO_SUB,)
+        and "verification_token_hash = NULL" in verified[0][1]
+        and "verification_token_expires = NULL" in verified[0][1],
+        repr(verified),
+    )
+
     # --- Allocations + form classes --------------------------------------
     allocs = values_for("INSERT INTO tenant_allocations")[0][2]
     check("24 allocation cells (4 classes x 6 core subjects)", len(allocs) == 24, f"got {len(allocs)}")
