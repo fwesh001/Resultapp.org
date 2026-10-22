@@ -421,6 +421,22 @@ def seed_demo_data(subdomain: str) -> Dict[str, int]:
             ("Term 1", DEMO_SESSION, subdomain),
         )
 
+        # --- Pre-verify the demo admin email --------------------------------
+        # The admin login mints its email_verified claim from schools
+        # .is_email_verified, and SignInForm gates the portal behind the
+        # VerifyEmailWall for a false claim. The demo admin address is
+        # fictional (demo-<id>@demo.resultapp.org) — no prospect can open a
+        # link it can never receive, so the wall is pure friction. Mirror the
+        # exact row state consume_verification_token() writes for a real
+        # verification: the flag flipped, any pending token cleared.
+        cur.execute(
+            f"UPDATE {db.SCHOOLS_REGISTRY_TABLE} "
+            "SET is_email_verified = TRUE, verification_token_hash = NULL, "
+            "verification_token_expires = NULL, updated_at = NOW() "
+            "WHERE subdomain = %s;",
+            (subdomain,),
+        )
+
         # --- Subjects ---
         execute_values(
             cur,
