@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Play, RotateCcw } from "lucide-react";
+import { DEMO_GUIDE_STORAGE_KEY } from "@/lib/demoPersonas";
 
 // Must equal ACTIVE_DEMO_COOKIE in app/api/demo/provision/route.ts (the
 // proxy is the only writer). Kept as a literal here so the client bundle
@@ -93,6 +94,14 @@ export function DemoLauncher() {
       };
       if (!res.ok || !data.success || !data.url) {
         throw new Error(data.error || "Demo launch failed. Please retry.");
+      }
+      // Post-provision onboarding: the freshly provisioned classroom pops the
+      // demo guide (credentials + personas) exactly once. The DemoHelp modal
+      // consumes and clears this flag on mount, so a reload never replays it.
+      try {
+        sessionStorage.setItem(DEMO_GUIDE_STORAGE_KEY, "1");
+      } catch {
+        // Private mode: the guide is still reachable via the banner / ? button.
       }
       window.location.href = data.url;
     } catch (err) {
