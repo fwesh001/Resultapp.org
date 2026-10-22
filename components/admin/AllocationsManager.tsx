@@ -171,6 +171,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
   const [pendingReset, setPendingReset] = useState<{ type: "student" | "staff"; id: string; name: string } | null>(null);
   const [resetting, setResetting] = useState(false);
 
+  // Bulk selection (Students tab): admission-row UUIDs ticked on the CURRENT
+  // page only. Selecting across pages would need selection state that survives
+  // the server-paged refetch — a later problem.
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<{ ids: string[] } | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // Computed available classes from registered students (unique, sorted)
   const availableClasses = useMemo(() => {
     return Array.from(new Set(students.map((s) => s.class_name).filter(Boolean))).sort();
@@ -250,6 +257,21 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
       return matchesSearch && matchesClass;
     });
   }, [students, q, studentClassFilter]);
+
+  // Bulk-selection helpers: "all" means every row VISIBLE under the current
+  // search/class filter (they are all on the loaded page).
+  const allVisibleStudentsSelected = filteredStudents.length > 0 && filteredStudents.every((s) => selectedStudentIds.has(s.id));
+  function toggleStudentSelection(id: string) {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAllStudents() {
+    setSelectedStudentIds(allVisibleStudentsSelected ? new Set() : new Set(filteredStudents.map((s) => s.id)));
+  }
 
   const filteredStaff = useMemo(() => {
     if (!q) return staff;
@@ -615,6 +637,37 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
     }
   }
 
+  async function handleBulkDeleteStudents() {
+    const ids = Array.from(selectedStudentIds);
+    setPendingBulkDelete(null);
+    setBulkDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/allocations?tenant_id=${encodeURIComponent(tenantId)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "student", ids }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { deleted?: number; missing?: string[]; error?: string };
+      if (!res.ok) throw new Error(data.error || "Bulk delete failed");
+      const deletedCount = data.deleted ?? ids.length;
+      const missingCount = data.missing?.length ?? 0;
+      toast.success(`${deletedCount} student${deletedCount === 1 ? "" : "s"} deleted`, {
+        description:
+          `${deletedCount} slot${deletedCount === 1 ? "" : "s"} refunded to the school.` +
+          (missingCount > 0 ? ` ${missingCount} selected row${missingCount === 1 ? " was" : "s were"} already gone.` : ""),
+      });
+      setSelectedStudentIds(new Set());
+      await fetchAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Bulk delete failed");
+      toast.error("Could not delete the selected students", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   async function handleResetPassword(type: "student" | "staff", id: string) {
     setPendingReset(null);
     setResetting(true);
@@ -664,7 +717,13 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
             <button
               key={tab.key}
               type="button"
-              onClick={() => { setActiveTab(tab.key); setPage(1); }}
+              onClick={() => {
+                // Selection does not survive a page or tab move — the ticked
+                // rows live only on the loaded page (see students pager too).
+                setSelectedStudentIds(new Set());
+                setActiveTab(tab.key);
+                setPage(1);
+              }}
               className={
                 activeTab === tab.key
                   ? "rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-[0_0_14px_rgba(147,51,234,0.3)]"
@@ -724,6 +783,30 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
           {/* Students Tab */}
           {activeTab === "Students" && (
             <div className="space-y-4">
+              {selectedStudentIds.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger-soft px-4 py-2.5">
+                  <p className="text-sm font-medium text-danger">
+                    {selectedStudentIds.size} student{selectedStudentIds.size === 1 ? "" : "s"} selected on this page
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setSelectedStudentIds(new Set())}
+                      variant="outline"
+                      disabled={bulkDeleting}
+                      className="rounded-full bg-surface-1 px-3 py-1.5 text-xs"
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      onClick={() => setPendingBulkDelete({ ids: Array.from(selectedStudentIds) })}
+                      disabled={bulkDeleting}
+                      className="rounded-full border border-danger/40 bg-danger-soft px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger/20"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete selected
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-text-1">Registered Students ({filteredStudents.length} of {totals.Students} • page {page})</h3>
                 <div className="flex gap-2">
@@ -740,6 +823,16 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-line-1 bg-surface-2 text-left text-xs font-semibold uppercase tracking-wide text-text-2">
+                      <th className="w-10 px-3 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all students on this page"
+                          checked={allVisibleStudentsSelected}
+                          onChange={toggleSelectAllStudents}
+                          disabled={filteredStudents.length === 0 || bulkDeleting}
+                          className="h-4 w-4 cursor-pointer accent-current"
+                        />
+                      </th>
                       <th className="px-4 py-3">Admission No</th>
                       <th className="px-4 py-3">Full Name</th>
                       <th className="px-4 py-3">Class</th>
@@ -750,13 +843,23 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                   <tbody>
                     {filteredStudents.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-text-3">
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-text-3">
                           {students.length === 0 ? "No students yet. Add your first student." : "No students match search/filter."}
                         </td>
                       </tr>
                     ) : (
                       filteredStudents.map((s) => (
                         <tr key={s.id} className="border-t border-line-1 text-text-2 hover:bg-surface-2">
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${s.full_name}`}
+                              checked={selectedStudentIds.has(s.id)}
+                              onChange={() => toggleStudentSelection(s.id)}
+                              disabled={bulkDeleting}
+                              className="h-4 w-4 cursor-pointer accent-current"
+                            />
+                          </td>
                           <td className="px-4 py-3 font-mono text-xs">{s.student_id}</td>
                           <td className="px-4 py-3 font-medium text-text-1">{s.full_name}</td>
                           <td className="px-4 py-3">{s.class_name}</td>
@@ -796,8 +899,14 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
                 page={page}
                 total={totals.Students}
                 loaded={students.length}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => p + 1)}
+                onPrev={() => {
+                  setSelectedStudentIds(new Set());
+                  setPage((p) => Math.max(1, p - 1));
+                }}
+                onNext={() => {
+                  setSelectedStudentIds(new Set());
+                  setPage((p) => p + 1);
+                }}
               />
             </div>
           )}
@@ -1424,6 +1533,20 @@ export function AllocationsManager({ tenantId, idPrefix: idPrefixProp, staffIdPr
         confirmLabel="Delete"
         loading={deleting}
         onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete.type, pendingDelete.id); }}
+      />
+
+      <ConfirmDialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingBulkDelete(null); }}
+        title={pendingBulkDelete ? `Delete ${pendingBulkDelete.ids.length} student${pendingBulkDelete.ids.length === 1 ? "" : "s"}?` : "Delete students?"}
+        message={
+          pendingBulkDelete
+            ? `This permanently erases ${pendingBulkDelete.ids.length} student${pendingBulkDelete.ids.length === 1 ? "" : "s"}: ${STUDENT_FIELDS} for each, all of their scores and behavioural assessments, every teacher and principal remark written about them, and their publication record. One slot of capacity is refunded per student. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel={`Delete ${pendingBulkDelete ? pendingBulkDelete.ids.length : ""} student${pendingBulkDelete && pendingBulkDelete.ids.length === 1 ? "" : "s"}`}
+        loading={bulkDeleting}
+        onConfirm={() => { void handleBulkDeleteStudents(); }}
       />
 
       <ConfirmDialog
