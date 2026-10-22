@@ -896,6 +896,11 @@ class BatchSubjectsPayload(BaseModel):
     rows: List[BatchSubjectRow] = Field(..., min_length=1, max_length=2000)
 
 
+class StudentsBulkDeletePayload(BaseModel):
+    """Deletes roster rows by UUID; invalid or unknown IDs are reported, not fatal."""
+    ids: List[str] = Field(..., min_length=1, max_length=200)
+
+
 def _next_prefixed_ids(cur, prefix: str, table: str, id_col: str, count: int, subdomain: str = "") -> list[str]:
     """Generate `count` sequential IDs (`PREFIX/001`, …) in ONE scan.
 
@@ -2036,6 +2041,176 @@ def delete_roster_record(
                 pass
         logger.exception(f"[roster] delete failed {record_type} {record_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@router.post("/students/bulk-delete", summary="Bulk delete students (cascade + per-student slot refund)")
+def bulk_delete_students(
+    tenant_id: str,
+    payload: StudentsBulkDeletePayload,
+    x_viewer_role: Optional[str] = Header(None, alias="X-Viewer-Role"),
+    x_viewer_id: Optional[str] = Header(None, alias="X-Viewer-Id"),
+    x_viewer_label: Optional[str] = Header(None, alias="X-Viewer-Label"),
+):
+    """Erase many students in ONE transaction, mirroring delete_roster_record().
+
+    Same cascade as the single-delete path (grades, academic + behavioural
+    records, publications, term clearance — keyed on the admission-number
+    STRING), then one aggregated slot refund: slots_balance + N plus a
+    SLOT_REFUND ledger row per student with the same per-idempotency ref the
+    single path uses. Unknown ids are reported back as `missing` rather than
+    aborting the batch, so a stale selection cannot wedge a cleanup. This
+    exists because the duplicate import behind the VHS incident left the
+    roster with row-twins that had to be removed wholesale.
+    """
+    tid = _validate_tenant_id(tenant_id)
+
+    import uuid as _uuid
+
+    req_ids: list[str] = []
+    for raw in payload.ids:
+        sid = str(raw or "").strip()
+        try:
+            _uuid.UUID(sid)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid student id: {sid!r}")
+        if sid.lower() not in {r.lower() for r in req_ids}:
+            req_ids.append(sid)
+
+    from services.db_manager import (
+        TENANT_STUDENTS_TABLE,
+        SCHOOLS_REGISTRY_TABLE,
+        BILLING_LEDGER_TABLE,
+        _connect_as_superuser,
+        log_admin_action,
+    )
+
+    conn = None
+    try:
+        conn = _connect_as_superuser()
+        cur = conn.cursor()
+        cur.execute("BEGIN;")
+
+        cur.execute(
+            f"SELECT id::text, student_id FROM {TENANT_STUDENTS_TABLE} "
+            f"WHERE subdomain = %s AND id::text = ANY(%s::text[]);",
+            (tid, [i.lower() for i in req_ids]),
+        )
+        found = {row[0]: str(row[1]) for row in cur.fetchall()}
+        missing = [i for i in req_ids if i.lower() not in found]
+        if not found:
+            cur.execute("ROLLBACK;")
+            raise HTTPException(status_code=404, detail="No matching students on this roster")
+
+        deleted_ids: list[str] = []
+        sids: list[str] = []
+        cascaded: dict = {}
+        for uid, sid in found.items():
+            deleted_ids.append(uid)
+            sids.append(sid)
+            cur.execute(
+                f"DELETE FROM {TENANT_STUDENTS_TABLE} WHERE id::text = %s AND subdomain = %s RETURNING id;",
+                (uid, tid),
+            )
+            if cur.rowcount == 0:  # vanished mid-batch — treat as missing
+                deleted_ids.remove(uid)
+                sids.remove(sid)
+                missing.append(uid)
+                continue
+            # Cascade exactly like the single delete: every table that keys on
+            # the admission-number string must lose this child's rows, or a
+            # re-enrollment reusing the number inherits them (P0 item 2).
+            for _cascade_table, _tenant_col in (
+                ("tenant_grades", "subdomain"),
+                ("student_academic_records", "tenant_id"),
+                ("student_behavioral_records", "tenant_id"),
+                ("result_publications", "subdomain"),
+                ("student_term_clearance", "subdomain"),
+            ):
+                try:
+                    cur.execute(
+                        f"DELETE FROM {_cascade_table} "
+                        f"WHERE {_tenant_col} = %s AND LOWER(student_id) = LOWER(%s);",
+                        (tid, sid),
+                    )
+                    cascaded[_cascade_table] = cascaded.get(_cascade_table, 0) + cur.rowcount
+                except Exception as _e:
+                    # Missing optional tables stay loud, like the single path.
+                    cascaded[_cascade_table] = None
+                    logger.error(
+                        "[roster] bulk cascade failed for %s (%s/%s): %s",
+                        _cascade_table, tid, sid, _e, exc_info=True,
+                    )
+            cur.execute(
+                f"""
+                INSERT INTO {BILLING_LEDGER_TABLE}
+                    (subdomain, token_type, amount, transaction_type, reference_id, description)
+                VALUES (%s, 'SLOT', 1, 'SLOT_REFUND', %s, %s)
+                ON CONFLICT (reference_id) DO NOTHING;
+                """,
+                (tid, f"slot_refund:{tid}:{sid}:{uid}", f"Slot refund for deleted student {sid} (bulk)"),
+            )
+
+        n = len(deleted_ids)
+        cur.execute(
+            f"""
+            UPDATE {SCHOOLS_REGISTRY_TABLE}
+            SET slots_balance = COALESCE(slots_balance, 0) + %s, updated_at = NOW()
+            WHERE subdomain = %s
+            RETURNING slots_balance;
+            """,
+            (n, tid),
+        )
+        bal_row = cur.fetchone()
+        cur.execute("COMMIT;")
+
+        # One audit row for the batch (details carry every id and admission
+        # number); attribution mirrors the single-delete fallback chain.
+        try:
+            log_admin_action(
+                "roster.student_purged",
+                subdomain=tid,
+                details={
+                    "ids": deleted_ids,
+                    "student_ids": sids,
+                    "cascaded_rows": cascaded,
+                    "slots_refunded": n,
+                    "bulk": True,
+                },
+                actor=(x_viewer_id or x_viewer_label or "tenant_admin"),
+                actor_id=x_viewer_id or None,
+                actor_type=(x_viewer_role or "admin"),
+            )
+        except Exception as _audit_err:
+            logger.warning(
+                "[roster] bulk delete audit failed for %s (%s Students): %s",
+                tid, n, _audit_err,
+            )
+
+        return {
+            "success": True,
+            "type": "student",
+            "deleted": n,
+            "missing": missing,
+            "slots_refunded": n,
+            "slots_balance": int(bal_row[0] or 0) if bal_row else None,
+            "cascaded_rows": cascaded,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception(f"[roster] bulk student delete failed for {tid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk delete failed: {e}")
     finally:
         if conn:
             try:
