@@ -186,6 +186,12 @@ check("seeder pre-verifies the admin email (fictional inbox cannot open a link)"
     ? true
     : "admin login renders VerifyEmailWall for demo-<id>@demo.resultapp.org — no prospect can verify that address"
 );
+check("publication probe is case-insensitive (compact / uppercase IDs stay published)", () => {
+  const credits = read(path.join("backend", "routers", "credits.py"));
+  return /result_publications/.test(credits) && /LOWER\(student_id\) = LOWER\(%s\)/.test(credits)
+    ? true
+    : "credits/publications matches student_id case-sensitively — an uppercase-stored id (demo STD001) reads as unpublished and every report page fail-closes to a draft preview";
+});
 check("seeder grants Command-Center credits", () =>
   /grant_initial_credits\(subdomain, DEMO_CREDIT_GRANT\)/.test(demoSvc)
     ? true
