@@ -6,6 +6,7 @@ import ResultLookupWidget from "@/components/landing/ResultLookupWidget";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import SuspendedPortal from "@/components/tenants/SuspendedPortal";
+import DemoCredentialsCard from "@/components/demo/DemoCredentialsCard";
 import { ShieldCheck, GraduationCap, CloudOff } from "lucide-react";
 
 /**
@@ -131,6 +132,16 @@ export default async function TenantPage({
               )}
             </div>
           </div>
+
+          {school.demo && (
+            /* Demo only: the credentials never touch a real tenant. Compact
+               credential rows sit ABOVE the result checker (the #1 demo
+               action), with the full persona guide one click away via the
+               shared event. */
+            <div className="mt-8">
+              <DemoCredentialsCard subdomain={subdomain} variant="strip" />
+            </div>
+          )}
 
           {/* Result lookup — centered. Carries the #result-checker anchor so a
               hard load of /#result-checker lands directly on the checker rather
