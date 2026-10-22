@@ -167,14 +167,76 @@ check("landing pill removed", () => {
   return /INTERACTIVE DEMO/.test(landing) ? "pill copy still present" : true;
 });
 
-console.log("\nContextual help");
+console.log("\nDemo personas: seeded, advertised, auto-opened");
+const personasLib = read(path.join("lib", "demoPersonas.ts"));
+check("seeder hashes the admin password (admin console reachable)", () =>
+  /admin_password_hash=DEMO_STAFF_PIN/.test(demoSvc)
+    ? true
+    : "demo.py never writes schools.admin_password_hash — the admin portal dead-ends on PASSWORD_NOT_SET"
+);
+check("seeder pins the academic session (no clock drift 404s)", () =>
+  /UPDATE \{db\.SCHOOLS_REGISTRY_TABLE\}/.test(demoSvc) &&
+  /current_term = %s, current_session = %s/.test(demoSvc) &&
+  /DEMO_SESSION/.test(demoSvc)
+    ? true
+    : "current_term/current_session left NULL — derived session silently desyncs the seeded publications"
+);
+check("seeder grants Command-Center credits", () =>
+  /grant_initial_credits\(subdomain, DEMO_CREDIT_GRANT\)/.test(demoSvc)
+    ? true
+    : "demo tenant has zero credits — publishing from the admin console hits the insufficient-credits wall"
+);
+check("seeder promotes the moderator deputy", () =>
+  /is_moderator = TRUE/.test(demoSvc) && /DEMO_MODERATOR_ID = "DEMO-T03"/.test(demoSvc)
+    ? true
+    : "no staff row is marked is_moderator — the RBAC persona cannot reach the Moderator Console"
+);
+check("seeder writes form assignments", () =>
+  /TENANT_FORM_ASSIGNMENTS_TABLE/.test(demoSvc) && /teacher_remark_scheme/.test(demoSvc)
+    ? true
+    : "no form assignments — blank signatory lines and no form-teacher persona"
+);
+check("seeder writes the fee-hold clearance row", () =>
+  /STUDENT_CLEARANCE_TABLE/.test(demoSvc) && /is_financially_cleared/.test(demoSvc)
+    ? true
+    : "no student_term_clearance row — the withheld card state is unreachable"
+);
+check("demo rows opt OUT of must_change_password", () =>
+  (demoSvc.match(/crypt\('123456', gen_salt\('bf'\)\), FALSE\)/g) || []).length >= 2
+    ? true
+    : "staff/student rows seeded without must_change_password=FALSE — password-change nag would desync the advertised PIN"
+);
+check("UI manifest mirrors the seeded staff IDs", () => {
+  for (const id of ["DEMO-ADM", "DEMO-T01", "DEMO-T02", "DEMO-T03", "DEMO-T04", "DEMO-T05"]) {
+    if (!demoSvc.includes(`"${id}"`) && !demoSvc.includes(`'${id}'`)) {
+      return `demo.py does not seed ${id}`;
+    }
+    if (!personasLib.includes(id)) {
+      return `lib/demoPersonas.ts does not advertise ${id}`;
+    }
+  }
+  return true;
+});
+check("UI manifest mirrors the seeded student IDs", () => {
+  for (const id of ["STD001", "STD002", "STD003", "STD013", "STD020"]) {
+    if (!demoSvc.includes(`"${id}"`)) return `demo.py does not reference ${id}`;
+    if (!personasLib.includes(`"${id}"`)) return `lib/demoPersonas.ts does not advertise ${id}`;
+  }
+  return true;
+});
+check("the shared PIN literal matches on both sides", () =>
+  /DEMO_STAFF_PIN = "123456"/.test(demoSvc) && /DEMO_PIN = "123456"/.test(personasLib)
+    ? true
+    : "PIN literal drifted between demo.py and lib/demoPersonas.ts"
+);
+
 const helpDict = read(path.join("lib", "demoHelpContent.ts"));
 const demoHelp = read(path.join("components", "demo", "DemoHelp.tsx"));
 check("help covers login, roster, billing, grading + fallback", () => {
   // Route matchers are written as /\/admin\/login/ — strip escapes so the
   // assertions read as the paths a visitor actually visits.
   const flat = helpDict.replace(/\\/g, "");
-  for (const re of [/\/admin\/login/, /\/staff\/login/, /\/admin\/billing/, /grading/]) {
+  for (const re of [/\/admin\/login/, /\/staff\/login/, /\/student\/login/, /\/admin\/billing/, /grading/]) {
     if (!re.test(flat)) return `no dictionary entry matching ${re}`;
   }
   return /DEMO_HELP_FALLBACK/.test(helpDict) ? true : "no fallback guide";
