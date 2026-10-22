@@ -266,9 +266,10 @@ export function TemplatesManager({ tenantId, schoolName, classOptions }: Props) 
         </div>
       </div>
 
-      {/* Builder */}
+      {/* Builder — free cards: the builder's own sections carry the borders,
+          so phones don't end up three bordered containers deep. */}
       {showBuilder && (
-        <div className="rounded-[1.6rem] border border-line-1 bg-surface-1 p-5 backdrop-blur-xl sm:p-6">
+        <div className="min-w-0">
           <TemplateBuilder
             key={editing ? `edit-${editing.id}` : "new"}
             tenantId={tenantId}
