@@ -254,6 +254,7 @@ def get_publications(
     _ensure_tenant(tid)
     session = (academic_session or "").strip() or current_academic_session()
 
+
     conn = None
     try:
         conn = _connect_as_superuser()
@@ -269,10 +270,17 @@ def get_publications(
                 import re as _re_pub
                 _m_pub = _re_pub.match(r"^([A-Za-z]+)(.*)$", _raw_pub)
                 _norm_pub = (_m_pub.group(1).lower() + _m_pub.group(2)) if _m_pub else _raw_pub.lower()
+            # Case-insensitive by design: IDs are stored verbatim (compact
+            # "STD001" for demo tenants, prefixed "vhs/005" elsewhere), while
+            # callers send the report-page normalization (lowercase). report.py's
+            # publication gate uses LOWER(...) = LOWER(...) for the same reason —
+            # a case-sensitive match here would read every uppercase-stored id
+            # as unpublished and fail the report card closed to a draft preview
+            # even though the row is published.
             cur.execute(
                 """
                 SELECT 1 FROM result_publications
-                WHERE subdomain = %s AND student_id = %s
+                WHERE subdomain = %s AND LOWER(student_id) = LOWER(%s)
                   AND (%s IS NULL OR term = %s)
                   AND academic_session = %s
                 LIMIT 1;
