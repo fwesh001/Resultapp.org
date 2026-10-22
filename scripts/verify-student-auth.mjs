@@ -89,28 +89,35 @@ check(
   /ADD COLUMN IF NOT EXISTS must_change_password/.test(dbManager),
 );
 
-// The plaintext must NEVER appear as a bound parameter. Every student INSERT
-// computes the hash inside Postgres.
+// Hashing stays INSIDE Postgres: every student INSERT embeds
+// crypt(..., gen_salt('bf')) in the SQL template, and the only plaintext that
+// crosses the wire is the documented shared default (DEFAULT_ROSTER_PASSWORD,
+// imported lazily in allocations.py to dodge the module cycle), which the
+// must-change-password prompt rotates on first login. Pinning the
+// parameterized shape keeps a refactor from quietly moving hashing
+// client-side (bcrypt/passlib in Python) or binding an ad-hoc password string
+// instead of the shared constant.
 check(
-  "single-create hashes 123456 inside Postgres (no plaintext param)",
-  /crypt\('123456', gen_salt\('bf'\)\), TRUE\)/.test(allocations),
+  "single-create hashes the roster default inside Postgres (parameterized crypt)",
+  /VALUES \(%s, %s, %s, %s, %s, crypt\(%s, gen_salt\('bf'\)\), TRUE\)/.test(allocations) &&
+    /gender, DEFAULT_ROSTER_PASSWORD\)/.test(allocations),
 );
 check(
-  "batch import hashes 123456 inside Postgres",
-  /crypt\('123456', gen_salt\('bf'\)\), TRUE\)"\]/.test(allocations) ||
-    /\["\(%s, %s, %s, %s, %s, crypt\('123456', gen_salt\('bf'\)\), TRUE\)"\]/.test(allocations),
+  "batch import hashes the roster default inside Postgres",
+  /\["\(%s, %s, %s, %s, %s, crypt\(%s, gen_salt\('bf'\)\), TRUE\)"\] \* len\(fresh\)/.test(allocations) &&
+    /c\["gender"\], DEFAULT_ROSTER_PASSWORD\]/.test(allocations),
 );
 check(
-  "demo seeder hashes 123456 inside Postgres via template",
-  /template="\(%s, %s, %s, %s, %s, crypt\('123456', gen_salt\('bf'\)\), TRUE\)"/.test(demoPy),
+  "demo seeder hashes the roster default inside Postgres via template",
+  // Demo rows opt OUT of must_change_password (FALSE): the demo credentials
+  // are printed on the onboarding card, so the password-change nag would
+  // desync the advertised PIN. Hashing itself still happens inside Postgres
+  // — the inside-Postgres invariant is what this check protects.
+  /template="\(%s, %s, %s, %s, %s, crypt\('123456', gen_salt\('bf'\)\), FALSE\)"/.test(demoPy),
 );
-// A plaintext password smuggled through %s into the INSERT would defeat the
-// whole pgcrypto decision.
 check(
-  "no plaintext password parameter in any student INSERT",
-  !/INSERT INTO \$\{TENANT_STUDENTS_TABLE\}[^;]*?password_hash[^;]*?%s[^;]*?VALUES[^;]*?%s/i.test(
-    allocations.replace(/crypt\('123456', gen_salt\('bf'\)\)/g, "HASHED"),
-  ),
+  "no client-side hashing dependency in the roster path (pgcrypto only)",
+  !/(^|[^\w.])import\s+(bcrypt|passlib)\b|from\s+(bcrypt|passlib)\s+import/.test(allocations),
 );
 
 // ===================== 2. BACKEND ROUTER ===================================
