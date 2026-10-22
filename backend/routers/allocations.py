@@ -1006,6 +1006,37 @@ def batch_create_students(tenant_id: str, payload: BatchStudentsPayload):
         slots = int(srow[0] or 0)
         id_prefix = (srow[1] or tid).strip().lower() or tid
 
+        # --- Phase 2b: whole-file re-import backstop ---------------------------
+        # The client sends blank admission numbers by design and Phase 3 mints
+        # the NEXT free numbers per row, so re-submitting the same file (double
+        # click, stale tab, dragged in twice) used to insert identical rows
+        # under fresh IDs — the ON CONFLICT guard never fired and the school
+        # paid the batch in slots a second time. If every requested row's
+        # (name, class) pair already exists on this tenant, treat the batch as
+        # an accidental re-import: return with nothing reserved, inserted or
+        # charged. Files with at least one genuinely new row keep the current
+        # semantics — same-name+class students from different people import
+        # distinctly, as the preview has always promised.
+        keys = {(c["full_name"].strip().lower(), c["class_name"].strip().lower()) for c in cleaned}
+        cur.execute(
+            f"SELECT full_name, class_name FROM {TENANT_STUDENTS_TABLE} WHERE subdomain = %s;",
+            (tid,),
+        )
+        existing_pairs = {
+            (str(fn or "").strip().lower(), str(cn or "").strip().lower())
+            for fn, cn in cur.fetchall()
+        }
+        if keys <= existing_pairs:
+            cur.execute("ROLLBACK;")
+            return {
+                "type": "students_batch",
+                "inserted": 0,
+                "skipped": len(cleaned),
+                "requested": len(payload.rows),
+                "slots_remaining": slots,
+                "reason": "already_registered",
+            }
+
         # --- Phase 3: assign sequential IDs (O(1) scan) ---
         new_ids = _next_prefixed_ids(cur, id_prefix, TENANT_STUDENTS_TABLE, "student_id", len(cleaned), tid)
         fresh = [
