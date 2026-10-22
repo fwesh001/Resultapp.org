@@ -127,27 +127,29 @@ export default function InfoTooltip({
   const showOnHover = !coarse;
   const vertical = placement === "top" ? "bottom-full mb-2" : "top-full mt-2";
 
-  // Clamp the open panel inside the viewport.
+  // Position the open panel inside the viewport.
   //
-  // The panel is centered on the trigger (`left-1/2 -translate-x-1/2`), so a
-  // trigger near the page's right edge — where header "more info" icons
-  // always live — pushes a w-72 bubble ~100px past the right edge on a
-  // phone, hard-clipping every line. CSS centering cannot know where the
-  // trigger is, so once the panel is in the DOM it measures itself and
-  // nudges its own transform back inside with a 6px gutter. The class
-  // stays as the SSR/first-paint fallback; the inline style wins after.
+  // The panel anchors at the trigger's center (left: 50%), so a trigger near
+  // the page's right edge — where header "more info" icons always live —
+  // pushes a w-72 bubble ~100px past the right edge on a phone, hard-clipping
+  // every line. CSS cannot know the trigger's position, so once the element
+  // is mounted (this layout effect runs before paint) it measures itself and
+  // writes its own translateX: centered, or pulled back to a 6px gutter at
+  // either edge. There is deliberately no -translate-x-1/2 class: Tailwind v4
+  // emits it as the separate `translate` property, which COMPOSES with
+  // transform and would double-count the centering.
   useLayoutEffect(() => {
     if (!open) return;
     const el = panelRef.current;
     if (!el) return;
     const vw = document.documentElement.clientWidth;
-    const r = el.getBoundingClientRect();
+    const width = el.offsetWidth;
+    const rawLeft = el.getBoundingClientRect().left; // trigger center, untransformed
     const gutter = 6;
-    let dx = 0;
-    if (r.left < gutter) dx = gutter - r.left;
-    else if (r.right > vw - gutter) dx = vw - gutter - r.right;
-    el.style.transform =
-      dx === 0 ? "translateX(-50%)" : `translateX(calc(-50% + ${Math.round(dx)}px))`;
+    let finalLeft = rawLeft;
+    if (rawLeft < gutter) finalLeft = gutter;
+    else if (rawLeft + width > vw - gutter) finalLeft = vw - gutter - width;
+    el.style.transform = `translateX(${Math.round(finalLeft - rawLeft)}px)`;
   }, [open]);
 
   return (
@@ -188,7 +190,7 @@ export default function InfoTooltip({
           id={id}
           role="tooltip"
           aria-live="polite"
-          className={`absolute left-1/2 z-50 ${vertical} ${widthClass} -translate-x-1/2 rounded-xl border border-line-1 bg-surface-1 px-3 py-2.5 text-xs leading-relaxed text-text-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)]`}
+          className={`absolute left-1/2 z-50 ${vertical} ${widthClass} max-w-[calc(100vw-12px)] rounded-xl border border-line-1 bg-surface-1 px-3 py-2.5 text-xs leading-relaxed text-text-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)]`}
         >
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">{children}</div>
