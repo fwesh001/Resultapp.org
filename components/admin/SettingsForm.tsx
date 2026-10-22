@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Mail, PenLine } from "lucide-react";
 import UploadField from "@/components/ui/UploadField";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import { Select } from "@/components/ui/Select";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import SchemeBuilder from "@/components/remarks/SchemeBuilder";
@@ -395,7 +397,10 @@ export default function SettingsForm({ school }: SettingsFormProps) {
   const isSecurity = activeTab === "security";
 
   const content = (
-    <div className="mt-6 space-y-4 rounded-xl border border-line-1 bg-surface-1 p-6">
+    <div className="mt-6 space-y-4">
+      {/* Free-card stack: each tab's sections carry their own borders (the
+          dashboard composition). The old wrapper card is what nested panel
+          cards inside a card and squeezed every row on a 375px screen. */}
       {error && (
         <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
@@ -460,7 +465,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
       {!isSecurity && (
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
       {activeTab === "general" && (
-        <div
+        <SectionCard
           className="space-y-4"
           role="tabpanel"
           id="settings-panel-general"
@@ -518,7 +523,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             This is not just a contact address — it is the username you sign in to
             this portal with. Changing it will require a one-time code sent to the
             NEW address, so an attacker who gets into this form cannot quietly
-            redirect the school's account to a mailbox they control.
+            redirect the school&apos;s account to a mailbox they control.
           </InfoTooltip>
         </div>
         <input
@@ -679,11 +684,11 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         <p className="mt-1 text-xs text-text-3">Shown beneath the school name on the report header.</p>
       </div>
 
-      </div>
+        </SectionCard>
       )}
 
       {activeTab === "branding" && (
-        <div
+        <SectionCard
           className="space-y-4"
           role="tabpanel"
           id="settings-panel-branding"
@@ -715,10 +720,12 @@ export default function SettingsForm({ school }: SettingsFormProps) {
 
       {/* Drawn signature — the primary path. Shown above the uploader so the
           recommended option is the first thing an admin reaches for. */}
-      <div className="rounded-xl border border-line-1 bg-surface-1 p-4">
+      {/* Signature group — de-carded: the panel SectionCard is the only
+          surface here, and a divider marks the sub-group instead. */}
+      <div className="border-t border-line-1 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-text-1">Principal's signature</p>
+            <p className="text-sm font-medium text-text-1">Principal&apos;s signature</p>
             <p className="mt-0.5 text-xs text-text-3">
               {drawnSignature
                 ? "Using your drawn signature."
@@ -759,7 +766,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         previewVariant="square"
       />
 
-        </div>
+        </SectionCard>
       )}
 
       {activeTab === "academics" && (
@@ -769,6 +776,7 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           id="settings-panel-academics"
           aria-labelledby="settings-tab-academics"
         >
+      <SectionCard className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <label
@@ -875,12 +883,15 @@ export default function SettingsForm({ school }: SettingsFormProps) {
           Resumption date for the next term (e.g., 2026-01-09). Displayed as “09 Jan 2026” on report cards. Leave empty for “—”.
         </p>
       </div>
+      </SectionCard>
 
-      <div className="rounded-2xl border border-line-1 bg-surface-1 p-4">
-        <h3 className="text-sm font-semibold text-text-1">Principal&apos;s Remark Scheme</h3>
-        <p className="mt-1 text-xs text-text-3">
-          Grade bands that auto-generate principal remarks from overall averages. Used by the “Auto-Apply Principal Remarks” bulk action. Averages in gaps stay manual.
-        </p>
+      {/* The scheme saves itself (its own request + "Save scheme"), so it is a
+          sibling card, not a block inside the calendar card — on a phone it
+          would otherwise be a card inside a card inside band cards. */}
+      <SectionCard
+        title="Principal's Remark Scheme"
+        description="Grade bands that auto-generate principal remarks from overall averages. Used by the “Auto-Apply Principal Remarks” bulk action. Averages in gaps stay manual."
+      >
         <div className="mt-3">
           <SchemeBuilder
             initial={school?.principalRemarkScheme ?? []}
@@ -902,20 +913,29 @@ export default function SettingsForm({ school }: SettingsFormProps) {
             }}
           />
         </div>
-      </div>
+      </SectionCard>
 
         </div>
       )}
 
-      <div className="action-bar-sticky rounded-b-xl">
+      {/* Free variant: the tab cards surrounding this form are the page stack
+          now, so the bar carries its own rounded border instead of spilling
+          past the grid. The label names what it saves on each tab — the
+          Remark Scheme has its own "Save scheme" in its card, and this bar
+          must not masquerade as it. */}
+      <MobileActionBar variant="free">
         <button
           type="submit"
           disabled={isSubmitting}
           className="w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-surface-0 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Saving..." : "Save Changes"}
+          {isSubmitting
+            ? "Saving..."
+            : activeTab === "academics"
+              ? "Save term & prefixes"
+              : "Save Changes"}
         </button>
-</div>
+      </MobileActionBar>
         </form>
       )}
 
@@ -928,16 +948,14 @@ export default function SettingsForm({ school }: SettingsFormProps) {
         >
           <PasswordChange subdomain={school?.slug ?? ""} />
 
-          <div className="rounded-2xl border border-line-1 bg-surface-1 p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-text-1">Moderator Management</h3>
-            <p className="mt-1 text-xs text-text-3">
-              Give trusted staff a deputy role for the day-to-day portal without
-              handing them your school settings, billing or audit log.
-            </p>
+          <SectionCard
+            title="Moderator Management"
+            description="Give trusted staff a deputy role for the day-to-day portal without handing them your school settings, billing or audit log."
+          >
             <div className="mt-4">
               <ModeratorManager subdomain={school?.slug ?? ""} />
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
     </div>
