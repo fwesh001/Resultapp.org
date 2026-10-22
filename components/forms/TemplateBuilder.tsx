@@ -524,8 +524,8 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
               const balanced = sum > 0 && sum === weight;
               return (
                 <div key={cat.id} className="rounded-xl border border-line-1 bg-surface-0/40 p-3 sm:p-4">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="min-w-0 flex-1">
                       <label className="text-xs font-medium text-text-2">Section name</label>
                       <input
                         value={cat.name}
@@ -534,28 +534,30 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                         className={`${inputClass} mt-1`}
                       />
                     </div>
-                    <div className="w-24 sm:w-28">
-                      <label className="text-xs font-medium text-text-2">Weight</label>
-                      <div className="mt-1 flex items-center gap-1">
-                        <input
-                          value={cat.weight}
-                          onChange={(e) => updateCategory(cat.id, { weight: e.target.value.replace(/[^0-9]/g, "") })}
-                          placeholder="40"
-                          inputMode="numeric"
-                          className={inputClass}
-                        />
-                        <span className="text-xs text-text-3">%</span>
+                    <div className="flex items-end gap-2">
+                      <div className="w-24 sm:w-28">
+                        <label className="text-xs font-medium text-text-2">Weight</label>
+                        <div className="mt-1 flex items-center gap-1">
+                          <input
+                            value={cat.weight}
+                            onChange={(e) => updateCategory(cat.id, { weight: e.target.value.replace(/[^0-9]/g, "") })}
+                            placeholder="40"
+                            inputMode="numeric"
+                            className={`${inputClass} min-w-0`}
+                          />
+                          <span className="text-xs text-text-3">%</span>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCategory(cat.id)}
+                        disabled={categories.length <= 1}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-danger hover:bg-danger-soft disabled:opacity-30"
+                        aria-label={`Remove ${cat.name || "section"}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCategory(cat.id)}
-                      disabled={categories.length <= 1}
-                      className="mt-6 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-soft text-danger hover:bg-danger-soft disabled:opacity-30"
-                      aria-label={`Remove ${cat.name || "section"}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
 
                   {/* Items */}
@@ -567,16 +569,16 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                           onChange={(e) => updateItem(cat.id, it.id, { name: e.target.value })}
                           placeholder="e.g. Assignment"
                           aria-label="Assessment item name"
-                          className="flex h-8 flex-1 rounded-lg border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
+                          className="flex h-8 min-w-0 flex-1 rounded-lg border border-line-1 bg-surface-3 px-3 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                         />
-                        <div className="flex w-28 items-center gap-1">
+                        <div className="flex w-24 min-w-0 items-center gap-1 sm:w-28">
                           <input
                             value={it.max_score}
                             onChange={(e) => updateItem(cat.id, it.id, { max_score: e.target.value.replace(/[^0-9]/g, "") })}
                             placeholder="10"
                             inputMode="numeric"
                             aria-label="Maximum score"
-                            className="flex h-8 w-full rounded-lg border border-line-1 bg-surface-3 px-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
+                            className="h-8 w-full min-w-0 rounded-lg border border-line-1 bg-surface-3 px-2 text-sm text-text-1 placeholder:text-text-3 focus:border-accent focus:outline-none"
                           />
                           <span className="text-xs text-text-3">max</span>
                         </div>
@@ -590,16 +592,16 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
                         </button>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                       <button
                         type="button"
                         onClick={() => addItem(cat.id)}
-                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-line-1 bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:bg-surface-2"
+                        className="mt-1 inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line-1 bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:bg-surface-2"
                       >
                         <Plus className="h-3 w-3" /> Add Assessment Item
                       </button>
                       {cat.items.length > 0 && (
-                        <span className={`text-xs ${balanced ? "text-success" : "text-text-3"}`}>
+                        <span className={`mt-1 text-xs ${balanced ? "text-success" : "text-text-3"}`}>
                           Items add up to {sum} (weight {weight}%)
                         </span>
                       )}
@@ -665,7 +667,7 @@ export function TemplateBuilder({ tenantId, schoolName, templateId, initial, cla
             <div className="mt-3 space-y-2">
               {grades.map((g) => (
                 <div key={g.id} className="flex items-center gap-2">
-                  <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-zinc-900">
+                  <span className="hidden h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-zinc-900 sm:flex">
                     {g.grade || "–"}
                   </span>
                   <input
