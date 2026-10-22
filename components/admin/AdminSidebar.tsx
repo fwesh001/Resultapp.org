@@ -167,6 +167,11 @@ export default function AdminSidebar({
       label: "Support",
       href: "/support",
       icon: LifeBuoy,
+      // Skip the RSC prefetch: `/support` bounces the browser across origins
+      // to the apex site, and the redirected fetch returns without CORS
+      // headers — Chrome logs a preflight failure to the console on every
+      // dashboard render (same fix as the other demo-host escape-hatch links).
+      noPrefetch: true,
     },
   ];
 
@@ -215,6 +220,7 @@ export default function AdminSidebar({
               key={item.label}
               href={item.href}
               onClick={onNavigate}
+              prefetch={"noPrefetch" in item ? false : undefined}
               className={
                 active
                   ? "flex items-center gap-3 rounded-lg border-r-2 border-accent bg-accent-soft px-3 py-2.5 text-sm font-medium text-accent"
