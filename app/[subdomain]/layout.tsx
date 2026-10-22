@@ -120,7 +120,7 @@ export default async function TenantLayout({
     <div data-subdomain={subdomain} data-school-id={school?.id ?? undefined}>
       {demo && <DemoBanner subdomain={subdomain} />}
       <main>{children}</main>
-      {demo && <DemoHelp />}
+      {demo && <DemoHelp subdomain={subdomain} />}
     </div>
   );
 }
