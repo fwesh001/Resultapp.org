@@ -17,6 +17,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 import models
 from database import get_db
@@ -634,14 +635,21 @@ def get_report_bundle(
         _wanted_session = str(academic_session).strip()
         if _wanted_session:
             try:
-                _pub = db.query(
-                    f"""
-                    SELECT 1 FROM result_publications
-                    WHERE subdomain = :tid
-                      AND LOWER(student_id) = LOWER(:sid)
-                      AND academic_session = :ses
-                    LIMIT 1
-                    """,
+                # SQLAlchemy 2.0: raw SQL must go through execute(text(...)).
+                # A bare db.query(<string>) raises ArgumentError, and the except
+                # below silently kept the current session — which killed every
+                # archived (historical session) link with a 404 even though the
+                # publications row existed.
+                _pub = db.execute(
+                    text(
+                        """
+                        SELECT 1 FROM result_publications
+                        WHERE subdomain = :tid
+                          AND LOWER(student_id) = LOWER(:sid)
+                          AND academic_session = :ses
+                        LIMIT 1
+                        """
+                    ),
                     {"tid": tid, "sid": sid, "ses": _wanted_session},
                 ).first()
                 if _pub is not None:
