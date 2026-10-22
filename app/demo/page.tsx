@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import { DemoLauncher } from "@/components/demo/DemoLauncher";
 
 export const metadata: Metadata = {
@@ -27,7 +29,8 @@ export default function DemoLandingPage() {
           demo page has no hero of its own, so the card list needs the darker
           scrim more than the landing page does. */}
       <div aria-hidden className="absolute inset-0 -z-10">
-        <img src="/hero-preview.avif" alt="" className="h-full w-full object-cover" />
+        {/* next/image fill: positioned by the absolute parent, object-cover by class. */}
+        <Image src="/hero-preview.avif" alt="" fill sizes="100vw" priority className="object-cover" />
         <div className="absolute inset-0 bg-[#0B0514]/80" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B0514] via-transparent to-[#0B0514]/60" />
       </div>
@@ -61,12 +64,20 @@ export default function DemoLandingPage() {
             See slots, credits, and the real Flutterwave checkout in test mode.
           </li>
         </ul>
+        <p className="mt-4 max-w-xl text-sm text-purple-200/60">
+          Four curated roles are waiting inside — subject teacher, subject + form
+          teacher, a Vice Principal with Moderator (deputy) powers, and the school
+          admin — plus five seed pupils engineered to show every result state:
+          fully published, held for unpaid fees, absent-but-published, not yet
+          published, and none at all. One tap opens the credentials card when your
+          classroom is ready.
+        </p>
         <p className="mt-8 text-xs text-purple-300/40">
           Demo data is fictional and resets automatically. Ready for the real
           thing?{" "}
-          <a href="/register" className="underline underline-offset-4 hover:text-white">
+          <Link href="/register" className="underline underline-offset-4 hover:text-white">
             Register your school
-          </a>
+          </Link>
         </p>
       </div>
     </main>
