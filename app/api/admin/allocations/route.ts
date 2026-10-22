@@ -185,10 +185,44 @@ export async function DELETE(req: NextRequest) {
   const type = (searchParams.get("type") || "").trim();
   const id = (searchParams.get("id") || "").trim();
 
-  if (!tenantId || !type || !id) return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
+  // Bulk student delete: DELETE with a JSON body { type: "student", ids: [...] }
+  // forwards to the backend's bulk endpoint instead of the single-record path.
+  let bulkBody: Record<string, unknown> | null = null;
+  if (req.headers.get("content-type")?.includes("application/json")) {
+    try {
+      bulkBody = (await req.json()) as Record<string, unknown>;
+    } catch {
+      bulkBody = null;
+    }
+  }
+  const rawIds = Array.isArray(bulkBody?.ids) ? (bulkBody?.ids as unknown[]) : null;
+  const bulkIds = rawIds ? rawIds.map(String).map((s) => s.trim()).filter(Boolean) : [];
+  const isBulk = bulkIds.length > 0 && (String(bulkBody?.type ?? "student") === "student");
+
+  if (!tenantId || (isBulk ? false : (!type || !id))) {
+    return NextResponse.json({ success: false, error: "Missing tenant_id, type or id" }, { status: 400 });
+  }
 
   const guardDelete = await requireAdminSession(tenantId);
   if (guardDelete) return guardDelete;
+
+  if (isBulk) {
+    const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster/students/bulk-delete`;
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-SECRET-KEY": secret },
+        body: JSON.stringify({ ids: bulkIds }),
+        cache: "no-store",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return NextResponse.json({ success: false, error: (data as { detail?: string })?.detail || "Bulk delete failed", raw: data }, { status: r.status });
+      return NextResponse.json(data, { status: 200 });
+    } catch (e) {
+      console.error("[allocations proxy DELETE bulk] failed", e);
+      return NextResponse.json({ success: false, error: "Could not reach roster service" }, { status: 502 });
+    }
+  }
 
   const url = `${getBackendBase()}/api/v1/tenant/${encodeURIComponent(tenantId)}/roster/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
   try {
