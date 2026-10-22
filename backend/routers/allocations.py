@@ -650,11 +650,14 @@ def create_roster_record(tenant_id: str, payload: RosterCreate):
                     detail=f"Insufficient slots. Need 1, balance is {slots} ({used} slots used). Top up slots to add more students.",
                 )
             # Insert student
-            # password_hash is computed INSIDE Postgres (pgcrypto) so the
-            # default plaintext never travels as a bound parameter, matching the
-            # staff insert at the bottom of this function. must_change_password
-            # starts TRUE so the portal can nudge the student off the shared
-            # default; it is a soft prompt, never a lockout.
+            # password_hash is computed INSIDE Postgres (pgcrypto): crypt()
+            # lives in the SQL template, and the plaintext crossing the wire is
+            # the documented shared default (DEFAULT_ROSTER_PASSWORD) — the
+            # same parameterized treatment as the batch import below. No
+            # bcrypt/passlib dependency ships in Python.
+            # must_change_password starts TRUE so the portal can nudge the
+            # student off the shared default; it is a soft prompt, never a
+            # lockout.
             cur.execute(
                 f"""
                 INSERT INTO {TENANT_STUDENTS_TABLE} (subdomain, student_id, full_name, class_name, gender, password_hash, must_change_password)
