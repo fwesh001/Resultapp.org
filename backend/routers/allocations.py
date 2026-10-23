@@ -94,8 +94,9 @@ def _notify_moderator_change(
         return
     try:
         # Notifier internals are imported by name — they are shared building
-        # blocks (one shell, one button) and duplicating that markup here is
-        # how a later email restyle ends up applying to half the sends.
+        # blocks (one shell, one button, one markup engine) and duplicating
+        # that markup here is how a later email restyle ends up applying to
+        # half the sends.
         from services import notifier
         from services.notifier import send_auth_email
 
@@ -103,10 +104,21 @@ def _notify_moderator_change(
         _cta_button = notifier._cta_button
         _fallback_link = notifier._fallback_link
         public_base_url = notifier.public_base_url
+        markup_action = notifier.markup_action
 
         link = f"{public_base_url()}/{tid}/moderator" if is_moderator else f"{public_base_url()}/{tid}/staff"
         if is_moderator:
-            subject = f"You now have Moderator access to {school_name}"
+            subject = notifier.SUBJECT_MODERATOR_GRANTED.format(school=school_name)
+            preheader = (
+                f"{school_name} granted you Moderator Console access — no extra sign-in."
+            )
+            ld = [
+                markup_action(
+                    "Open the Moderator Console",
+                    link,
+                    f"Moderator access to {school_name} has been granted.",
+                )
+            ]
             heading = "You have Moderator access"
             body_html = (
                 f"<p>{name},</p>"
@@ -119,14 +131,23 @@ def _notify_moderator_change(
                 f"{_cta_button('Open the Moderator Console', link)}"
             )
             text_body = (
+                f"Open: {link}\n\n"
                 f"{name},\n\n{school_name} has made you a Moderator.\n\n"
                 "Open the Moderator Console from your Staff Portal sidebar - there is no "
-                f"extra sign-in.\n\nOpen it here: {link}\n"
+                "extra sign-in.\n"
             )
             # Clients that strip the styled button still get a usable URL.
             text_body += _fallback_link(link)
         else:
-            subject = f"Your Moderator access has ended — {school_name}"
+            subject = notifier.SUBJECT_MODERATOR_REVOKED.format(school=school_name)
+            preheader = "Your Staff Portal account and your role are unaffected."
+            ld = [
+                markup_action(
+                    "Go to your Staff Portal",
+                    link,
+                    f"Moderator access to {school_name} has been removed.",
+                )
+            ]
             heading = "Moderator access removed"
             body_html = (
                 f"<p>{name},</p>"
@@ -139,18 +160,18 @@ def _notify_moderator_change(
                 f"{_cta_button('Go to your Staff Portal', link)}"
             )
             text_body = (
+                f"Open: {link}\n\n"
                 f"{name},\n\n{school_name} has removed your Moderator access. Your Staff "
                 f"Portal account is unaffected and your {display_role} role is unchanged.\n\n"
                 f"If you had the Moderator Console open, close the tab - its sessions "
-                f"expire within a couple of hours, and opening it again will be refused.\n\n"
-                f"Staff Portal: {link}\n"
+                f"expire within a couple of hours, and opening it again will be refused.\n"
             )
             text_body += _fallback_link(link)
 
         send_auth_email(
             email.lower(),
             subject,
-            _auth_email_shell(heading, body_html, "Role notification from your school."),
+            _auth_email_shell(heading, body_html, preheader, ld),
             text_body,
         )
     except Exception as email_err:
